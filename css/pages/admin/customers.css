@@ -1,0 +1,43 @@
+/* =========================
+   ADMIN · CUSTOMERS
+========================= */
+
+.kk-admin-customers .kk-admin-controls {
+  margin-bottom: 18px;
+}
+
+/* Customers table tweaks */
+.kk-admin-customers-table td:last-child,
+.kk-admin-customers-table th:last-child {
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Customer name emphasis */
+.kk-admin-customer-name {
+  font-weight: 900;
+}
+
+/* Address column tighter line-height */
+.kk-admin-customer-address {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--kk-muted);
+}
+
+/* Order history table inside modal */
+.kk-admin-customer-orders th {
+  font-size: 11px;
+}
+
+.kk-admin-customer-orders td {
+  font-size: 13px;
+}
+
+/* Mobile polish */
+@media (max-width: 768px) {
+  .kk-admin-customers-table th:nth-child(3),
+  .kk-admin-customers-table td:nth-child(3) {
+    display: none; /* hide address on very small screens */
+  }
+}

@@ -1,0 +1,259 @@
+/* =========================
+   ADMIN (SHARED)
+   Used by every admin page
+========================= */
+
+.kk-page.kk-admin,
+.kk-page.kk-admin-home,
+.kk-page.kk-admin-products {
+  /* navbar.css already adds .kk-page padding-top */
+  min-height: 100vh;
+}
+
+/* Slightly tighter container spacing for admin pages */
+.kk-admin .kk-container,
+.kk-admin-home .kk-container,
+.kk-admin-products .kk-container {
+  padding-top: 16px;
+}
+
+/* Admin page header card */
+.kk-admin-header {
+  margin-bottom: 18px;
+}
+
+/* Section spacing helpers */
+.kk-admin-section {
+  margin-top: 18px;
+}
+
+.kk-admin-section .kk-section-title {
+  margin-bottom: 10px;
+}
+
+/* ---------- Admin grid cards ---------- */
+.kk-admin-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 900px) {
+  .kk-admin-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+  }
+}
+
+/* Card link button (dashboard tiles) */
+.kk-admin-tile {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  border: var(--kk-border);
+  background: var(--kk-white);
+}
+
+.kk-admin-tile-inner {
+  padding: 16px;
+}
+
+.kk-admin-tile:hover {
+  background: #000;
+  color: #fff;
+}
+
+.kk-admin-tile:hover .kk-admin-tile-sub {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.kk-admin-tile-kicker {
+  font-weight: 1000;
+  letter-spacing: var(--kk-track-wide);
+  text-transform: uppercase;
+  font-size: 12px;
+}
+
+.kk-admin-tile-title {
+  margin-top: 10px;
+  font-weight: 1000;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  font-size: 16px;
+  line-height: 1.15;
+}
+
+.kk-admin-tile-sub {
+  margin-top: 8px;
+  color: var(--kk-muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+/* ---------- Admin “pill” badges ---------- */
+.kk-admin-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 3px solid #000;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 1000;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  background: #fff;
+}
+
+/* ---------- Admin buttons (matches theme) ---------- */
+.kk-admin-btn {
+  border: 4px solid #000;
+  background: #fff;
+  color: #000;
+  padding: 12px 14px;
+  cursor: pointer;
+  font-weight: 1000;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  font-size: 12px;
+}
+
+.kk-admin-btn:hover {
+  background: #000;
+  color: #fff;
+}
+
+/* This is for your injected navbar Logout button (id="btnLogout") */
+#btnLogout.kk-btn,
+#btnLogout.kk-admin-btn {
+  width: 100%;
+}
+
+/* ---------- Admin tables ---------- */
+.kk-admin-table-wrap {
+  overflow: auto;
+  border: var(--kk-border);
+  background: #fff;
+}
+.kk-admin-table { width: 100%; }
+@media (min-width: 901px){
+  .kk-admin-table { min-width: 920px; }
+}
+
+.kk-admin-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.kk-admin-table thead {
+  background: #000;
+  color: #fff;
+}
+
+.kk-admin-table th {
+  text-align: left;
+  padding: 14px;
+  font-weight: 1000;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  font-size: 12px;
+}
+
+.kk-admin-table td {
+  padding: 14px;
+  border-top: 2px solid rgba(0,0,0,.12);
+  vertical-align: top;
+  font-size: 14px;
+}
+
+.kk-admin-table td:last-child,
+.kk-admin-table th:last-child {
+  text-align: right;
+}
+
+/* ---------- Admin modal base ---------- */
+.kk-admin-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 120; /* above drawers */
+  display: none;
+}
+
+.kk-admin-modal.is-open {
+  display: block;
+}
+
+.kk-admin-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,.55);
+}
+
+.kk-admin-modal-panel {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 16px;
+  overflow: auto;
+}
+
+/* Alternative layout for stage (centered grid) */
+.kk-admin-modal-stage {
+  position: relative;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+
+.kk-admin-modal-card {
+  width: min(920px, 100%);
+  max-height: 85vh;
+  overflow: auto;
+  background: #fff;
+  border: var(--kk-border);
+}
+
+/* Panel variant card */
+.kk-admin-modal-panel .kk-admin-modal-card {
+  width: 100%;
+  max-width: 980px;
+  margin-top: 16px;
+  max-height: none;
+}
+
+.kk-admin-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 2px solid rgba(0,0,0,.15);
+}
+
+.kk-admin-modal-body {
+  padding: 14px 16px;
+}
+
+.kk-admin-modal-foot {
+  padding: 14px 16px;
+  border-top: 2px solid rgba(0,0,0,.15);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.kk-page.kk-admin,
+.kk-page.kk-admin-home,
+.kk-page.kk-admin-products,
+.kk-page.kk-admin-productcalc {
+  min-height: 100vh;
+}
+
+.kk-admin .kk-container,
+.kk-admin-home .kk-container,
+.kk-admin-products .kk-container,
+.kk-admin-productcalc .kk-container {
+  padding-top: 16px;
+}

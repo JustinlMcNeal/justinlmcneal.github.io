@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin · Promotions</title>
+
+  <!-- Global brand theme -->
+  <link rel="stylesheet" href="/css/theme/base.css">
+  <link rel="stylesheet" href="/css/theme/components.css">
+
+  <!-- New navbar -->
+  <link rel="stylesheet" href="/css/components/navbar.css">
+
+  <!-- Admin styles (shared first, then page overrides) -->
+  <link rel="stylesheet" href="/css/pages/admin/admin.css">
+  <link rel="stylesheet" href="/css/pages/admin/promotions.css">
+</head>
+
+<body class="kk-page kk-admin kk-admin-promotions">
+
+  <!-- Navbar mount (navbar.js injects /page_inserts/navbar.html here) -->
+  <div id="kkNavbarMount"></div>
+
+  <main class="kk-container">
+
+    <!-- Header -->
+    <section class="kk-card kk-card-pad kk-admin-header">
+      <div class="kk-kicker">Admin</div>
+      <h1 class="kk-h1">Promotions</h1>
+      <p class="kk-sub">Manage campaigns, discounts, and special offers</p>
+    </section>
+
+
+
+    <!-- APP -->
+    <section id="appPanel" class="hidden">
+      <div class="gap-24"></div>
+
+      <!-- Controls -->
+      <section class="kk-card kk-card-pad kk-admin-controls">
+        <div class="kk-kicker">Campaigns</div>
+        <div class="gap-12"></div>
+
+        <div class="kk-grid kk-grid-2">
+          <div class="kk-field">
+            <label class="kk-label kk-label--tight" for="searchInput">Search</label>
+            <input
+              id="searchInput"
+              class="kk-input kk-input--tight"
+              type="search"
+              placeholder="Search name / code / type…"
+            />
+          </div>
+
+          <div class="kk-field kk-admin-controls-right">
+            <label class="kk-label kk-label--tight kk-admin-controls-spacer">Action</label>
+            <button id="btnNew" class="kk-btn kk-admin-new-btn" type="button">
+              + Add promotion
+            </button>
+          </div>
+        </div>
+
+        <div class="gap-12"></div>
+
+        <div class="kk-admin-controls-foot">
+          <div id="countLabel" class="kk-sub">0 items</div>
+        </div>
+      </section>
+
+      <div class="gap-24"></div>
+
+      <!-- Table wrapper -->
+      <section id="tableWrap" class="kk-card kk-admin-table">
+        <table class="kk-admin-table-table">
+          <thead class="kk-admin-table-head">
+            <tr>
+              <th>Name</th>
+              <th>Code</th>
+              <th>Type</th>
+              <th>Value</th>
+              <th>Active</th>
+              <th>Start Date</th>
+              <th>End Date</th>
+              <th class="kk-admin-table-actions">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="promotionRows"></tbody>
+        </table>
+      </section>
+    </section>
+
+    <!-- MODAL -->
+    <div id="modal" class="hidden kk-admin-modal" aria-hidden="true">
+      <div class="kk-admin-modal-backdrop"></div>
+
+      <div class="kk-admin-modal-stage">
+        <div class="kk-card kk-admin-modal-card">
+          <div class="kk-admin-modal-head">
+            <h3 id="modalTitle" class="kk-kicker kk-admin-modal-title">Edit Promotion</h3>
+            <button id="btnClose" class="kk-btn kk-admin-modal-close" type="button">
+              Close
+            </button>
+          </div>
+
+          <div class="kk-admin-modal-body">
+            <!-- BASICS -->
+            <div class="kk-section-title">Basics</div>
+            <div class="gap-12"></div>
+
+            <div class="kk-grid kk-grid-2">
+              <div class="kk-field">
+                <label class="kk-label kk-label--tight" for="fName">Name</label>
+                <input id="fName" class="kk-input kk-input--tight" placeholder="Summer Sale 2025" />
+              </div>
+
+              <div class="kk-field">
+                <label class="kk-label kk-label--tight" for="fCode">Code (optional)</label>
+                <input id="fCode" class="kk-input kk-input--tight" placeholder="SUMMER25" />
+                <div class="kk-sub" style="margin-top:6px;">
+                  Leave blank for an auto-applied promotion (no coupon code).
+                </div>
+              </div>
+
+              <div class="kk-field">
+                <label class="kk-label kk-label--tight" for="fType">Type</label>
+                <select id="fType" class="kk-input kk-input--tight">
+                  <option value="percentage">Percentage Discount</option>
+                  <option value="fixed">Fixed Amount</option>
+                  <option value="bogo">Buy One Get One</option>
+                  <option value="free-shipping">Free Shipping</option>
+                </select>
+              </div>
+
+              <div class="kk-field">
+                <label class="kk-label kk-label--tight" for="fValue">Value</label>
+                <input id="fValue" class="kk-input kk-input--tight" type="number" step="0.01" placeholder="25" />
+              </div>
+
+              <div class="kk-field">
+                <label class="kk-label kk-label--tight" for="fMinOrder">Min Order Amount</label>
+                <input id="fMinOrder" class="kk-input kk-input--tight" type="number" step="0.01" placeholder="0" />
+              </div>
+
+              <div class="kk-field">
+                <label class="kk-label kk-label--tight" for="fUsageLimit">Usage Limit</label>
+                <input id="fUsageLimit" class="kk-input kk-input--tight" type="number" placeholder="Unlimited" />
+              </div>
+            </div>
+
+            <div class="kk-divider"></div>
+
+            <!-- BANNER -->
+            <div class="kk-section-title">Homepage Banner</div>
+            <div class="gap-12"></div>
+
+            <div class="kk-field">
+              <label class="kk-label kk-label--tight" for="fBannerImage">Banner image path (optional)</label>
+              <input
+                id="fBannerImage"
+                class="kk-input kk-input--tight"
+                placeholder="/imgs/banners/summer-sale.webp"
+                autocomplete="off"
+              />
+              <div class="kk-sub" style="margin-top:6px;">
+                Put the image in your site repo (recommended: <b>/imgs/banners/</b>) and paste the path here.
+              </div>
+            </div>
+
+            <!-- Preview (shown only when a path exists) -->
+            <div id="promoBannerPreviewWrap" class="kk-field hidden">
+              <div class="kk-kicker">Preview</div>
+              <img
+                id="promoBannerPreviewImg"
+                src=""
+                alt="Banner preview"
+                style="width:100%; max-height:180px; object-fit:cover; border:2px solid #000; margin-top:8px;"
+              />
+            </div>
+
+            <div class="kk-divider"></div>
+
+            <!-- DATES -->
+            <div class="kk-section-title">Schedule</div>
+            <div class="gap-12"></div>
+
+            <div class="kk-grid kk-grid-2">
+              <div class="kk-field">
+                <label class="kk-label kk-label--tight" for="fStartDate">Start Date</label>
+                <input id="fStartDate" class="kk-input kk-input--tight" type="datetime-local" />
+              </div>
+
+              <div class="kk-field">
+                <label class="kk-label kk-label--tight" for="fEndDate">End Date</label>
+                <input id="fEndDate" class="kk-input kk-input--tight" type="datetime-local" />
+              </div>
+            </div>
+
+            <div class="kk-divider"></div>
+
+            <!-- STATUS -->
+            <div class="kk-section-title">Status</div>
+            <div class="gap-12"></div>
+
+            <div class="kk-field">
+              <label class="kk-admin-checkbox-row">
+                <input id="fActive" type="checkbox" />
+                Active
+              </label>
+            </div>
+
+            <div class="kk-field">
+              <label class="kk-admin-checkbox-row">
+                <input id="fPublic" type="checkbox" />
+                Public (visible to customers)
+              </label>
+            </div>
+
+            <div class="kk-divider"></div>
+
+            <!-- SCOPE -->
+            <div class="kk-section-title">Apply To</div>
+            <div class="gap-12"></div>
+
+            <div class="kk-field">
+              <label class="kk-label kk-label--tight" for="fScopeType">Scope Type</label>
+              <select id="fScopeType" class="kk-input kk-input--tight">
+                <option value="all">All Products</option>
+                <option value="category">Specific Categories</option>
+                <option value="tag">Specific Tags</option>
+                <option value="product">Specific Products</option>
+              </select>
+            </div>
+
+            <div class="gap-12"></div>
+
+            <!-- Categories selector (hidden by default) -->
+            <div id="scopeCategoriesWrap" class="hidden">
+              <label class="kk-label kk-label--tight">Categories</label>
+              <div id="scopeCategoriesSelect" class="kk-scope-select-wrap"></div>
+              <div class="gap-12"></div>
+            </div>
+
+            <!-- Tags selector (hidden by default) -->
+            <div id="scopeTagsWrap" class="hidden">
+              <label class="kk-label kk-label--tight">Tags</label>
+              <div id="scopeTagsSelect" class="kk-scope-select-wrap"></div>
+              <div class="gap-12"></div>
+            </div>
+
+            <!-- Products selector (hidden by default) -->
+            <div id="scopeProductsWrap" class="hidden">
+              <label class="kk-label kk-label--tight">Products</label>
+              <div id="scopeProductsSelect" class="kk-scope-select-wrap"></div>
+              <div class="gap-12"></div>
+            </div>
+
+            <div class="kk-divider"></div>
+
+            <!-- BOGO FREE ITEM (for BOGO type promos) -->
+            <div id="bogoSection" class="hidden">
+              <div class="kk-section-title">Free Reward</div>
+              <div class="gap-12"></div>
+
+              <div class="kk-field">
+                <label class="kk-label kk-label--tight" for="fBOGOType">What to Give Free</label>
+                <select id="fBOGOType" class="kk-input kk-input--tight">
+                  <option value="product">Specific Product</option>
+                  <option value="category">Entire Category</option>
+                  <option value="tag">Specific Tag</option>
+                </select>
+              </div>
+
+              <div class="gap-12"></div>
+
+              <!-- Product selector (shown by default) -->
+              <div id="bogoProductWrap">
+                <label class="kk-label kk-label--tight">Product to Give Free</label>
+                <select id="fBOGOProduct" class="kk-input kk-input--tight">
+                  <option value="">-- Choose product --</option>
+                </select>
+                <div class="gap-12"></div>
+              </div>
+
+              <!-- Category selector (hidden by default) -->
+              <div id="bogoCategoryWrap" class="hidden">
+                <label class="kk-label kk-label--tight">Category to Give Free</label>
+                <select id="fBOGOCategory" class="kk-input kk-input--tight">
+                  <option value="">-- Choose category --</option>
+                </select>
+                <div class="gap-12"></div>
+              </div>
+
+              <!-- Tag selector (hidden by default) -->
+              <div id="bogoTagWrap" class="hidden">
+                <label class="kk-label kk-label--tight">Tag to Give Free</label>
+                <select id="fBOGOTag" class="kk-input kk-input--tight">
+                  <option value="">-- Choose tag --</option>
+                </select>
+                <div class="gap-12"></div>
+              </div>
+
+              <p class="kk-sub">When customers buy any item from the selected categories/tags/products above, they'll receive this free reward.</p>
+
+              <div class="kk-divider"></div>
+            </div>
+
+            <div class="kk-section-title">Description</div>
+            <div class="gap-12"></div>
+
+            <div class="kk-field">
+              <label class="kk-label kk-label--tight" for="fDescription">Description (optional)</label>
+              <textarea id="fDescription" class="kk-input kk-input--tight" placeholder="Details about this promotion..." style="min-height: 80px; font-family: inherit;"></textarea>
+            </div>
+
+            <div id="modalMsg" class="hidden kk-sub kk-admin-msg"></div>
+          </div>
+
+          <div class="kk-admin-modal-foot">
+            <button id="btnDelete" type="button" class="kk-btn kk-admin-danger-outline">
+              Delete
+            </button>
+
+            <button id="btnSave" type="button" class="kk-btn kk-admin-save">
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ✅ Navbar system init -->
+  <script type="module" src="/js/admin/promotions/index.js"></script>
+</body>
+</html>

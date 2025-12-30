@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin · Home</title>
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Universal theme -->
+  <link rel="stylesheet" href="/css/theme/base.css" />
+  <link rel="stylesheet" href="/css/theme/components.css" />
+  <link rel="stylesheet" href="/css/theme/admin-ui.css" />
+
+  <!-- Navbar -->
+  <link rel="stylesheet" href="/css/components/navbar.css" />
+</head>
+
+<body class="kk-page kk-admin-home">
+  <div id="kkNavbarMount"></div>
+
+  <main class="kk-container">
+
+    <!-- HEADER -->
+    <section class="border-[4px] border-black bg-white">
+      <div class="p-5 sm:p-7 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <div class="kk-admin-kicker">Admin</div>
+          <h1 class="mt-2 text-[clamp(32px,6vw,56px)] leading-[0.95] font-black uppercase tracking-[0.04em]">
+            Dashboard
+          </h1>
+          <p class="mt-3 text-[14px] leading-6 text-black/60 max-w-[70ch]">
+            Manage products, promotions, orders, analytics, and internal tools.
+          </p>
+        </div>
+
+        <div class="flex flex-col sm:flex-row gap-2 sm:gap-3">
+          <a href="/pages/admin/products.html" class="kk-btn-solid text-center">+ New Product</a>
+          <a href="/pages/admin/promotions.html" class="kk-btn-ghost text-center">Promotions</a>
+        </div>
+      </div>
+
+      <div class="border-t-2 border-black/15"></div>
+
+      <!-- SEARCH + FILTERS -->
+      <div class="p-4 sm:px-7 sm:py-5 bg-black/[0.02]">
+        <div class="flex flex-col gap-3">
+          <!-- Search -->
+          <div class="flex flex-col sm:flex-row gap-2 sm:items-center">
+            <div class="flex-1">
+              <label class="block text-[12px] font-black uppercase tracking-[0.14em] text-black/60">
+                Search tools
+              </label>
+              <input
+                id="toolSearch"
+                type="search"
+                placeholder="Type: products, orders, reviews, stats…"
+                class="mt-2 w-full border-[4px] border-black bg-white px-4 py-3 text-[14px]
+                       focus:outline-none focus:ring-4 focus:ring-black/10"
+              />
+            </div>
+
+            <button
+              id="clearSearch"
+              class="kk-btn-ghost mt-2 sm:mt-7"
+              type="button"
+            >
+              Clear
+            </button>
+          </div>
+
+          <!-- Filter chips -->
+          <div class="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+            <button class="kk-admin-pill js-filter" data-filter="all" type="button">All</button>
+            <button class="kk-admin-pill js-filter" data-filter="catalog" type="button">Catalog</button>
+            <button class="kk-admin-pill js-filter" data-filter="orders" type="button">Orders</button>
+            <button class="kk-admin-pill js-filter" data-filter="tools" type="button">Tools</button>
+            <button class="kk-admin-pill js-filter" data-filter="customers" type="button">Customers</button>
+            <button class="kk-admin-pill js-filter" data-filter="finance" type="button">Finance</button>
+            <button class="kk-admin-pill js-filter" data-filter="social" type="button">Social</button>
+            <button class="kk-admin-pill js-filter" data-filter="analytics" type="button">Analytics</button>
+            <button class="kk-admin-pill js-filter" data-filter="security" type="button">Security</button>
+          </div>
+
+          <div id="toolCount" class="text-[12px] text-black/55"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- GRID -->
+    <section class="mt-5 sm:mt-7">
+      <div
+        id="toolGrid"
+        class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
+      >
+
+        <!-- Each tile has data attributes for filtering/search -->
+        <a class="kk-admin-tile2" href="/pages/admin/products.html"
+           data-title="Products" data-kicker="Catalog" data-tags="catalog products items variants images tags sections">
+          <div class="p-5 flex flex-col gap-3 h-full">
+            <div class="flex items-start justify-between gap-3">
+              <div class="kk-admin-kicker">Catalog</div>
+              <div class="kk-admin-pill">Core</div>
+            </div>
+            <div class="kk-admin-title">Products</div>
+            <div class="kk-admin-sub">Items, variants, images, tags, sections</div>
+            <div class="kk-admin-arrow"><span>Open</span><span>→</span></div>
+          </div>
+        </a>
+
+        <a class="kk-admin-tile2" href="/pages/admin/promotions.html"
+           data-title="Promotions" data-kicker="Catalog" data-tags="catalog promotions sales discounts bundles rules">
+          <div class="p-5 flex flex-col gap-3 h-full">
+            <div class="flex items-start justify-between gap-3">
+              <div class="kk-admin-kicker">Catalog</div>
+              <div class="kk-admin-pill">Sales</div>
+            </div>
+            <div class="kk-admin-title">Promotions</div>
+            <div class="kk-admin-sub">Sales, discounts, bundles, rules</div>
+            <div class="kk-admin-arrow"><span>Open</span><span>→</span></div>
+          </div>
+        </a>
+
+        <a class="kk-admin-tile2" href="/pages/admin/pCalc.html"
+           data-title="Product Calculator" data-kicker="Tools" data-tags="tools calculator pricing margin cost">
+          <div class="p-5 flex flex-col gap-3 h-full">
+            <div class="flex items-start justify-between gap-3">
+              <div class="kk-admin-kicker">Tools</div>
+              <div class="kk-admin-pill">Pricing</div>
+            </div>
+            <div class="kk-admin-title">Product Calculator</div>
+            <div class="kk-admin-sub">Cost, margin, pricing helpers</div>
+            <div class="kk-admin-arrow"><span>Open</span><span>→</span></div>
+          </div>
+        </a>
+
+        <a class="kk-admin-tile2" href="/pages/admin/pStorage.html"
+           data-title="Product Storage" data-kicker="Inventory" data-tags="inventory storage locations tracking notes">
+          <div class="p-5 flex flex-col gap-3 h-full">
+            <div class="flex items-start justify-between gap-3">
+              <div class="kk-admin-kicker">Inventory</div>
+              <div class="kk-admin-pill">Ops</div>
+            </div>
+            <div class="kk-admin-title">Product Storage</div>
+            <div class="kk-admin-sub">Storage locations, notes, tracking</div>
+            <div class="kk-admin-arrow"><span>Open</span><span>→</span></div>
+          </div>
+        </a>
+
+        <a class="kk-admin-tile2" href="/pages/admin/lineitemsraw.html"
+           data-title="Line Items Raw" data-kicker="Orders" data-tags="orders line items raw stripe sheets rows data">
+          <div class="p-5 flex flex-col gap-3 h-full">
+            <div class="flex items-start justify-between gap-3">
+              <div class="kk-admin-kicker">Orders</div>
+              <div class="kk-admin-pill">Data</div>
+            </div>
+            <div class="kk-admin-title">Line Items · Raw</div>
+            <div class="kk-admin-sub">Raw Stripe / Sheets rows</div>
+            <div class="kk-admin-arrow"><span>Open</span><span>→</span></div>
+          </div>
+        </a>
+
+        <a class="kk-admin-tile2" href="/pages/admin/lineItemsOrders.html"
+           data-title="Line Items Orders" data-kicker="Orders" data-tags="orders line items grouped totals status">
+          <div class="p-5 flex flex-col gap-3 h-full">
+            <div class="flex items-start justify-between gap-3">
+              <div class="kk-admin-kicker">Orders</div>
+              <div class="kk-admin-pill">View</div>
+            </div>
+            <div class="kk-admin-title">Line Items · Orders</div>
+            <div class="kk-admin-sub">Grouped orders, totals, status</div>
+            <div class="kk-admin-arrow"><span>Open</span><span>→</span></div>
+          </div>
+        </a>
+
+        <a class="kk-admin-tile2" href="/pages/admin/customers.html"
+           data-title="Customers" data-kicker="Customers" data-tags="customers segments email phone crm">
+          <div class="p-5 flex flex-col gap-3 h-full">
+            <div class="flex items-start justify-between gap-3">
+              <div class="kk-admin-kicker">Customers</div>
+              <div class="kk-admin-pill">CRM</div>
+            </div>
+            <div class="kk-admin-title">Customers</div>
+            <div class="kk-admin-sub">Customers, segments, contact data</div>
+            <div class="kk-admin-arrow"><span>Open</span><span>→</span></div>
+          </div>
+        </a>
+
+        <a class="kk-admin-tile2" href="/pages/admin/expenses.html"
+           data-title="Expenses" data-kicker="Finance" data-tags="finance expenses budget tracking">
+          <div class="p-5 flex flex-col gap-3 h-full">
+            <div class="flex items-start justify-between gap-3">
+              <div class="kk-admin-kicker">Finance</div>
+              <div class="kk-admin-pill">Ops</div>
+            </div>
+            <div class="kk-admin-title">Expenses</div>
+            <div class="kk-admin-sub">Business expense tracking</div>
+            <div class="kk-admin-arrow"><span>Open</span><span>→</span></div>
+          </div>
+        </a>
+
+        <a class="kk-admin-tile2" href="/pages/admin/reviews.html"
+           data-title="Reviews" data-kicker="Social" data-tags="social reviews moderate highlight publish">
+          <div class="p-5 flex flex-col gap-3 h-full">
+            <div class="flex items-start justify-between gap-3">
+              <div class="kk-admin-kicker">Social</div>
+              <div class="kk-admin-pill">Trust</div>
+            </div>
+            <div class="kk-admin-title">Reviews</div>
+            <div class="kk-admin-sub">Moderate, highlight, publish</div>
+            <div class="kk-admin-arrow"><span>Open</span><span>→</span></div>
+          </div>
+        </a>
+
+        <a class="kk-admin-tile2" href="/pages/admin/item-stats.html"
+           data-title="Item Stats" data-kicker="Analytics" data-tags="analytics stats likes views conversions">
+          <div class="p-5 flex flex-col gap-3 h-full">
+            <div class="flex items-start justify-between gap-3">
+              <div class="kk-admin-kicker">Analytics</div>
+              <div class="kk-admin-pill">KPIs</div>
+            </div>
+            <div class="kk-admin-title">Item Stats</div>
+            <div class="kk-admin-sub">Likes, views, conversions</div>
+            <div class="kk-admin-arrow"><span>Open</span><span>→</span></div>
+          </div>
+        </a>
+
+        <a class="kk-admin-tile2" href="/pages/admin/auth-callback.html"
+           data-title="Auth" data-kicker="Security" data-tags="security auth session admin login">
+          <div class="p-5 flex flex-col gap-3 h-full">
+            <div class="flex items-start justify-between gap-3">
+              <div class="kk-admin-kicker">Security</div>
+              <div class="kk-admin-pill">Auth</div>
+            </div>
+            <div class="kk-admin-title">Auth</div>
+            <div class="kk-admin-sub">Admin sign-in & session handling</div>
+            <div class="kk-admin-arrow"><span>Open</span><span>→</span></div>
+          </div>
+        </a>
+
+        <a class="kk-admin-tile2" href="/pages/admin/reset.html"
+           data-title="Reset Password" data-kicker="Security" data-tags="security reset password email">
+          <div class="p-5 flex flex-col gap-3 h-full">
+            <div class="flex items-start justify-between gap-3">
+              <div class="kk-admin-kicker">Security</div>
+              <div class="kk-admin-pill">Password</div>
+            </div>
+            <div class="kk-admin-title">Reset Password</div>
+            <div class="kk-admin-sub">Update admin password via email</div>
+            <div class="kk-admin-arrow"><span>Open</span><span>→</span></div>
+          </div>
+        </a>
+
+        <a
+  class="kk-admin-tile2"
+  href="/pages/admin/categories.html"
+  data-title="Categories"
+  data-kicker="Catalog"
+  data-tags="catalog categories sections navigation"
+>
+  <div class="p-5 flex flex-col gap-3 h-full">
+    <div class="flex items-start justify-between gap-3">
+      <div class="kk-admin-kicker">Catalog</div>
+      <div class="kk-admin-pill">Categories</div>
+    </div>
+
+    <div class="kk-admin-title">Categories</div>
+
+    <div class="kk-admin-sub">
+      Manage catalog sections, homepage order, and visibility
+    </div>
+
+    <div class="kk-admin-arrow">
+      <span>Open</span><span>→</span>
+    </div>
+  </div>
+</a>
+
+
+      </div>
+    </section>
+
+    <!-- FOOT NOTE -->
+    <section class="mt-6 sm:mt-8">
+      <div class="border-[4px] border-black bg-white p-5 sm:p-7">
+        <div class="kk-admin-kicker">Tip</div>
+        <p class="mt-3 text-[14px] leading-6 text-black/60">
+          You can add pages later — just create the file and the dashboard link will work instantly.
+        </p>
+      </div>
+    </section>
+
+  </main>
+
+  <script type="module">
+    import { initNavbar } from "/js/shared/navbar.js";
+
+    function initToolSearch() {
+      const input = document.getElementById("toolSearch");
+      const clearBtn = document.getElementById("clearSearch");
+      const grid = document.getElementById("toolGrid");
+      const countEl = document.getElementById("toolCount");
+      const filterBtns = Array.from(document.querySelectorAll(".js-filter"));
+
+      const tiles = Array.from(grid.querySelectorAll("a[data-title]"));
+
+      let activeFilter = "all";
+      let query = "";
+
+      function apply() {
+        const q = query.trim().toLowerCase();
+
+        let shown = 0;
+        for (const tile of tiles) {
+          const title = (tile.dataset.title || "").toLowerCase();
+          const kicker = (tile.dataset.kicker || "").toLowerCase();
+          const tags = (tile.dataset.tags || "").toLowerCase();
+
+          const matchesText = !q || title.includes(q) || kicker.includes(q) || tags.includes(q);
+
+          const matchesFilter =
+            activeFilter === "all" ||
+            (tile.dataset.kicker || "").toLowerCase() === activeFilter;
+
+          const show = matchesText && matchesFilter;
+          tile.style.display = show ? "" : "none";
+          if (show) shown++;
+        }
+
+        countEl.textContent = shown === tiles.length
+          ? `Showing all ${tiles.length} tools`
+          : `Showing ${shown} of ${tiles.length} tools`;
+      }
+
+      input.addEventListener("input", () => {
+        query = input.value || "";
+        apply();
+      });
+
+      clearBtn.addEventListener("click", () => {
+        input.value = "";
+        query = "";
+        apply();
+        input.focus();
+      });
+
+      filterBtns.forEach(btn => {
+        btn.addEventListener("click", () => {
+          activeFilter = btn.dataset.filter || "all";
+
+          // Visual "active" state
+          filterBtns.forEach(b => {
+            b.style.background = "#fff";
+            b.style.color = "#000";
+          });
+          btn.style.background = "#000";
+          btn.style.color = "#fff";
+
+          apply();
+        });
+      });
+
+      // Set "All" active by default
+      const allBtn = filterBtns.find(b => b.dataset.filter === "all");
+      if (allBtn) {
+        allBtn.style.background = "#000";
+        allBtn.style.color = "#fff";
+      }
+
+      apply();
+    }
+
+    document.addEventListener("DOMContentLoaded", async () => {
+      await initNavbar();
+      initToolSearch();
+    });
+  </script>
+</body>
+</html>

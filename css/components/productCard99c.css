@@ -1,0 +1,101 @@
+/* =========================================================
+   /css/pages/index.css  (or wherever your home CSS lives)
+   99¢ Picks section (no arrows) + 99¢ card tweaks
+   Works with: .kk-pcard .kk-pcard-99c markup
+========================================================= */
+
+/* -------------------------
+   99¢ Slider Section (NO ARROWS)
+-------------------------- */
+
+.kk-home-99c {
+  margin-top: 22px;
+}
+
+.kk-home-99c-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.kk-home-99c-title {
+    text-transform: uppercase;
+  margin: 0;
+  font-size: 18px;
+  letter-spacing: 0.04em;
+  font-weight: 900;
+}
+
+.kk-home-99c-sub {
+  margin: 0;
+  opacity: 0.7;
+}
+
+/* Track behaves like your category strip:
+   - Mobile shows ~2 items
+   - Desktop shows ~3 items
+   - Scrollbar visible and styled
+*/
+.kk-home-99c-track {
+  display: grid;
+  grid-auto-flow: column;
+
+  /* 2 visible on mobile */
+  grid-auto-columns: calc((100% - 14px) / 2);
+
+  gap: 14px;
+  overflow-x: auto;
+  padding: 6px 2px 10px;
+
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Same scrollbar vibe as category strip */
+.kk-home-99c-track::-webkit-scrollbar {
+  height: 8px;
+}
+.kk-home-99c-track::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+/* snap cards nicely */
+.kk-home-99c-track > * {
+  scroll-snap-align: start;
+}
+
+/* Desktop: 3 visible */
+@media (min-width: 900px) {
+  .kk-home-99c-track {
+    grid-auto-columns: calc((100% - (14px * 2)) / 3);
+  }
+}
+
+/* Empty state */
+.kk-home-99c-empty.is-hidden {
+  display: none;
+}
+
+/* -------------------------
+   99¢ Product Card Visuals
+   (overrides the shared product card)
+-------------------------- */
+
+.kk-pcard-99c .kk-pcard-body {
+  padding-top: 8px;
+}
+
+.kk-pcard-99c .kk-pcard-name {
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.kk-pcard-99c .kk-pcard-price {
+  margin-top: 4px;
+  font-size: 15px;
+  font-weight: 1000;
+  letter-spacing: 0.02em;
+}

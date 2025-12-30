@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin · Orders</title>
+
+  <!-- Global theme -->
+  <link rel="stylesheet" href="/css/theme/base.css" />
+  <link rel="stylesheet" href="/css/theme/components.css" />
+
+  <!-- Navbar -->
+  <link rel="stylesheet" href="/css/components/navbar.css" />
+
+  <!-- Admin shared -->
+  <link rel="stylesheet" href="/css/pages/admin/admin.css" />
+
+  <!-- Page styles -->
+  <link rel="stylesheet" href="/css/pages/admin/lineItemsOrders.css" />
+</head>
+
+<body class="kk-page kk-admin kk-admin-lineitemsorders">
+
+  <!-- NAVBAR (injected) -->
+  <div id="kkNavbarMount"></div>
+
+  <main class="kk-container">
+
+    <!-- HEADER -->
+    <section class="kk-card kk-card-pad kk-admin-header">
+      <div class="kk-kicker">Admin</div>
+      <h1 class="kk-h1">Orders</h1>
+      <p class="kk-sub">
+        Grouped orders view for totals, status, shipping, profit, and exports.
+      </p>
+
+      <div class="kk-divider"></div>
+
+      <div class="kk-admin-orders-kpis">
+        <div class="kk-admin-kpi">
+          <div class="kk-admin-kpi-label">Orders</div>
+          <div class="kk-admin-kpi-value" id="kpiOrders">—</div>
+        </div>
+
+        <div class="kk-admin-kpi">
+          <div class="kk-admin-kpi-label">Revenue</div>
+          <div class="kk-admin-kpi-value" id="kpiRevenue">—</div>
+        </div>
+
+        <div class="kk-admin-kpi">
+          <div class="kk-admin-kpi-label">Profit</div>
+          <div class="kk-admin-kpi-value" id="kpiProfit">—</div>
+        </div>
+
+        <div class="kk-admin-kpi">
+          <div class="kk-admin-kpi-label">Unfulfilled</div>
+          <div class="kk-admin-kpi-value" id="kpiUnfulfilled">—</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CONTROLS -->
+    <section class="kk-card kk-card-pad kk-admin-controls">
+      <div class="kk-kicker">Filter</div>
+
+      <div class="kk-grid kk-grid-2 kk-admin-orders-controlsGrid">
+        <div class="kk-field">
+          <label class="kk-label" for="searchInput">Search</label>
+          <input
+            class="kk-input"
+            id="searchInput"
+            type="search"
+            placeholder="Order / email / name / coupon / status / tracking…"
+            autocomplete="off"
+          />
+          <div class="kk-sub kk-admin-hint">Search runs across the full dataset (server-side).</div>
+        </div>
+
+        <div class="kk-field">
+          <label class="kk-label" for="statusFilter">Status</label>
+          <select class="kk-input" id="statusFilter">
+            <option value="">All statuses</option>
+            <option value="pending">Pending</option>
+            <option value="label_purchased">Label Purchased</option>
+            <option value="shipped">Shipped</option>
+            <option value="delivered">Delivered</option>
+            <option value="voided">Voided</option>
+            <option value="returned">Returned</option>
+          </select>
+          <div class="kk-sub kk-admin-hint">Status is stored in fulfillment_shipments.</div>
+        </div>
+      </div>
+
+      <div class="kk-grid kk-grid-3 kk-admin-orders-controlsGrid kk-admin-orders-controlsGrid2">
+        <div class="kk-field">
+          <label class="kk-label" for="dateFrom">Date From</label>
+          <input class="kk-input" id="dateFrom" type="date" />
+        </div>
+
+        <div class="kk-field">
+          <label class="kk-label" for="dateTo">Date To</label>
+          <input class="kk-input" id="dateTo" type="date" />
+        </div>
+
+        <div class="kk-field kk-admin-orders-actions">
+          <label class="kk-label">Action</label>
+          <button class="kk-btn" id="btnRefresh" type="button">Refresh</button>
+          <div class="kk-admin-metaRow">
+            <div id="countLabel" class="kk-sub">0 rows</div>
+            <div id="status" class="kk-sub"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="kk-divider"></div>
+
+      <div class="kk-admin-orders-exportRow">
+        <button class="kk-admin-btn" id="btnExportShipReady" type="button">
+          Export Ship-Ready CSV
+        </button>
+
+        <button class="kk-admin-btn kk-admin-btn-ghost" id="btnImportPirateShip" type="button" disabled>
+          Import Pirate Ship Export
+        </button>
+
+        <div class="kk-sub kk-admin-hint">
+          Ship-ready export will be used for Pirate Ship batch label printing.
+        </div>
+      </div>
+    </section>
+
+    <!-- TABLE -->
+    <section class="kk-card kk-admin-section kk-admin-orders-tableCard">
+      <div class="kk-admin-table-wrap kk-admin-orders-wrap">
+        <table class="kk-admin-table kk-admin-orders-table" id="ordersTable">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Order</th>
+              <th>Customer</th>
+              <th>Email</th>
+              <th>Items</th>
+              <th>Weight</th>
+              <th>Paid</th>
+              <th>Cost</th>
+              <th>Profit</th>
+              <th>Status</th>
+              <th>Tracking</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+
+          <tbody id="ordersRows"></tbody>
+        </table>
+      </div>
+
+      <div class="kk-admin-loadmore">
+        <button id="btnLoadMore" class="kk-admin-btn" type="button">Load more</button>
+        <div id="loadMoreStatus" class="kk-sub"></div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- EDIT MODAL -->
+  <div id="modal" class="kk-admin-modal" aria-hidden="true">
+    <div class="kk-admin-modal-backdrop"></div>
+
+    <div class="kk-admin-modal-stage">
+      <div class="kk-admin-modal-card">
+
+        <div class="kk-admin-modal-head">
+          <div>
+            <div class="kk-kicker" id="modalKicker">Order</div>
+            <h2 class="kk-h2" id="modalTitle">Edit Shipment</h2>
+            <div class="kk-sub" id="modalSub">Update label + tracking info.</div>
+          </div>
+          <button class="kk-admin-modal-close" id="btnClose" type="button" aria-label="Close">✕</button>
+        </div>
+
+        <div class="kk-divider"></div>
+
+        <div class="kk-admin-modal-body">
+          <div id="modalMsg" class="kk-sub"></div>
+
+          <div class="kk-grid kk-grid-2 kk-admin-modal-grid">
+            <div class="kk-field">
+              <label class="kk-label" for="fSessionId">Stripe Session ID</label>
+              <input class="kk-input" id="fSessionId" type="text" readonly />
+            </div>
+            <div class="kk-field">
+              <label class="kk-label" for="fKkOrderId">KK Order ID</label>
+              <input class="kk-input" id="fKkOrderId" type="text" readonly />
+            </div>
+          </div>
+
+          <div class="kk-grid kk-grid-2 kk-admin-modal-grid">
+            <div class="kk-field">
+              <label class="kk-label" for="fLabelStatus">Label Status</label>
+              <select class="kk-input" id="fLabelStatus">
+                <option value="pending">Pending</option>
+                <option value="label_purchased">Label Purchased</option>
+                <option value="shipped">Shipped</option>
+                <option value="delivered">Delivered</option>
+                <option value="voided">Voided</option>
+                <option value="returned">Returned</option>
+              </select>
+            </div>
+
+            <div class="kk-field">
+              <label class="kk-label" for="fTrackingNumber">Tracking Number</label>
+              <input class="kk-input" id="fTrackingNumber" type="text" placeholder="9400..." />
+            </div>
+
+            <div class="kk-field">
+              <label class="kk-label" for="fCarrier">Carrier</label>
+              <input class="kk-input" id="fCarrier" type="text" placeholder="USPS / UPS / FedEx" />
+            </div>
+
+            <div class="kk-field">
+              <label class="kk-label" for="fService">Service</label>
+              <input class="kk-input" id="fService" type="text" placeholder="Ground Advantage, Priority..." />
+            </div>
+
+            <div class="kk-field">
+              <label class="kk-label" for="fBatchId">Batch ID</label>
+              <input class="kk-input" id="fBatchId" type="text" placeholder="2025-12-25-A" />
+            </div>
+
+            <div class="kk-field">
+              <label class="kk-label" for="fPrintedAt">Printed At</label>
+              <input class="kk-input" id="fPrintedAt" type="datetime-local" />
+            </div>
+
+            <div class="kk-field">
+              <label class="kk-label" for="fLabelCost">Label Cost ($)</label>
+              <input class="kk-input" id="fLabelCost" type="number" step="0.01" placeholder="4.23" />
+            </div>
+
+            <div class="kk-field">
+              <label class="kk-label" for="fPackageWeightGFinal">Final Package Weight (g)</label>
+              <input class="kk-input" id="fPackageWeightGFinal" type="number" step="1" placeholder="320" />
+            </div>
+
+            <div class="kk-field">
+              <label class="kk-label" for="fPirateShipShipmentId">Pirate Ship Shipment ID</label>
+              <input class="kk-input" id="fPirateShipShipmentId" type="text" placeholder="pship_..." />
+            </div>
+          </div>
+
+          <div class="kk-field">
+            <label class="kk-label" for="fNotes">Notes</label>
+            <textarea class="kk-input" id="fNotes" rows="4" placeholder="Any fulfillment notes..."></textarea>
+          </div>
+        </div>
+
+        <div class="kk-divider"></div>
+
+        <div class="kk-admin-modal-foot">
+          <button class="kk-admin-btn kk-admin-btn-ghost" id="btnCancel" type="button">Cancel</button>
+          <button class="kk-admin-btn" id="btnSave" type="button">Save</button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/js/admin/lineItemsOrders/index.js"></script>
+</body>
+</html>

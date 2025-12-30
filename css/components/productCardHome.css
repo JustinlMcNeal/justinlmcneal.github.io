@@ -1,0 +1,22 @@
+/* /css/components/productCardHome.css
+   Home grid product card typography (LARGER)
+*/
+
+.kk-pcard-home .kk-pcard-name {
+  font-size: 20px;
+}
+
+.kk-pcard-home .kk-pcard-price {
+  font-size: 16px;
+}
+
+/* make swatches slightly larger on home grid */
+.kk-pcard-home .kk-pcard-swatch {
+  width: 24px;
+  height: 20px;
+}
+
+/* a little more breathing room */
+.kk-pcard-home .kk-pcard-body {
+  padding-top: 12px;
+}

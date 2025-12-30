@@ -1,0 +1,536 @@
+/* =========================
+   KARRY KRAZE — HOME PAGE
+   /css/pages/index.css
+========================= */
+
+.is-hidden { display: none !important; }
+
+/* Keep your base container spacing; hero looks better with extra top room */
+.kk-home .kk-container {
+  padding-top: 18px;
+}
+
+/* =========================
+   HERO / PROMO BANNER
+========================= */
+
+.kk-hero {
+  position: relative;
+  overflow: hidden;
+  border: var(--kk-border);
+  background: #fff;
+  min-height: 320px;
+}
+
+.kk-hero-media {
+  position: absolute;
+  inset: 0;
+
+  /* fallback gradient (shows if no image/video is loaded) */
+  background:
+    radial-gradient(circle at 22% 30%, rgba(245,143,134,.65) 0%, rgba(245,143,134,0) 42%),
+    radial-gradient(circle at 80% 70%, rgba(246,220,198,.85) 0%, rgba(246,220,198,0) 48%),
+    linear-gradient(120deg, #ffffff 0%, #ffffff 38%, rgba(245,143,134,.35) 38%, rgba(246,220,198,.55) 100%);
+}
+
+/* Vignette for readability */
+.kk-hero-media::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(0,0,0,0.25),
+    rgba(0,0,0,0.40)
+  );
+  pointer-events: none;
+}
+
+/* subtle pattern so it doesn’t feel “blank” */
+.kk-hero-media::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    repeating-linear-gradient(
+      45deg,
+      rgba(0,0,0,.06) 0px,
+      rgba(0,0,0,.06) 1px,
+      transparent 1px,
+      transparent 10px
+    );
+  opacity: .35;
+  pointer-events: none;
+}
+
+/* Shared media rules */
+.kk-hero-img,
+.kk-hero-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.kk-hero-video {
+  background: #000;
+}
+
+.kk-hero-overlay {
+  position: relative;
+  z-index: 2;
+  min-height: 320px;
+
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+
+  /* you wanted no white gradient */
+  background: transparent;
+}
+
+.kk-hero-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.kk-hero-title {
+  margin: 10px 0 0;
+  max-width: 22ch;
+}
+
+.kk-hero-sub {
+  margin: 10px 0 0;
+  max-width: 52ch;
+}
+
+.kk-hero-actions {
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.kk-hero-btn {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  min-width: 220px;
+}
+
+.kk-hero-link {
+  font-weight: 900;
+  letter-spacing: var(--kk-track-wide);
+  text-transform: uppercase;
+  font-size: 12px;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,.6);
+}
+
+.kk-hero-link:hover {
+  text-decoration: underline;
+}
+
+/* HERO TEXT – WHITE + SHADOW */
+.kk-hero-title,
+.kk-hero-sub,
+.kk-hero-overlay .kk-kicker {
+  color: #ffffff;
+  text-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.55),
+    0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+/* =========================
+   HOME CATALOG SECTION
+========================= */
+
+.kk-home-section {
+  margin-top: 28px;
+}
+
+.kk-home-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.kk-home-viewall {
+  font-weight: 900;
+  letter-spacing: var(--kk-track-wide);
+  text-transform: uppercase;
+  font-size: 12px;
+}
+
+/* chips container */
+.kk-home-chips-wrap {
+  margin-top: 4px;
+}
+
+.kk-home-chips {
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (min-width: 768px) {
+
+  .kk-home-chips {
+    gap: 12px;
+    padding-bottom: 10px;
+    overflow-x: visible; /* no scrolling on desktop */
+  }
+}
+
+.kk-home-chips::-webkit-scrollbar {
+  height: 10px;
+}
+.kk-home-chips::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,.18);
+  border-radius: 999px;
+}
+
+/* =========================
+   PRODUCT GRID (10 items)
+   Desktop: 5 columns
+   Mobile: 2 columns
+========================= */
+
+.kk-home-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+/* Your newer preference: no card background/border */
+.kk-home-card {
+  background: transparent;
+  border: none;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.kk-home-thumb {
+  aspect-ratio: 1 / 1;
+  background:
+    linear-gradient(135deg, rgba(0,0,0,.06), rgba(0,0,0,0)),
+    radial-gradient(circle at 28% 30%, rgba(245,143,134,.35), rgba(245,143,134,0) 45%),
+    radial-gradient(circle at 70% 75%, rgba(246,220,198,.55), rgba(246,220,198,0) 55%),
+    #fff;
+}
+
+.kk-home-card-body {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  text-align: left;
+}
+
+.kk-home-card-title {
+  font-weight: 1000;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.kk-home-card-sub {
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.kk-home-card-foot {
+  margin-top: auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.kk-home-price {
+  font-weight: 500;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  font-size: 20px;
+}
+
+/* CTA row */
+.kk-home-more {
+  margin-top: 16px;
+  display: flex;
+  justify-content: center;
+}
+
+/* =========================
+   Variant Swatches (Squares)
+========================= */
+
+.kk-home-variants {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+  justify-content: flex-start;
+}
+
+.kk-home-variant-dot {
+  width: 22px;
+  height: 18px;
+  border: 2px solid #000;
+  background: #fff;
+  display: inline-block;
+}
+
+/* Out of stock */
+.kk-home-variant-dot.is-oos {
+  opacity: 0.35;
+  position: relative;
+}
+
+.kk-home-variant-dot.is-oos::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-top: 2px solid #000;
+  transform: rotate(-45deg);
+  transform-origin: center;
+}
+
+/* +N indicator */
+.kk-home-variant-more {
+  font-weight: 900;
+  font-size: 11px;
+  padding: 0 6px;
+  border: 2px solid #000;
+  background: #fff;
+}
+
+/* =========================
+   HOME SECTION — PLAIN MODE
+   (no card, no border)
+========================= */
+
+.kk-home-section--plain {
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+/* =========================
+   FOOTER
+========================= */
+
+.kk-home-footer {
+  background: #000;
+  margin-top: 40px;
+}
+
+.kk-home-footer-inner {
+  padding-top: 32px;
+  padding-bottom: 32px;
+}
+
+.kk-home-footer-line {
+  border-top: 2px solid rgba(255,255,255,.15);
+  margin: 18px 0 14px;
+}
+
+/* =========================
+   RESPONSIVE
+========================= */
+
+@media (max-width: 920px) {
+  .kk-home-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .kk-hero,
+  .kk-hero-overlay {
+    min-height: 360px;
+  }
+
+  /* Mobile layout requested: 2 columns */
+  .kk-home-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .kk-hero-btn {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .kk-hero-actions {
+    gap: 10px;
+  }
+}
+
+
+/* =========================
+   Home Category Strip (Pic #2 style + superscript count)
+========================= */
+
+.kk-home-catstrip { margin-top: 22px; }
+
+.kk-home-catstrip-head{
+    
+  display:flex;
+  justify-content:space-between;
+  align-items:baseline;
+  gap:12px;
+  margin-bottom:10px;
+}
+
+.kk-home-catstrip-title{
+    text-transform: uppercase;
+  margin:0;
+  font-size:18px;
+  font-weight:900;
+  letter-spacing:.04em;
+}
+
+.kk-home-catstrip-track{
+  display:grid;
+  grid-auto-flow:column;
+
+  /* card width controls how many show */
+  grid-auto-columns: 300px;
+  gap:14px;
+
+  overflow-x:auto;
+  padding: 6px 2px 10px;
+  scroll-snap-type:x mandatory;
+  -webkit-overflow-scrolling:touch;
+}
+
+.kk-home-catstrip-track::-webkit-scrollbar { height: 8px; }
+.kk-home-catstrip-track::-webkit-scrollbar-thumb { background: rgba(0,0,0,.2); }
+
+/* Card */
+.kk-home-catcard{
+  position:relative;
+  scroll-snap-align:start;
+  text-decoration:none;
+  color:#fff;
+  display:block;
+
+  /* taller like pic #2 */
+  aspect-ratio: 10 / 14;
+
+  overflow:hidden;
+}
+
+.kk-home-catcard img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  display:block;
+  filter: contrast(1.05);
+}
+
+/* Strong overlay for readable text (pic #2 look) */
+.kk-home-catcard::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  background: linear-gradient(
+    to top,
+    rgba(0,0,0,.78) 0%,
+    rgba(0,0,0,.32) 48%,
+    rgba(0,0,0,.10) 72%,
+    rgba(0,0,0,0) 100%
+  );
+  pointer-events:none;
+}
+
+.kk-home-catcard-label {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 2;
+
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+
+  text-align: center;
+  text-transform: uppercase;
+  text-shadow: 0 4px 14px rgba(0,0,0,.72);
+  letter-spacing: 0.12em;
+  padding: 6px 10px;
+}
+
+
+
+.kk-home-catcard-allrow{
+  display:flex;
+  align-items:flex-start;
+  gap:6px;
+  line-height: 1;
+}
+
+.kk-home-catcard-all{
+  font-weight: 900;
+  letter-spacing: .09em;
+  font-size: 23px;
+  opacity: .95;
+}
+
+/* Superscript count (top-right of "All") */
+.kk-home-catcard-count{
+  font-weight: 900;
+  letter-spacing: .08em;
+  font-size: 21px;
+  opacity: .95;
+  transform: translateY(-5px); /* slightly higher like pic */
+}
+
+.kk-home-catcard-name{
+  font-weight: 200;
+  letter-spacing: .06em;
+  font-size: 1.5rem;
+  line-height: 1.02; /* tighter */
+}
+/* Smooth feel */
+.kk-home-catstrip-track{
+  scroll-behavior: smooth;
+}
+
+/* Hover polish (desktop only) */
+@media (hover:hover) and (pointer:fine) {
+  .kk-home-catcard{
+    transition: transform .18s ease, box-shadow .18s ease;
+    will-change: transform;
+  }
+
+  .kk-home-catcard img{
+    transition: transform .35s ease;
+    will-change: transform;
+  }
+
+  .kk-home-catcard:hover{
+    transform: translateY(-4px);
+    box-shadow: 0 18px 40px rgba(0,0,0,.22);
+  }
+
+  .kk-home-catcard:hover img{
+    transform: scale(1.06);
+  }
+}
+.kk-home-catstrip-track{
+  padding: 0px 14px 10px; /* gives side padding so first/last card breathe */
+}
+

@@ -1,0 +1,356 @@
+/* =========================
+   ADMIN PROMOTIONS
+========================= */
+
+/* Header card */
+.kk-admin-promotions .kk-admin-header {
+  margin-bottom: 24px;
+  background: linear-gradient(135deg, #f6f6f6 0%, #ffffff 100%);
+}
+
+/* Controls card */
+.kk-admin-promotions .kk-admin-controls {
+  margin-top: 0;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.kk-admin-promotions .kk-admin-controls .kk-kicker {
+  font-size: 11px;
+  opacity: 0.7;
+  margin-bottom: 16px;
+}
+
+/* Count label styling */
+.kk-admin-promotions #countLabel {
+  font-size: 13px;
+  opacity: 0.65;
+  font-weight: 600;
+}
+
+/* Search & action grid improvements */
+.kk-admin-promotions .kk-grid.kk-grid-2 {
+  gap: 16px;
+  align-items: end;
+}
+
+.kk-admin-promotions .kk-admin-controls-right {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.kk-admin-promotions .kk-admin-controls-spacer {
+  display: none;
+}
+
+.kk-admin-promotions .kk-input {
+  font-size: 14px;
+  transition: border-color 0.2s ease;
+}
+
+.kk-admin-promotions .kk-input:focus {
+  outline: none;
+  border-color: #000;
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.1);
+}
+
+.kk-admin-promotions .kk-admin-new-btn {
+  transition: all 0.2s ease;
+}
+
+.kk-admin-promotions .kk-admin-new-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* =========================
+   TABLE
+========================= */
+
+.kk-admin-promotions .kk-admin-table {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  border-radius: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.kk-admin-promotions .kk-admin-table-table {
+  border-spacing: 0;
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.kk-admin-promotions .kk-admin-table-table thead th {
+  background: #000;
+  color: #fff;
+  font-size: 11px;
+  padding: 16px 18px;
+  font-weight: 1000;
+  letter-spacing: 0.1em;
+  border-bottom: 3px solid #333;
+  text-align: left;
+}
+
+.kk-admin-promotions .kk-admin-table-table tbody tr {
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  transition: background-color 0.15s ease;
+}
+
+.kk-admin-promotions .kk-admin-table-table tbody tr:hover {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.kk-admin-promotions .kk-admin-table-table td {
+  padding: 18px;
+  vertical-align: middle;
+  font-size: 14px;
+}
+
+.kk-admin-promotions .kk-admin-table-table td strong {
+  font-weight: 1000;
+  font-size: 15px;
+}
+
+/* Column widths */
+.kk-admin-promotions .kk-admin-table-table th:nth-child(1) { width: 20%; } /* Name */
+.kk-admin-promotions .kk-admin-table-table th:nth-child(2) { width: 12%; } /* Code */
+.kk-admin-promotions .kk-admin-table-table th:nth-child(3) { width: 10%; } /* Type */
+.kk-admin-promotions .kk-admin-table-table th:nth-child(4) { width: 8%; }  /* Value */
+.kk-admin-promotions .kk-admin-table-table th:nth-child(5) { width: 8%; }  /* Active */
+.kk-admin-promotions .kk-admin-table-table th:nth-child(6) { width: 12%; } /* Start Date */
+.kk-admin-promotions .kk-admin-table-table th:nth-child(7) { width: 12%; } /* End Date */
+.kk-admin-promotions .kk-admin-table-table th:nth-child(8) { width: 8%; }  /* Actions */
+
+/* Table cell specific styling */
+.kk-admin-promotions .kk-admin-table-table td:nth-child(3) {
+  color: rgba(0, 0, 0, 0.7);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.kk-admin-promotions .kk-admin-table-table td:nth-child(4) {
+  font-weight: 900;
+  font-size: 13px;
+}
+
+.kk-admin-promotions .kk-admin-table-table td:nth-child(5),
+.kk-admin-promotions .kk-admin-table-table td:nth-child(6),
+.kk-admin-promotions .kk-admin-table-table td:nth-child(7) {
+  font-size: 13px;
+  color: rgba(0, 0, 0, 0.7);
+}
+
+/* Active status badge */
+.kk-admin-promotions .kk-admin-table-table td:nth-child(5) {
+  font-weight: 900;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+.kk-admin-promotions .kk-admin-table-table td:nth-child(5)::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 8px;
+  background: #22c55e;
+}
+
+.kk-admin-promotions .kk-admin-table-table tbody tr:has(td:nth-child(5):contains("NO")) td:nth-child(5)::before,
+.kk-admin-promotions .kk-admin-table-table td:nth-child(5):not(:contains("YES"))::before {
+  background: #999;
+}
+
+/* Type badges styling */
+.kk-admin-promotions .kk-promo-type-badge {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  background: #f0f0f0;
+  border: 2px solid #000;
+}
+
+.kk-admin-promotions .kk-promo-type-badge.percentage {
+  background: #dbeafe;
+  border-color: #2563eb;
+  color: #1e40af;
+}
+
+.kk-admin-promotions .kk-promo-type-badge.fixed {
+  background: #dcfce7;
+  border-color: #16a34a;
+  color: #15803d;
+}
+
+.kk-admin-promotions .kk-promo-type-badge.bogo {
+  background: #fce7f3;
+  border-color: #ec4899;
+  color: #be185d;
+}
+
+.kk-admin-promotions .kk-promo-type-badge.free-shipping {
+  background: #fef3c7;
+  border-color: #f59e0b;
+  color: #d97706;
+}
+
+/* Actions in the table */
+.kk-admin-promotions .kk-admin-row-actions {
+  display: inline-flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.kk-admin-promotions .kk-admin-row-actions button {
+  border: 3px solid #000;
+  background: #fff;
+  padding: 10px 16px;
+  cursor: pointer;
+  font-weight: 1000;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-size: 11px;
+  transition: all 0.2s ease;
+  border-radius: 0;
+}
+
+.kk-admin-promotions .kk-admin-row-actions button:hover {
+  background: #000;
+  color: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* =========================
+   MODAL
+========================= */
+
+/* Textarea styling */
+.kk-admin-promotions textarea.kk-input {
+  resize: vertical;
+  padding: 12px;
+  border: 2px solid #000;
+}
+
+.kk-admin-promotions textarea.kk-input:focus {
+  border-color: #000;
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.1);
+}
+
+/* =========================
+   MOBILE
+========================= */
+
+/* Mobile responsive adjustments */
+@media (max-width: 768px) {
+  /* Stack search and button */
+  .kk-admin-promotions .kk-grid.kk-grid-2 {
+    grid-template-columns: 1fr;
+  }
+  
+  .kk-admin-promotions .kk-admin-controls-right {
+    align-items: stretch;
+  }
+  
+  .kk-admin-promotions .kk-admin-new-btn {
+    max-width: 100%;
+  }
+  
+  /* Make table scrollable on mobile */
+  .kk-admin-promotions .kk-admin-table {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Reduce padding on mobile */
+  .kk-admin-promotions .kk-admin-table-table td {
+    padding: 12px 10px;
+    font-size: 13px;
+  }
+  
+  .kk-admin-promotions .kk-admin-table-table thead th {
+    padding: 12px 10px;
+    font-size: 10px;
+  }
+  
+  /* Smaller buttons on mobile */
+  .kk-admin-promotions .kk-admin-row-actions button {
+    padding: 8px 12px;
+    font-size: 10px;
+  }
+  
+  /* Hide less important columns on very small screens */
+  @media (max-width: 600px) {
+    .kk-admin-promotions .kk-admin-table-table th:nth-child(6),
+    .kk-admin-promotions .kk-admin-table-table td:nth-child(6),
+    .kk-admin-promotions .kk-admin-table-table th:nth-child(7),
+    .kk-admin-promotions .kk-admin-table-table td:nth-child(7) {
+      display: none;
+    }
+  }
+}
+
+/* ===== SCOPE STYLING ===== */
+
+.kk-scope-select-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  background: #fafafa;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.kk-scope-select-wrap label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #333;
+  cursor: pointer;
+  user-select: none;
+}
+
+.kk-scope-select-wrap input[type="checkbox"] {
+  accent-color: #000;
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+}
+
+.kk-scope-select-wrap label:hover {
+  background: rgba(0, 0, 0, 0.03);
+  border-radius: 2px;
+  padding: 2px 4px;
+}
+
+/* Modal: make fields breathe on small screens */
+@media (max-width: 520px) {
+  .kk-admin-promotions .kk-grid.kk-grid-2 {
+    grid-template-columns: 1fr !important;
+  }
+
+  .kk-admin-modal-stage {
+    padding: 12px;
+  }
+
+  .kk-admin-modal-card {
+    max-height: 90vh;
+  }
+
+  .kk-scope-select-wrap {
+    max-height: 150px;
+    padding: 10px;
+  }
+}

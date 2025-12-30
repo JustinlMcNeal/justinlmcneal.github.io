@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>Admin · Reset Password</title>
+
+  <!-- Global site theme -->
+  <link rel="stylesheet" href="/css/theme/base.css">
+  <link rel="stylesheet" href="/css/theme/components.css">
+
+  <!-- New navbar + drawers -->
+  <link rel="stylesheet" href="/css/components/navbar.css">
+
+  <!-- Admin page styles -->
+  <link rel="stylesheet" href="/css/pages/admin.css">
+</head>
+
+<body class="kk-page kk-admin">
+
+  <!-- ✅ NAVBAR INSERT MOUNT -->
+  <div id="kkNavbarMount"></div>
+
+  <main class="kk-container">
+    <div class="kk-card kk-card-pad maxw-sm">
+      <div class="kk-kicker">Admin</div>
+      <h1 class="kk-h1">Reset Password</h1>
+      <p id="status" class="kk-sub">Loading…</p>
+
+      <!-- Debug (your JS can show this when DEBUG=true) -->
+      <div id="debugBox" class="hidden">
+        <pre id="debug" class="kk-debug"></pre>
+      </div>
+
+      <form id="form" class="hidden gap-24">
+        <label class="kk-label" for="pw1">New password</label>
+        <input id="pw1" class="kk-input" type="password" autocomplete="new-password" />
+
+        <div class="gap-16"></div>
+
+        <label class="kk-label" for="pw2">Confirm password</label>
+        <input id="pw2" class="kk-input" type="password" autocomplete="new-password" />
+
+        <div class="gap-24"></div>
+
+        <button class="kk-btn" type="submit">Update password</button>
+
+        <div class="gap-16"></div>
+
+        <a class="kk-link" href="/pages/admin/auth-callback.html">Back to auth</a>
+      </form>
+    </div>
+  </main>
+
+
+
+  <!-- Reset logic -->
+  <script type="module" src="/js/admin/reset/index.js"></script>
+</body>
+</html>

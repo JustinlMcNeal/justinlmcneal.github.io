@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KARRY KRAZE — Product</title>
+
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Keep KK theme if desired -->
+  <link rel="stylesheet" href="/css/theme/base.css">
+  <link rel="stylesheet" href="/css/theme/components.css">
+  <link rel="stylesheet" href="/css/components/navbar.css">
+
+  <style>
+    /* Sticky fix for KK theme pages */
+    .kk-page--product,
+    .kk-page--product main,
+    .kk-page--product section,
+    .kk-page--product #productWrap {
+      overflow: visible !important;
+    }
+    .kk-page--product {
+      transform: none !important;
+      filter: none !important;
+      backdrop-filter: none !important;
+    }
+
+    /* Soft dock styles (only applied when JS adds .is-docked) */
+    #stickyDetailsCol.is-docked {
+      opacity: 1;
+      transform: translateY(-2px);
+      box-shadow: 0 14px 30px rgba(0,0,0,.10);
+    }
+
+    /* Default (not docked) */
+    #stickyDetailsCol {
+      opacity: .98;
+      transform: translateY(0);
+      box-shadow: none;
+    }
+
+    /* Respect reduced motion */
+    @media (prefers-reduced-motion: reduce) {
+      #stickyDetailsCol { transition: none !important; }
+    }
+  </style>
+</head>
+
+<body class="kk-page kk-page--product">
+
+  <div id="kkNavbarMount"></div>
+
+  <main class="max-w-5xl mx-auto px-4 py-4">
+
+    <!-- Breadcrumb -->
+    <div class="text-sm mb-4">
+      <a class="underline" href="/pages/catalog.html">Back</a>
+      <span class="opacity-60"> / </span>
+      <span id="crumbName">Product</span>
+    </div>
+
+    <!-- Header -->
+    <header class="bg-white">
+      <div class="px-4 py-6 text-center">
+        <div id="productCategory" class="uppercase tracking-[.25em] font-black text-xs opacity-70">
+          Category
+        </div>
+
+        <h1 id="productName" class="font-black tracking-tight text-2xl sm:text-3xl mt-2">
+          Product Name
+        </h1>
+
+        <div id="productCode" class="text-sm opacity-60 mt-2"></div>
+      </div>
+    </header>
+
+    <!-- Main -->
+    <section class="bg-white mt-6">
+
+      <!-- Loading -->
+      <div id="productLoading" class="p-5">
+        <div class="uppercase tracking-[.25em] font-black text-xs">Loading</div>
+        <div class="text-sm opacity-70 mt-2">Fetching product…</div>
+      </div>
+
+      <!-- Error -->
+      <div id="productError" class="p-5 hidden">
+        <div class="uppercase tracking-[.25em] font-black text-xs text-red-700">Error</div>
+        <div id="errorMsg" class="text-sm text-red-700 mt-2"></div>
+        <div class="mt-4">
+          <a class="inline-block bg-black text-white font-black px-5 py-3" href="/pages/catalog.html">
+            Back to catalog
+          </a>
+        </div>
+      </div>
+
+      <!-- Content -->
+      <div id="productWrap" class="hidden">
+        <div class="grid lg:grid-cols-2 gap-8 items-start">
+
+          <!-- LEFT -->
+          <div class="p-2">
+            <div id="productGalleryMount"></div>
+          </div>
+
+          <!-- RIGHT (sticky on lg+) -->
+          <div
+            id="stickyDetailsCol"
+            class="p-4 lg:p-6 self-start lg:sticky lg:top-[calc(var(--kk-nav-h,72px)+12px)] h-fit
+                   transition-[transform,box-shadow,opacity] duration-200 ease-out
+                   will-change-transform"
+          >
+            <div id="productDetailsMount"></div>
+          </div>
+
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <script type="module" src="/js/product/index.js"></script>
+</body>
+</html>

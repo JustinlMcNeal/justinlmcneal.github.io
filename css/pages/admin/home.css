@@ -1,0 +1,35 @@
+/* =========================
+   ADMIN HOME (DASHBOARD)
+========================= */
+
+.kk-admin-home .kk-admin-hero {
+  margin-bottom: 14px;
+}
+
+.kk-admin-home .kk-admin-hero .kk-card-pad {
+  text-align: left;
+}
+
+.kk-admin-home .kk-admin-hero-title {
+  margin-top: 10px;
+}
+
+@media (min-width: 900px) {
+  .kk-admin-home .kk-admin-hero .kk-card-pad {
+    padding: 18px 18px;
+  }
+}
+
+/* Group sections on dashboard */
+.kk-admin-home .kk-admin-group {
+  margin-top: 14px;
+}
+
+.kk-admin-home .kk-admin-group-title {
+  margin: 0 0 10px;
+  font-weight: 1000;
+  letter-spacing: var(--kk-track-wide);
+  text-transform: uppercase;
+  font-size: 12px;
+  opacity: .75;
+}

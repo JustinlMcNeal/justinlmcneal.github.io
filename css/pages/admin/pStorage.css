@@ -1,0 +1,227 @@
+/* =========================
+   ADMIN · PRODUCT STORAGE
+========================= */
+
+/* Page identity */
+.kk-page.kk-admin-pstorage {
+  min-height: 100vh;
+}
+
+/* Slightly tighter top spacing like Products */
+.kk-admin-pstorage .kk-container {
+  padding-top: 16px;
+}
+
+/* =========================
+   HEADER
+========================= */
+
+.kk-admin-pstorage .kk-admin-header {
+  margin-bottom: 24px;
+  background: linear-gradient(135deg, #f6f6f6 0%, #ffffff 100%);
+}
+
+/* =========================
+   CONTROLS
+========================= */
+
+.kk-admin-pstorage .kk-admin-controls {
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.08);
+}
+
+.kk-admin-pstorage .kk-admin-controls .kk-kicker {
+  font-size: 11px;
+  opacity: .7;
+  margin-bottom: 16px;
+}
+
+.kk-admin-pstorage #countLabel {
+  font-size: 13px;
+  opacity: .65;
+  font-weight: 600;
+}
+
+/* Search + button layout */
+.kk-admin-pstorage .kk-grid.kk-grid-2 {
+  gap: 16px;
+  align-items: end;
+}
+
+.kk-admin-pstorage .kk-admin-controls-right {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.kk-admin-pstorage .kk-input {
+  font-size: 14px;
+}
+
+.kk-admin-pstorage .kk-admin-new-btn {
+  transition: all .2s ease;
+}
+
+.kk-admin-pstorage .kk-admin-new-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,.15);
+}
+
+/* =========================
+   TABLE
+========================= */
+
+/* Wrapper card */
+.kk-admin-pstorage .kk-admin-table {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  box-shadow: 0 2px 12px rgba(0,0,0,.08);
+  border-radius: 0;
+}
+
+/* Actual table */
+.kk-admin-pstorage .kk-admin-table-table {
+  width: 100%;
+  min-width: 920px;
+  border-collapse: collapse;
+  border-spacing: 0;
+  table-layout: fixed; /* KEY FIX */
+}
+
+/* Head */
+.kk-admin-pstorage .kk-admin-table-table thead th {
+  background: #000;
+  color: #fff;
+  font-size: 11px;
+  padding: 16px 18px;
+  font-weight: 1000;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  border-bottom: 3px solid #333;
+}
+
+/* Body rows */
+.kk-admin-pstorage .kk-admin-table-table tbody tr {
+  border-top: 1px solid rgba(0,0,0,.08);
+  transition: background-color .15s ease;
+}
+
+.kk-admin-pstorage .kk-admin-table-table tbody tr:hover {
+  background: rgba(0,0,0,.02);
+}
+
+/* Cells */
+.kk-admin-pstorage .kk-admin-table-table td {
+  padding: 18px;
+  vertical-align: middle;
+  font-size: 14px;
+}
+
+/* Column sizing */
+.kk-admin-pstorage .kk-admin-table-table th:nth-child(1) { width: 28%; } /* Item */
+.kk-admin-pstorage .kk-admin-table-table th:nth-child(2) { width: 12%; } /* Stage */
+.kk-admin-pstorage .kk-admin-table-table th:nth-child(3) { width: 12%; } /* Target */
+.kk-admin-pstorage .kk-admin-table-table th:nth-child(4) { width: 12%; } /* Cost */
+.kk-admin-pstorage .kk-admin-table-table th:nth-child(5) { width: 14%; } /* Weight */
+.kk-admin-pstorage .kk-admin-table-table th:nth-child(6) { width: 12%; } /* Actions */
+
+/* =========================
+   BADGES / STAGE
+========================= */
+
+.kk-admin-pstorage .kk-stage-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 3px solid #000;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 1000;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  background: #fff;
+}
+
+/* =========================
+   ACTIONS
+========================= */
+
+.kk-admin-pstorage .kk-admin-row-actions {
+  display: inline-flex;
+  justify-content: flex-end;
+}
+
+.kk-admin-pstorage .kk-admin-row-actions button {
+  border: 3px solid #000;
+  background: #fff;
+  padding: 10px 16px;
+  cursor: pointer;
+  font-weight: 1000;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  font-size: 11px;
+  transition: all .2s ease;
+}
+
+.kk-admin-pstorage .kk-admin-row-actions button:hover {
+  background: #000;
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+/* =========================
+   MODAL (inherits admin.css)
+========================= */
+
+.kk-admin-pstorage .kk-admin-modal {
+  z-index: 130; /* above drawers */
+}
+
+/* =========================
+   MOBILE
+========================= */
+
+@media (max-width: 768px) {
+  .kk-admin-pstorage .kk-grid.kk-grid-2 {
+    grid-template-columns: 1fr;
+  }
+
+  .kk-admin-pstorage .kk-admin-table-table td {
+    padding: 12px 10px;
+    font-size: 13px;
+  }
+
+  .kk-admin-pstorage .kk-admin-table-table thead th {
+    padding: 12px 10px;
+    font-size: 10px;
+  }
+
+  .kk-admin-pstorage .kk-admin-row-actions button {
+    padding: 8px 12px;
+    font-size: 10px;
+  }
+}
+
+/* Hide less important columns on very small screens */
+@media (max-width: 600px) {
+  .kk-admin-pstorage .kk-admin-table-table th:nth-child(5),
+  .kk-admin-pstorage .kk-admin-table-table td:nth-child(5) {
+    display: none;
+  }
+}
+
+/* Modal breathing room */
+@media (max-width: 520px) {
+  .kk-admin-pstorage .kk-grid.kk-grid-2 {
+    grid-template-columns: 1fr !important;
+  }
+
+  .kk-admin-pstorage .kk-admin-modal-stage {
+    padding: 12px;
+  }
+
+  .kk-admin-pstorage .kk-admin-modal-card {
+    max-height: 90vh;
+  }
+}

@@ -1,0 +1,58 @@
+<!-- /page_inserts/product/gallery.html -->
+<section class="w-full">
+
+  <!-- MAIN IMAGE / CAROUSEL (PERFECT SQUARE, NO BORDERS) -->
+  <div class="relative w-full aspect-square bg-white overflow-hidden">
+
+    <!-- prev -->
+    <button
+      id="imgPrev"
+      type="button"
+      aria-label="Previous image"
+      class="absolute left-2 top-1/2 -translate-y-1/2 z-10
+             h-10 w-10 flex items-center justify-center
+             bg-white font-black shadow
+             active:scale-[0.98]"
+    >
+      &lt;
+    </button>
+
+    <!-- track -->
+    <div
+      id="mainCarousel"
+      class="absolute inset-0
+             flex overflow-x-auto scroll-smooth
+             snap-x snap-mandatory
+             [scrollbar-width:none] [-ms-overflow-style:none]"
+      style="scrollbar-width:none;"
+    ></div>
+
+    <!-- next -->
+    <button
+      id="imgNext"
+      type="button"
+      aria-label="Next image"
+      class="absolute right-2 top-1/2 -translate-y-1/2 z-10
+             h-10 w-10 flex items-center justify-center
+             bg-white font-black shadow
+             active:scale-[0.98]"
+    >
+      &gt;
+    </button>
+  </div>
+
+  <!-- MOBILE THUMBS (3 visible, swipe) -->
+  <div
+    id="thumbCarousel"
+    aria-label="Product thumbnails (swipe)"
+    class="mt-3 flex gap-2 overflow-x-auto snap-x snap-mandatory lg:hidden pb-1"
+  ></div>
+
+  <!-- DESKTOP THUMBS GRID (2 columns) -->
+  <div
+    id="thumbRow"
+    aria-label="Product images"
+    class="mt-4 hidden lg:grid grid-cols-2 gap-3"
+  ></div>
+
+</section>

@@ -1,0 +1,257 @@
+/* =========================
+   ADMIN PRODUCTS
+========================= */
+
+/* Header card */
+.kk-admin-products .kk-admin-header {
+  margin-bottom: 24px;
+  background: linear-gradient(135deg, #f6f6f6 0%, #ffffff 100%);
+}
+
+/* Controls card */
+.kk-admin-products .kk-admin-controls {
+  margin-top: 0;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.kk-admin-products .kk-admin-controls .kk-kicker {
+  font-size: 11px;
+  opacity: 0.7;
+  margin-bottom: 16px;
+}
+
+/* Count label styling */
+.kk-admin-products #countLabel {
+  font-size: 13px;
+  opacity: 0.65;
+  font-weight: 600;
+}
+
+/* Search & action grid improvements */
+.kk-admin-products .kk-grid.kk-grid-2 {
+  gap: 16px;
+  align-items: end;
+}
+
+.kk-admin-products .kk-admin-controls-right {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.kk-admin-products .kk-admin-controls-spacer {
+  display: none;
+}
+
+.kk-admin-products .kk-input {
+  font-size: 14px;
+  transition: border-color 0.2s ease;
+}
+
+.kk-admin-products .kk-input:focus {
+  outline: none;
+  border-color: #000;
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.1);
+}
+
+.kk-admin-products .kk-admin-new-btn {
+  transition: all 0.2s ease;
+}
+
+.kk-admin-products .kk-admin-new-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* =========================
+   TABLE
+========================= */
+
+.kk-admin-products .kk-admin-table {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  border-radius: 0;
+  overflow: hidden;
+}
+
+.kk-admin-products .kk-admin-table-table {
+  border-spacing: 0;
+}
+
+.kk-admin-products .kk-admin-table-table thead th {
+  background: #000;
+  color: #fff;
+  font-size: 11px;
+  padding: 16px 18px;
+  font-weight: 1000;
+  letter-spacing: 0.1em;
+  border-bottom: 3px solid #333;
+}
+
+/* Column width optimization */
+.kk-admin-products .kk-admin-table-table th:nth-child(1) { width: 25%; } /* Name */
+.kk-admin-products .kk-admin-table-table th:nth-child(2) { width: 20%; } /* Slug */
+.kk-admin-products .kk-admin-table-table th:nth-child(3) { width: 12%; } /* Code */
+.kk-admin-products .kk-admin-table-table th:nth-child(4) { width: 15%; } /* Category */
+.kk-admin-products .kk-admin-table-table th:nth-child(5) { width: 10%; } /* Price */
+.kk-admin-products .kk-admin-table-table th:nth-child(6) { width: 8%; }  /* Active */
+.kk-admin-products .kk-admin-table-table th:nth-child(7) { width: 10%; } /* Actions */
+
+
+.kk-admin-products .kk-admin-table-table tbody tr {
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  transition: background-color 0.15s ease;
+}
+
+.kk-admin-products .kk-admin-table-table tbody tr:hover {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.kk-admin-products .kk-admin-table-table td {
+  padding: 18px;
+  vertical-align: middle;
+  font-size: 14px;
+}
+
+.kk-admin-products .kk-admin-table-table td strong {
+  font-weight: 1000;
+  font-size: 15px;
+}
+
+/* Table cell specific styling */
+.kk-admin-products .kk-admin-table-table td:nth-child(4),
+.kk-admin-products .kk-admin-table-table td:nth-child(5) {
+  color: rgba(0, 0, 0, 0.7);
+  font-size: 13px;
+}
+
+/* Active status badge */
+.kk-admin-products .kk-admin-table-table td:nth-child(6) {
+  font-weight: 900;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+.kk-admin-products .kk-admin-table-table td:nth-child(6)::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 8px;
+  background: #22c55e;
+}
+
+.kk-admin-products .kk-admin-table-table tbody tr:has(td:nth-child(6):contains("NO")) td:nth-child(6)::before,
+.kk-admin-products .kk-admin-table-table td:nth-child(6):not(:contains("YES"))::before {
+  background: #999;
+}
+
+/* Actions in the table */
+.kk-admin-products .kk-admin-row-actions {
+  display: inline-flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.kk-admin-products .kk-admin-row-actions button {
+  border: 3px solid #000;
+  background: #fff;
+  padding: 10px 16px;
+  cursor: pointer;
+  font-weight: 1000;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-size: 11px;
+  transition: all 0.2s ease;
+  border-radius: 0;
+}
+
+.kk-admin-products .kk-admin-row-actions button:hover {
+  background: #000;
+  color: #fff;
+  transform: translateY(-1px);
+/* =========================
+   MOBILE
+========================= */
+
+/* Mobile responsive adjustments */
+@media (max-width: 768px) {
+  /* Stack search and button */
+  .kk-admin-products .kk-grid.kk-grid-2 {
+    grid-template-columns: 1fr;
+  }
+  
+  .kk-admin-products .kk-admin-controls-right {
+    align-items: stretch;
+  }
+  
+  .kk-admin-products .kk-admin-new-btn {
+    max-width: 100%;
+  }
+  
+  /* Make table scrollable on mobile */
+  .kk-admin-products .kk-admin-table {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Reduce padding on mobile */
+  .kk-admin-products .kk-admin-table-table td {
+    padding: 12px 10px;
+    font-size: 13px;
+  }
+  
+  .kk-admin-products .kk-admin-table-table thead th {
+    padding: 12px 10px;
+    font-size: 10px;
+  }
+  
+  /* Smaller buttons on mobile */
+  .kk-admin-products .kk-admin-row-actions button {
+    padding: 8px 12px;
+    font-size: 10px;
+  }
+  
+  /* Hide less important columns on very small screens */
+  @media (max-width: 600px) {
+    .kk-admin-products .kk-admin-table-table th:nth-child(2),
+    .kk-admin-products .kk-admin-table-table td:nth-child(2),
+    .kk-admin-products .kk-admin-table-table th:nth-child(3),
+    .kk-admin-products .kk-admin-table-table td:nth-child(3) {
+      display: none;
+    }
+  }
+}
+
+/* Modal: make fields breathe on small screens */
+@media (max-width: 520px) {
+  .kk-admin-products .kk-grid.kk-grid-2 {
+    grid-template-columns: 1fr !important;
+  }
+
+  .kk-admin-modal-stage {
+    padding: 12px;
+  }
+
+  .kk-admin-modal-card {
+    max-height: 90vh;
+  }
+}  MOBILE
+========================= */
+
+/* Modal: make fields breathe on small screens */
+@media (max-width: 520px) {
+  .kk-admin-products .kk-grid.kk-grid-2 {
+    grid-template-columns: 1fr !important;
+  }
+
+  .kk-admin-modal-stage {
+    padding: 12px;
+  }
+
+  .kk-admin-modal-card {
+    max-height: 90vh;
+  }
+}

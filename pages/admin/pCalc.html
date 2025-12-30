@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin · Product Calculator</title>
+
+    <!-- Global theme -->
+    <link rel="stylesheet" href="/css/theme/base.css" />
+    <link rel="stylesheet" href="/css/theme/components.css" />
+
+    <!-- Navbar -->
+    <link rel="stylesheet" href="/css/components/navbar.css" />
+
+    <!-- Admin shared -->
+    <link rel="stylesheet" href="/css/pages/admin/admin.css" />
+
+    <!-- Page styles -->
+    <link rel="stylesheet" href="/css/pages/admin/pCalc.css" />
+</head>
+
+<body class="kk-page kk-admin kk-admin-productcalc">
+
+    <!-- NAVBAR -->
+    <div id="kkNavbarMount"></div>
+
+    <main class="kk-container">
+
+        <section class="kk-card kk-card-pad kk-admin-header">
+            <div class="kk-kicker">Admin</div>
+            <h1 class="kk-h1">Product Calculator</h1>
+            <p class="kk-sub">Supplier ship (SC) + Paid vs Free shipping CPI, like your Google Sheet.</p>
+            <div id="pc_status" class="kk-sub" style="margin-top:8px;">Loading…</div>
+
+            <div class="kk-pcalc-top-actions">
+                <button id="pc_refresh" class="kk-btn kk-pcalc-ghost" type="button">Refresh</button>
+                <button id="pc_reset" class="kk-btn kk-pcalc-ghost" type="button">Reset</button>
+            </div>
+        </section>
+
+        <section class="kk-pcalc-grid">
+
+            <!-- LEFT: INPUTS + TABLE -->
+            <section class="kk-card kk-card-pad">
+                <div class="kk-section-title">Inputs</div>
+                <div class="kk-divider"></div>
+
+                <div class="kk-grid kk-grid-2">
+                    <div class="kk-field">
+                        <label class="kk-label" for="pc_product">Product</label>
+                        <select id="pc_product" class="kk-input"></select>
+                        <div class="kk-pcalc-help">Pick an item. Costs come from <code>product_costs</code> (joined in
+                            JS).</div>
+                    </div>
+
+                    <div class="kk-field">
+                        <label class="kk-label" for="pc_view">View</label>
+                        <select id="pc_view" class="kk-input">
+                            <option value="both">Both (Paid + Free Shipping)</option>
+                            <option value="paid">Paid Shipping Only</option>
+                            <option value="free">Free Shipping Only</option>
+                        </select>
+                        <div class="kk-pcalc-help">“Paid shipping” = you don’t cover STCC.</div>
+                    </div>
+
+                    <!-- Unit cost -->
+                    <div class="kk-field">
+                        <label class="kk-label" for="pc_unit_cost">Unit Cost</label>
+                        <div class="kk-moneyField">
+                            <span class="kk-moneyField__prefix">$</span>
+                            <input id="pc_unit_cost" class="kk-input kk-moneyField__input" type="number" step="0.01"
+                                min="0" />
+                        </div>
+                        <div class="kk-pcalc-help">Defaults from <code>product_costs.unit_cost</code>.</div>
+                    </div>
+
+                    <!-- Supplier ship per unit -->
+                    <div class="kk-field">
+                        <label class="kk-label" for="pc_ship_per_unit">Supplier Ship / Unit</label>
+                        <div class="kk-moneyField">
+                            <span class="kk-moneyField__prefix">$</span>
+                            <input id="pc_ship_per_unit" class="kk-input kk-moneyField__input" type="number" step="0.01"
+                                min="0" />
+                        </div>
+                        <div class="kk-pcalc-help">Defaults from <code>product_costs.supplier_ship_per_unit</code>
+                            (optional).</div>
+                    </div>
+
+                    <!-- Weight grams -->
+                    <div class="kk-field">
+                        <label class="kk-label" for="pc_weight_oz">Weight (g)</label>
+                        <input id="pc_weight_oz" class="kk-input" type="number" step="1" min="0" />
+                        <div class="kk-pcalc-help">Your DB uses grams (<code>products.weight_g</code>). Override uses
+                            <code>product_costs.weight_oz_override</code> (legacy name, treated as grams).</div>
+                    </div>
+
+                    <!-- STCC -->
+                    <div class="kk-field">
+                        <label class="kk-label" for="pc_stcc">
+                            STCC (Ship to Customer)
+                            <span id="pc_stcc_mode" class="kk-pill kk-pill-auto">AUTO</span>
+                        </label>
+
+                        <div class="kk-moneyField">
+                            <span class="kk-moneyField__prefix">$</span>
+                            <input id="pc_stcc" class="kk-input kk-moneyField__input" type="number" step="0.01"
+                                min="0" />
+                        </div>
+                        <div class="kk-pcalc-help">Defaults from <code>product_costs.stcc_override</code> (per unit).
+                        </div>
+                    </div>
+                </div>
+
+                <div class="kk-divider"></div>
+
+                <div class="kk-pcalc-tablehead">
+                    <div>
+                        <div class="kk-section-title">Quantity Range</div>
+                        <div class="kk-sub">Generate rows like your Google Sheet.</div>
+                    </div>
+
+                    <div class="kk-pcalc-controls">
+                        <input id="pc_start" class="kk-input kk-pcalc-input-sm" type="number" step="1" min="1"
+                            value="5" />
+                        <input id="pc_end" class="kk-input kk-pcalc-input-sm" type="number" step="1" min="1"
+                            value="150" />
+                        <input id="pc_step" class="kk-input kk-pcalc-input-sm" type="number" step="1" min="1"
+                            value="5" />
+                    </div>
+                </div>
+
+                <div class="kk-grid kk-grid-2 gap-12">
+                    <button id="pc_generate" class="kk-btn" type="button">Generate</button>
+                    <button id="pc_copy" class="kk-btn kk-pcalc-ghost" type="button">Copy CSV</button>
+                </div>
+
+                <div class="kk-pcalc-help">
+                    Columns:
+                    <b>Item Amount</b> (qty * unit_cost),
+                    <b>Total Weight (g)</b> (qty * weight_g),
+                    <b>SC</b> (sheet SC formula),
+                    <b>Total Cost Paid</b> (item + SC),
+                    <b>Total Cost Free</b> (paid + STCC*qty),
+                    <b>CPI</b> = totals / qty.
+                </div>
+
+                <div class="kk-divider"></div>
+
+                <div class="kk-pcalc-tablewrap">
+                    <table class="kk-table kk-pcalc-table">
+                        <thead>
+                            <tr>
+                                <th>Qty</th>
+                                <th>Item Amount</th>
+                                <th>Total Weight (g)</th>
+                                <th>SC</th>
+                                <th>Total Cost Paid</th>
+                                <th>Total Cost Free</th>
+                                <th>CPI Free</th>
+                                <th>CPI Paid</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pc_tbody"></tbody>
+                    </table>
+                </div>
+
+            </section>
+
+            <!-- RIGHT: SUMMARY -->
+            <aside class="kk-card kk-card-pad">
+                <div class="kk-section-title">Summary</div>
+                <div class="kk-divider"></div>
+
+                <div class="kk-pcalc-summary">
+                    <div class="kk-pcalc-row">
+                        <div class="kk-pcalc-label">Item</div>
+                        <div id="pc_sum_name" class="kk-pcalc-val">—</div>
+                    </div>
+                    <div class="kk-pcalc-row">
+                        <div class="kk-pcalc-label">Unit Cost</div>
+                        <div id="pc_sum_unit" class="kk-pcalc-val">—</div>
+                    </div>
+                    <div class="kk-pcalc-row">
+                        <div class="kk-pcalc-label">Weight (g)</div>
+                        <div id="pc_sum_weight" class="kk-pcalc-val">—</div>
+                    </div>
+                    <div class="kk-pcalc-row">
+                        <div class="kk-pcalc-label">STCC</div>
+                        <div id="pc_sum_stcc" class="kk-pcalc-val">—</div>
+                    </div>
+                    <div class="kk-pcalc-row">
+                        <div class="kk-pcalc-label">Supplier Ship / Unit</div>
+                        <div id="pc_sum_ship" class="kk-pcalc-val">—</div>
+                    </div>
+
+                    <div class="kk-divider"></div>
+
+                    <div class="kk-sub">
+                        Green-highlight = best CPI (Paid Shipping).<br />
+                        Pink-highlight = best CPI (Free Shipping).
+                    </div>
+                </div>
+            </aside>
+
+        </section>
+    </main>
+
+    <script type="module" src="/js/admin/pCalc/index.js"></script>
+</body>
+
+</html>

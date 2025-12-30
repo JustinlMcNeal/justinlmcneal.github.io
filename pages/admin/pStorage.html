@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin · Product Storage</title>
+
+  <!-- Global brand theme -->
+  <link rel="stylesheet" href="/css/theme/base.css">
+  <link rel="stylesheet" href="/css/theme/components.css">
+
+  <!-- Navbar -->
+  <link rel="stylesheet" href="/css/components/navbar.css">
+
+  <!-- Admin styles -->
+  <link rel="stylesheet" href="/css/pages/admin/admin.css">
+  <link rel="stylesheet" href="/css/pages/admin/pStorage.css">
+</head>
+
+<body class="kk-page kk-admin kk-admin-pstorage">
+
+  <div id="kkNavbarMount"></div>
+
+  <main class="kk-container">
+
+    <!-- Header -->
+    <section class="kk-card kk-card-pad kk-admin-header">
+      <div class="kk-kicker">Admin</div>
+      <h1 class="kk-h1">Product Storage</h1>
+      <p class="kk-sub">Wishlist / “maybe” products (Supabase)</p>
+      <div id="ps_status" class="kk-sub" style="margin-top:8px;">Loading…</div>
+    </section>
+
+    <!-- APP (If you later want auth gating like products.html, you can wrap this in appPanel) -->
+    <section id="appPanel">
+      <div class="gap-24"></div>
+
+      <!-- Controls -->
+      <section class="kk-card kk-card-pad kk-admin-controls">
+        <div class="kk-kicker">Storage</div>
+        <div class="gap-12"></div>
+
+        <div class="kk-grid kk-grid-2">
+          <div class="kk-field">
+            <label class="kk-label kk-label--tight" for="searchInput">Search</label>
+            <input
+              id="searchInput"
+              class="kk-input kk-input--tight"
+              type="search"
+              placeholder="Search name / product id / tags…"
+            />
+          </div>
+
+          <div class="kk-field kk-admin-controls-right">
+            <label class="kk-label kk-label--tight kk-admin-controls-spacer">Action</label>
+            <button id="btnNew" class="kk-btn kk-admin-new-btn" type="button">
+              + Add item
+            </button>
+          </div>
+        </div>
+
+        <div class="gap-12"></div>
+
+        <div class="kk-admin-controls-foot">
+          <div id="countLabel" class="kk-sub">0 items</div>
+        </div>
+      </section>
+
+      <div class="gap-24"></div>
+
+      <!-- Table wrapper -->
+      <section id="tableWrap" class="kk-card kk-admin-table">
+        <table class="kk-admin-table-table">
+          <thead class="kk-admin-table-head">
+            <tr>
+              <th>Item</th>
+              <th>Stage</th>
+              <th>Target</th>
+              <th>Cost</th>
+              <th>Weight (g)</th>
+              <th class="kk-admin-table-actions">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="storageRows"></tbody>
+        </table>
+      </section>
+    </section>
+
+    <!-- MODAL -->
+    <div id="modal" class="hidden kk-admin-modal" aria-hidden="true">
+      <div class="kk-admin-modal-backdrop"></div>
+
+      <div class="kk-admin-modal-stage">
+        <div class="kk-card kk-admin-modal-card">
+          <div class="kk-admin-modal-head">
+            <h3 id="modalTitle" class="kk-kicker kk-admin-modal-title">Edit Item</h3>
+            <button id="btnClose" class="kk-btn kk-admin-modal-close" type="button">Close</button>
+          </div>
+
+          <div class="kk-admin-modal-body">
+            <input id="fId" type="hidden" />
+
+            <div class="kk-section-title">Basics</div>
+            <div class="gap-12"></div>
+
+            <div class="kk-grid kk-grid-2">
+              <div class="kk-field">
+                <label class="kk-label kk-label--tight" for="fName">Item Name</label>
+                <input id="fName" class="kk-input kk-input--tight" placeholder="Satin-lined beanie blank" />
+              </div>
+
+              <div class="kk-field">
+                <label class="kk-label kk-label--tight" for="fProductId">Product ID (optional)</label>
+                <input id="fProductId" class="kk-input kk-input--tight" placeholder="KK-1042" />
+              </div>
+
+              <div class="kk-field kk-admin-span-all">
+                <label class="kk-label kk-label--tight" for="fUrl">Item Link</label>
+                <input id="fUrl" class="kk-input kk-input--tight" placeholder="https://..." />
+              </div>
+
+              <div class="kk-field">
+                <label class="kk-label kk-label--tight" for="fStage">Stage</label>
+                <select id="fStage" class="kk-input kk-input--tight">
+                  <option value="idea">Idea</option>
+                  <option value="researching">Researching</option>
+                  <option value="sample">Sample</option>
+                  <option value="pricing">Pricing</option>
+                  <option value="ready">Ready</option>
+                  <option value="archived">Archived</option>
+                </select>
+              </div>
+
+              <div class="kk-field">
+                <label class="kk-label kk-label--tight" for="fTags">Tags (comma)</label>
+                <input id="fTags" class="kk-input kk-input--tight" placeholder="supplierA, beanie, mto" />
+              </div>
+            </div>
+
+            <div class="kk-divider"></div>
+
+            <div class="kk-section-title">Costs</div>
+            <p class="kk-sub kk-admin-help">Keep it light — only fill what you know.</p>
+            <div class="gap-12"></div>
+
+            <div class="kk-grid kk-grid-3">
+              <div class="kk-field">
+                <label class="kk-label kk-label--tight" for="fTargetPrice">Target Sell Price</label>
+                <input id="fTargetPrice" class="kk-input kk-input--tight" type="number" step="0.01" placeholder="0.00" />
+              </div>
+
+              <div class="kk-field">
+                <label class="kk-label kk-label--tight" for="fUnitCost">Unit Cost (no ship)</label>
+                <input id="fUnitCost" class="kk-input kk-input--tight" type="number" step="0.01" placeholder="0.00" />
+              </div>
+
+              <div class="kk-field">
+                <label class="kk-label kk-label--tight" for="fWeightG">Weight (g)</label>
+                <input id="fWeightG" class="kk-input kk-input--tight" type="number" step="1" placeholder="0" />
+              </div>
+
+              <div class="kk-field">
+                <label class="kk-label kk-label--tight" for="fSupplierShip">Supplier Ship / Unit</label>
+                <input id="fSupplierShip" class="kk-input kk-input--tight" type="number" step="0.01" placeholder="0.00" />
+              </div>
+
+              <div class="kk-field">
+                <label class="kk-label kk-label--tight" for="fStcc">STCC (Ship to customer)</label>
+                <input id="fStcc" class="kk-input kk-input--tight" type="number" step="0.01" placeholder="0.00" />
+              </div>
+
+              <div class="kk-field">
+                <label class="kk-label kk-label--tight" for="fBulkQty">Bulk Qty</label>
+                <input id="fBulkQty" class="kk-input kk-input--tight" type="number" step="1" placeholder="30" />
+              </div>
+            </div>
+
+            <div class="kk-divider"></div>
+
+            <div class="kk-section-title">Notes</div>
+            <div class="gap-12"></div>
+            <textarea id="fNotes" class="kk-input kk-textarea" rows="6" placeholder="Anything you want to remember…"></textarea>
+
+            <div id="modalMsg" class="hidden kk-sub kk-admin-msg"></div>
+          </div>
+
+          <div class="kk-admin-modal-foot">
+            <button id="btnArchive" type="button" class="kk-btn kk-admin-danger-outline">
+              Archive
+            </button>
+
+            <button id="btnHardDelete" type="button" class="kk-btn kk-admin-outline">
+              Delete
+            </button>
+
+            <button id="btnSave" type="button" class="kk-btn kk-admin-save">
+              Save
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <script type="module" src="/js/admin/pStorage/index.js"></script>
+</body>
+</html>

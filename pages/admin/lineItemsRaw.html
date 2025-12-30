@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin · Line Items (Raw)</title>
+
+  <!-- Global brand theme -->
+  <link rel="stylesheet" href="/css/theme/base.css">
+  <link rel="stylesheet" href="/css/theme/components.css">
+
+  <!-- Navbar -->
+  <link rel="stylesheet" href="/css/components/navbar.css">
+
+  <!-- Admin shared -->
+  <link rel="stylesheet" href="/css/pages/admin/admin.css">
+
+  <!-- Page styles -->
+  <link rel="stylesheet" href="/css/pages/admin/lineItemsRaw.css">
+</head>
+
+<body class="kk-page kk-admin kk-admin-lineitemsraw">
+
+  <div id="kkNavbarMount"></div>
+
+  <main class="kk-container">
+
+    <!-- Header -->
+    <section class="kk-card kk-card-pad kk-admin-header">
+      <div class="kk-kicker">Admin</div>
+      <h1 class="kk-h1">Line Items Raw</h1>
+      <p class="kk-sub">Item-level truth. View via joined orders, edit raw line rows if needed.</p>
+      <div id="lir_status" class="kk-sub" style="margin-top:8px;">Loading…</div>
+    </section>
+
+    <section id="appPanel">
+      <div class="gap-24"></div>
+
+      <!-- Controls -->
+      <section class="kk-card kk-card-pad kk-admin-controls">
+        <div class="kk-kicker">Filter</div>
+
+        <div class="kk-grid kk-grid-2 gap-12">
+          <div class="kk-field">
+            <label class="kk-label kk-label--tight" for="searchInput">Search</label>
+            <input
+              id="searchInput"
+              class="kk-input kk-input--tight"
+              type="search"
+              placeholder="Order / email / product / variant…"
+            />
+          </div>
+
+          <div class="kk-field kk-admin-controls-right">
+            <label class="kk-label kk-label--tight kk-admin-controls-spacer">Action</label>
+            <button id="btnRefresh" class="kk-btn kk-admin-new-btn" type="button">
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        <div class="kk-admin-controls-foot">
+          <div id="countLabel" class="kk-sub">0 rows</div>
+        </div>
+      </section>
+
+      <div class="gap-24"></div>
+
+      <!-- Table -->
+      <section class="kk-card kk-admin-table kk-lir-tableCard">
+        <table class="kk-admin-table-table kk-lir-table">
+          <thead class="kk-admin-table-head">
+            <tr>
+              <th>Date</th>
+              <th>Order</th>
+              <th>Product</th>
+              <th>Variant</th>
+              <th>Qty</th>
+              <th>Unit</th>
+              <th>Paid Unit</th>
+              <th>Line Total</th>
+              <th class="kk-admin-table-actions">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="lineItemRows"></tbody>
+        </table>
+        <div class="kk-admin-loadmore">
+  <button id="btnLoadMore" class="kk-btn kk-admin-outline" type="button">Load more</button>
+  <div id="loadMoreStatus" class="kk-sub" style="margin-top:8px;"></div>
+</div>
+
+      </section>
+      
+    </section>
+
+    <!-- MODAL -->
+    <div id="modal" class="hidden kk-admin-modal" aria-hidden="true">
+      <div class="kk-admin-modal-backdrop"></div>
+
+      <div class="kk-admin-modal-stage">
+        <div class="kk-card kk-admin-modal-card">
+
+          <div class="kk-admin-modal-head">
+            <h3 class="kk-kicker kk-admin-modal-title">Edit Line Item</h3>
+            <button id="btnClose" class="kk-btn kk-admin-modal-close" type="button">Close</button>
+          </div>
+
+          <div class="kk-admin-modal-body">
+
+            <!-- Identifiers (read-only) -->
+            <div class="kk-section-title">Identifiers</div>
+            <div class="kk-grid kk-grid-2 gap-12">
+              <div class="kk-field">
+                <label class="kk-label kk-label--tight">Row ID</label>
+                <input id="fLineRowId" class="kk-input kk-input--tight" disabled />
+              </div>
+
+              <div class="kk-field">
+                <label class="kk-label kk-label--tight">Checkout Session</label>
+                <input id="fSessionId" class="kk-input kk-input--tight" disabled />
+              </div>
+
+              <div class="kk-field kk-admin-span-all">
+                <label class="kk-label kk-label--tight">Stripe Line Item ID</label>
+                <input id="fStripeLineItemId" class="kk-input kk-input--tight" disabled />
+              </div>
+            </div>
+
+            <div class="kk-divider"></div>
+
+            <!-- Editable -->
+            <div class="kk-section-title">Line Item</div>
+            <div class="kk-grid kk-grid-2 gap-12">
+              <div class="kk-field">
+                <label class="kk-label kk-label--tight">Product ID</label>
+                <input id="fProductId" class="kk-input kk-input--tight" />
+              </div>
+
+              <div class="kk-field">
+                <label class="kk-label kk-label--tight">Product Name</label>
+                <input id="fProductName" class="kk-input kk-input--tight" />
+              </div>
+
+              <div class="kk-field">
+                <label class="kk-label kk-label--tight">Variant</label>
+                <input id="fVariant" class="kk-input kk-input--tight" />
+              </div>
+
+              <div class="kk-field">
+                <label class="kk-label kk-label--tight">Quantity</label>
+                <input id="fQuantity" class="kk-input kk-input--tight" type="number" min="1" />
+              </div>
+
+              <div class="kk-field">
+                <label class="kk-label kk-label--tight">Item Weight (g)</label>
+                <input id="fWeightG" class="kk-input kk-input--tight" type="number" min="0" />
+              </div>
+            </div>
+
+            <div class="kk-divider"></div>
+
+            <!-- Money -->
+            <div class="kk-section-title">Money</div>
+            <p class="kk-sub">Stored in cents. Displayed in dollars.</p>
+
+            <div class="kk-grid kk-grid-2 gap-12">
+              <div class="kk-field">
+                <label class="kk-label kk-label--tight">Unit Price</label>
+                <input id="fUnitPrice" class="kk-input kk-input--tight" type="number" step="0.01" min="0" />
+              </div>
+
+              <div class="kk-field">
+                <label class="kk-label kk-label--tight">Paid Unit Price</label>
+                <input id="fPostDiscount" class="kk-input kk-input--tight" type="number" step="0.01" min="0" />
+              </div>
+            </div>
+
+            <div id="modalMsg" class="hidden kk-sub kk-admin-msg"></div>
+          </div>
+
+          <div class="kk-admin-modal-foot">
+            <button id="btnHardDelete" class="kk-btn kk-admin-outline" type="button">
+              Delete Line
+            </button>
+            <button id="btnSave" class="kk-btn kk-admin-save" type="button">
+              Save Changes
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <script type="module" src="/js/admin/lineItemsRaw/index.js"></script>
+</body>
+</html>

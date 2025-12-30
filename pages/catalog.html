@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KARRY KRAZE — Catalog</title>
+
+  <!-- Global theme -->
+  <link rel="stylesheet" href="/css/theme/base.css">
+  <link rel="stylesheet" href="/css/theme/components.css">
+
+  <!-- Navbar (required for page_inserts/navbar.html) -->
+  <link rel="stylesheet" href="/css/components/navbar.css">
+
+  <!-- Page-specific -->
+  <link rel="stylesheet" href="/css/pages/catalog.css">
+</head>
+
+<body class="kk-page">
+
+  <!-- ✅ NAVBAR INSERT MOUNT (DO NOT REMOVE) -->
+  <div id="kkNavbarMount"></div>
+
+  <!-- HERO -->
+  <section class="kk-container">
+    <div class="kk-card kk-card-pad" style="text-align:center;">
+      <div class="kk-kicker">Welcome to</div>
+
+      <h1 class="kk-h1" style="margin-top:8px;">
+        Premium Accessories<br />Your Style
+      </h1>
+
+      <p class="kk-sub" style="max-width:420px; margin:12px auto 0;">
+        Discover curated pieces that elevate your everyday look.
+      </p>
+
+      <div class="gap-16"></div>
+
+      <button class="kk-btn" style="max-width:260px; margin:0 auto;">
+        Shop Now
+      </button>
+    </div>
+  </section>
+
+  <!-- SEARCH -->
+  <section class="kk-container">
+    <div class="kk-card kk-card-pad">
+      <label class="kk-label kk-label--tight" for="catalogSearch">
+        Search products
+      </label>
+
+      <input
+        id="catalogSearch"
+        type="search"
+        class="kk-input kk-input--tight"
+        placeholder="Search by name, tag, or style…"
+      />
+
+      <div id="catalogCount" class="kk-sub" style="margin-top:10px;">
+        0 items
+      </div>
+    </div>
+  </section>
+
+  <!-- CATEGORIES -->
+  <section class="kk-container">
+    <div class="kk-card kk-card-pad">
+      <div
+        id="categoryChips"
+        style="display:flex; gap:10px; overflow-x:auto; padding-bottom:4px;"
+      >
+        <!-- JS injects category chips -->
+      </div>
+    </div>
+  </section>
+
+  <!-- PRODUCT GRID -->
+  <main class="kk-container">
+    <div id="productGrid"></div>
+  </main>
+
+  <!-- FOOTER -->
+  <footer style="background:#000; color:#fff; margin-top:40px;">
+    <div class="kk-container" style="padding-top:32px; padding-bottom:32px;">
+      <div
+        style="
+          display:grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap:24px;
+        "
+      >
+        <div>
+          <div class="kk-kicker" style="color:#fff;">KARRY KRAZE</div>
+          <p class="kk-sub" style="color:#b5b5b5; margin-top:8px;">
+            Premium accessories for the modern lifestyle.
+          </p>
+        </div>
+
+        <div>
+          <div class="kk-kicker" style="color:#fff;">Shop</div>
+          <ul style="list-style:none; padding:0; margin-top:8px;">
+            <li class="kk-sub" style="color:#b5b5b5;">All Products</li>
+            <li class="kk-sub" style="color:#b5b5b5;">New Arrivals</li>
+            <li class="kk-sub" style="color:#b5b5b5;">Best Sellers</li>
+          </ul>
+        </div>
+      </div>
+
+      <div
+        style="
+          border-top:2px solid rgba(255,255,255,.15);
+          margin-top:24px;
+          padding-top:16px;
+          text-align:center;
+        "
+      >
+        <div class="kk-sub" style="color:#9a9a9a;">
+          © 2025 Karry Kraze. All rights reserved.
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Catalog logic (navbar + grid rendering) -->
+  <script type="module" src="/js/catalog/index.js"></script>
+
+</body>
+</html>

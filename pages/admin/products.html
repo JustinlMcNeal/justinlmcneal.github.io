@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin · Products</title>
+
+  <!-- Global brand theme -->
+  <link rel="stylesheet" href="/css/theme/base.css">
+  <link rel="stylesheet" href="/css/theme/components.css">
+
+  <!-- New navbar -->
+  <link rel="stylesheet" href="/css/components/navbar.css">
+
+  <!-- Admin styles (shared first, then page overrides) -->
+  <link rel="stylesheet" href="/css/pages/admin/admin.css">
+  <link rel="stylesheet" href="/css/pages/admin/products.css">
+</head>
+
+<body class="kk-page kk-admin kk-admin-products">
+
+
+  <!-- Navbar mount (navbar.js injects /page_inserts/navbar.html here) -->
+  <div id="kkNavbarMount"></div>
+
+  <main class="kk-container">
+
+    <!-- Header -->
+    <section class="kk-card kk-card-pad kk-admin-header">
+      <div class="kk-kicker">Admin</div>
+      <h1 class="kk-h1">Products</h1>
+      <p class="kk-sub">Manage your catalog (Supabase)</p>
+    </section>
+
+
+    <!-- APP -->
+    <section id="appPanel" class="hidden">
+      <div class="gap-24"></div>
+
+      <!-- Controls -->
+      <section class="kk-card kk-card-pad kk-admin-controls">
+        <div class="kk-kicker">Catalog</div>
+        <div class="gap-12"></div>
+
+        <div class="kk-grid kk-grid-2">
+          <div class="kk-field">
+            <label class="kk-label kk-label--tight" for="searchInput">Search</label>
+            <input
+              id="searchInput"
+              class="kk-input kk-input--tight"
+              type="search"
+              placeholder="Search name / slug / code…"
+            />
+          </div>
+
+          <div class="kk-field kk-admin-controls-right">
+            <label class="kk-label kk-label--tight kk-admin-controls-spacer">Action</label>
+            <button id="btnNew" class="kk-btn kk-admin-new-btn" type="button">
+              + Add product
+            </button>
+          </div>
+        </div>
+
+        <div class="gap-12"></div>
+
+        <div class="kk-admin-controls-foot">
+          <div id="countLabel" class="kk-sub">0 items</div>
+        </div>
+      </section>
+
+      <div class="gap-24"></div>
+
+      <!-- Table wrapper -->
+      <section id="tableWrap" class="kk-card kk-admin-table">
+        <table class="kk-admin-table-table">
+          <thead class="kk-admin-table-head">
+            <tr>
+              <th>Name</th>
+              <th>Slug</th>
+              <th>Code</th>
+              <th>Category</th>
+              <th>Price</th>
+              <th>Active</th>
+              <th class="kk-admin-table-actions">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="productRows"></tbody>
+        </table>
+      </section>
+    </section>
+
+    <!-- MODAL -->
+    <div id="modal" class="hidden kk-admin-modal" aria-hidden="true">
+      <div class="kk-admin-modal-backdrop"></div>
+
+      <div class="kk-admin-modal-stage">
+        <div class="kk-card kk-admin-modal-card">
+          <div class="kk-admin-modal-head">
+            <h3 id="modalTitle" class="kk-kicker kk-admin-modal-title">Edit Product</h3>
+            <button id="btnClose" class="kk-btn kk-admin-modal-close" type="button">
+              Close
+            </button>
+          </div>
+
+          <div class="kk-admin-modal-body">
+            <!-- BASICS -->
+            <div class="kk-section-title">Basics</div>
+            <div class="gap-12"></div>
+
+            <div class="kk-grid kk-grid-2">
+              <div class="kk-field">
+                <label class="kk-label kk-label--tight" for="fName">Name</label>
+                <input id="fName" class="kk-input kk-input--tight" placeholder="Name" />
+              </div>
+
+              <div class="kk-field">
+                <label class="kk-label kk-label--tight" for="fSlug">Slug</label>
+                <input id="fSlug" class="kk-input kk-input--tight" placeholder="ribbed-knit-earflap-beanie" />
+              </div>
+
+              <div class="kk-field">
+                <label class="kk-label kk-label--tight" for="fCode">Code</label>
+                <input id="fCode" class="kk-input kk-input--tight" placeholder="KK-1001" />
+              </div>
+
+              <div class="kk-field">
+                <label class="kk-label kk-label--tight" for="fCategory">Category</label>
+                <select id="fCategory" class="kk-input kk-input--tight"></select>
+              </div>
+
+              <div class="kk-field">
+                <label class="kk-label kk-label--tight" for="fPrice">Price</label>
+                <input id="fPrice" class="kk-input kk-input--tight" type="number" step="0.01" placeholder="0.00" />
+              </div>
+
+              <div class="kk-field">
+                <label class="kk-label kk-label--tight" for="fWeight">Weight (g)</label>
+                <input id="fWeight" class="kk-input kk-input--tight" type="number" step="0.01" placeholder="0.0" />
+              </div>
+
+              <div class="kk-field">
+                <label class="kk-label kk-label--tight" for="fShipping">Shipping status</label>
+                <input id="fShipping" class="kk-input kk-input--tight" placeholder="mto or blank" />
+              </div>
+
+              <div class="kk-field">
+                <label class="kk-label kk-label--tight">Active</label>
+                <label class="kk-admin-checkbox-row">
+                  <input id="fActive" type="checkbox" />
+                  Active
+                </label>
+              </div>
+            </div>
+
+            <div class="kk-divider"></div>
+
+            <!-- IMAGES -->
+            <div class="kk-section-title">Images</div>
+            <div class="gap-12"></div>
+
+            <div class="kk-grid kk-grid-2">
+              <div class="kk-field">
+                <label class="kk-label kk-label--tight" for="fCatalogImg">Catalog image URL</label>
+                <input id="fCatalogImg" class="kk-input kk-input--tight" placeholder="https://..." />
+              </div>
+
+              <div class="kk-field">
+                <label class="kk-label kk-label--tight" for="fHoverImg">Catalog hover URL</label>
+                <input id="fHoverImg" class="kk-input kk-input--tight" placeholder="https://..." />
+              </div>
+
+              <div class="kk-field kk-admin-span-all">
+                <label class="kk-label kk-label--tight" for="fPrimaryImg">Primary image URL</label>
+                <input id="fPrimaryImg" class="kk-input kk-input--tight" placeholder="https://..." />
+              </div>
+            </div>
+
+            <div class="kk-divider"></div>
+
+            <!-- TAGS -->
+            <div class="kk-section-title">Tags</div>
+            <p class="kk-sub kk-admin-help">Comma-separated (ex: featured, bestseller, beanie)</p>
+            <div class="gap-12"></div>
+            <input id="fTags" class="kk-input kk-input--tight" placeholder="featured, bestseller, beanie" />
+
+            <div class="kk-divider"></div>
+
+            <!-- VARIANTS -->
+            <div class="kk-admin-row-between">
+              <div>
+                <div class="kk-section-title">Variants (Color)</div>
+                <p class="kk-sub kk-admin-help">Add colors + stock details if you use them.</p>
+              </div>
+              <button id="btnAddVariant" class="kk-btn kk-admin-mini-btn" type="button">
+                + Add color
+              </button>
+            </div>
+
+            <div class="gap-12"></div>
+            <div id="variantList"></div>
+
+            <div class="kk-divider"></div>
+
+            <!-- GALLERY -->
+            <div class="kk-admin-row-between">
+              <div>
+                <div class="kk-section-title">Gallery Images</div>
+                <p class="kk-sub kk-admin-help">Extra images for the product page carousel.</p>
+              </div>
+              <button id="btnAddGallery" class="kk-btn kk-admin-mini-btn" type="button">
+                + Add image
+              </button>
+            </div>
+
+            <div class="gap-12"></div>
+            <div id="galleryList"></div>
+
+            <div id="modalMsg" class="hidden kk-sub kk-admin-msg"></div>
+          </div>
+
+          <div class="kk-admin-modal-foot">
+            <button id="btnDelete" type="button" class="kk-btn kk-admin-danger-outline">
+              Disable
+            </button>
+
+            <button id="btnHardDelete" type="button" class="kk-btn kk-admin-outline">
+              Delete
+            </button>
+
+            <button id="btnSave" type="button" class="kk-btn kk-admin-save">
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <script type="module" src="/js/admin/products/index.js"></script>
+</body>
+</html>

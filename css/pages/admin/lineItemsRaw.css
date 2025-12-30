@@ -1,0 +1,302 @@
+/* =========================
+   ADMIN · LINE ITEMS RAW
+   (FULL FILE — COPY/PASTE)
+========================= */
+
+.kk-page.kk-admin-lineitemsraw { min-height: 100vh; }
+.kk-admin-lineitemsraw .kk-container { padding-top: 16px; }
+
+/* Header */
+.kk-admin-lineitemsraw .kk-admin-header{
+  margin-bottom: 24px;
+  background: linear-gradient(135deg, #f6f6f6 0%, #ffffff 100%);
+}
+
+/* Controls card */
+.kk-admin-lineitemsraw .kk-admin-controls{
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.08);
+}
+
+.kk-admin-lineitemsraw .kk-admin-controls .kk-kicker{
+  font-size: 11px;
+  opacity: .7;
+  margin-bottom: 16px;
+}
+
+.kk-admin-lineitemsraw #countLabel{
+  font-size: 13px;
+  opacity: .65;
+  font-weight: 700;
+}
+
+.kk-admin-lineitemsraw .kk-grid.kk-grid-2{
+  gap: 16px;
+  align-items: end;
+}
+
+.kk-admin-lineitemsraw .kk-admin-controls-right{
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.kk-admin-lineitemsraw .kk-admin-new-btn{
+  transition: all .2s ease;
+}
+
+.kk-admin-lineitemsraw .kk-admin-new-btn:hover{
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,.15);
+}
+
+/* =========================
+   TABLE (Desktop)
+========================= */
+
+.kk-admin-lineitemsraw .kk-lir-tableCard{
+  width: 100%;
+  box-shadow: 0 2px 12px rgba(0,0,0,.08);
+  overflow: hidden;
+}
+
+.kk-admin-lineitemsraw .kk-lir-table{
+  width: 100%;
+  border-collapse: collapse;
+  border-spacing: 0;
+  table-layout: fixed;
+}
+
+.kk-admin-lineitemsraw .kk-lir-table thead th{
+  background: #000;
+  color: #fff;
+  font-size: 11px;
+  padding: 16px 18px;
+  font-weight: 900;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  border-bottom: 3px solid #333;
+}
+
+.kk-admin-lineitemsraw .kk-lir-table tbody tr{
+  border-top: 1px solid rgba(0,0,0,.08);
+  transition: background-color .15s ease;
+}
+
+.kk-admin-lineitemsraw .kk-lir-table tbody tr:hover{
+  background: rgba(0,0,0,.02);
+}
+
+.kk-admin-lineitemsraw .kk-lir-table td{
+  padding: 16px 14px;
+  vertical-align: middle;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Column sizing (9 columns) */
+.kk-admin-lineitemsraw .kk-lir-table th:nth-child(1){ width: 12%; } /* Date */
+.kk-admin-lineitemsraw .kk-lir-table th:nth-child(2){ width: 14%; } /* Order */
+.kk-admin-lineitemsraw .kk-lir-table th:nth-child(3){ width: 22%; } /* Product */
+.kk-admin-lineitemsraw .kk-lir-table th:nth-child(4){ width: 12%; } /* Variant */
+.kk-admin-lineitemsraw .kk-lir-table th:nth-child(5){ width: 6%;  } /* Qty */
+.kk-admin-lineitemsraw .kk-lir-table th:nth-child(6){ width: 10%; } /* Unit */
+.kk-admin-lineitemsraw .kk-lir-table th:nth-child(7){ width: 10%; } /* Paid Unit */
+.kk-admin-lineitemsraw .kk-lir-table th:nth-child(8){ width: 10%; } /* Line Total */
+.kk-admin-lineitemsraw .kk-lir-table th:nth-child(9){ width: 14%; } /* Actions */
+
+.kk-admin-lineitemsraw .kk-admin-row-actions{
+  display: inline-flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.kk-admin-lineitemsraw .kk-admin-row-actions button{
+  border: 3px solid #000;
+  background: #fff;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-weight: 900;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  font-size: 11px;
+  transition: all .2s ease;
+}
+
+.kk-admin-lineitemsraw .kk-admin-row-actions button:hover{
+  background: #000;
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+/* Modal tweaks */
+.kk-admin-lineitemsraw .kk-admin-modal{
+  z-index: 130;
+}
+
+/* =========================
+   Responsive
+========================= */
+
+/* Tablet + small desktop: allow horizontal scroll */
+@media (max-width: 900px){
+  .kk-admin-lineitemsraw .kk-lir-tableCard{
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .kk-admin-lineitemsraw .kk-lir-table{
+    min-width: 860px;
+  }
+}
+
+/* Small screens: controls stack */
+@media (max-width: 768px){
+  .kk-admin-lineitemsraw .kk-grid.kk-grid-2{
+    grid-template-columns: 1fr;
+  }
+  .kk-admin-lineitemsraw .kk-admin-row-actions button{
+    padding: 8px 12px;
+    font-size: 10px;
+  }
+}
+
+/* =========================
+   MOBILE (No sideways scroll + cards)
+========================= */
+
+@media (max-width: 560px){
+
+  /* Prevent sideways scroll on phones */
+  html,
+  body{
+    overflow-x: hidden;
+    width: 100%;
+  }
+
+  .kk-admin-lineitemsraw,
+  .kk-admin-lineitemsraw .kk-container{
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+
+  /* cards container */
+  .kk-admin-lineitemsraw .kk-lir-tableCard{
+    overflow: visible;
+    box-shadow: none;
+    background: transparent;
+  }
+
+  /* hide thead, convert to cards */
+  .kk-admin-lineitemsraw .kk-lir-table{
+    min-width: 0;
+  }
+
+  .kk-admin-lineitemsraw .kk-lir-table thead{
+    display: none;
+  }
+
+  .kk-admin-lineitemsraw .kk-lir-table,
+  .kk-admin-lineitemsraw .kk-lir-table tbody,
+  .kk-admin-lineitemsraw .kk-lir-table tr,
+  .kk-admin-lineitemsraw .kk-lir-table td{
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* each row becomes a "card" */
+  .kk-admin-lineitemsraw .kk-lir-table tr{
+    border: var(--kk-border);
+    background: var(--kk-white);
+    margin-bottom: 16px;
+    padding: 14px 12px 12px;
+  }
+
+  /* key/value layout */
+  .kk-admin-lineitemsraw .kk-lir-table td{
+    border: 0;
+    padding: 7px 0;
+
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+
+    display: grid;
+    grid-template-columns: 84px 1fr; /* tighter label column */
+    gap: 12px;
+    align-items: baseline;
+
+    font-size: 13px;
+
+    /* hard wrap long values */
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+
+  .kk-admin-lineitemsraw .kk-lir-table td::before{
+    content: attr(data-label);
+    font-weight: 800;
+    letter-spacing: var(--kk-track-normal);
+    text-transform: uppercase;
+    font-size: 11px;
+    opacity: 0.75;
+  }
+
+  /* emphasize order id */
+  .kk-admin-lineitemsraw .kk-lir-table td[data-label="Order"] strong{
+    letter-spacing: .08em;
+  }
+
+  /* actions section */
+  .kk-admin-lineitemsraw .kk-lir-table td[data-label="Actions"]{
+    grid-template-columns: 1fr;
+    margin-top: 10px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(0,0,0,.12);
+  }
+
+  .kk-admin-lineitemsraw .kk-lir-table td[data-label="Actions"]::before{
+    display: none;
+  }
+
+  .kk-admin-lineitemsraw .kk-admin-row-actions{
+    display: block;
+  }
+
+  /* Bulletproof: style the actual button in Actions */
+  .kk-admin-lineitemsraw .kk-lir-table td[data-label="Actions"] button{
+    width: 100%;
+    display: block;
+
+    padding: 12px 14px;
+    border: 3px solid #000;
+    background: #000;
+    color: #fff;
+
+    font-weight: 900;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    font-size: 11px;
+
+    cursor: pointer;
+    transition: all .2s ease;
+  }
+
+  .kk-admin-lineitemsraw .kk-lir-table td[data-label="Actions"] button:hover{
+    background: #fff;
+    color: #000;
+    transform: translateY(-1px);
+  }
+
+  /* modal padding on phones */
+  .kk-admin-lineitemsraw .kk-admin-modal-stage{
+    padding: 12px;
+  }
+
+  .kk-admin-lineitemsraw .kk-admin-modal-card{
+    max-height: 90vh;
+  }
+}

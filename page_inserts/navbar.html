@@ -1,0 +1,125 @@
+<!-- KARRY KRAZE NAVBAR -->
+<header class="kk-nav" data-kk-nav>
+  <div class="kk-nav-inner">
+    <button class="kk-nav-btn" type="button" data-kk-open="menu" aria-label="Open menu">
+      MENU
+    </button>
+
+    <a class="kk-nav-logo" href="/index.html" aria-label="Karry Kraze Home">
+      <span class="kk-nav-logo-pill">
+        <img src="/imgs/brand/logo-bwp.png" alt="Karry Kraze" />
+      </span>
+    </a>
+
+    <!-- CART button (hidden automatically on admin pages via CSS below) -->
+    <button class="kk-nav-btn kk-cart-trigger" type="button" data-kk-open="cart" aria-label="Open cart">
+      CART <span class="kk-cart-count" data-kk-cart-count>0</span>
+    </button>
+  </div>
+</header>
+
+<!-- Overlay (dim + blur background) -->
+<div class="kk-overlay" data-kk-overlay hidden></div>
+
+<!-- MENU DRAWER -->
+<aside class="kk-drawer kk-drawer--left" data-kk-drawer="menu" aria-hidden="true">
+  <div class="kk-drawer-head">
+    <div class="kk-drawer-title">MENU</div>
+    <button class="kk-drawer-x" type="button" data-kk-close aria-label="Close menu">✕</button>
+  </div>
+
+  <nav class="kk-drawer-body">
+    <!-- Public links -->
+    <a class="kk-drawer-link" href="/pages/catalog.html">Shop</a>
+    <a class="kk-drawer-link" href="/pages/reviews.html">Reviews</a>
+    <a class="kk-drawer-link" href="/pages/faq.html">FAQ</a>
+    <a class="kk-drawer-link" href="/pages/contact.html">Contact</a>
+
+    <!-- Admin-only block (hidden unless on /pages/admin/*) -->
+    <div class="kk-admin-only">
+      <div style="border-top:2px solid rgba(0,0,0,.15); margin:16px 0;"></div>
+
+      <a class="kk-drawer-link" href="/pages/admin/products.html">Admin · Products</a>
+      <a class="kk-drawer-link" href="/pages/admin/auth-callback.html">Admin · Auth</a>
+
+      <!-- REQUIRED FOR ADMIN JS -->
+      <!-- Hidden by default; admin JS shows it when session exists -->
+      <button
+        id="btnLogout"
+        class="kk-btn hidden"
+        type="button"
+        style="width:100%; margin-top:10px;"
+      >
+        Logout
+      </button>
+    </div>
+  </nav>
+</aside>
+
+<!-- CART DRAWER (hidden automatically on admin pages via CSS below) -->
+<aside class="kk-drawer kk-drawer--right kk-cart-drawer" data-kk-drawer="cart" aria-hidden="true">
+  <div class="kk-drawer-head">
+    <div class="kk-drawer-title">CART</div>
+    <button class="kk-drawer-x" type="button" data-kk-close aria-label="Close cart">✕</button>
+  </div>
+
+  <div class="kk-drawer-body">
+    <div data-kk-cart-items></div>
+
+    <div class="kk-cart-footer">
+      <!-- Coupon input section -->
+      <div style="margin-bottom: 16px; padding-bottom: 16px; border-bottom: 2px solid rgba(0,0,0,.15);">
+        <label style="display: block; font-weight: 1000; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; margin-bottom: 8px;">
+          Coupon Code
+        </label>
+        <div style="display: flex; gap: 8px;">
+          <input 
+            type="text" 
+            id="kk-coupon-input" 
+            placeholder="Enter code" 
+            style="flex: 1; border: 4px solid #000; padding: 10px; font-size: 14px; text-transform: uppercase;"
+          />
+          <button 
+            id="kk-coupon-apply" 
+            style="border: 4px solid #000; background: #000; color: #fff; padding: 10px 16px; cursor: pointer; font-weight: 1000; letter-spacing: .12em; text-transform: uppercase; font-size: 11px;"
+          >
+            APPLY
+          </button>
+        </div>
+        <div id="kk-coupon-message" style="margin-top: 8px; font-size: 12px; display: none;"></div>
+      </div>
+
+<!-- Subtotal -->
+<div class="kk-cart-row">
+  <span>Subtotal</span>
+  <span data-kk-cart-subtotal>$0.00</span>
+</div>
+
+<!-- Auto promotions (BOGO / % promos) -->
+<div id="cart-promotions"></div>
+
+<!-- ✅ Coupon discount (ALL coupon types live here) -->
+<div id="cart-coupon-discount" class="kk-cart-row" style="display:none;">
+  <span class="kk-promo-label">Coupon</span>
+  <span class="kk-discount-amount">-$0.00</span>
+</div>
+
+<hr />
+
+<!-- Total -->
+<div class="kk-cart-row kk-cart-total">
+  <span>Total</span>
+  <span id="cart-total">$0.00</span>
+</div>
+
+
+      <button class="kk-btn" type="button" data-kk-checkout>Checkout</button>
+
+      <div class="kk-sub" style="margin-top:10px;">
+        Shipping + tax calculated at checkout.
+      </div>
+    </div>
+  </div>
+</aside>
+
+

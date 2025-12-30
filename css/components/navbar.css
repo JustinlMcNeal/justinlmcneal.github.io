@@ -1,0 +1,318 @@
+/* =========================
+   NAVBAR + DRAWERS
+========================= */
+
+/* IMPORTANT:
+   Using FIXED instead of STICKY because sticky breaks when any ancestor
+   has overflow: hidden/auto/scroll (common in layout wrappers).
+*/
+
+/* Page offset so content doesn't sit under fixed nav */
+.kk-page { padding-top: 76px; } /* adjust if you change nav height */
+
+/* Fixed, NO background */
+.kk-nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+
+  z-index: 80;
+  background: transparent;
+  border: 0;
+  pointer-events: none; /* allow only inner to click */
+}
+
+.kk-nav-inner{
+  max-width: 80rem;
+  margin: 0 auto;
+  padding: 14px 16px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+
+  pointer-events: auto; /* clickable area */
+}
+
+/* MENU / CART text buttons */
+.kk-nav-btn{
+  border: 0;
+  background: transparent;
+  padding: 8px 0;
+  cursor: pointer;
+  font-weight: 1000;
+  letter-spacing: var(--kk-track-wide);
+  text-transform: uppercase;
+  font-size: 12px;
+}
+.kk-nav-btn:hover{ text-decoration: underline; }
+.kk-nav-btn:focus{ outline: none; }
+.kk-nav-btn:focus-visible{ outline: 4px solid var(--kk-pink); outline-offset: 4px; }
+
+.kk-nav-btn[data-kk-open="menu"]{ justify-self: start; }
+.kk-nav-btn[data-kk-open="cart"]{ justify-self: end; }
+
+/* Logo centered with blurry background ONLY behind logo */
+.kk-nav-logo{ justify-self: center; }
+.kk-nav-logo-pill{
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border: 4px solid #000;
+  background: rgba(255,255,255,.30);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.kk-nav-logo img{ height: 34px; display: block; }
+
+/* Cart count bubble */
+.kk-cart-count{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  margin-left: 8px;
+  border: 3px solid #000;
+  font-size: 11px;
+  font-weight: 1000;
+  background: #fff;
+}
+
+/* Overlay (dim + blur) */
+.kk-overlay{
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(0,0,0,.35);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+/* Drawer base */
+.kk-drawer{
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  width: min(420px, 92vw);
+  z-index: 100;
+  background: #fff;
+  border: var(--kk-border);
+  transform: translateX(-110%);
+  transition: transform 220ms ease;
+  display: flex;
+  flex-direction: column;
+}
+.kk-drawer--right{
+  right: 0;
+  left: auto;
+  transform: translateX(110%);
+}
+.kk-drawer--left{
+  left: 0;
+  right: auto;
+}
+
+/* open state */
+.kk-drawer.is-open.kk-drawer--left{ transform: translateX(0); }
+.kk-drawer.is-open.kk-drawer--right{ transform: translateX(0); }
+
+/* drawer header */
+.kk-drawer-head{
+  padding: 16px;
+  border-bottom: 2px solid rgba(0,0,0,.15);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.kk-drawer-title{
+  font-weight: 1000;
+  letter-spacing: var(--kk-track-wide);
+  text-transform: uppercase;
+}
+
+/* close button */
+.kk-drawer-x{
+  border: 4px solid #000;
+  background: #fff;
+  width: 44px;
+  height: 44px;
+  cursor: pointer;
+  font-weight: 1000;
+}
+.kk-drawer-x:hover{ background:#000; color:#fff; }
+
+/* drawer body */
+.kk-drawer-body{
+  padding: 16px;
+  overflow: auto;
+  flex: 1;
+}
+
+/* menu links */
+.kk-drawer-link{
+  display: block;
+  padding: 14px 12px;
+  border: 4px solid #000;
+  margin-bottom: 12px;
+  font-weight: 1000;
+  letter-spacing: var(--kk-track-wide);
+  text-transform: uppercase;
+}
+.kk-drawer-link:hover{ background:#000; color:#fff; }
+
+/* cart */
+.kk-cart-item{
+  border: 2px solid rgba(0,0,0,.15);
+  padding: 12px;
+  margin-bottom: 12px;
+}
+.kk-cart-item-top{
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.kk-cart-img{
+  width: 64px;
+  height: 64px;
+  border: 4px solid #000;
+  background: #f4f4f4;
+  object-fit: cover;
+}
+.kk-cart-name{
+  font-weight: 1000;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  font-size: 12px;
+}
+.kk-cart-sub{
+  font-size: 13px;
+  color: var(--kk-muted);
+  margin-top: 6px;
+}
+
+.kk-cart-actions{
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+/* Only style the main action buttons (ex: Remove), not nested qty buttons */
+.kk-cart-actions > button{
+  border: 4px solid #000;
+  background: #fff;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-weight: 1000;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+.kk-cart-actions > button:hover{ background:#000; color:#fff; }
+
+.kk-cart-actions button:hover{ background:#000; color:#fff; }
+
+.kk-cart-footer{
+  margin-top: 16px;
+  border-top: 2px solid rgba(0,0,0,.15);
+  padding-top: 16px;
+}
+.kk-cart-row{
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 12px;
+  font-weight: 1000;
+}
+/* =========================
+   ADMIN PAGE OVERRIDES
+   (no inline CSS, no JS hacks)
+========================= */
+
+/* Hide admin-only items everywhere by default */
+.kk-admin-only {
+  display: none;
+}
+
+/* Show admin menu section only on admin pages */
+body.kk-admin .kk-admin-only {
+  display: block;
+}
+
+/* Hide cart trigger + cart drawer on admin pages */
+body.kk-admin .kk-nav-btn[data-kk-open="cart"] {
+  display: none !important;
+}
+
+body.kk-admin .kk-drawer[data-kk-drawer="cart"] {
+  display: none !important;
+}
+
+/* =========================
+   CART QTY CONTROLS
+========================= */
+
+.kk-qty{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.kk-qty-btn{
+  border: 4px solid #000;
+  background: #fff;
+  width: 44px;
+  height: 44px;
+  cursor: pointer;
+  font-weight: 1000;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  font-size: 16px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.kk-qty-btn:hover{ background:#000; color:#fff; }
+
+.kk-qty-num{
+  min-width: 28px;
+  text-align: center;
+  font-weight: 1000;
+  letter-spacing: .06em;
+}
+
+/* =========================
+   CART PROMO LINES
+========================= */
+
+.kk-cart-promos{
+  border-top: 2px solid rgba(0,0,0,.15);
+  padding-top: 10px;
+  margin-top: 10px;
+  margin-bottom: 10px;
+}
+
+.kk-promo-line{
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin: 6px 0;
+  font-size: 13px;
+}
+
+.kk-promo-label{
+  min-width: 0;
+  opacity: .9;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kk-discount-amount{
+  font-weight: 1000;
+  color: #16a34a;
+  white-space: nowrap;
+}
