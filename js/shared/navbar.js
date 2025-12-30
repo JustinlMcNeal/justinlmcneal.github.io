@@ -78,7 +78,7 @@ function fixInjectedRootPaths(rootEl) {
 ========================= */
 
 // Path to your navbar insert file (root-absolute)
-const NAVBAR_URL = "/page_inserts/navbar.html";
+const NAVBAR_URL = "../../page_inserts/navbar.html";
 
 // helper: wait for next microtask/frame so injected DOM exists
 function nextTick() {
