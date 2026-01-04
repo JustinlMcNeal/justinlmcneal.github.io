@@ -10,6 +10,17 @@ import {
   buildCheckoutPromoPayload,
 } from "./cart/cartTotals.js";
 
+function isAdminPage() {
+  const base = getSiteBasePath();
+  const p = location.pathname || "/";
+  const raw = base && p.startsWith(base) ? p.slice(base.length) : p;
+
+  return raw === "/pages/admin" || raw.startsWith("/pages/admin/");
+}
+
+
+
+
 /* =========================
    PATH HELPERS (Local + GitHub Pages)
 ========================= */
@@ -120,6 +131,60 @@ async function ensureNavbarInjected() {
   }
 }
 
+  // =========================
+  // Admin-only nav behavior
+  // =========================
+async function applyAdminNavbarBehavior() {
+  const onAdmin = isAdminPage();
+
+  // Show/hide admin-only menu block
+  document.querySelectorAll(".kk-admin-only").forEach((el) => {
+    el.classList.toggle("hidden", !onAdmin);
+  });
+
+  // Hide cart trigger + cart drawer on admin pages
+  const cartTrigger = document.querySelector('[data-kk-open="cart"]');
+  const cartDrawer = document.querySelector('[data-kk-drawer="cart"]');
+  if (cartTrigger) cartTrigger.classList.toggle("hidden", onAdmin);
+  if (cartDrawer) cartDrawer.classList.toggle("hidden", onAdmin);
+
+  // Bind logout on admin pages (show only when session exists)
+  if (!onAdmin) return;
+
+  try {
+    const sb = getSupabaseClient();
+    if (!sb) return;
+
+    const { data, error } = await sb.auth.getSession();
+    if (error) console.error("[navbar] getSession error:", error);
+
+    const session = data?.session;
+    const btnLogout = document.getElementById("btnLogout");
+
+    if (!btnLogout) return;
+
+    if (session?.user) {
+      btnLogout.classList.remove("hidden");
+
+      if (!btnLogout.__kkBound) {
+        btnLogout.__kkBound = true;
+        btnLogout.addEventListener("click", async () => {
+          try {
+            await sb.auth.signOut();
+          } catch (e) {
+            console.error(e);
+          }
+          window.location.href = withBase("/pages/admin/login.html");
+        });
+      }
+    } else {
+      btnLogout.classList.add("hidden");
+    }
+  } catch (e) {
+    console.error("[navbar] admin logout bind failed:", e);
+  }
+}
+
 /* =========================
    INIT
 ========================= */
@@ -128,15 +193,21 @@ export async function initNavbar() {
   // 1) Make sure navbar markup exists
   await ensureNavbarInjected();
 
+  // 1.5) Admin-mode UI toggles + logout (runs AFTER injection so elements exist)
+  await applyAdminNavbarBehavior();
+
   // 2) Now drawers/cart can safely initialize
   initDrawer();
   renderCartDrawer();
   initCouponUI();
 
   // Listen for cart updates and re-render
-  window.addEventListener("kk-cart-updated", () => {
-    renderCartDrawer();
-  });
+  if (!window.__kkCartUpdatedBound) {
+    window.__kkCartUpdatedBound = true;
+    window.addEventListener("kk-cart-updated", () => {
+      renderCartDrawer();
+    });
+  }
 
   // Listen for product page add-to-cart events (only bind once)
   if (!window.__kkAddToCartBound) {
@@ -144,11 +215,21 @@ export async function initNavbar() {
     window.addEventListener("kk:addToCart", (e) => addToCart(e.detail));
   }
 
-  // Active nav state
-  const path = location.pathname;
+  // Active nav state (handles GitHub base path)
+  const base = getSiteBasePath();
+  const rawPath = base && location.pathname.startsWith(base)
+    ? location.pathname.slice(base.length)
+    : location.pathname;
+
   document.querySelectorAll(".kk-drawer-link").forEach((link) => {
     const href = link.getAttribute("href") || "";
-    if (href && path.includes(href.replace(getSiteBasePath(), ""))) {
+    if (!href) return;
+
+    // normalize href to "raw" as well
+    const hrefRaw = base && href.startsWith(base) ? href.slice(base.length) : href;
+
+    // only mark as active if the raw path includes the href's raw path
+    if (hrefRaw !== "/" && rawPath.includes(hrefRaw)) {
       link.classList.add("is-active");
       link.style.background = "#000";
       link.style.color = "#fff";
@@ -268,3 +349,4 @@ export async function initNavbar() {
     });
   }
 }
+

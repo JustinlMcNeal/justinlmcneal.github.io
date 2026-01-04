@@ -1,5 +1,6 @@
-import { initNavbar } from "../../shared/navbar.js";
-import { requireAdmin } from "../../shared/guard.js";
+// /js/admin/products/index.js
+import { initNavbar } from "/js/shared/navbar.js";
+import { requireAdmin } from "/js/shared/guard.js";
 
 import { fetchCategories, fetchProducts } from "./api.js";
 import { state } from "./state.js";
@@ -12,20 +13,44 @@ import {
   upsertSectionItemsForProduct,
 } from "./sectionItems.js";
 
-document.addEventListener("DOMContentLoaded", async () => {
-  await initNavbar();
+function buildLoginRedirect() {
+  const next = `${location.pathname}${location.search}`;
+  return `/pages/admin/login.html?next=${encodeURIComponent(next)}`;
+}
+
+function safeMatchMediaAdd(mq, fn) {
+  try {
+    // Safari fallback
+    if (mq.addEventListener) mq.addEventListener("change", fn);
+    else mq.addListener(fn);
+  } catch {
+    /* ignore */
+  }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
   boot();
 });
 
-function boot() {
+async function boot() {
+  // 1) Navbar first (so admin-only menu/logout can show)
+  await initNavbar();
+
+  // 2) Admin guard (ENFORCED)
+  const check = await requireAdmin();
+  if (!check.ok) {
+    console.warn("[Admin Products] blocked:", check.reason);
+    location.replace(buildLoginRedirect());
+    return;
+  }
+
+  // 3) Cache elements
   const els = {
-    // existing page elements
     searchInput: $("searchInput"),
     countLabel: $("countLabel"),
     btnNew: $("btnNew"),
     productRows: $("productRows"),
 
-    // modal elements (same ids you already have)
     modal: $("modal"),
     modalTitle: $("modalTitle"),
     btnClose: $("btnClose"),
@@ -53,70 +78,38 @@ function boot() {
     galleryList: $("galleryList"),
   };
 
-  let isAdmin = false;
-
-  let refreshTable = () => {
-    renderTable({
-      productRowsEl: els.productRows,
-      countLabelEl: els.countLabel,
-      searchValue: els.searchInput?.value || "",
-      onEdit: isAdmin ? modal.openEdit : () => {},
-      onEditError: (err) => console.warn("[Admin Products] Edit failed:", err),
-      readOnly: !isAdmin,
-    });
-  };
-
+  // 4) Modal binder
   const modal = bindModal(
     els,
     () => refreshTable(),
     { fetchSectionItemsForProduct, upsertSectionItemsForProduct }
   );
 
-  async function loadData() {
-    state.categories = await fetchCategories();
-    state.products = await fetchProducts();
-    refreshTable();
-  }
-
-  function setReadOnlyUI(readOnly) {
-    if (els.btnNew) {
-      els.btnNew.disabled = readOnly;
-      els.btnNew.style.opacity = readOnly ? "0.5" : "1";
-      els.btnNew.style.pointerEvents = readOnly ? "none" : "auto";
-      els.btnNew.title = readOnly ? "Admin only" : "";
-    }
-  }
-
-  function wire() {
-    els.searchInput?.addEventListener("input", refreshTable);
-
-    els.btnNew?.addEventListener("click", () => {
-      if (!isAdmin) return;
-      modal.openNew();
+  // 5) Render function
+  function refreshTable() {
+    renderTable({
+      productRowsEl: els.productRows,
+      countLabelEl: els.countLabel,
+      searchValue: els.searchInput?.value || "",
+      onEdit: modal.openEdit,
+      onEditError: (err) => console.warn("[Admin Products] Edit failed:", err),
+      readOnly: false, // admin only page, so never readOnly here
     });
-
-    // Re-render on breakpoint changes so mobile/table switches cleanly
-    window.matchMedia("(max-width: 768px)").addEventListener("change", refreshTable);
   }
 
-  (async () => {
-    wire();
+  // 6) Wire UI
+  els.searchInput?.addEventListener("input", refreshTable);
 
-    // Always load data so page isn't blank
-    await loadData();
+  els.btnNew?.addEventListener("click", () => {
+    modal.openNew();
+  });
 
-    // Admin check AFTER data (so you still see products even if not admin)
-    const check = await requireAdmin();
-    isAdmin = !!check.ok;
+  // Re-render on breakpoint changes
+  const mq = window.matchMedia("(max-width: 768px)");
+  safeMatchMediaAdd(mq, refreshTable);
 
-    setReadOnlyUI(!isAdmin);
-
-    // Optional: show a tiny “read only” notice somewhere if you want
-    if (!isAdmin) {
-      console.warn("[Admin Products]", check.reason);
-    }
-
-    // Re-render so Edit buttons disappear if not admin
-    refreshTable();
-  })();
+  // 7) Load data + render
+  state.categories = await fetchCategories();
+  state.products = await fetchProducts();
+  refreshTable();
 }

@@ -5,238 +5,353 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Admin · Products</title>
 
-  <!-- Global brand theme -->
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- KK base + components ONLY -->
   <link rel="stylesheet" href="/css/theme/base.css">
   <link rel="stylesheet" href="/css/theme/components.css">
-
-  <!-- New navbar -->
-  <link rel="stylesheet" href="/css/components/navbar.css">
-
-  <!-- Admin styles (shared first, then page overrides) -->
-  <link rel="stylesheet" href="/css/pages/admin/admin.css">
-  <link rel="stylesheet" href="/css/pages/admin/products.css">
 </head>
 
-<body class="kk-page kk-admin kk-admin-products">
+<body class="kk-page kk-admin bg-white">
 
-
-  <!-- Navbar mount (navbar.js injects /page_inserts/navbar.html here) -->
+  <!-- Navbar mount -->
   <div id="kkNavbarMount"></div>
 
-  <main class="kk-container">
+  <main class="max-w-7xl mx-auto px-4 py-6">
 
     <!-- Header -->
-    <section class="kk-card kk-card-pad kk-admin-header">
-      <div class="kk-kicker">Admin</div>
-      <h1 class="kk-h1">Products</h1>
-      <p class="kk-sub">Manage your catalog (Supabase)</p>
-    </section>
+    <header class="border-4 border-black p-5 bg-white">
+      <div class="text-[11px] font-black uppercase tracking-[.25em] opacity-70">
+        Admin
+      </div>
+      <h1 class="text-2xl sm:text-3xl font-black mt-2">
+        Products
+      </h1>
+      <p class="text-sm opacity-70 mt-2">
+        Manage your catalog (Supabase)
+      </p>
+    </header>
 
+    <!-- Controls -->
+    <section class="mt-6 border-4 border-black p-4 bg-white">
+      <div class="text-[11px] font-black uppercase tracking-[.25em] opacity-70">
+        Catalog
+      </div>
 
-    <!-- APP -->
-    <section id="appPanel" class="hidden">
-      <div class="gap-24"></div>
-
-      <!-- Controls -->
-      <section class="kk-card kk-card-pad kk-admin-controls">
-        <div class="kk-kicker">Catalog</div>
-        <div class="gap-12"></div>
-
-        <div class="kk-grid kk-grid-2">
-          <div class="kk-field">
-            <label class="kk-label kk-label--tight" for="searchInput">Search</label>
-            <input
-              id="searchInput"
-              class="kk-input kk-input--tight"
-              type="search"
-              placeholder="Search name / slug / code…"
-            />
-          </div>
-
-          <div class="kk-field kk-admin-controls-right">
-            <label class="kk-label kk-label--tight kk-admin-controls-spacer">Action</label>
-            <button id="btnNew" class="kk-btn kk-admin-new-btn" type="button">
-              + Add product
-            </button>
-          </div>
+      <div class="mt-4 grid gap-4 md:grid-cols-2 items-end">
+        <!-- Search -->
+        <div>
+          <label for="searchInput"
+                 class="block text-xs font-black uppercase tracking-[.18em] mb-2">
+            Search
+          </label>
+          <input
+            id="searchInput"
+            type="search"
+            placeholder="Search name / slug / code…"
+            class="w-full border-4 border-black px-3 py-2 text-sm outline-none"
+          />
         </div>
 
-        <div class="gap-12"></div>
-
-        <div class="kk-admin-controls-foot">
-          <div id="countLabel" class="kk-sub">0 items</div>
+        <!-- New product -->
+        <div class="md:text-right">
+          <button
+            id="btnNew"
+            type="button"
+            class="border-4 border-black px-5 py-2 font-black uppercase tracking-[.18em] text-xs
+                   hover:bg-black hover:text-white transition"
+          >
+            + Add product
+          </button>
         </div>
-      </section>
+      </div>
 
-      <div class="gap-24"></div>
-
-      <!-- Table wrapper -->
-      <section id="tableWrap" class="kk-card kk-admin-table">
-        <table class="kk-admin-table-table">
-          <thead class="kk-admin-table-head">
-            <tr>
-              <th>Name</th>
-              <th>Slug</th>
-              <th>Code</th>
-              <th>Category</th>
-              <th>Price</th>
-              <th>Active</th>
-              <th class="kk-admin-table-actions">Actions</th>
-            </tr>
-          </thead>
-          <tbody id="productRows"></tbody>
-        </table>
-      </section>
+      <div class="mt-4 text-sm opacity-70" id="countLabel">
+        0 items
+      </div>
     </section>
 
-    <!-- MODAL -->
-    <div id="modal" class="hidden kk-admin-modal" aria-hidden="true">
-      <div class="kk-admin-modal-backdrop"></div>
+    <!-- Table -->
+<section id="tableWrap" class="mt-6 bg-white border-[4px] border-black overflow-x-auto">
+  <table class="w-full border-collapse text-sm">
+    <thead class="bg-gray-100 border-b-[4px] border-black">
+      <tr class="text-left uppercase tracking-[.12em] text-[11px] font-black">
+        <th class="px-4 py-3">Name</th>
+        <th class="px-4 py-3">Slug</th>
+        <th class="px-4 py-3">Code</th>
+        <th class="px-4 py-3">Category</th>
+        <th class="px-4 py-3 text-right">Price</th>
+        <th class="px-4 py-3 text-center">Active</th>
+        <th class="px-4 py-3 text-right">Actions</th>
+      </tr>
+    </thead>
 
-      <div class="kk-admin-modal-stage">
-        <div class="kk-card kk-admin-modal-card">
-          <div class="kk-admin-modal-head">
-            <h3 id="modalTitle" class="kk-kicker kk-admin-modal-title">Edit Product</h3>
-            <button id="btnClose" class="kk-btn kk-admin-modal-close" type="button">
-              Close
-            </button>
+    <tbody
+      id="productRows"
+      class="divide-y divide-black/20"
+    ></tbody>
+  </table>
+</section>
+
+
+  </main>
+
+  <!-- MODAL (Tailwind-only) -->
+<div
+  id="modal"
+  class="hidden fixed inset-0 z-[200]"
+  aria-hidden="true"
+>
+  <!-- Backdrop -->
+  <div
+    class="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+    data-modal-backdrop
+  ></div>
+
+  <!-- Stage -->
+  <div class="relative h-full w-full overflow-y-auto">
+    <div class="min-h-full flex items-end sm:items-center justify-center p-3 sm:p-6">
+      <!-- Card -->
+      <div class="w-full max-w-4xl bg-white border-[4px] border-black">
+        <!-- Head -->
+        <div class="flex items-center justify-between gap-3 p-4 border-b-2 border-black/15">
+          <div>
+            <div class="text-[11px] font-black uppercase tracking-[.25em] text-black/70">
+              Admin
+            </div>
+            <h3 id="modalTitle" class="text-xl sm:text-2xl font-black tracking-tight mt-1">
+              Edit Product
+            </h3>
           </div>
 
-          <div class="kk-admin-modal-body">
-            <!-- BASICS -->
-            <div class="kk-section-title">Basics</div>
-            <div class="gap-12"></div>
+          <button
+            id="btnClose"
+            type="button"
+            class="border-[4px] border-black bg-white px-4 py-2 font-black uppercase tracking-[.12em] text-[11px]
+                   hover:bg-black hover:text-white"
+          >
+            Close
+          </button>
+        </div>
 
-            <div class="kk-grid kk-grid-2">
-              <div class="kk-field">
-                <label class="kk-label kk-label--tight" for="fName">Name</label>
-                <input id="fName" class="kk-input kk-input--tight" placeholder="Name" />
+        <!-- Body -->
+        <div class="p-4 sm:p-6 space-y-6">
+          <!-- BASICS -->
+          <section class="space-y-3">
+            <div class="flex items-end justify-between gap-3">
+              <div>
+                <div class="text-[11px] font-black uppercase tracking-[.25em]">Basics</div>
+                <div class="text-sm text-black/60 mt-1">Core product metadata.</div>
+              </div>
+            </div>
+
+            <div class="grid sm:grid-cols-2 gap-3">
+              <div>
+                <label for="fName" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
+                  Name
+                </label>
+                <input id="fName" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none"
+                  placeholder="Name" />
               </div>
 
-              <div class="kk-field">
-                <label class="kk-label kk-label--tight" for="fSlug">Slug</label>
-                <input id="fSlug" class="kk-input kk-input--tight" placeholder="ribbed-knit-earflap-beanie" />
+              <div>
+                <label for="fSlug" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
+                  Slug
+                </label>
+                <input id="fSlug" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none"
+                  placeholder="ribbed-knit-earflap-beanie" />
               </div>
 
-              <div class="kk-field">
-                <label class="kk-label kk-label--tight" for="fCode">Code</label>
-                <input id="fCode" class="kk-input kk-input--tight" placeholder="KK-1001" />
+              <div>
+                <label for="fCode" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
+                  Code
+                </label>
+                <input id="fCode" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none"
+                  placeholder="KK-1001" />
               </div>
 
-              <div class="kk-field">
-                <label class="kk-label kk-label--tight" for="fCategory">Category</label>
-                <select id="fCategory" class="kk-input kk-input--tight"></select>
+              <div>
+                <label for="fCategory" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
+                  Category
+                </label>
+                <select id="fCategory" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none bg-white"></select>
               </div>
 
-              <div class="kk-field">
-                <label class="kk-label kk-label--tight" for="fPrice">Price</label>
-                <input id="fPrice" class="kk-input kk-input--tight" type="number" step="0.01" placeholder="0.00" />
+              <div>
+                <label for="fPrice" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
+                  Price
+                </label>
+                <input id="fPrice" type="number" step="0.01"
+                  class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none"
+                  placeholder="0.00" />
               </div>
 
-              <div class="kk-field">
-                <label class="kk-label kk-label--tight" for="fWeight">Weight (g)</label>
-                <input id="fWeight" class="kk-input kk-input--tight" type="number" step="0.01" placeholder="0.0" />
+              <div>
+                <label for="fWeight" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
+                  Weight (g)
+                </label>
+                <input id="fWeight" type="number" step="0.01"
+                  class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none"
+                  placeholder="0.0" />
               </div>
 
-              <div class="kk-field">
-                <label class="kk-label kk-label--tight" for="fShipping">Shipping status</label>
-                <input id="fShipping" class="kk-input kk-input--tight" placeholder="mto or blank" />
+              <div>
+                <label for="fShipping" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
+                  Shipping status
+                </label>
+                <input id="fShipping"
+                  class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none"
+                  placeholder="mto or blank" />
               </div>
 
-              <div class="kk-field">
-                <label class="kk-label kk-label--tight">Active</label>
-                <label class="kk-admin-checkbox-row">
-                  <input id="fActive" type="checkbox" />
+              <div class="flex items-center gap-3 pt-6">
+                <input id="fActive" type="checkbox" class="h-5 w-5 border-[4px] border-black" />
+                <label for="fActive" class="text-sm font-black uppercase tracking-[.12em]">
                   Active
                 </label>
               </div>
             </div>
+          </section>
 
-            <div class="kk-divider"></div>
+          <div class="border-t-2 border-black/15"></div>
 
-            <!-- IMAGES -->
-            <div class="kk-section-title">Images</div>
-            <div class="gap-12"></div>
-
-            <div class="kk-grid kk-grid-2">
-              <div class="kk-field">
-                <label class="kk-label kk-label--tight" for="fCatalogImg">Catalog image URL</label>
-                <input id="fCatalogImg" class="kk-input kk-input--tight" placeholder="https://..." />
-              </div>
-
-              <div class="kk-field">
-                <label class="kk-label kk-label--tight" for="fHoverImg">Catalog hover URL</label>
-                <input id="fHoverImg" class="kk-input kk-input--tight" placeholder="https://..." />
-              </div>
-
-              <div class="kk-field kk-admin-span-all">
-                <label class="kk-label kk-label--tight" for="fPrimaryImg">Primary image URL</label>
-                <input id="fPrimaryImg" class="kk-input kk-input--tight" placeholder="https://..." />
-              </div>
+          <!-- IMAGES -->
+          <section class="space-y-3">
+            <div>
+              <div class="text-[11px] font-black uppercase tracking-[.25em]">Images</div>
+              <div class="text-sm text-black/60 mt-1">Catalog + product page images.</div>
             </div>
 
-            <div class="kk-divider"></div>
-
-            <!-- TAGS -->
-            <div class="kk-section-title">Tags</div>
-            <p class="kk-sub kk-admin-help">Comma-separated (ex: featured, bestseller, beanie)</p>
-            <div class="gap-12"></div>
-            <input id="fTags" class="kk-input kk-input--tight" placeholder="featured, bestseller, beanie" />
-
-            <div class="kk-divider"></div>
-
-            <!-- VARIANTS -->
-            <div class="kk-admin-row-between">
+            <div class="grid sm:grid-cols-2 gap-3">
               <div>
-                <div class="kk-section-title">Variants (Color)</div>
-                <p class="kk-sub kk-admin-help">Add colors + stock details if you use them.</p>
+                <label for="fCatalogImg" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
+                  Catalog image URL
+                </label>
+                <input id="fCatalogImg" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none"
+                  placeholder="https://..." />
               </div>
-              <button id="btnAddVariant" class="kk-btn kk-admin-mini-btn" type="button">
+
+              <div>
+                <label for="fHoverImg" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
+                  Catalog hover URL
+                </label>
+                <input id="fHoverImg" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none"
+                  placeholder="https://..." />
+              </div>
+
+              <div class="sm:col-span-2">
+                <label for="fPrimaryImg" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
+                  Primary image URL
+                </label>
+                <input id="fPrimaryImg" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none"
+                  placeholder="https://..." />
+              </div>
+            </div>
+          </section>
+
+          <div class="border-t-2 border-black/15"></div>
+
+          <!-- TAGS -->
+          <section class="space-y-3">
+            <div>
+              <div class="text-[11px] font-black uppercase tracking-[.25em]">Tags</div>
+              <div class="text-sm text-black/60 mt-1">Comma-separated (featured, bestseller, beanie).</div>
+            </div>
+            <input id="fTags" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none"
+              placeholder="featured, bestseller, beanie" />
+          </section>
+
+          <div class="border-t-2 border-black/15"></div>
+
+          <!-- VARIANTS -->
+          <section class="space-y-3">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class="text-[11px] font-black uppercase tracking-[.25em]">Variants (Color)</div>
+                <div class="text-sm text-black/60 mt-1">Add colors + stock details if you use them.</div>
+              </div>
+              <button
+                id="btnAddVariant"
+                type="button"
+                class="border-[4px] border-black bg-white px-3 py-2 font-black uppercase tracking-[.12em] text-[11px]
+                       hover:bg-black hover:text-white whitespace-nowrap"
+              >
                 + Add color
               </button>
             </div>
 
-            <div class="gap-12"></div>
-            <div id="variantList"></div>
+            <div id="variantList" class="space-y-2"></div>
+          </section>
 
-            <div class="kk-divider"></div>
+          <div class="border-t-2 border-black/15"></div>
 
-            <!-- GALLERY -->
-            <div class="kk-admin-row-between">
+          <!-- GALLERY -->
+          <section class="space-y-3">
+            <div class="flex items-start justify-between gap-3">
               <div>
-                <div class="kk-section-title">Gallery Images</div>
-                <p class="kk-sub kk-admin-help">Extra images for the product page carousel.</p>
+                <div class="text-[11px] font-black uppercase tracking-[.25em]">Gallery Images</div>
+                <div class="text-sm text-black/60 mt-1">Extra images for carousel.</div>
               </div>
-              <button id="btnAddGallery" class="kk-btn kk-admin-mini-btn" type="button">
+              <button
+                id="btnAddGallery"
+                type="button"
+                class="border-[4px] border-black bg-white px-3 py-2 font-black uppercase tracking-[.12em] text-[11px]
+                       hover:bg-black hover:text-white whitespace-nowrap"
+              >
                 + Add image
               </button>
             </div>
 
-            <div class="gap-12"></div>
-            <div id="galleryList"></div>
+            <div id="galleryList" class="space-y-2"></div>
+          </section>
 
-            <div id="modalMsg" class="hidden kk-sub kk-admin-msg"></div>
+          <!-- Message -->
+          <div id="modalMsg" class="hidden border-[4px] border-black p-3">
+            <div class="text-[11px] font-black uppercase tracking-[.25em]">Status</div>
+            <div class="text-sm text-black/70 mt-2" data-modal-msg></div>
           </div>
+        </div>
 
-          <div class="kk-admin-modal-foot">
-            <button id="btnDelete" type="button" class="kk-btn kk-admin-danger-outline">
+        <!-- Foot -->
+        <div class="flex flex-wrap gap-2 justify-between p-4 border-t-2 border-black/15">
+          <div class="flex gap-2">
+            <button
+              id="btnDelete"
+              type="button"
+              class="border-[4px] border-black bg-white px-4 py-2 font-black uppercase tracking-[.12em] text-[11px]
+                     hover:bg-black hover:text-white"
+            >
               Disable
             </button>
 
-            <button id="btnHardDelete" type="button" class="kk-btn kk-admin-outline">
+            <button
+              id="btnHardDelete"
+              type="button"
+              class="border-[4px] border-black bg-white px-4 py-2 font-black uppercase tracking-[.12em] text-[11px]
+                     hover:bg-black hover:text-white"
+            >
               Delete
             </button>
-
-            <button id="btnSave" type="button" class="kk-btn kk-admin-save">
-              Save
-            </button>
           </div>
+
+          <button
+            id="btnSave"
+            type="button"
+            class="border-[4px] border-black bg-black text-white px-5 py-2 font-black uppercase tracking-[.12em] text-[11px]
+                   hover:bg-white hover:text-black"
+          >
+            Save
+          </button>
         </div>
       </div>
     </div>
+  </div>
+</div>
 
-  </main>
 
+  <!-- Admin Products logic -->
   <script type="module" src="/js/admin/products/index.js"></script>
+
 </body>
 </html>

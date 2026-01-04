@@ -1,6 +1,6 @@
 /**
  * /js/shared/cart/cartUI.js
- * Cart drawer UI (HTML + styling hooks only)
+ * Cart drawer UI (Tailwind-only markup)
  *
  * Option A:
  * - Promotions list shows ONLY auto-promos (promoBreakdown + bogoBreakdown)
@@ -88,15 +88,15 @@ export function renderCartItems(items = [], totals = {}, els = {}) {
   if (els.subtotalEl) els.subtotalEl.textContent = money(subtotal);
   if (els.totalEl) els.totalEl.textContent = money(total);
 
-  // Empty / safety
+  // Safety
   if (!els.cartItemsEl) return;
 
   // Empty state
   if (!items.length) {
     els.cartItemsEl.innerHTML = `
-      <div class="kk-cart-empty">
-        <div class="kk-cart-empty-title">Your cart is empty</div>
-        <div class="kk-cart-empty-sub">Add something cute to get started.</div>
+      <div class="border-[4px] border-black bg-white p-5">
+        <div class="text-[12px] font-black uppercase tracking-[.14em]">Your cart is empty</div>
+        <div class="text-[13px] text-black/60 mt-2">Add something cute to get started.</div>
       </div>
     `;
 
@@ -109,13 +109,13 @@ export function renderCartItems(items = [], totals = {}, els = {}) {
       els.couponDiscountEl.style.display = "none";
     }
     if (els.couponMsg) {
-      els.couponMsg.style.display = "none";
+      els.couponMsg.classList.add("hidden");
       els.couponMsg.textContent = "";
     }
     return;
   }
 
-  // Items markup (KK-styled)
+  // Items markup (Tailwind)
   els.cartItemsEl.innerHTML = items
     .map((it) => {
       const id = String(it.id || "");
@@ -126,59 +126,64 @@ export function renderCartItems(items = [], totals = {}, els = {}) {
       const unit = money(it.price);
 
       return `
-  <article class="kk-cart-item">
-    <div class="kk-cart-item-top">
-      <img
-        class="kk-cart-img"
-        src="${esc(img)}"
-        alt="${name}"
-        loading="lazy"
-      />
+<article class="border-2 border-black/15 bg-white p-3 mb-3">
+  <div class="flex gap-3 items-start">
+    <img
+      class="w-16 h-16 border-[4px] border-black bg-black/5 object-cover flex-none"
+      src="${esc(img)}"
+      alt="${name}"
+      loading="lazy"
+    />
 
-      <div style="min-width:0; flex:1;">
-        <div class="kk-cart-name">${name}</div>
+    <div class="min-w-0 flex-1">
+      <div class="font-black uppercase tracking-[.06em] text-[12px] truncate">${name}</div>
 
-        <div class="kk-cart-sub">
-          <span style="font-weight:900;">${unit}</span>
-          ${variant ? `<span style="opacity:.75;"> · ${esc(variant)}</span>` : ""}
-        </div>
+      <div class="text-[13px] text-black/60 mt-1">
+        <span class="font-black text-black">${unit}</span>
+        ${variant ? `<span class="opacity-80"> · ${esc(variant)}</span>` : ""}
+      </div>
 
-        <div class="kk-cart-actions">
-          <div class="kk-qty">
-            <button
-              type="button"
-              class="kk-qty-btn"
-              data-kk-qty-minus
-              data-id="${esc(id)}"
-              data-variant="${esc(variant)}"
-              data-qty="${qty}"
-              aria-label="Decrease quantity"
-            >−</button>
+      <div class="mt-3 flex flex-wrap items-center gap-2">
+        <!-- Qty controls -->
+        <div class="inline-flex items-center gap-2">
+          <button
+            type="button"
+            class="w-11 h-11 border-[4px] border-black bg-white font-black text-[16px] leading-none
+                   inline-flex items-center justify-center hover:bg-black hover:text-white"
+            data-kk-qty-minus
+            data-id="${esc(id)}"
+            data-variant="${esc(variant)}"
+            data-qty="${qty}"
+            aria-label="Decrease quantity"
+          >−</button>
 
-            <span class="kk-qty-num">${qty}</span>
-
-            <button
-              type="button"
-              class="kk-qty-btn"
-              data-kk-qty-plus
-              data-id="${esc(id)}"
-              data-variant="${esc(variant)}"
-              data-qty="${qty}"
-              aria-label="Increase quantity"
-            >+</button>
-          </div>
+          <span class="min-w-[28px] text-center font-black tracking-[.06em]">${qty}</span>
 
           <button
             type="button"
-            class="kk-cart-remove"
-            data-kk-remove
+            class="w-11 h-11 border-[4px] border-black bg-white font-black text-[16px] leading-none
+                   inline-flex items-center justify-center hover:bg-black hover:text-white"
+            data-kk-qty-plus
             data-id="${esc(id)}"
             data-variant="${esc(variant)}"
-          >Remove</button>
+            data-qty="${qty}"
+            aria-label="Increase quantity"
+          >+</button>
         </div>
+
+        <!-- Remove -->
+        <button
+          type="button"
+          class="border-[4px] border-black bg-white px-3 py-[10px] font-black uppercase tracking-[.12em] text-[11px]
+                 hover:bg-black hover:text-white"
+          data-kk-remove
+          data-id="${esc(id)}"
+          data-variant="${esc(variant)}"
+        >Remove</button>
       </div>
     </div>
-  </article>
+  </div>
+</article>
 `;
     })
     .join("");
@@ -187,17 +192,13 @@ export function renderCartItems(items = [], totals = {}, els = {}) {
   if (els.promotionsEl) {
     const combined = [
       ...(promoBreakdown || []).map(({ promo, amount }) => ({ promo, amount })),
-      ...(bogoBreakdown || []).map(({ promo, amount, meta }) => ({
-        promo,
-        amount,
-        meta,
-      })),
+      ...(bogoBreakdown || []).map(({ promo, amount, meta }) => ({ promo, amount, meta })),
     ];
 
     if (combined.length) {
       els.promotionsEl.style.display = "block";
       els.promotionsEl.innerHTML = `
-        <div class="kk-cart-promos">
+        <div class="border-t-2 border-black/15 pt-3 mt-3">
           ${combined
             .map(({ promo, amount, meta }) => {
               const isBogo = String(promo?.type || "").toLowerCase() === "bogo";
@@ -207,9 +208,9 @@ export function renderCartItems(items = [], totals = {}, els = {}) {
                   : promo?.name || "Promotion";
 
               return `
-                <div class="kk-promo-line">
-                  <span class="kk-promo-label">${esc(label)}</span>
-                  <span class="kk-discount-amount">-${money(amount)}</span>
+                <div class="flex justify-between items-baseline gap-3 my-1 text-[13px]">
+                  <span class="min-w-0 truncate opacity-90">${esc(label)}</span>
+                  <span class="font-black text-green-600 whitespace-nowrap">-${money(amount)}</span>
                 </div>
               `;
             })
@@ -229,12 +230,23 @@ export function renderCartItems(items = [], totals = {}, els = {}) {
     if (coupon && amt > 0) {
       els.couponDiscountEl.style.display = "flex";
 
-      // label element (try both common class names)
-      const labelEl =
+      // Find or create label + amount elements
+      let labelEl =
         els.couponDiscountEl.querySelector(".kk-promo-label") ||
         els.couponDiscountEl.querySelector(".kk-coupon-label");
 
-      const amtEl = els.couponDiscountEl.querySelector(".kk-discount-amount");
+      let amtEl = els.couponDiscountEl.querySelector(".kk-discount-amount");
+
+      // If your HTML is the Tailwind navbar version I gave you, it won’t have those classes,
+      // so we inject them once.
+      if (!labelEl || !amtEl) {
+        els.couponDiscountEl.innerHTML = `
+          <span class="kk-promo-label min-w-0 truncate opacity-90"></span>
+          <span class="kk-discount-amount font-black text-green-600 whitespace-nowrap"></span>
+        `;
+        labelEl = els.couponDiscountEl.querySelector(".kk-promo-label");
+        amtEl = els.couponDiscountEl.querySelector(".kk-discount-amount");
+      }
 
       if (labelEl) labelEl.textContent = formatCouponLabel(coupon, couponMeta);
       if (amtEl) amtEl.textContent = `-${money(amt)}`;
@@ -242,4 +254,7 @@ export function renderCartItems(items = [], totals = {}, els = {}) {
       els.couponDiscountEl.style.display = "none";
     }
   }
+
+  // Coupon message element: keep it hidden unless couponUI shows it
+  // (couponUI should manage its own visibility)
 }

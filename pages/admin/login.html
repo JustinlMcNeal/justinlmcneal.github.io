@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KARRY KRAZE — Admin Login</title>
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- KK theme (safe to keep) -->
+  <link rel="stylesheet" href="/css/theme/base.css">
+  <link rel="stylesheet" href="/css/theme/components.css">
+
+  <style>
+    body { background:#fff; }
+    .kk-soft-shadow { box-shadow: 0 14px 30px rgba(0,0,0,.08); }
+
+    @media (prefers-reduced-motion: reduce) {
+      * { transition:none!important; animation:none!important; }
+    }
+  </style>
+</head>
+
+<body class="kk-page kk-page--admin-login">
+
+  <!-- Navbar mount -->
+  <div id="kkNavbarMount"></div>
+
+  <main class="max-w-6xl mx-auto px-4 py-8">
+    <header class="bg-white text-center py-6">
+      <div class="uppercase tracking-[.25em] font-black text-xs opacity-70">Admin</div>
+      <h1 class="font-black tracking-tight text-2xl sm:text-3xl mt-2">Sign in</h1>
+      <p class="text-sm opacity-70 mt-2">
+        Please sign in to access the admin dashboard.
+      </p>
+    </header>
+
+    <section class="bg-white mt-6">
+      <div class="max-w-md mx-auto p-4 sm:p-6">
+
+        <!-- Already signed in -->
+        <div id="alreadyIn" class="hidden kk-soft-shadow border border-black p-5">
+          <div class="uppercase tracking-[.25em] font-black text-xs">
+            You’re already signed in
+          </div>
+          <div class="text-sm opacity-80 mt-2" id="alreadyEmail"></div>
+
+          <div class="mt-4 flex gap-2">
+            <a id="goNextBtn"
+               href="/pages/admin/index.html"
+               class="bg-black text-white font-black px-5 py-3">
+              Go to Admin
+            </a>
+
+            <button id="logoutBtn"
+                    type="button"
+                    class="border border-black font-black px-5 py-3">
+              Log out
+            </button>
+          </div>
+        </div>
+
+        <!-- Login form -->
+        <form id="loginForm" class="kk-soft-shadow border border-black p-5">
+          <div class="uppercase tracking-[.25em] font-black text-xs">
+            Admin Login
+          </div>
+
+          <div class="mt-4">
+            <label class="block text-xs font-black uppercase tracking-[.25em] opacity-70">
+              Email
+            </label>
+            <input id="email" type="email" required
+              class="mt-2 w-full border border-black px-4 py-3"
+              placeholder="you@domain.com" />
+          </div>
+
+          <div class="mt-4">
+            <label class="block text-xs font-black uppercase tracking-[.25em] opacity-70">
+              Password
+            </label>
+            <input id="password" type="password" required
+              class="mt-2 w-full border border-black px-4 py-3"
+              placeholder="••••••••" />
+          </div>
+
+          <div class="mt-4 flex justify-between items-center gap-3">
+            <label class="inline-flex items-center gap-2 text-sm">
+              <input type="checkbox" class="border border-black" />
+              <span class="opacity-80">Remember me</span>
+            </label>
+
+            <button id="loginBtn"
+                    type="submit"
+                    class="bg-black text-white font-black px-5 py-3">
+              Sign in
+            </button>
+          </div>
+
+          <div id="statusBox" class="hidden mt-4 border border-black p-4">
+            <div id="statusKicker"
+                 class="uppercase tracking-[.25em] font-black text-xs">
+              Status
+            </div>
+            <div id="statusMsg" class="text-sm mt-2"></div>
+          </div>
+
+          <div class="mt-6 pt-4 border-t border-black">
+            <button id="magicBtn"
+                    type="button"
+                    class="w-full border border-black font-black px-5 py-3">
+              Send magic link instead
+            </button>
+            <p class="text-xs opacity-70 mt-3">
+              Magic link will email you a sign-in link.
+            </p>
+          </div>
+        </form>
+
+        <div class="text-center text-xs opacity-60 mt-6">
+          <a href="/" class="underline">Back to site</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- LOGIN LOGIC -->
+  <script type="module" src="/js/admin/login/index.js"></script>
+</body>
+</html>
