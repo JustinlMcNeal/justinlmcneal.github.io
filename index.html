@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KARRY KRAZE — Home</title>
+
+<!-- Global theme -->
+<link rel="stylesheet" href="./css/theme/base.css">
+<link rel="stylesheet" href="./css/theme/components.css">
+
+<script src="https://cdn.tailwindcss.com"></script>
+
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          kkpink: '#f58f86',
+          kkpeach: '#f6dcc6',
+        },
+        borderWidth: {
+          '4': '4px',
+        }
+      }
+    }
+  }
+</script>
+
+<!-- ... -->
+
+
+
+
+
+</head>
+
+<body class="kk-page kk-home">
+
+  <!-- ✅ NAVBAR INSERT MOUNT (DO NOT REMOVE) -->
+  <div id="kkNavbarMount"></div>
+
+  <!-- =========================
+       HERO / PROMO BANNER
+       (Dynamic via promotions table later)
+  ========================== -->
+  <!-- HOME BANNER INSERT -->
+<header class="w-full">
+  <div id="homeBannerMount"></div>
+</header>
+
+
+
+  <!-- =========================
+       HOME CATALOG SECTION
+       Categories (chips) + 10 products
+  ========================== -->
+<!-- ✅ HOME CATALOG INSERT MOUNT -->
+<div id="kkHomeCatalogMount"></div>
+<div id="kkHome99CentMount"></div>
+<div id="kkHomeCategoryStripMount"></div>
+<div id="kkShopTheLookMount"></div>
+
+
+  <!-- ✅ FOOTER INSERT MOUNT -->
+  <div id="kkFooterMount"></div>
+
+<script type="module" src="./js/home/index.js"></script>
+
+
+</body>
+</html>

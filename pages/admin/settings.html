@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin · Site Settings</title>
+
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Global brand theme -->
+  <link rel="stylesheet" href="/css/theme/base.css">
+  <link rel="stylesheet" href="/css/theme/components.css">
+
+  <style>
+    :root { --kk-border: 4px solid #000; }
+    .kk-border { border: var(--kk-border); }
+    .kk-shadow { box-shadow: 0 14px 30px rgba(0,0,0,.08); }
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+    }
+  </style>
+</head>
+
+<body class="bg-white text-black">
+  <!-- Admin Nav mount -->
+  <div id="kkAdminNavMount"></div>
+
+  <main class="max-w-4xl mx-auto px-4 py-8">
+    <!-- Header -->
+    <header class="text-center">
+      <div class="uppercase tracking-[.25em] font-black text-xs opacity-70">Admin</div>
+      <h1 class="font-black tracking-tight text-2xl sm:text-3xl mt-2">Site Settings</h1>
+      <p class="text-sm opacity-70 mt-2">Manage announcement bar, shipping settings, and more</p>
+    </header>
+
+    <!-- APP -->
+    <section id="appPanel" class="hidden mt-8 space-y-6">
+      
+      <!-- Announcement Bar Section -->
+      <section class="kk-border kk-shadow bg-white p-4 sm:p-6">
+        <div class="flex items-center justify-between gap-4 mb-6">
+          <div>
+            <h2 class="font-black text-lg uppercase tracking-wide">📢 Announcement Bar</h2>
+            <p class="text-sm opacity-70 mt-1">Display a message at the top of your site</p>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" id="announcementEnabled" class="sr-only peer">
+            <div class="w-14 h-8 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-black"></div>
+          </label>
+        </div>
+
+        <div class="grid gap-4">
+          <!-- Text -->
+          <div>
+            <label class="block text-xs font-black uppercase tracking-[.15em] opacity-70 mb-2">
+              Announcement Text
+            </label>
+            <input
+              id="announcementText"
+              type="text"
+              placeholder="FREE SHIPPING on orders over $50!"
+              class="w-full kk-border px-4 py-3 outline-none text-[16px]"
+            />
+          </div>
+
+          <!-- Link (Optional) -->
+          <div>
+            <label class="block text-xs font-black uppercase tracking-[.15em] opacity-70 mb-2">
+              Link (Optional)
+            </label>
+            <input
+              id="announcementLink"
+              type="text"
+              placeholder="/pages/catalog.html or https://..."
+              class="w-full kk-border px-4 py-3 outline-none text-[16px]"
+            />
+            <p class="text-xs opacity-50 mt-1">Leave empty for no link</p>
+          </div>
+
+          <!-- Colors -->
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-black uppercase tracking-[.15em] opacity-70 mb-2">
+                Background Color
+              </label>
+              <div class="flex gap-2">
+                <input
+                  id="announcementBgColor"
+                  type="color"
+                  value="#000000"
+                  class="w-12 h-12 kk-border cursor-pointer"
+                />
+                <input
+                  id="announcementBgColorText"
+                  type="text"
+                  value="#000000"
+                  class="flex-1 kk-border px-3 py-2 outline-none uppercase text-[14px]"
+                />
+              </div>
+            </div>
+            <div>
+              <label class="block text-xs font-black uppercase tracking-[.15em] opacity-70 mb-2">
+                Text Color
+              </label>
+              <div class="flex gap-2">
+                <input
+                  id="announcementTextColor"
+                  type="color"
+                  value="#ffffff"
+                  class="w-12 h-12 kk-border cursor-pointer"
+                />
+                <input
+                  id="announcementTextColorText"
+                  type="text"
+                  value="#ffffff"
+                  class="flex-1 kk-border px-3 py-2 outline-none uppercase text-[14px]"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Show Close Button -->
+          <div class="flex items-center gap-3">
+            <input type="checkbox" id="announcementShowClose" checked class="w-5 h-5 accent-black">
+            <label for="announcementShowClose" class="text-sm font-bold">Allow visitors to dismiss the bar</label>
+          </div>
+
+          <!-- Preview -->
+          <div>
+            <label class="block text-xs font-black uppercase tracking-[.15em] opacity-70 mb-2">
+              Preview
+            </label>
+            <div id="announcementPreview" class="kk-border p-0 overflow-hidden">
+              <div class="flex items-center justify-center gap-4 py-3 px-4 text-center text-sm font-bold" style="background: #000; color: #fff;">
+                <span id="previewText">FREE SHIPPING on orders over $50!</span>
+                <button class="opacity-60 hover:opacity-100 text-lg leading-none">✕</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Free Shipping Progress Section -->
+      <section class="kk-border kk-shadow bg-white p-4 sm:p-6">
+        <div class="flex items-center justify-between gap-4 mb-6">
+          <div>
+            <h2 class="font-black text-lg uppercase tracking-wide">🚚 Free Shipping Progress</h2>
+            <p class="text-sm opacity-70 mt-1">Show progress bar in cart drawer</p>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" id="freeShippingEnabled" class="sr-only peer">
+            <div class="w-14 h-8 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-black"></div>
+          </label>
+        </div>
+
+        <div class="grid gap-4">
+          <!-- Threshold -->
+          <div>
+            <label class="block text-xs font-black uppercase tracking-[.15em] opacity-70 mb-2">
+              Free Shipping Threshold ($)
+            </label>
+            <input
+              id="freeShippingThreshold"
+              type="number"
+              min="0"
+              step="0.01"
+              value="50.00"
+              placeholder="50.00"
+              class="w-full kk-border px-4 py-3 outline-none text-[16px]"
+            />
+            <p class="text-xs opacity-50 mt-1">Orders at or above this amount get free shipping</p>
+          </div>
+
+          <!-- Message Under Threshold -->
+          <div>
+            <label class="block text-xs font-black uppercase tracking-[.15em] opacity-70 mb-2">
+              Message (Under Threshold)
+            </label>
+            <input
+              id="freeShippingMsgUnder"
+              type="text"
+              value="Spend ${remaining} more for FREE shipping!"
+              placeholder="Spend ${remaining} more for FREE shipping!"
+              class="w-full kk-border px-4 py-3 outline-none text-[16px]"
+            />
+            <p class="text-xs opacity-50 mt-1">Use ${remaining} as placeholder for remaining amount</p>
+          </div>
+
+          <!-- Message When Reached -->
+          <div>
+            <label class="block text-xs font-black uppercase tracking-[.15em] opacity-70 mb-2">
+              Message (Threshold Reached)
+            </label>
+            <input
+              id="freeShippingMsgReached"
+              type="text"
+              value="🎉 You qualify for FREE shipping!"
+              placeholder="🎉 You qualify for FREE shipping!"
+              class="w-full kk-border px-4 py-3 outline-none text-[16px]"
+            />
+          </div>
+
+          <!-- Preview -->
+          <div>
+            <label class="block text-xs font-black uppercase tracking-[.15em] opacity-70 mb-2">
+              Preview (Under Threshold)
+            </label>
+            <div class="kk-border p-4 bg-gray-50">
+              <div class="text-sm font-bold text-center mb-2">Spend $25.00 more for FREE shipping!</div>
+              <div class="h-2 bg-gray-200 rounded-full overflow-hidden">
+                <div class="h-full bg-black rounded-full transition-all" style="width: 50%"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Save Button -->
+      <div class="flex justify-end gap-3">
+        <button
+          id="btnSave"
+          type="button"
+          class="kk-border bg-black text-white font-black px-8 py-4 uppercase tracking-[.15em] text-sm hover:bg-white hover:text-black transition-colors"
+        >
+          💾 Save Settings
+        </button>
+      </div>
+
+    </section>
+
+    <!-- Loading State -->
+    <section id="loadingPanel" class="mt-8">
+      <div class="kk-border kk-shadow bg-white p-6 text-center">
+        <div class="inline-block w-8 h-8 border-4 border-black border-t-transparent rounded-full animate-spin"></div>
+        <p class="mt-4 text-sm opacity-70">Loading settings...</p>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer mount -->
+  <div id="kkFooterMount"></div>
+
+  <script type="module">
+    import { initAdminNav } from "/js/shared/adminNav.js";
+    import { initFooter } from "/js/shared/footer.js";
+    import { getSupabaseClient } from "/js/shared/supabaseClient.js";
+    import { requireAdmin } from "/js/shared/guard.js";
+
+    const supabase = getSupabaseClient();
+
+    // DOM Elements
+    const appPanel = document.getElementById("appPanel");
+    const loadingPanel = document.getElementById("loadingPanel");
+
+    // Announcement Bar
+    const announcementEnabled = document.getElementById("announcementEnabled");
+    const announcementText = document.getElementById("announcementText");
+    const announcementLink = document.getElementById("announcementLink");
+    const announcementBgColor = document.getElementById("announcementBgColor");
+    const announcementBgColorText = document.getElementById("announcementBgColorText");
+    const announcementTextColor = document.getElementById("announcementTextColor");
+    const announcementTextColorText = document.getElementById("announcementTextColorText");
+    const announcementShowClose = document.getElementById("announcementShowClose");
+    const announcementPreview = document.getElementById("announcementPreview");
+    const previewText = document.getElementById("previewText");
+
+    // Free Shipping
+    const freeShippingEnabled = document.getElementById("freeShippingEnabled");
+    const freeShippingThreshold = document.getElementById("freeShippingThreshold");
+    const freeShippingMsgUnder = document.getElementById("freeShippingMsgUnder");
+    const freeShippingMsgReached = document.getElementById("freeShippingMsgReached");
+
+    const btnSave = document.getElementById("btnSave");
+
+    async function init() {
+      await initAdminNav("Settings");
+      initFooter();
+      
+      // Admin guard
+      const check = await requireAdmin();
+      if (!check.ok) {
+        console.warn("[Settings] Not admin:", check.reason);
+        // Could redirect or disable save
+      }
+      
+      await loadSettings();
+      setupListeners();
+      loadingPanel.classList.add("hidden");
+      appPanel.classList.remove("hidden");
+    }
+
+    async function loadSettings() {
+      // Fetch announcement bar settings
+      const { data: announcementData } = await supabase
+        .from("site_settings")
+        .select("value")
+        .eq("key", "announcement_bar")
+        .single();
+
+      if (announcementData?.value) {
+        const v = announcementData.value;
+        announcementEnabled.checked = v.enabled ?? false;
+        announcementText.value = v.text ?? "";
+        announcementLink.value = v.link ?? "";
+        announcementBgColor.value = v.bg_color ?? "#000000";
+        announcementBgColorText.value = v.bg_color ?? "#000000";
+        announcementTextColor.value = v.text_color ?? "#ffffff";
+        announcementTextColorText.value = v.text_color ?? "#ffffff";
+        announcementShowClose.checked = v.show_close ?? true;
+        updatePreview();
+      }
+
+      // Fetch free shipping settings
+      const { data: freeShippingData } = await supabase
+        .from("site_settings")
+        .select("value")
+        .eq("key", "free_shipping")
+        .single();
+
+      if (freeShippingData?.value) {
+        const v = freeShippingData.value;
+        freeShippingEnabled.checked = v.enabled ?? true;
+        freeShippingThreshold.value = v.threshold ?? 50;
+        freeShippingMsgUnder.value = v.message_under ?? "Spend ${remaining} more for FREE shipping!";
+        freeShippingMsgReached.value = v.message_reached ?? "🎉 You qualify for FREE shipping!";
+      }
+    }
+
+    function setupListeners() {
+      // Sync color pickers with text inputs
+      announcementBgColor.addEventListener("input", () => {
+        announcementBgColorText.value = announcementBgColor.value;
+        updatePreview();
+      });
+      announcementBgColorText.addEventListener("input", () => {
+        if (/^#[0-9A-Fa-f]{6}$/.test(announcementBgColorText.value)) {
+          announcementBgColor.value = announcementBgColorText.value;
+        }
+        updatePreview();
+      });
+      announcementTextColor.addEventListener("input", () => {
+        announcementTextColorText.value = announcementTextColor.value;
+        updatePreview();
+      });
+      announcementTextColorText.addEventListener("input", () => {
+        if (/^#[0-9A-Fa-f]{6}$/.test(announcementTextColorText.value)) {
+          announcementTextColor.value = announcementTextColorText.value;
+        }
+        updatePreview();
+      });
+
+      announcementText.addEventListener("input", updatePreview);
+
+      btnSave.addEventListener("click", saveSettings);
+    }
+
+    function updatePreview() {
+      const bar = announcementPreview.querySelector("div");
+      bar.style.background = announcementBgColor.value;
+      bar.style.color = announcementTextColor.value;
+      previewText.textContent = announcementText.value || "Your announcement text here";
+    }
+
+    async function saveSettings() {
+      btnSave.disabled = true;
+      btnSave.textContent = "Saving...";
+
+      try {
+        // Save announcement bar
+        const { error: err1 } = await supabase
+          .from("site_settings")
+          .upsert({
+            key: "announcement_bar",
+            value: {
+              enabled: announcementEnabled.checked,
+              text: announcementText.value,
+              link: announcementLink.value,
+              bg_color: announcementBgColor.value,
+              text_color: announcementTextColor.value,
+              show_close: announcementShowClose.checked
+            },
+            updated_at: new Date().toISOString()
+          }, { onConflict: "key" });
+
+        if (err1) throw err1;
+
+        // Save free shipping
+        const { error: err2 } = await supabase
+          .from("site_settings")
+          .upsert({
+            key: "free_shipping",
+            value: {
+              enabled: freeShippingEnabled.checked,
+              threshold: parseFloat(freeShippingThreshold.value) || 50,
+              message_under: freeShippingMsgUnder.value,
+              message_reached: freeShippingMsgReached.value
+            },
+            updated_at: new Date().toISOString()
+          }, { onConflict: "key" });
+
+        if (err2) throw err2;
+
+        alert("✅ Settings saved successfully!");
+      } catch (err) {
+        console.error(err);
+        alert("❌ Error saving settings: " + err.message);
+      } finally {
+        btnSave.disabled = false;
+        btnSave.textContent = "💾 Save Settings";
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

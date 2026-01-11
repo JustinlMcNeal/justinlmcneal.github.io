@@ -1,0 +1,86 @@
+<!-- =========================
+     SHOP BY CATEGORY SECTION
+========================== -->
+<section class="max-w-6xl mx-auto px-4 mt-12 mb-16" id="categoryStripSection">
+  
+  <!-- Header with styled title -->
+  <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-8">
+    <div class="text-center sm:text-left">
+      <h2 class="font-black text-3xl md:text-5xl uppercase tracking-tighter leading-none relative inline-block">
+        Shop by Category
+        <div class="absolute -bottom-3 md:-bottom-4 left-0 w-full h-3 md:h-4 text-kkpink">
+          <svg viewBox="0 0 100 20" preserveAspectRatio="none" class="w-full h-full">
+            <path d="M0 10 Q 25 20, 50 10 T 100 10" stroke="currentColor" stroke-width="4" fill="none" />
+          </svg>
+        </div>
+      </h2>
+      <p class="mt-4 text-sm text-gray-500 font-medium">Find exactly what you're looking for</p>
+    </div>
+    <a href="/pages/catalog.html" class="hidden sm:inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest border-2 border-black px-4 py-2 hover:bg-black hover:text-white transition-all group">
+      View All
+      <svg class="w-4 h-4 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+      </svg>
+    </a>
+  </div>
+
+  <!-- Carousel Container -->
+  <div class="relative group/carousel">
+    
+    <!-- Left Arrow -->
+    <button 
+      data-catstrip-left
+      class="hidden md:flex absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 z-20 w-12 h-12 bg-white border-2 border-black items-center justify-center shadow-lg opacity-0 group-hover/carousel:opacity-100 transition-all hover:bg-black hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+      aria-label="Scroll left"
+    >
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+      </svg>
+    </button>
+
+    <!-- Cards Track -->
+    <div 
+      id="homeCatStripTrack"
+      data-home-catstrip 
+      class="flex gap-4 overflow-x-auto snap-x snap-mandatory scrollbar-hide pb-4 scroll-smooth"
+    >
+      <!-- Skeleton Loaders (shown while loading) -->
+      <div data-catstrip-skeleton class="contents">
+        <div class="w-[260px] sm:w-[280px] lg:w-[300px] shrink-0 aspect-[10/14] bg-gray-200 animate-pulse rounded-lg"></div>
+        <div class="w-[260px] sm:w-[280px] lg:w-[300px] shrink-0 aspect-[10/14] bg-gray-200 animate-pulse rounded-lg"></div>
+        <div class="w-[260px] sm:w-[280px] lg:w-[300px] shrink-0 aspect-[10/14] bg-gray-200 animate-pulse rounded-lg"></div>
+        <div class="w-[260px] sm:w-[280px] lg:w-[300px] shrink-0 aspect-[10/14] bg-gray-200 animate-pulse rounded-lg"></div>
+      </div>
+    </div>
+
+    <!-- Right Arrow -->
+    <button 
+      data-catstrip-right
+      class="hidden md:flex absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 z-20 w-12 h-12 bg-white border-2 border-black items-center justify-center shadow-lg opacity-0 group-hover/carousel:opacity-100 transition-all hover:bg-black hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+      aria-label="Scroll right"
+    >
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- Progress Dots -->
+  <div data-catstrip-dots class="flex justify-center gap-2 mt-4"></div>
+
+  <!-- Mobile View All Button -->
+  <div class="sm:hidden mt-6 text-center">
+    <a href="/pages/catalog.html" class="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest border-2 border-black px-6 py-3 hover:bg-black hover:text-white transition-all">
+      View All Categories
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+      </svg>
+    </a>
+  </div>
+</section>
+
+<style>
+  /* Hide scrollbar but keep functionality */
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
+  .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+</style>

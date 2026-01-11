@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KARRY KRAZE — Product</title>
+
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            kkpink: '#f58f86',
+            kkpeach: '#f6dcc6',
+          },
+          borderWidth: {
+            '4': '4px',
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Keep KK theme if desired -->
+  <link rel="stylesheet" href="/css/theme/base.css">
+  <link rel="stylesheet" href="/css/theme/components.css">
+
+  <style>
+    /* Prevent horizontal overflow on mobile */
+    html, body {
+      max-width: 100vw;
+      overflow-x: hidden;
+    }
+    
+    /* Sticky fix for KK theme pages - but NOT overflow-x */
+    .kk-page--product main,
+    .kk-page--product section,
+    .kk-page--product #productWrap {
+      overflow-y: visible !important;
+    }
+    .kk-page--product {
+      transform: none !important;
+      filter: none !important;
+      backdrop-filter: none !important;
+      max-width: 100vw;
+      overflow-x: hidden;
+    }
+
+    /* Soft dock styles (only applied when JS adds .is-docked) */
+    #stickyDetailsCol.is-docked {
+      opacity: 1;
+      transform: translateY(-2px);
+      box-shadow: 0 14px 30px rgba(0,0,0,.10);
+    }
+
+    /* Default (not docked) */
+    #stickyDetailsCol {
+      opacity: .98;
+      transform: translateY(0);
+      box-shadow: none;
+    }
+
+    /* Respect reduced motion */
+    @media (prefers-reduced-motion: reduce) {
+      #stickyDetailsCol { transition: none !important; }
+    }
+
+    /* Ensure proper mobile viewport */
+    @viewport {
+      width: device-width;
+      zoom: 1;
+    }
+    
+    html {
+      -webkit-text-size-adjust: 100%;
+      -moz-text-size-adjust: 100%;
+      text-size-adjust: 100%;
+    }
+    
+    /* Force all content to fit viewport */
+    * {
+      max-width: 100%;
+      box-sizing: border-box;
+    }
+    
+    img, video, iframe, embed, object {
+      max-width: 100%;
+      height: auto;
+    }
+    
+    /* Prevent long text from causing overflow */
+    h1, h2, h3, h4, h5, h6, p, span, div {
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+      word-break: break-word;
+    }
+    
+    /* Ensure flex/grid items can shrink */
+    .flex > *, .grid > * {
+      min-width: 0;
+    }
+  </style>
+</head>
+
+<body class="kk-page kk-page--product bg-[#f8f8f8] overflow-x-hidden">
+
+  <div id="kkNavbarMount"></div>
+
+  <main class="max-w-6xl mx-auto px-4 py-6 overflow-x-hidden">
+
+    <!-- Breadcrumb -->
+    <nav class="flex items-center gap-2 text-sm mb-6">
+      <a class="text-black/60 hover:text-black transition-colors" href="/pages/catalog.html">
+        <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+        </svg>
+        Back to Shop
+      </a>
+      <span class="text-black/30">/</span>
+      <span id="crumbName" class="text-black/60 truncate max-w-[200px]">Product</span>
+    </nav>
+
+    <!-- Tags Row (above everything on mobile) -->
+    <div id="productTagsTop" class="mb-4"></div>
+
+    <!-- Product Code -->
+    <div id="productCode" class="text-xs font-mono text-black/40 tracking-wider mb-2"></div>
+
+    <!-- Category -->
+    <div id="productCategory" class="uppercase tracking-[.2em] font-bold text-xs text-black/50 mb-1">
+      Category
+    </div>
+
+    <!-- Product Name -->
+    <h1 id="productName" class="font-black text-3xl sm:text-4xl tracking-tight leading-tight mb-6 break-words">
+      Product Name
+    </h1>
+
+    <!-- Loading -->
+    <div id="productLoading" class="bg-white rounded-2xl p-8 shadow-sm">
+      <div class="flex items-center gap-3">
+        <div class="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
+        <span class="text-sm font-medium">Loading product...</span>
+      </div>
+    </div>
+
+    <!-- Error -->
+    <div id="productError" class="bg-red-50 border border-red-200 rounded-2xl p-8 hidden">
+      <div class="uppercase tracking-[.15em] font-black text-xs text-red-600 mb-2">Error</div>
+      <div id="errorMsg" class="text-sm text-red-700"></div>
+      <a class="inline-block mt-4 bg-black text-white font-bold px-6 py-3 rounded-lg hover:bg-black/80 transition-colors" href="/pages/catalog.html">
+        Back to catalog
+      </a>
+    </div>
+
+    <!-- Content -->
+    <div id="productWrap" class="hidden">
+      <div class="grid lg:grid-cols-[1fr,420px] gap-8 items-start">
+
+        <!-- LEFT: Gallery -->
+        <div class="bg-white rounded-2xl overflow-hidden shadow-sm">
+          <div id="productGalleryMount" class="p-4"></div>
+          
+          <!-- Thumbnail sections (outside the fetched fragment to avoid Live Server corruption) -->
+          <div class="px-4 pb-4">
+            <!-- MOBILE THUMBS (horizontal scroll) -->
+            <div
+              id="thumbCarousel"
+              aria-label="Product thumbnails"
+              class="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 md:hidden"
+              style="scrollbar-width:none; -ms-overflow-style:none;"
+            ></div>
+
+            <!-- DESKTOP THUMBS GRID -->
+            <div
+              id="thumbRow"
+              aria-label="Product images"
+              class="hidden md:grid md:grid-cols-4 gap-3"
+            ></div>
+          </div>
+        </div>
+
+        <!-- RIGHT: Details (sticky on lg+) -->
+        <div
+          id="stickyDetailsCol"
+          class="bg-white rounded-2xl shadow-sm p-6 lg:p-8
+                 lg:sticky lg:top-[calc(var(--kk-nav-h,72px)+16px)] h-fit
+                 transition-[transform,box-shadow,opacity] duration-200 ease-out
+                 will-change-transform"
+        >
+          <!-- Details content inlined to avoid Live Server corruption -->
+          <section id="productDetailsMount" class="w-full space-y-6">
+
+            <!-- Price row -->
+            <div>
+              <div id="productPrice" class="text-3xl font-black tracking-tight"></div>
+              <div id="shippingLine" class="text-sm text-black/50 mt-1 flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path>
+                </svg>
+                <span></span>
+              </div>
+            </div>
+
+            <!-- Promos (clean card) -->
+            <div id="productPromos" class="hidden">
+              <div class="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl p-4">
+                <details class="group" open>
+                  <summary class="list-none cursor-pointer flex items-center justify-between select-none">
+                    <div class="flex items-center gap-2">
+                      <span class="text-lg">🏷️</span>
+                      <span class="font-bold text-sm text-green-800">Active Promotions</span>
+                    </div>
+                    <span class="text-xs text-green-600 transition-transform duration-200 group-open:rotate-180">▼</span>
+                  </summary>
+
+                  <div class="mt-3 space-y-3">
+                    <div id="promoApplied" class="space-y-2"></div>
+                    
+                    <div id="promoEligibleWrap" class="hidden pt-3 border-t border-green-200">
+                      <div class="text-xs font-bold text-green-700/70 mb-2">You could unlock:</div>
+                      <div id="promoEligible" class="space-y-2"></div>
+                    </div>
+                  </div>
+                </details>
+              </div>
+            </div>
+
+            <!-- Divider -->
+            <div class="border-t border-black/10"></div>
+
+            <!-- Options Section -->
+            <div>
+              <div class="text-xs font-bold uppercase tracking-widest text-black/40 mb-4">Select Color</div>
+              <div id="variantSwatches" class="flex flex-wrap gap-3"></div>
+            </div>
+
+            <!-- Quantity + Add to Cart -->
+            <div class="flex items-stretch gap-3">
+              <!-- Quantity -->
+              <div class="inline-flex items-center border-2 border-black/10 rounded-xl overflow-hidden bg-black/5">
+                <button
+                  type="button"
+                  id="qtyMinus"
+                  aria-label="Decrease quantity"
+                  class="w-12 h-12 flex items-center justify-center font-bold text-xl text-black/60 hover:text-black hover:bg-black/10 transition-colors"
+                >−</button>
+
+                <input
+                  id="qty"
+                  type="number"
+                  min="1"
+                  value="1"
+                  readonly
+                  class="w-12 h-12 text-center font-bold text-lg bg-transparent outline-none pointer-events-none"
+                />
+
+                <button
+                  type="button"
+                  id="qtyPlus"
+                  aria-label="Increase quantity"
+                  class="w-12 h-12 flex items-center justify-center font-bold text-xl text-black/60 hover:text-black hover:bg-black/10 transition-colors"
+                >+</button>
+              </div>
+
+              <!-- Add to cart -->
+              <button
+                id="btnAddToCart"
+                class="flex-1 bg-black text-white font-bold text-sm uppercase tracking-wider py-4 px-6 rounded-xl
+                       hover:bg-black/80 active:scale-[0.98] transition-all duration-150"
+              >
+                Add to Cart
+              </button>
+            </div>
+
+            <!-- Purchase on Amazon -->
+            <a
+              id="btnAmazon"
+              href="#"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="hidden w-full bg-[#FF9900] text-black font-bold text-sm uppercase tracking-wider py-4 px-6 rounded-xl
+                     hover:bg-[#FFa929] active:scale-[0.98] transition-all duration-150
+                     flex items-center justify-center gap-3"
+            >
+              <svg class="w-5 h-5" viewBox="0 0 448 512" fill="currentColor">
+                <path d="M257.2 162.7c-48.7 1.8-169.5 15.5-169.5 117.5 0 109.5 138.3 114 183.5 43.2 6.5 10.2 35.4 37.5 45.3 46.8l56.8-56S341 288.9 341 261.4V114.3C341 89 316.5 32 228.7 32 140.7 32 94 87 94 136.3l73.5 6.8c16.3-49.5 54.2-49.5 54.2-49.5 40.7-.1 35.5 29.8 35.5 69.1zm0 86.8c0 80-84.2 68-84.2 17.2 0-47.2 50.5-56.7 84.2-57.8v40.6zm136 163.5c-7.7 10-70 67-174.5 67S34.2 408.5 9.7 379c-6.8-7.7 1-11.3 5.5-8.3C88.5 415.2 203 488.5 387.7 401c7.5-3.7 13.3 2 5.5 12zm39.8 2.2c-6.5 15.8-16 26.8-21.2 31-5.5 4.5-9.5 2.7-6.5-3.8s19.3-46.5 12.7-55c-6.5-8.3-37-4.3-48-3.2-10.8 1-13 2-14-.3-2.3-5.7 21.7-15.5 37.5-17.5 15.7-1.8 41-.8 46 5.7 3.7 5.1 0 27.1-6.5 43.1z"></path>
+              </svg>
+              Purchase on Amazon
+            </a>
+
+            <div id="actionMsg" class="text-sm font-medium hidden"></div>
+
+            <!-- Divider -->
+            <div class="border-t border-black/10"></div>
+
+            <!-- Details Accordion -->
+            <div>
+              <div class="text-xs font-bold uppercase tracking-widest text-black/40 mb-4">Product Details</div>
+              <div id="productSections" class="space-y-2"></div>
+            </div>
+
+            <!-- Tags (hidden - moved to top of page) -->
+            <div id="tagRow" class="hidden"></div>
+
+            <!-- Pairs well with -->
+            <div id="productPairsMount" class="pt-4"></div>
+
+          </section>
+        </div>
+
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ✅ FOOTER INSERT MOUNT -->
+  <div id="kkFooterMount"></div>
+
+  <script type="module" src="/js/product/index.js"></script>
+</body>
+</html>

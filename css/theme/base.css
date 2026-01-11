@@ -1,0 +1,137 @@
+/* =========================
+   KARRY KRAZE — BASE (LEAN)
+   Keep: tokens + reset + core primitives
+   Use Tailwind for spacing/grid/layout utilities.
+========================= */
+
+:root {
+  --kk-black: #000;
+  --kk-white: #fff;
+  --kk-pink: #f58f86;
+  --kk-peach: #f6dcc6;
+  --kk-muted: #6b6b6b;
+
+  --kk-border-w: 4px;
+  --kk-border: var(--kk-border-w) solid var(--kk-black);
+
+  --kk-font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+  --kk-track-wide: 0.14em;
+}
+
+/* ---------- Reset / Base ---------- */
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  width: 100%;
+  min-height: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  font-family: var(--kk-font);
+  color: var(--kk-black);
+  background: var(--kk-white);
+}
+
+a { color: inherit; text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* Page background helper (navbar.css also uses .kk-page for padding-top) */
+.kk-page { background: var(--kk-white); }
+
+/* ---------- Layout Primitive ---------- */
+.kk-container {
+  max-width: 80rem;
+  margin: 0 auto;
+  padding: 20px 16px;
+}
+
+/* ---------- Typography Primitives ---------- */
+.kk-kicker {
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: var(--kk-track-wide);
+  text-transform: uppercase;
+}
+
+.kk-h1 {
+  font-weight: 1000;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: clamp(32px, 6vw, 56px);
+  line-height: 0.95;
+  margin: 0;
+}
+
+.kk-sub {
+  font-size: 14px;
+  color: var(--kk-muted);
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* ---------- Card Primitive ---------- */
+.kk-card {
+  border: var(--kk-border);
+  background: #fff;
+}
+
+.kk-card-pad { padding: 26px; }
+
+/* ---------- Button Primitive ---------- */
+.kk-btn {
+  border: var(--kk-border);
+  background: #000;
+  color: #fff;
+  padding: 14px 16px;
+  font-weight: 1000;
+  letter-spacing: var(--kk-track-wide);
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.kk-btn:hover {
+  background: var(--kk-pink);
+  color: #000;
+}
+
+.kk-btn:focus { outline: none; }
+.kk-btn:focus-visible { outline: 4px solid var(--kk-pink); outline-offset: 4px; }
+
+/* ---------- Form Primitives ---------- */
+.kk-label {
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: var(--kk-track-wide);
+  text-transform: uppercase;
+}
+
+.kk-input {
+  width: 100%;
+  border: 2px solid #000;
+  padding: 12px;
+  font: inherit;
+}
+
+.kk-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ---------- Simple Content Helpers ---------- */
+.kk-section-title {
+  font-weight: 1000;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 14px;
+  margin: 0;
+}
+
+.kk-divider {
+  margin: 18px 0;
+  border-top: 2px solid rgba(0, 0, 0, 0.15);
+}

@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin · Dashboard</title>
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            kkpink: '#ff6b9d',
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- KK theme -->
+  <link rel="stylesheet" href="/css/theme/base.css" />
+  <link rel="stylesheet" href="/css/theme/components.css" />
+  
+  <style>
+    /* Modern Admin Dashboard Styles */
+    .admin-card {
+      background: white;
+      border-radius: 1rem;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+      border: 1px solid #e5e7eb;
+      padding: 1.5rem;
+      transition: all 0.2s ease;
+    }
+    .admin-card:hover {
+      box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+      border-color: #ff6b9d;
+    }
+    .admin-btn {
+      border: 2px solid #000;
+      border-radius: 0.5rem;
+      padding: 0.5rem 1rem;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 0.75rem;
+      background: white;
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+    .admin-btn:hover {
+      background: #ff6b9d;
+      color: white;
+      border-color: #ff6b9d;
+    }
+    .admin-btn.active {
+      background: #ff6b9d;
+      color: white;
+      border-color: #ff6b9d;
+    }
+    .admin-tile {
+      background: white;
+      border-radius: 1rem;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+      border: 2px solid #e5e7eb;
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      text-decoration: none;
+      color: inherit;
+      min-height: 180px;
+    }
+    .admin-tile:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 32px rgba(0,0,0,0.12);
+      border-color: #ff6b9d;
+    }
+    .admin-tile-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      margin-bottom: 0.75rem;
+    }
+    .admin-tile-title {
+      font-weight: 900;
+      font-size: 1.25rem;
+      line-height: 1.2;
+      margin-bottom: 0.25rem;
+    }
+    .admin-tile-desc {
+      font-size: 0.75rem;
+      color: #6b7280;
+      margin-top: auto;
+    }
+    .admin-tile-badge {
+      font-size: 0.625rem;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      padding: 0.25rem 0.5rem;
+      border-radius: 9999px;
+      width: fit-content;
+      margin-bottom: 0.5rem;
+    }
+  </style>
+</head>
+
+<body class="bg-gray-50 min-h-screen hidden">
+  <!-- Admin Nav mount -->
+  <div id="kkAdminNavMount"></div>
+
+  <main class="max-w-6xl mx-auto px-4 py-8">
+    <!-- Modern Header -->
+    <header class="admin-card text-center mb-8">
+      <div class="text-xs font-black uppercase tracking-widest text-pink-500 mb-2">Admin</div>
+      <h1 class="text-3xl sm:text-4xl font-black tracking-tight mb-2" style="color: #ff6b9d;">Dashboard</h1>
+      <p class="text-sm text-gray-500">Quick access to tools & admin pages</p>
+    </header>
+
+    <!-- Loading / Status -->
+    <section id="adminStatus" class="admin-card text-center mb-6">
+      <div class="text-xs font-black uppercase tracking-widest text-pink-500">Loading</div>
+      <div class="text-sm text-gray-500 mt-2">Checking admin session…</div>
+    </section>
+
+    <!-- Controls -->
+    <section class="grid gap-4 md:grid-cols-[1fr_auto] items-stretch mb-8">
+      <div class="admin-card">
+        <label class="block text-xs font-black uppercase tracking-widest text-pink-500 mb-3">Search tools</label>
+        <div class="flex gap-2">
+          <input
+            id="toolSearch"
+            type="text"
+            placeholder="Type: products, orders, reviews…"
+            class="flex-1 border-2 border-gray-200 rounded-lg px-4 py-3 text-sm focus:border-pink-400 focus:ring-2 focus:ring-pink-100 outline-none transition-all"
+          />
+          <button id="clearSearch" type="button" class="admin-btn">Clear</button>
+        </div>
+      </div>
+
+      <div class="admin-card flex flex-wrap gap-2 items-center justify-start md:justify-end">
+        <button class="js-filter admin-btn active" data-filter="all" type="button">All</button>
+        <button class="js-filter admin-btn" data-filter="store" type="button">Store</button>
+        <button class="js-filter admin-btn" data-filter="orders" type="button">Orders</button>
+        <button class="js-filter admin-btn" data-filter="finance" type="button">Finance</button>
+      </div>
+    </section>
+
+    <div class="text-sm text-gray-400 mb-4" id="toolCount"></div>
+
+    <!-- Tool Grid -->
+    <section id="toolGrid" class="grid gap-4 grid-cols-2 lg:grid-cols-4">
+      
+      <!-- Shop The Look -->
+      <a href="/pages/admin/looks.html"
+         data-title="Shop The Look"
+         data-kicker="Visuals"
+         data-tags="hotspot lookbook style image marketing"
+         class="admin-tile group">
+        <div class="admin-tile-icon bg-green-100 text-green-600">👗</div>
+        <div class="admin-tile-badge bg-green-100 text-green-700">Visuals</div>
+        <div class="admin-tile-title">Shop The Look</div>
+        <div class="admin-tile-desc group-hover:text-pink-500 transition-colors">Manage Looks →</div>
+      </a>
+
+      <!-- Home Categories -->
+      <a href="/pages/admin/homeCats.html"
+         data-title="Home Categories"
+         data-kicker="Visuals"
+         data-tags="category strip home image order visibility"
+         class="admin-tile group">
+        <div class="admin-tile-icon bg-orange-100 text-orange-600">📂</div>
+        <div class="admin-tile-badge bg-orange-100 text-orange-700">Visuals</div>
+        <div class="admin-tile-title">Home Categories</div>
+        <div class="admin-tile-desc group-hover:text-pink-500 transition-colors">Manage Strip →</div>
+      </a>
+
+      <!-- Site Settings -->
+      <a href="/pages/admin/settings.html"
+         data-title="Site Settings"
+         data-kicker="store"
+         data-tags="announcement bar shipping settings config"
+         class="admin-tile group">
+        <div class="admin-tile-icon bg-purple-100 text-purple-600">⚙️</div>
+        <div class="admin-tile-badge bg-purple-100 text-purple-700">Config</div>
+        <div class="admin-tile-title">Site Settings</div>
+        <div class="admin-tile-desc group-hover:text-pink-500 transition-colors">Announcements & More →</div>
+      </a>
+
+      <!-- Homepage Banners -->
+      <a href="/pages/admin/banners.html"
+         data-title="Homepage Banners"
+         data-kicker="Visuals"
+         data-tags="carousel slide image marketing"
+         class="admin-tile group">
+        <div class="admin-tile-icon bg-yellow-100 text-yellow-600">🖼️</div>
+        <div class="admin-tile-badge bg-yellow-100 text-yellow-700">Visuals</div>
+        <div class="admin-tile-title">Homepage Banners</div>
+        <div class="admin-tile-desc group-hover:text-pink-500 transition-colors">Manage Carousel →</div>
+      </a>
+
+      <!-- Products -->
+      <a href="/pages/admin/products.html"
+         data-title="Products"
+         data-kicker="store"
+         data-tags="products inventory items"
+         class="admin-tile group">
+        <div class="admin-tile-icon bg-blue-100 text-blue-600">📦</div>
+        <div class="admin-tile-badge bg-blue-100 text-blue-700">Catalog</div>
+        <div class="admin-tile-title">Products</div>
+        <div class="admin-tile-desc group-hover:text-pink-500 transition-colors">Edit items, variants, pricing →</div>
+      </a>
+
+      <!-- Promotions -->
+      <a href="/pages/admin/promotions.html"
+         data-title="Promotions"
+         data-kicker="store"
+         data-tags="promotions coupons bogo discounts"
+         class="admin-tile group">
+        <div class="admin-tile-icon bg-pink-100 text-pink-600">🏷️</div>
+        <div class="admin-tile-badge bg-pink-100 text-pink-700">Marketing</div>
+        <div class="admin-tile-title">Promotions</div>
+        <div class="admin-tile-desc group-hover:text-pink-500 transition-colors">Manage promos & discounts →</div>
+      </a>
+
+      <!-- Social Media -->
+      <a href="/pages/admin/social.html"
+         data-title="Social Media"
+         data-kicker="store"
+         data-tags="social media pinterest instagram posts schedule"
+         class="admin-tile group">
+        <div class="admin-tile-icon bg-pink-100 text-pink-600">📱</div>
+        <div class="admin-tile-badge bg-pink-100 text-pink-700">Marketing</div>
+        <div class="admin-tile-title">Social Media</div>
+        <div class="admin-tile-desc group-hover:text-pink-500 transition-colors">Schedule Posts →</div>
+      </a>
+
+      <!-- Storage -->
+      <a href="/pages/admin/pStorage.html"
+         data-title="Product Storage"
+         data-kicker="store"
+         data-tags="storage bins locations"
+         class="admin-tile group">
+        <div class="admin-tile-icon bg-gray-100 text-gray-600">🗄️</div>
+        <div class="admin-tile-badge bg-gray-100 text-gray-700">Ops</div>
+        <div class="admin-tile-title">Storage</div>
+        <div class="admin-tile-desc group-hover:text-pink-500 transition-colors">Track bin locations →</div>
+      </a>
+
+      <!-- Orders -->
+      <a href="/pages/admin/lineItemsOrders.html"
+         data-title="Line Items Orders"
+         data-kicker="orders"
+         data-tags="orders line items shipping"
+         class="admin-tile group">
+        <div class="admin-tile-icon bg-indigo-100 text-indigo-600">📋</div>
+        <div class="admin-tile-badge bg-indigo-100 text-indigo-700">Orders</div>
+        <div class="admin-tile-title">Orders</div>
+        <div class="admin-tile-desc group-hover:text-pink-500 transition-colors">Fulfillment & shipping →</div>
+      </a>
+
+      <!-- Customers -->
+      <a href="/pages/admin/customers.html"
+         data-title="Customers"
+         data-kicker="orders"
+         data-tags="customers emails repeat buyers"
+         class="admin-tile group">
+        <div class="admin-tile-icon bg-teal-100 text-teal-600">👥</div>
+        <div class="admin-tile-badge bg-teal-100 text-teal-700">CRM</div>
+        <div class="admin-tile-title">Customers</div>
+        <div class="admin-tile-desc group-hover:text-pink-500 transition-colors">Directory & history →</div>
+      </a>
+
+      <!-- Raw Items -->
+      <a href="/pages/admin/lineItemsRaw.html"
+         data-title="Line Items Raw"
+         data-kicker="orders"
+         data-tags="raw stripe webhook line items"
+         class="admin-tile group opacity-60 hover:opacity-100">
+        <div class="admin-tile-icon bg-gray-100 text-gray-500">🔧</div>
+        <div class="admin-tile-badge bg-gray-100 text-gray-600">Debug</div>
+        <div class="admin-tile-title">Raw Items</div>
+        <div class="admin-tile-desc group-hover:text-pink-500 transition-colors">Webhook logs →</div>
+      </a>
+
+      <!-- Expenses -->
+      <a href="/pages/admin/expenses.html"
+         data-title="Expenses"
+         data-kicker="finance"
+         data-tags="expenses costs budgeting"
+         class="admin-tile group">
+        <div class="admin-tile-icon bg-red-100 text-red-600">💰</div>
+        <div class="admin-tile-badge bg-red-100 text-red-700">Finance</div>
+        <div class="admin-tile-title">Expenses</div>
+        <div class="admin-tile-desc group-hover:text-pink-500 transition-colors">Track business spend →</div>
+      </a>
+
+      <!-- Product Calculator -->
+      <a href="/pages/admin/product-calculator.html"
+         data-title="Product Calculator"
+         data-kicker="finance"
+         data-tags="calculator pricing margins"
+         class="admin-tile group">
+        <div class="admin-tile-icon bg-emerald-100 text-emerald-600">🧮</div>
+        <div class="admin-tile-badge bg-emerald-100 text-emerald-700">Finance</div>
+        <div class="admin-tile-title">Product Calculator</div>
+        <div class="admin-tile-desc group-hover:text-pink-500 transition-colors">Cost → price → margin →</div>
+      </a>
+
+      <!-- Item Stats -->
+      <a href="/pages/admin/item-stats.html"
+         data-title="Item Stats"
+         data-kicker="finance"
+         data-tags="stats likes performance"
+         class="admin-tile group">
+        <div class="admin-tile-icon bg-cyan-100 text-cyan-600">📊</div>
+        <div class="admin-tile-badge bg-cyan-100 text-cyan-700">Finance</div>
+        <div class="admin-tile-title">Item Stats</div>
+        <div class="admin-tile-desc group-hover:text-pink-500 transition-colors">Performance metrics →</div>
+      </a>
+
+    </section>
+
+    <div class="mt-10 text-center text-xs text-gray-400">
+      Admin access enforced by Supabase RPC <code class="bg-gray-100 px-2 py-1 rounded">is_admin</code>
+    </div>
+  </main>
+
+  <!-- Footer mount -->
+  <div id="kkFooterMount"></div>
+
+  <script type="module" src="/js/admin/index/index.js"></script>
+</body>
+</html>

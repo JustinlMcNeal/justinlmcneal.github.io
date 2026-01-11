@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin · Promotions</title>
+
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Global brand theme (keep) -->
+  <link rel="stylesheet" href="/css/theme/base.css">
+  <link rel="stylesheet" href="/css/theme/components.css">
+
+  <style>
+    /* KK thick-border vibe */
+    :root { --kk-border: 4px solid #000; }
+    .kk-border { border: var(--kk-border); }
+    .kk-shadow { box-shadow: 0 14px 30px rgba(0,0,0,.08); }
+    
+    /* Status badges */
+    .status-active { background: #10b981; color: white; }
+    .status-inactive { background: #ef4444; color: white; }
+    .status-expired { background: #6b7280; color: white; }
+    .status-scheduled { background: #3b82f6; color: white; }
+    
+    /* Type badges */
+    .type-percentage { background: #8b5cf6; color: white; }
+    .type-fixed { background: #06b6d4; color: white; }
+    .type-bogo { background: #f59e0b; color: white; }
+    .type-free-shipping { background: #10b981; color: white; }
+    
+    /* Custom scrollbar */
+    .custom-scrollbar::-webkit-scrollbar { height: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 3px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 3px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #a1a1a1; }
+    
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+    }
+  </style>
+</head>
+
+<body class="bg-gray-50 text-black">
+  <!-- Admin Nav mount -->
+  <div id="kkAdminNavMount"></div>
+
+  <main class="max-w-6xl mx-auto px-4 py-6 sm:py-8">
+    <!-- Header -->
+    <header class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-6">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <div class="uppercase tracking-[.25em] font-black text-xs text-gray-500">Admin</div>
+          <h1 class="font-black tracking-tight text-2xl sm:text-3xl mt-1">Promotions</h1>
+          <p class="text-sm text-gray-500 mt-1">Manage campaigns, discounts, and special offers</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <div class="text-sm font-bold text-gray-500" id="countLabel">0 items</div>
+        </div>
+      </div>
+    </header>
+
+    <!-- APP -->
+    <section id="appPanel" class="hidden">
+      <!-- Controls -->
+      <section class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6 mb-6">
+        <div class="flex flex-col sm:flex-row gap-4">
+          <!-- Search -->
+          <div class="flex-1">
+            <label for="searchInput" class="block text-xs font-black uppercase tracking-[.2em] text-gray-500 mb-2">
+              Search
+            </label>
+            <input
+              id="searchInput"
+              type="search"
+              placeholder="Search name, code, type…"
+              class="w-full border-2 border-gray-300 rounded-xl px-4 py-3 outline-none focus:border-black transition-colors"
+            />
+          </div>
+
+          <!-- Add Button -->
+          <div class="sm:self-end">
+            <button
+              id="btnNew"
+              type="button"
+              class="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-black text-white font-black 
+                     px-6 py-3 rounded-xl hover:bg-gray-800 transition-colors"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+              </svg>
+              Add Promotion
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Table Section -->
+      <section class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+        <!-- Mobile Card View -->
+        <div id="mobilePromotionCards" class="sm:hidden"></div>
+        
+        <!-- Desktop Table View -->
+        <div class="hidden sm:block overflow-x-auto custom-scrollbar">
+          <table class="w-full border-collapse text-sm">
+            <thead class="bg-black text-white">
+              <tr class="text-left uppercase tracking-[.12em] text-[11px] font-black">
+                <th class="px-4 py-4">Name</th>
+                <th class="px-4 py-4 hidden md:table-cell">Code</th>
+                <th class="px-4 py-4">Type</th>
+                <th class="px-4 py-4 hidden lg:table-cell">Value</th>
+                <th class="px-4 py-4 text-center">Status</th>
+                <th class="px-4 py-4 hidden xl:table-cell">Schedule</th>
+                <th class="px-4 py-4 text-right">Actions</th>
+              </tr>
+            </thead>
+
+            <tbody id="promotionRows" class="divide-y divide-gray-200"></tbody>
+          </table>
+        </div>
+
+        <div class="px-4 py-3 border-t border-gray-200 text-xs text-gray-500 bg-gray-50">
+          💡 Tip: Leave Code blank to create an auto-applied promotion (no coupon needed).
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <!-- MODAL (Tailwind) -->
+  <div id="modal" class="hidden fixed inset-0 z-50" aria-hidden="true">
+    <!-- Backdrop -->
+    <div data-modal-backdrop class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
+
+    <!-- Panel -->
+    <div class="relative min-h-full flex items-end sm:items-center justify-center p-3 sm:p-6">
+      <div class="w-full max-w-3xl bg-white rounded-2xl shadow-2xl overflow-hidden">
+        <!-- Head -->
+        <div class="flex items-center justify-between gap-3 bg-black text-white px-4 sm:px-6 py-4">
+          <div>
+            <div class="uppercase tracking-[.25em] font-black text-xs text-gray-400">Promotion</div>
+            <h3 id="modalTitle" class="font-black text-lg sm:text-xl mt-1">Edit Promotion</h3>
+          </div>
+
+          <button
+            id="btnClose"
+            type="button"
+            class="border-2 border-white/30 text-white font-black px-4 py-2 rounded-lg hover:bg-white/10 transition-colors"
+          >
+            Close
+          </button>
+        </div>
+
+        <!-- Body -->
+        <div class="px-4 sm:px-6 py-5 max-h-[75vh] overflow-y-auto">
+          <!-- Basics -->
+          <div class="uppercase tracking-[.25em] font-black text-xs text-gray-500 mb-3">Basics</div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label for="fName" class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-2">Name</label>
+              <input id="fName" class="w-full border-2 border-gray-300 rounded-xl px-4 py-3 outline-none focus:border-black transition-colors" placeholder="Summer Sale 2026" />
+            </div>
+
+            <div>
+              <label for="fCode" class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-2">
+                Code (optional)
+              </label>
+              <input id="fCode" class="w-full border-2 border-gray-300 rounded-xl px-4 py-3 outline-none focus:border-black transition-colors font-mono" placeholder="SUMMER25" />
+              <div class="text-xs text-gray-500 mt-2">Leave blank for auto-applied (no coupon).</div>
+            </div>
+
+            <div>
+              <label for="fType" class="block text-xs font-black uppercase tracking-[.25em] opacity-70">Type</label>
+              <select id="fType" class="mt-2 w-full kk-border px-4 py-3 outline-none bg-white">
+                <option value="percentage">Percentage Discount</option>
+                <option value="fixed">Fixed Amount</option>
+                <option value="bogo">Buy One Get One</option>
+                <option value="free-shipping">Free Shipping</option>
+              </select>
+            </div>
+
+            <div>
+              <label for="fValue" class="block text-xs font-black uppercase tracking-[.25em] opacity-70">Value</label>
+              <input id="fValue" type="number" step="0.01" class="mt-2 w-full kk-border px-4 py-3 outline-none" placeholder="25" />
+              <div class="text-xs opacity-70 mt-2">Percentage promos use “25” for 25%.</div>
+            </div>
+
+            <div>
+              <label for="fMinOrder" class="block text-xs font-black uppercase tracking-[.25em] opacity-70">Min order</label>
+              <input id="fMinOrder" type="number" step="0.01" class="mt-2 w-full kk-border px-4 py-3 outline-none" placeholder="0" />
+            </div>
+
+            <div>
+              <label for="fUsageLimit" class="block text-xs font-black uppercase tracking-[.25em] opacity-70">Usage limit</label>
+              <input id="fUsageLimit" type="number" class="mt-2 w-full kk-border px-4 py-3 outline-none" placeholder="Unlimited" />
+            </div>
+          </div>
+
+          <div class="my-6 border-t-4 border-black"></div>
+
+          <!-- Banner -->
+          <div class="uppercase tracking-[.25em] font-black text-xs text-gray-500 mb-3">Homepage banner</div>
+          <div>
+            <label for="fBannerImage" class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-2">
+              Banner image path (optional)
+            </label>
+            <input
+              id="fBannerImage"
+              class="w-full border-2 border-gray-300 rounded-xl px-4 py-3 outline-none focus:border-black transition-colors"
+              placeholder="/imgs/banners/summer-sale.webp"
+              autocomplete="off"
+            />
+            <div class="text-xs text-gray-500 mt-2">
+              Put the image in your site repo (recommended: <b>/imgs/banners/</b>) and paste the path here.
+            </div>
+
+            <div id="promoBannerPreviewWrap" class="hidden mt-4">
+              <div class="uppercase tracking-[.25em] font-black text-xs text-gray-500 mb-2">Preview</div>
+              <img
+                id="promoBannerPreviewImg"
+                src=""
+                alt="Banner preview"
+                class="w-full max-h-[180px] object-cover rounded-xl border-2 border-gray-200"
+              />
+            </div>
+          </div>
+
+          <div class="my-6 border-t border-gray-200"></div>
+
+          <!-- Schedule -->
+          <div class="uppercase tracking-[.25em] font-black text-xs text-gray-500 mb-3">Schedule</div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label for="fStartDate" class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-2">Start</label>
+              <input id="fStartDate" type="datetime-local" class="w-full border-2 border-gray-300 rounded-xl px-4 py-3 outline-none focus:border-black transition-colors" />
+            </div>
+            <div>
+              <label for="fEndDate" class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-2">End</label>
+              <input id="fEndDate" type="datetime-local" class="w-full border-2 border-gray-300 rounded-xl px-4 py-3 outline-none focus:border-black transition-colors" />
+            </div>
+          </div>
+
+          <div class="my-6 border-t border-gray-200"></div>
+
+          <!-- Status -->
+          <div class="uppercase tracking-[.25em] font-black text-xs text-gray-500 mb-3">Status</div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <label class="flex items-center gap-3 border-2 border-gray-300 rounded-xl px-4 py-3 cursor-pointer hover:border-black transition-colors">
+              <input id="fActive" type="checkbox" class="w-5 h-5 accent-black" />
+              <div>
+                <span class="font-bold">Active</span>
+                <span class="text-xs text-gray-500 block">Promotion is enabled</span>
+              </div>
+            </label>
+
+            <label class="flex items-center gap-3 border-2 border-gray-300 rounded-xl px-4 py-3 cursor-pointer hover:border-black transition-colors">
+              <input id="fPublic" type="checkbox" class="w-5 h-5 accent-black" />
+              <div>
+                <span class="font-bold">Public</span>
+                <span class="text-xs text-gray-500 block">Visible to customers</span>
+              </div>
+            </label>
+          </div>
+
+          <div class="my-6 border-t border-gray-200"></div>
+
+          <!-- Scope -->
+          <div class="uppercase tracking-[.25em] font-black text-xs text-gray-500 mb-3">Apply to</div>
+          <div>
+            <label for="fScopeType" class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-2">
+              Scope type
+            </label>
+            <select id="fScopeType" class="w-full border-2 border-gray-300 rounded-xl px-4 py-3 outline-none focus:border-black transition-colors bg-white">
+              <option value="all">All Products</option>
+              <option value="category">Specific Categories</option>
+              <option value="tag">Specific Tags</option>
+              <option value="product">Specific Products</option>
+            </select>
+
+            <!-- Categories -->
+            <div id="scopeCategoriesWrap" class="hidden mt-4">
+              <div class="uppercase tracking-[.25em] font-black text-xs text-gray-500 mb-2">Categories</div>
+              <div id="scopeCategoriesSelect" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
+            </div>
+
+            <!-- Tags -->
+            <div id="scopeTagsWrap" class="hidden mt-4">
+              <div class="uppercase tracking-[.25em] font-black text-xs text-gray-500 mb-2">Tags</div>
+              <div id="scopeTagsSelect" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
+            </div>
+
+            <!-- Products -->
+            <div id="scopeProductsWrap" class="hidden mt-4">
+              <div class="uppercase tracking-[.25em] font-black text-xs text-gray-500 mb-2">Products</div>
+              <div id="scopeProductsSelect" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
+            </div>
+          </div>
+
+          <div class="my-6 border-t border-gray-200"></div>
+
+          <!-- BOGO -->
+          <div id="bogoSection" class="hidden">
+            <div class="uppercase tracking-[.25em] font-black text-xs opacity-70">Free reward (BOGO)</div>
+
+            <div class="mt-3">
+              <label for="fBOGOType" class="block text-xs font-black uppercase tracking-[.25em] opacity-70">
+                What to give free
+              </label>
+              <select id="fBOGOType" class="mt-2 w-full kk-border px-4 py-3 outline-none bg-white">
+                <option value="product">Specific Product</option>
+                <option value="category">Entire Category</option>
+                <option value="tag">Specific Tag</option>
+              </select>
+            </div>
+
+            <div class="mt-4">
+              <div id="bogoProductWrap">
+                <label class="block text-xs font-black uppercase tracking-[.25em] opacity-70">Product to give free</label>
+                <select id="fBOGOProduct" class="mt-2 w-full kk-border px-4 py-3 outline-none bg-white">
+                  <option value="">-- Choose product --</option>
+                </select>
+              </div>
+
+              <div id="bogoCategoryWrap" class="hidden">
+                <label class="block text-xs font-black uppercase tracking-[.25em] opacity-70">Category to give free</label>
+                <select id="fBOGOCategory" class="mt-2 w-full kk-border px-4 py-3 outline-none bg-white">
+                  <option value="">-- Choose category --</option>
+                </select>
+              </div>
+
+              <div id="bogoTagWrap" class="hidden">
+                <label class="block text-xs font-black uppercase tracking-[.25em] opacity-70">Tag to give free</label>
+                <select id="fBOGOTag" class="mt-2 w-full kk-border px-4 py-3 outline-none bg-white">
+                  <option value="">-- Choose tag --</option>
+                </select>
+              </div>
+
+              <p class="text-xs opacity-70 mt-3">
+                When customers buy any item from the selected scope, they’ll receive this free reward.
+              </p>
+            </div>
+
+            <div class="my-6 border-t-4 border-black"></div>
+          </div>
+
+          <!-- Description -->
+          <div class="uppercase tracking-[.25em] font-black text-xs text-gray-500 mb-3">Description</div>
+          <div>
+            <label for="fDescription" class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-2">
+              Description (optional)
+            </label>
+            <textarea
+              id="fDescription"
+              class="w-full border-2 border-gray-300 rounded-xl px-4 py-3 outline-none focus:border-black transition-colors resize-none"
+              placeholder="Details about this promotion..."
+              rows="3"
+            ></textarea>
+          </div>
+
+          <div id="modalMsg" class="hidden mt-4 border-2 rounded-xl px-4 py-3 text-sm"></div>
+        </div>
+
+        <!-- Foot -->
+        <div class="flex items-center justify-between gap-3 border-t border-gray-200 bg-gray-50 px-4 sm:px-6 py-4">
+          <button id="btnDelete" type="button" class="border-2 border-red-500 text-red-500 font-black px-4 py-3 rounded-xl hover:bg-red-50 transition-colors">
+            Delete
+          </button>
+
+          <button id="btnSave" type="button" class="bg-black text-white font-black px-6 py-3 rounded-xl hover:bg-gray-800 transition-colors">
+            Save Changes
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer mount -->
+  <div id="kkFooterMount"></div>
+
+  <!-- Page logic -->
+  <script type="module" src="/js/admin/promotions/index.js"></script>
+</body>
+</html>

@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin · Shop The Look</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/css/theme/base.css" />
+  <link rel="stylesheet" href="/css/theme/components.css" />
+  <!-- Basic styling for hotspots -->
+  <style>
+    .hotspot-dot {
+      position: absolute;
+      width: 24px;
+      height: 24px;
+      transform: translate(-50%, -50%); /* Centered */
+      background: rgba(0,0,0,0.8);
+      border: 3px solid white;
+      border-radius: 50%;
+      cursor: grab; /* Indicates draggable */
+      z-index: 10;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+      transition: transform 0.1s;
+    }
+    .hotspot-dot:active { cursor: grabbing; transform: translate(-50%, -50%) scale(1.1); background: #f58f86; }
+    .hotspot-dot:hover { transform: translate(-50%, -50%) scale(1.2); border-color: #f58f86; }
+    
+    /* Context Menu */
+    #ctxMenu { z-index: 100; min-width: 150px; background: white; border: 2px solid black; position: absolute; }
+  </style>
+</head>
+<body class="kk-page kk-admin bg-gray-50 hidden">
+  
+  <div id="kkAdminNavMount"></div>
+
+  <!-- Context Menu -->
+  <div id="ctxMenu" class="hidden shadow-[4px_4px_0_0_rgba(0,0,0,1)]">
+     <button id="ctxChangeProduct" class="block w-full text-left px-4 py-2 hover:bg-gray-100 text-xs font-bold uppercase">Change Product</button>
+     <div class="border-b border-gray-200"></div>
+     <button id="ctxDelete" class="block w-full text-left px-4 py-2 hover:bg-red-50 text-red-600 text-xs font-bold uppercase">Delete Tag</button>
+  </div>
+
+  <main class="max-w-6xl mx-auto px-4 py-8">
+    <header class="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
+      <div>
+        <div class="text-[10px] uppercase font-black tracking-[0.25em] text-gray-500 mb-2">Visual Merchandising</div>
+        <h1 class="text-4xl font-black uppercase tracking-tight">Shop The Look</h1>
+        <p class="mt-2 text-gray-600 max-w-xl">Upload lifestyle images and tag products with hotspots.</p>
+      </div>
+      <div class="flex gap-3">
+         <a href="/pages/admin/index.html" class="px-5 py-3 border-2 border-black font-black uppercase tracking-widest text-xs hover:bg-gray-100">Back</a>
+         <button id="btnNewLook" class="px-5 py-3 bg-black text-white border-2 border-black font-black uppercase tracking-widest text-xs hover:bg-kkpink hover:text-black">
+            + New Look
+         </button>
+      </div>
+    </header>
+
+    <!-- Content Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+       
+       <!-- Left: List of Looks -->
+       <div class="lg:col-span-1 flex flex-col gap-6">
+          <div class="bg-white border-2 border-black p-4">
+             <h2 class="font-black uppercase tracking-widest text-sm mb-4 border-b-2 border-black/10 pb-2">Active Looks</h2>
+             <div id="looksList" class="flex flex-col gap-3 max-h-[600px] overflow-y-auto">
+                <div class="p-4 text-center text-gray-400 text-sm">Loading...</div>
+             </div>
+          </div>
+       </div>
+
+       <!-- Right: Editor Area -->
+       <div class="lg:col-span-2 hidden" id="editorPanel">
+          <div class="bg-white border-2 border-black p-6 relative">
+             
+             <!-- Toolbar -->
+             <div class="flex flex-col md:flex-row md:justify-between items-start md:items-center mb-6 pb-4 border-b-2 border-black/10 gap-4">
+                <div class="flex items-center gap-4 w-full md:w-auto flex-1 md:mr-8">
+                   <input type="text" id="editTitle" placeholder="Look Title (e.g. Summer Vibes)" class="font-black text-xl uppercase w-full bg-transparent border-none outline-none placeholder-gray-300">
+                   <label class="flex items-center gap-2 cursor-pointer select-none shrink-0 border-l border-gray-200 pl-4">
+                      <input type="checkbox" id="editIsActive" class="w-5 h-5 accent-black">
+                      <span class="text-[10px] font-black uppercase tracking-widest text-gray-500">Active</span>
+                   </label>
+                </div>
+                <div class="flex gap-2 shrink-0">
+                   <button id="btnSaveLook" class="px-6 py-3 bg-black text-white font-bold text-xs uppercase tracking-widest hover:opacity-80 transition-opacity">Save</button>
+                   <button id="btnDeleteLook" class="px-4 py-2 border-2 border-red-500 text-red-600 font-bold text-xs uppercase tracking-widest hover:bg-red-50">Delete</button>
+                </div>
+             </div>
+
+             <!-- Image Area -->
+             <div class="mb-6 relative bg-gray-100 border-2 border-dashed border-gray-300 min-h-[400px] flex items-center justify-center group" id="imageArea">
+                <!-- Image goes here -->
+                <img id="previewImage" src="" class="hidden max-w-full max-h-[600px] object-contain select-none" draggable="false">
+                
+                <!-- Upload Placeholder -->
+                <div id="uploadPlaceholder" class="text-center p-8">
+                   <p class="font-bold text-gray-400 uppercase tracking-widest text-xs mb-4">No Image Selected</p>
+                   <label class="px-6 py-3 bg-white border-2 border-black cursor-pointer font-black uppercase text-xs tracking-widest hover:bg-kkpink">
+                      Upload Image
+                      <input type="file" id="fileInput" accept="image/*" class="hidden">
+                   </label>
+                </div>
+
+                <!-- Hotspots container (overlay) -->
+                <div id="hotspotLayer" class="absolute inset-0 hidden cursor-crosshair"></div>
+             </div>
+
+             <!-- Hints -->
+             <p class="text-xs text-gray-500 mb-6 font-mono text-center bg-gray-100 py-2">Click anywhere on the image to add a product tag.</p>
+
+             <!-- Items List -->
+             <div>
+                <h3 class="font-black uppercase tracking-widest text-xs mb-4">Tagged Products</h3>
+                <div id="taggedItemsList" class="grid gap-3">
+                   <!-- Rows injected here -->
+                </div>
+             </div>
+
+          </div>
+       </div>
+
+    </div>
+  </main>
+
+  <!-- Product Picker / Edit Modal -->
+  <dialog id="productModal" class="p-0 border-4 border-black w-full max-w-2xl bg-white backdrop:bg-black/50">
+     <div class="p-6">
+        <div class="flex justify-between items-start mb-4">
+            <h3 class="font-black uppercase text-xl">Edit Tag</h3>
+            <div class="flex gap-2">
+                 <!-- Color Picker -->
+                 <div class="flex gap-2 p-1 bg-gray-100 rounded-lg">
+                    <button type="button" class="w-6 h-6 rounded-full border border-gray-300 bg-white hover:scale-110 transition-transform" onclick="window.dispatchEvent(new CustomEvent('kk:setLookColor', { detail: 'white' }))"></button>
+                    <button type="button" class="w-6 h-6 rounded-full border border-gray-300 bg-black hover:scale-110 transition-transform" onclick="window.dispatchEvent(new CustomEvent('kk:setLookColor', { detail: 'black' }))"></button>
+                    <button type="button" class="w-6 h-6 rounded-full border border-gray-300 bg-red-500 hover:scale-110 transition-transform" onclick="window.dispatchEvent(new CustomEvent('kk:setLookColor', { detail: '#ef4444' }))"></button>
+                    <button type="button" class="w-6 h-6 rounded-full border border-gray-300 bg-blue-500 hover:scale-110 transition-transform" onclick="window.dispatchEvent(new CustomEvent('kk:setLookColor', { detail: '#3b82f6' }))"></button>
+                 </div>
+                 <button class="px-3 py-1 bg-red-50 text-red-600 font-bold uppercase text-[10px] border border-red-200 hover:bg-red-100" id="btnModalDelete">Delete</button>
+            </div>
+        </div>
+
+        <input type="text" id="modalSearch" placeholder="Search products..." class="w-full px-4 py-3 border-2 border-black font-bold uppercase text-sm mb-4">
+        <div id="modalResults" class="h-64 overflow-y-auto border-2 border-gray-100 p-2 grid gap-2"></div>
+        <div class="flex justify-end gap-3 mt-4 pt-4 border-t-2 border-gray-100">
+           <button class="px-6 py-3 border-2 border-black font-bold uppercase text-xs" onclick="document.getElementById('productModal').close()">Cancel</button>
+        </div>
+     </div>
+  </dialog>
+
+    <!-- Context Menu -->
+    <div id="ctxMenu" class="hidden fixed bg-white border border-gray-200 shadow-xl rounded-lg py-1 z-50 w-48 font-sans text-sm">
+        <div class="px-3 py-2 border-b border-gray-100 mb-1">
+            <div class="text-[10px] text-gray-500 uppercase tracking-widest mb-2">Dot Color</div>
+            <div class="flex gap-2">
+                <div class="w-5 h-5 rounded-full bg-white border border-gray-300 cursor-pointer hover:scale-110 transition-transform" onclick="window.dispatchEvent(new CustomEvent('kk:setLookColor', { detail: 'white' }))"></div>
+                <div class="w-5 h-5 rounded-full bg-black border border-gray-300 cursor-pointer hover:scale-110 transition-transform" onclick="window.dispatchEvent(new CustomEvent('kk:setLookColor', { detail: 'black' }))"></div>
+                <div class="w-5 h-5 rounded-full bg-red-500 border border-gray-300 cursor-pointer hover:scale-110 transition-transform" onclick="window.dispatchEvent(new CustomEvent('kk:setLookColor', { detail: '#ef4444' }))"></div>
+                <div class="w-5 h-5 rounded-full bg-blue-500 border border-gray-300 cursor-pointer hover:scale-110 transition-transform" onclick="window.dispatchEvent(new CustomEvent('kk:setLookColor', { detail: '#3b82f6' }))"></div>
+            </div>
+        </div>
+        <div id="ctxChangeProduct" class="px-4 py-2 hover:bg-gray-50 cursor-pointer flex items-center gap-2">
+            <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+             Change Product
+        </div>
+        <div id="ctxDelete" class="px-4 py-2 hover:bg-red-50 text-red-600 cursor-pointer flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+             Delete Tag
+        </div>
+    </div>
+
+  <!-- Footer mount -->
+  <div id="kkFooterMount"></div>
+
+  <script type="module" src="/js/admin/looks/index.js"></script>
+</body>
+</html>

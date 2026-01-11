@@ -1,0 +1,611 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin · Products</title>
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            kkpink: '#ff69b4',
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- KK base + components ONLY -->
+  <link rel="stylesheet" href="/css/theme/base.css">
+  <link rel="stylesheet" href="/css/theme/components.css">
+
+  <style>
+    /* Custom scrollbar for tables */
+    .custom-scrollbar::-webkit-scrollbar { height: 8px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #000; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #333; }
+
+    /* Row hover effect */
+    .product-row:hover { background: #fafafa; }
+    .product-row:hover .row-actions { opacity: 1; }
+    .row-actions { opacity: 0.5; transition: opacity 0.15s; }
+
+    /* Status badge */
+    .status-active { background: #dcfce7; color: #166534; }
+    .status-inactive { background: #fee2e2; color: #991b1b; }
+
+    /* Mobile improvements */
+    @media (max-width: 640px) {
+      /* Full-width modal on mobile */
+      .modal-card-mobile {
+        border-radius: 0;
+        border-left: 0;
+        border-right: 0;
+        max-height: 100vh;
+      }
+      
+      /* Clamp text to 2 lines */
+      .line-clamp-2 {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      
+      /* Touch-friendly buttons */
+      button, [role="button"] {
+        min-height: 44px;
+      }
+      
+      /* Smaller inputs */
+      input, select, textarea {
+        font-size: 16px !important; /* Prevent zoom on iOS */
+      }
+    }
+    
+    /* Active state for touch */
+    @media (hover: none) {
+      .product-row:active { background: #f5f5f5; }
+    }
+  </style>
+</head>
+
+<body class="kk-page kk-admin bg-gray-50 min-h-screen">
+
+  <!-- Admin Nav mount -->
+  <div id="kkAdminNavMount"></div>
+
+  <main class="max-w-7xl mx-auto px-2 sm:px-6 py-4 sm:py-8">
+
+    <!-- Header Card -->
+    <header class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6">
+      <div class="flex flex-col gap-4">
+        <div>
+          <div class="inline-block bg-black text-white px-2 py-1 text-[10px] font-black uppercase tracking-[.25em] mb-2">
+            Admin Panel
+          </div>
+          <h1 class="text-2xl sm:text-4xl font-black tracking-tight">
+            Products
+          </h1>
+          <p class="text-xs sm:text-sm text-gray-500 mt-1">
+            Manage your product catalog
+          </p>
+        </div>
+        <div class="grid grid-cols-2 sm:flex gap-2">
+          <button
+            id="btnImportJson"
+            type="button"
+            class="border-4 border-black bg-white text-black px-3 sm:px-4 py-2 sm:py-3 font-black uppercase tracking-[.12em] text-[10px] sm:text-xs
+                   hover:bg-gray-100 transition-all text-center"
+          >
+            📋 Paste JSON
+          </button>
+          <button
+            id="btnNew"
+            type="button"
+            class="border-4 border-black bg-black text-white px-3 sm:px-6 py-2 sm:py-3 font-black uppercase tracking-[.12em] sm:tracking-[.15em] text-[10px] sm:text-sm
+                   hover:bg-kkpink hover:border-kkpink hover:text-black transition-all text-center"
+          >
+            + Add
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Search & Filters -->
+    <section class="bg-white rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4 mb-4 sm:mb-6">
+      <div class="flex flex-col sm:flex-row gap-3 sm:gap-4 items-stretch sm:items-end">
+        <!-- Search -->
+        <div class="flex-1">
+          <label for="searchInput"
+                 class="block text-[9px] sm:text-[10px] font-black uppercase tracking-[.18em] mb-1 sm:mb-2 text-gray-500">
+            Search Products
+          </label>
+          <div class="relative">
+            <input
+              id="searchInput"
+              type="search"
+              placeholder="Search..."
+              class="w-full border-4 border-black px-3 sm:px-4 py-2 sm:py-3 text-sm outline-none pr-10 focus:border-kkpink transition-colors"
+            />
+            <svg class="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Count + Sort (mobile) -->
+        <div class="flex items-center justify-between sm:justify-end gap-3">
+          <div class="text-xs sm:text-sm font-bold uppercase tracking-wider text-gray-500" id="countLabel">
+            0 items
+          </div>
+          <!-- Mobile sort dropdown -->
+          <select id="mobileSortSelect" class="sm:hidden border-2 border-black px-2 py-1 text-xs font-bold bg-white">
+            <option value="">Sort by...</option>
+            <option value="name-asc">Name A-Z</option>
+            <option value="name-desc">Name Z-A</option>
+            <option value="price-asc">Price Low-High</option>
+            <option value="price-desc">Price High-Low</option>
+            <option value="status-asc">Active First</option>
+            <option value="status-desc">Inactive First</option>
+          </select>
+        </div>
+      </div>
+    </section>
+
+    <!-- Table (Desktop) / Cards (Mobile) -->
+    <section id="tableWrap" class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+      <!-- Mobile Card View -->
+      <div id="mobileProductCards" class="sm:hidden"></div>
+      
+      <!-- Desktop Table View -->
+      <div class="hidden sm:block overflow-x-auto custom-scrollbar">
+        <table class="w-full border-collapse text-sm">
+          <thead class="bg-black text-white">
+            <tr class="text-left uppercase tracking-[.12em] text-[11px] font-black">
+              <th class="px-4 py-4 cursor-pointer hover:bg-gray-800 transition-colors" data-sort="name">
+                <span class="flex items-center gap-1">Product <span data-sort-icon="name">↕</span></span>
+              </th>
+              <th class="px-4 py-4 hidden md:table-cell">Slug</th>
+              <th class="px-4 py-4 hidden sm:table-cell cursor-pointer hover:bg-gray-800 transition-colors" data-sort="code">
+                <span class="flex items-center gap-1">Code <span data-sort-icon="code">↕</span></span>
+              </th>
+              <th class="px-4 py-4 cursor-pointer hover:bg-gray-800 transition-colors" data-sort="category">
+                <span class="flex items-center gap-1">Category <span data-sort-icon="category">↕</span></span>
+              </th>
+              <th class="px-4 py-4 text-right cursor-pointer hover:bg-gray-800 transition-colors" data-sort="price">
+                <span class="flex items-center justify-end gap-1">Price <span data-sort-icon="price">↕</span></span>
+              </th>
+              <th class="px-4 py-4 text-center hidden lg:table-cell cursor-pointer hover:bg-gray-800 transition-colors" data-sort="margin">
+                <span class="flex items-center justify-center gap-1">Margin <span data-sort-icon="margin">↕</span></span>
+              </th>
+              <th class="px-4 py-4 text-center cursor-pointer hover:bg-gray-800 transition-colors" data-sort="status">
+                <span class="flex items-center justify-center gap-1">Status <span data-sort-icon="status">↕</span></span>
+              </th>
+              <th class="px-4 py-4 text-right">Actions</th>
+            </tr>
+          </thead>
+
+          <tbody
+            id="productRows"
+            class="divide-y divide-gray-200"
+          ></tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- MODAL (Tailwind-only) -->
+<div
+  id="modal"
+  class="hidden fixed inset-0 z-[200]"
+  aria-hidden="true"
+>
+  <!-- Backdrop -->
+  <div
+    class="absolute inset-0 bg-black/60 backdrop-blur-sm"
+    data-modal-backdrop
+  ></div>
+
+  <!-- Stage -->
+  <div class="relative h-full w-full overflow-y-auto">
+    <div class="min-h-full flex items-end sm:items-center justify-center p-0 sm:p-6">
+      <!-- Card - full screen on mobile -->
+      <div class="w-full sm:max-w-4xl bg-white border-0 sm:border-4 border-black shadow-none sm:shadow-[8px_8px_0_0_rgba(0,0,0,0.1)] min-h-screen sm:min-h-0">
+        <!-- Head -->
+        <div class="sticky top-0 z-10 flex items-center justify-between gap-3 p-3 sm:p-5 border-b-4 border-black bg-white">
+          <div class="min-w-0">
+            <div class="inline-block bg-kkpink text-black px-2 py-0.5 text-[8px] sm:text-[9px] font-black uppercase tracking-[.2em] mb-1">
+              Product Editor
+            </div>
+            <h3 id="modalTitle" class="text-lg sm:text-2xl font-black tracking-tight truncate">
+              Edit Product
+            </h3>
+          </div>
+
+          <button
+            id="btnClose"
+            type="button"
+            class="border-4 border-black bg-white w-10 h-10 sm:w-10 sm:h-10 flex items-center justify-center font-black text-lg
+                   hover:bg-black hover:text-white transition-colors flex-shrink-0"
+            aria-label="Close"
+          >
+            ✕
+          </button>
+        </div>
+
+        <!-- Body -->
+        <div class="p-3 sm:p-6 space-y-4 sm:space-y-6 pb-24 sm:pb-6 overflow-y-auto" style="max-height: calc(100vh - 180px);">
+          <!-- BASICS -->
+          <section class="space-y-3 sm:space-y-4">
+            <div class="flex items-end justify-between gap-3">
+              <div>
+                <div class="text-[10px] sm:text-[11px] font-black uppercase tracking-[.25em] flex items-center gap-2">
+                  <span class="w-5 h-5 bg-black text-white text-[10px] flex items-center justify-center">1</span>
+                  Basics
+                </div>
+                <div class="text-xs sm:text-sm text-gray-500 mt-1">Core product information</div>
+              </div>
+            </div>
+
+            <div class="grid sm:grid-cols-2 gap-4">
+              <div>
+                <label for="fName" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
+                  Name
+                </label>
+                <input id="fName" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none"
+                  placeholder="Name" />
+              </div>
+
+              <div>
+                <label for="fSlug" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
+                  Slug
+                </label>
+                <input id="fSlug" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none"
+                  placeholder="ribbed-knit-earflap-beanie" />
+              </div>
+
+              <div>
+                <label for="fCode" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
+                  Code
+                </label>
+                <input id="fCode" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none"
+                  placeholder="KK-1001" />
+              </div>
+
+              <div>
+                <label for="fCategory" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
+                  Category
+                </label>
+                <select id="fCategory" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none bg-white"></select>
+              </div>
+
+              <div>
+                <label for="fPrice" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
+                  Price
+                </label>
+                <input id="fPrice" type="number" step="0.01"
+                  class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none"
+                  placeholder="0.00" />
+              </div>
+
+              <div>
+                <label for="fWeight" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
+                  Weight (g)
+                </label>
+                <input id="fWeight" type="number" step="0.01"
+                  class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none"
+                  placeholder="0.0" />
+              </div>
+
+              <div>
+                <label for="fUnitCost" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
+                  Unit Cost ($)
+                </label>
+                <input id="fUnitCost" type="number" step="0.01"
+                  class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none"
+                  placeholder="0.00" />
+              </div>
+
+              <div>
+                <label for="fShipping" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
+                  Shipping status
+                </label>
+                <input id="fShipping"
+                  class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none"
+                  placeholder="mto or blank" />
+              </div>
+
+              <!-- Amazon URL -->
+              <div class="col-span-2">
+                <label for="fAmazonUrl" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
+                  <span class="flex items-center gap-2">
+                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M13.958 10.09c0 1.232.029 2.256-.591 3.351-.502.891-1.301 1.438-2.186 1.438-1.214 0-1.922-.924-1.922-2.292 0-2.692 2.415-3.182 4.7-3.182v.685zm3.186 7.705c-.209.189-.512.201-.745.074-1.052-.872-1.238-1.276-1.814-2.106-1.735 1.767-2.965 2.297-5.209 2.297-2.66 0-4.731-1.641-4.731-4.925 0-2.565 1.391-4.309 3.37-5.164 1.715-.754 4.11-.891 5.942-1.095v-.41c0-.753.06-1.642-.383-2.294-.385-.579-1.124-.82-1.775-.82-1.205 0-2.277.618-2.54 1.897-.054.285-.261.567-.549.582l-3.061-.333c-.259-.056-.548-.266-.472-.66.704-3.716 4.06-4.838 7.066-4.838 1.537 0 3.547.41 4.758 1.574 1.538 1.436 1.392 3.352 1.392 5.438v4.923c0 1.481.616 2.13 1.192 2.929.204.287.249.63-.01.839l-2.431 2.092zM22.033 18.679C20.097 20.348 17.139 21.248 14.587 21.248c-3.566 0-6.779-1.315-9.207-3.506-.191-.172-.021-.409.209-.274 2.621 1.525 5.862 2.442 9.206 2.442 2.259 0 4.738-.468 7.02-1.438.344-.147.635.227.218.207zM23.086 17.405c-.259-.333-1.724-.157-2.381-.079-.2.024-.231-.15-.05-.276 1.165-.817 3.076-.581 3.299-.308.224.276-.059 2.186-1.153 3.097-.168.142-.328.066-.254-.121.246-.614.798-1.981.539-2.313z"/>
+                    </svg>
+                    Amazon URL
+                  </span>
+                </label>
+                <input id="fAmazonUrl"
+                  class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none"
+                  placeholder="https://www.amazon.com/dp/..." />
+                <p class="text-xs text-gray-500 mt-1">Optional: Add an Amazon product link to show "Buy on Amazon" button</p>
+              </div>
+
+              <div class="flex items-center gap-3 pt-6">
+                <input id="fActive" type="checkbox" class="h-5 w-5 border-[4px] border-black accent-kkpink" />
+                <label for="fActive" class="text-sm font-black uppercase tracking-[.12em]">
+                  Active (visible in store)
+                </label>
+              </div>
+            </div>
+
+            <!-- Profit Projections Panel -->
+            <div id="profitProjectionsPanel" class="hidden mt-4">
+              <!-- Content populated by JS -->
+            </div>
+          </section>
+
+          <div class="border-t-4 border-gray-100"></div>
+
+          <!-- IMAGES -->
+          <section class="space-y-4">
+            <div>
+              <div class="text-[11px] font-black uppercase tracking-[.25em] flex items-center gap-2">
+                <span class="w-5 h-5 bg-black text-white text-[10px] flex items-center justify-center">2</span>
+                Images
+              </div>
+              <div class="text-sm text-gray-500 mt-1">Upload images or paste URLs. Drag & drop supported.</div>
+            </div>
+
+            <!-- Primary Image (Full Width) -->
+            <div class="bg-gray-50 border-2 border-dashed border-gray-300 p-4 hover:border-black transition-colors">
+              <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-3 text-black/70">
+                Primary Image
+              </label>
+              <div class="flex flex-col sm:flex-row gap-4 items-start">
+                <div id="primaryImgPreview" class="w-32 h-32 bg-gray-200 border-2 border-black flex items-center justify-center overflow-hidden shrink-0">
+                  <span class="text-[10px] uppercase tracking-wider text-gray-400">No image</span>
+                </div>
+                <div class="flex-1 space-y-2 w-full">
+                  <div class="flex gap-2">
+                    <label class="flex-1 cursor-pointer">
+                      <input type="file" id="fPrimaryImgFile" accept="image/*" class="hidden" />
+                      <div class="border-[4px] border-black px-4 py-2 font-black uppercase tracking-[.12em] text-[11px] text-center hover:bg-black hover:text-white transition">
+                        Upload Image
+                      </div>
+                    </label>
+                    <button type="button" id="btnClearPrimary" class="border-[4px] border-black px-3 py-2 text-[11px] font-black hover:bg-red-600 hover:text-white hover:border-red-600 transition">✕</button>
+                  </div>
+                  <div class="text-[10px] text-black/50 uppercase tracking-wider text-center">or paste URL</div>
+                  <input id="fPrimaryImg" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none"
+                    placeholder="https://..." />
+                </div>
+              </div>
+            </div>
+
+            <!-- Catalog Images (Side by Side) -->
+            <div class="grid sm:grid-cols-2 gap-4">
+              <!-- Catalog Image -->
+              <div class="bg-gray-50 border-2 border-dashed border-gray-300 p-4 hover:border-black transition-colors">
+                <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-3 text-black/70">
+                  Catalog Image
+                </label>
+                <div id="catalogImgPreview" class="w-full aspect-square max-w-[120px] mx-auto bg-gray-200 border-2 border-black flex items-center justify-center overflow-hidden mb-3">
+                  <span class="text-[10px] uppercase tracking-wider text-gray-400">No image</span>
+                </div>
+                <div class="space-y-2">
+                  <label class="block cursor-pointer">
+                    <input type="file" id="fCatalogImgFile" accept="image/*" class="hidden" />
+                    <div class="border-[4px] border-black px-3 py-2 font-black uppercase tracking-[.12em] text-[10px] text-center hover:bg-black hover:text-white transition">
+                      Upload
+                    </div>
+                  </label>
+                  <input id="fCatalogImg" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none"
+                    placeholder="https://..." />
+                </div>
+              </div>
+
+              <!-- Hover Image -->
+              <div class="bg-gray-50 border-2 border-dashed border-gray-300 p-4 hover:border-black transition-colors">
+                <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-3 text-black/70">
+                  Catalog Hover Image
+                </label>
+                <div id="hoverImgPreview" class="w-full aspect-square max-w-[120px] mx-auto bg-gray-200 border-2 border-black flex items-center justify-center overflow-hidden mb-3">
+                  <span class="text-[10px] uppercase tracking-wider text-gray-400">No image</span>
+                </div>
+                <div class="space-y-2">
+                  <label class="block cursor-pointer">
+                    <input type="file" id="fHoverImgFile" accept="image/*" class="hidden" />
+                    <div class="border-[4px] border-black px-3 py-2 font-black uppercase tracking-[.12em] text-[10px] text-center hover:bg-black hover:text-white transition">
+                      Upload
+                    </div>
+                  </label>
+                  <input id="fHoverImg" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none"
+                    placeholder="https://..." />
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <div class="border-t-4 border-gray-100"></div>
+
+          <!-- TAGS -->
+          <section class="space-y-3">
+            <div>
+              <div class="text-[11px] font-black uppercase tracking-[.25em] flex items-center gap-2">
+                <span class="w-5 h-5 bg-black text-white text-[10px] flex items-center justify-center">3</span>
+                Tags
+              </div>
+              <div class="text-sm text-gray-500 mt-1">Comma-separated (featured, bestseller, beanie).</div>
+            </div>
+            <input id="fTags" class="w-full border-4 border-black px-4 py-3 text-sm outline-none focus:border-kkpink transition-colors"
+              placeholder="featured, bestseller, beanie" />
+          </section>
+
+          <div class="border-t-4 border-gray-100"></div>
+
+          <!-- VARIANTS -->
+          <section class="space-y-4">
+            <div>
+              <div class="text-[11px] font-black uppercase tracking-[.25em] flex items-center gap-2">
+                <span class="w-5 h-5 bg-black text-white text-[10px] flex items-center justify-center">4</span>
+                Color Variants
+              </div>
+              <div class="text-sm text-gray-500 mt-1">Add colors with stock quantities and preview images.</div>
+            </div>
+
+            <div id="variantList" class="space-y-2"></div>
+            
+            <button
+              id="btnAddVariant"
+              type="button"
+              class="w-full border-2 border-dashed border-gray-400 bg-white px-4 py-3 font-bold uppercase tracking-[.1em] text-[11px] text-gray-500
+                     hover:border-black hover:text-black hover:bg-gray-50 transition-colors"
+            >
+              + Add Color Variant
+            </button>
+          </section>
+
+          <div class="border-t-4 border-gray-100"></div>
+
+          <!-- GALLERY -->
+          <section class="space-y-4">
+            <div>
+              <div class="text-[11px] font-black uppercase tracking-[.25em] flex items-center gap-2">
+                <span class="w-5 h-5 bg-black text-white text-[10px] flex items-center justify-center">5</span>
+                Gallery Images
+              </div>
+              <div class="text-sm text-gray-500 mt-1">Additional images for the product carousel. Click + to add, or drag to reorder.</div>
+            </div>
+
+            <!-- Gallery Grid -->
+            <div id="galleryList" class="flex flex-wrap gap-3">
+              <!-- Gallery items will be added here as squares -->
+            </div>
+
+            <!-- Add Gallery Controls -->
+            <div class="flex flex-wrap items-center gap-3">
+              <!-- Upload button -->
+              <label class="cursor-pointer">
+                <input type="file" id="galleryFileInput" accept="image/*" multiple class="hidden" />
+                <div class="w-20 h-20 border-4 border-dashed border-gray-400 flex items-center justify-center
+                       hover:border-black hover:bg-gray-50 transition-colors">
+                  <span class="text-3xl text-gray-400 hover:text-black">+</span>
+                </div>
+              </label>
+
+              <!-- OR divider -->
+              <span class="text-xs text-gray-400 uppercase font-bold">or</span>
+
+              <!-- URL input -->
+              <div class="flex-1 min-w-[200px] flex gap-2">
+                <input id="galleryUrlInput" type="text" placeholder="Paste image URL..." 
+                       class="flex-1 border-2 border-gray-300 px-3 py-2 text-sm outline-none focus:border-black" />
+                <button id="btnAddGalleryUrl" type="button" 
+                        class="border-2 border-black bg-black text-white px-4 py-2 text-xs font-bold uppercase
+                               hover:bg-kkpink hover:border-kkpink hover:text-black transition-colors">
+                  Add
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <!-- Message -->
+          <div id="modalMsg" class="hidden border-4 border-red-500 bg-red-50 p-4">
+            <div class="text-[11px] font-black uppercase tracking-[.25em] text-red-600">Error</div>
+            <div class="text-sm text-red-700 mt-2" data-modal-msg></div>
+          </div>
+        </div>
+
+        <!-- Foot - Fixed on mobile -->
+        <div class="fixed sm:sticky bottom-0 left-0 right-0 sm:left-auto sm:right-auto flex flex-col sm:flex-row gap-2 sm:gap-3 justify-between p-3 sm:p-5 border-t-4 border-black bg-gray-50 z-20">
+          <div class="flex gap-2 order-2 sm:order-1">
+            <button
+              id="btnDelete"
+              type="button"
+              class="flex-1 sm:flex-none border-4 border-gray-300 bg-white px-3 sm:px-4 py-2 font-black uppercase tracking-[.1em] text-[9px] sm:text-[10px] text-gray-600
+                     hover:bg-gray-100 hover:border-gray-400 transition-colors"
+            >
+              Disable
+            </button>
+
+            <button
+              id="btnHardDelete"
+              type="button"
+              class="flex-1 sm:flex-none border-4 border-red-200 bg-white px-3 sm:px-4 py-2 font-black uppercase tracking-[.1em] text-[9px] sm:text-[10px] text-red-600
+                     hover:bg-red-600 hover:text-white hover:border-red-600 transition-colors"
+            >
+              Delete
+            </button>
+          </div>
+
+          <button
+            id="btnSave"
+            type="button"
+            class="order-1 sm:order-2 w-full sm:w-auto border-4 border-black bg-black text-white px-6 sm:px-8 py-3 font-black uppercase tracking-[.12em] sm:tracking-[.15em] text-xs
+                   hover:bg-kkpink hover:border-kkpink hover:text-black transition-colors"
+          >
+            Save Product
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- JSON Import Modal -->
+<div id="json-import-modal" class="fixed inset-0 z-[250] hidden items-center justify-center bg-black/50 p-2 sm:p-4">
+  <div class="bg-white border-4 border-black w-full max-w-xl">
+    <!-- Header -->
+    <div class="border-b-4 border-black p-3 sm:p-4 flex justify-between items-center">
+      <h3 class="text-lg sm:text-xl font-black uppercase tracking-[.12em] sm:tracking-[.15em]">Import JSON</h3>
+      <button id="json-import-close" class="text-2xl sm:text-3xl hover:text-kkpink transition-colors w-10 h-10 flex items-center justify-center">&times;</button>
+    </div>
+    <!-- Body -->
+    <div class="p-4 sm:p-6">
+      <p class="text-sm text-gray-600 mb-4">Paste your product JSON below. Fields will be auto-mapped to the form.</p>
+      <textarea
+        id="json-import-textarea"
+        class="w-full h-64 border-2 border-black p-4 font-mono text-sm resize-none focus:outline-none focus:border-kkpink"
+        placeholder='{
+  "name": "Product Name",
+  "category": "Category",
+  "product_id": "ID",
+  "price": 9.99,
+  ...
+}'></textarea>
+      <p id="json-import-error" class="text-red-600 text-sm mt-2 hidden"></p>
+    </div>
+    <!-- Footer -->
+    <div class="border-t-4 border-black p-4 flex justify-end gap-3">
+      <button
+        id="json-import-cancel"
+        type="button"
+        class="border-2 border-gray-400 px-6 py-2 font-bold uppercase text-xs hover:bg-gray-100"
+      >Cancel</button>
+      <button
+        id="json-import-apply"
+        type="button"
+        class="border-4 border-black bg-black text-white px-6 py-2 font-bold uppercase text-xs hover:bg-kkpink hover:border-kkpink hover:text-black transition-colors"
+      >Apply to Form</button>
+    </div>
+  </div>
+</div>
+
+
+  <!-- Footer mount -->
+  <div id="kkFooterMount"></div>
+
+  <!-- Admin Products logic -->
+  <script type="module" src="/js/admin/products/index.js"></script>
+
+</body>
+</html>

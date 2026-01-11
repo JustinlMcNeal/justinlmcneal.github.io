@@ -1,0 +1,1250 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin · Social Media</title>
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            kkpink: '#ff69b4',
+            instagram: '#E1306C',
+            pinterest: '#E60023',
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- KK base + components -->
+  <link rel="stylesheet" href="/css/theme/base.css">
+  <link rel="stylesheet" href="/css/theme/components.css">
+  <link rel="stylesheet" href="/css/pages/admin/social.css">
+</head>
+
+<body class="bg-gray-50 min-h-screen">
+
+  <!-- Admin Nav Mount -->
+  <div id="kkAdminNavMount"></div>
+
+  <!-- Main Content -->
+  <main class="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
+
+    <!-- Header -->
+    <div class="flex flex-col gap-4 mb-6">
+      <div>
+        <h1 class="text-xl sm:text-2xl font-black tracking-tight">Social Media Manager</h1>
+        <p class="text-xs sm:text-sm text-gray-500 mt-1">Upload images, schedule posts, manage your content calendar</p>
+      </div>
+      
+      <!-- Action buttons - responsive layout -->
+      <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+        <button id="connect-instagram" class="px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 text-white rounded-lg hover:opacity-80 transition-opacity flex items-center gap-1 sm:gap-2">
+          <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+          </svg>
+          <span class="hidden xs:inline">Connect</span> Instagram
+        </button>
+        <button id="connect-pinterest" class="px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold bg-pinterest text-white rounded-lg hover:bg-pinterest/80 transition-colors flex items-center gap-1 sm:gap-2">
+          <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 0C5.373 0 0 5.373 0 12c0 5.084 3.163 9.426 7.627 11.174-.105-.949-.2-2.406.042-3.442.218-.936 1.407-5.965 1.407-5.965s-.359-.719-.359-1.781c0-1.669.967-2.914 2.171-2.914 1.024 0 1.518.769 1.518 1.69 0 1.03-.655 2.569-.994 3.995-.283 1.195.599 2.169 1.777 2.169 2.133 0 3.772-2.249 3.772-5.495 0-2.873-2.064-4.882-5.012-4.882-3.414 0-5.418 2.561-5.418 5.208 0 1.031.397 2.137.893 2.739.098.119.112.223.083.344-.091.378-.293 1.194-.333 1.361-.052.218-.173.265-.4.16-1.499-.698-2.436-2.889-2.436-4.649 0-3.785 2.75-7.262 7.929-7.262 4.163 0 7.398 2.966 7.398 6.931 0 4.136-2.608 7.464-6.227 7.464-1.216 0-2.359-.632-2.75-1.378l-.748 2.853c-.271 1.043-1.002 2.35-1.492 3.146C9.57 23.812 10.763 24 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0z"/>
+          </svg>
+          <span class="hidden xs:inline">Connect</span> Pinterest
+        </button>
+        <button id="btnSettings" class="p-2 sm:px-4 sm:py-2 text-sm font-medium border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+          </svg>
+          <span class="hidden sm:inline">Settings</span>
+        </button>
+        <button id="btnAutoQueue" class="px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:opacity-80 transition-opacity flex items-center gap-1 sm:gap-2 ml-auto">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+          </svg>
+          <span class="hidden xs:inline">Auto</span> Queue
+        </button>
+        <button id="btnUpload" class="px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold bg-black text-white rounded-lg hover:bg-black/80 transition-colors flex items-center gap-1 sm:gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+          </svg>
+          New Post
+        </button>
+      </div>
+    </div>
+
+    <!-- Stats Row -->
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-4 mb-6">
+      <div class="bg-white rounded-xl p-3 sm:p-4 shadow-sm border">
+        <div class="text-[10px] sm:text-xs font-medium text-gray-500 uppercase tracking-wide">Queued</div>
+        <div id="statQueued" class="text-xl sm:text-2xl font-black mt-1">0</div>
+      </div>
+      <div class="bg-white rounded-xl p-3 sm:p-4 shadow-sm border">
+        <div class="text-[10px] sm:text-xs font-medium text-gray-500 uppercase tracking-wide">Posted Today</div>
+        <div id="statPostedToday" class="text-xl sm:text-2xl font-black mt-1">0</div>
+      </div>
+      <!-- Instagram Connection Status -->
+      <div id="instagramStatus" class="bg-white rounded-xl p-3 sm:p-4 shadow-sm border cursor-pointer hover:shadow-md transition-shadow" onclick="window.testInstagramPost && window.testInstagramPost()">
+        <div class="text-[10px] sm:text-xs font-medium text-gray-500 uppercase tracking-wide">Instagram</div>
+        <div class="flex items-center gap-2 mt-1">
+          <span id="instagramStatusIcon" class="text-gray-400">○</span>
+          <span id="instagramStatusText" class="text-sm font-bold text-gray-400">Not Connected</span>
+        </div>
+        <div id="instagramTestBtn" class="hidden text-[10px] text-blue-500 mt-1 underline">Click to test post</div>
+      </div>
+      <!-- Facebook Connection Status -->
+      <div id="facebookStatus" class="bg-white rounded-xl p-3 sm:p-4 shadow-sm border">
+        <div class="text-[10px] sm:text-xs font-medium text-gray-500 uppercase tracking-wide">Facebook</div>
+        <div class="flex items-center gap-2 mt-1">
+          <span id="facebookStatusIcon" class="text-gray-400">○</span>
+          <span id="facebookStatusText" class="text-sm font-bold text-gray-400">Via Instagram</span>
+        </div>
+        <div class="text-[10px] text-gray-400 mt-1">Auto-syncs with Instagram</div>
+      </div>
+      <!-- Pinterest Connection Status -->
+      <div id="pinterestStatus" class="bg-white rounded-xl p-3 sm:p-4 shadow-sm border">
+        <div class="text-[10px] sm:text-xs font-medium text-gray-500 uppercase tracking-wide">Pinterest</div>
+        <div class="flex items-center gap-2 mt-1">
+          <span id="pinterestStatusIcon" class="text-gray-400">○</span>
+          <span id="pinterestStatusText" class="text-sm font-bold text-gray-400">Not Connected</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab Navigation - horizontal scroll on mobile -->
+    <div class="flex items-center gap-1 border-b border-gray-200 mb-6 overflow-x-auto scrollbar-hide -mx-3 px-3 sm:mx-0 sm:px-0">
+      <button data-tab="calendar" class="tab-btn px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-black transition-colors whitespace-nowrap">
+        📅 Calendar
+      </button>
+      <button data-tab="queue" class="tab-btn px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-black transition-colors whitespace-nowrap">
+        📋 Queue
+      </button>
+      <button data-tab="assets" class="tab-btn px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-black transition-colors whitespace-nowrap">
+        🖼️ Assets
+      </button>
+      <button data-tab="templates" class="tab-btn px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-black transition-colors whitespace-nowrap">
+        ✏️ Templates
+      </button>
+      <button data-tab="boards" class="tab-btn px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-black transition-colors whitespace-nowrap">
+        📌 Boards
+      </button>
+      <button data-tab="autoqueue" class="tab-btn px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-black transition-colors whitespace-nowrap">
+        ⚡ Auto-Queue
+      </button>
+      <button data-tab="analytics" class="tab-btn px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-black transition-colors whitespace-nowrap">
+        📊 Analytics
+      </button>
+      <button data-tab="carousel" class="tab-btn px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-black transition-colors whitespace-nowrap">
+        🎠 Carousel
+      </button>
+    </div>
+
+    <!-- Tab Content -->
+    <div id="tabContent">
+      <!-- Calendar View -->
+      <div id="tab-calendar" class="tab-panel hidden">
+        <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+          <!-- Calendar Header -->
+          <div class="flex items-center justify-between p-3 sm:p-4 border-b">
+            <button id="calPrev" class="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+              <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+              </svg>
+            </button>
+            <h2 id="calMonth" class="text-sm sm:text-lg font-bold">January 2026</h2>
+            <button id="calNext" class="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+              <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+              </svg>
+            </button>
+          </div>
+          
+          <!-- Calendar Grid -->
+          <div class="p-2 sm:p-4">
+            <!-- Day headers - abbreviated on mobile -->
+            <div class="grid grid-cols-7 gap-1 mb-2">
+              <div class="text-[10px] sm:text-xs font-medium text-gray-400 text-center py-1 sm:py-2"><span class="sm:hidden">S</span><span class="hidden sm:inline">Sun</span></div>
+              <div class="text-[10px] sm:text-xs font-medium text-gray-400 text-center py-1 sm:py-2"><span class="sm:hidden">M</span><span class="hidden sm:inline">Mon</span></div>
+              <div class="text-[10px] sm:text-xs font-medium text-gray-400 text-center py-1 sm:py-2"><span class="sm:hidden">T</span><span class="hidden sm:inline">Tue</span></div>
+              <div class="text-[10px] sm:text-xs font-medium text-gray-400 text-center py-1 sm:py-2"><span class="sm:hidden">W</span><span class="hidden sm:inline">Wed</span></div>
+              <div class="text-[10px] sm:text-xs font-medium text-gray-400 text-center py-1 sm:py-2"><span class="sm:hidden">T</span><span class="hidden sm:inline">Thu</span></div>
+              <div class="text-[10px] sm:text-xs font-medium text-gray-400 text-center py-1 sm:py-2"><span class="sm:hidden">F</span><span class="hidden sm:inline">Fri</span></div>
+              <div class="text-[10px] sm:text-xs font-medium text-gray-400 text-center py-1 sm:py-2"><span class="sm:hidden">S</span><span class="hidden sm:inline">Sat</span></div>
+            </div>
+            <!-- Calendar days -->
+            <div id="calendarGrid" class="grid grid-cols-7 gap-1">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Queue View -->
+      <div id="tab-queue" class="tab-panel hidden">
+        <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+          <div class="p-4 border-b flex items-center justify-between">
+            <h2 class="font-bold">Scheduled Posts</h2>
+            <select id="queueFilter" class="text-sm border rounded-lg px-3 py-2">
+              <option value="all">All Platforms</option>
+              <option value="instagram">Instagram</option>
+              <option value="pinterest">Pinterest</option>
+            </select>
+          </div>
+          <div id="queueList" class="divide-y">
+            <!-- Populated by JS -->
+            <div class="p-8 text-center text-gray-400">
+              <p>No scheduled posts yet</p>
+              <button class="mt-2 text-sm text-black font-medium hover:underline" onclick="document.getElementById('btnUpload').click()">Create your first post →</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Assets View -->
+      <div id="tab-assets" class="tab-panel hidden">
+        <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+          <div class="p-4 border-b flex items-center justify-between">
+            <h2 class="font-bold">Uploaded Assets</h2>
+            <input id="assetSearch" type="text" placeholder="Search..." class="text-sm border rounded-lg px-3 py-2 w-48">
+          </div>
+          <div id="assetGrid" class="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            <!-- Populated by JS -->
+            <div class="col-span-full p-8 text-center text-gray-400">
+              <p>No assets uploaded yet</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Templates View -->
+      <div id="tab-templates" class="tab-panel hidden">
+        <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+          <div class="p-4 border-b flex items-center justify-between">
+            <h2 class="font-bold">Caption Templates</h2>
+            <button id="btnAddTemplate" class="text-sm font-medium text-black hover:underline">+ Add Template</button>
+          </div>
+          
+          <!-- Template tabs by tone (8 tones) -->
+          <div class="flex flex-wrap border-b">
+            <button data-tone="casual" class="tone-tab px-3 py-3 text-sm font-medium text-center border-b-2 border-transparent hover:bg-gray-50">
+              😊 Casual
+            </button>
+            <button data-tone="professional" class="tone-tab px-3 py-3 text-sm font-medium text-center border-b-2 border-transparent hover:bg-gray-50">
+              💼 Pro
+            </button>
+            <button data-tone="urgency" class="tone-tab px-3 py-3 text-sm font-medium text-center border-b-2 border-transparent hover:bg-gray-50">
+              🔥 Urgent
+            </button>
+            <button data-tone="playful" class="tone-tab px-3 py-3 text-sm font-medium text-center border-b-2 border-transparent hover:bg-gray-50">
+              🎉 Playful
+            </button>
+            <button data-tone="value" class="tone-tab px-3 py-3 text-sm font-medium text-center border-b-2 border-transparent hover:bg-gray-50">
+              💰 Value
+            </button>
+            <button data-tone="trending" class="tone-tab px-3 py-3 text-sm font-medium text-center border-b-2 border-transparent hover:bg-gray-50">
+              📈 Trend
+            </button>
+            <button data-tone="inspirational" class="tone-tab px-3 py-3 text-sm font-medium text-center border-b-2 border-transparent hover:bg-gray-50">
+              ✨ Inspire
+            </button>
+            <button data-tone="minimalist" class="tone-tab px-3 py-3 text-sm font-medium text-center border-b-2 border-transparent hover:bg-gray-50">
+              🪶 Minimal
+            </button>
+          </div>
+          
+          <div id="templateList" class="divide-y">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Boards View -->
+      <div id="tab-boards" class="tab-panel hidden">
+        <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+          <div class="p-4 border-b flex items-center justify-between">
+            <h2 class="font-bold">Pinterest Boards</h2>
+            <button id="btnAddBoard" class="text-sm font-medium text-black hover:underline">+ Add Board</button>
+          </div>
+          <div id="boardList" class="divide-y">
+            <!-- Populated by JS -->
+            <div class="p-8 text-center text-gray-400">
+              <p>No boards configured yet</p>
+              <p class="text-xs mt-1">Add boards to organize your Pinterest pins by category</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Auto-Queue View -->
+      <div id="tab-autoqueue" class="tab-panel hidden">
+        <div class="grid gap-6">
+          
+          <!-- AUTOPILOT TOGGLE CARD -->
+          <div id="autopilotCard" class="bg-gradient-to-r from-purple-500 to-indigo-600 rounded-xl p-6 text-white">
+            <div class="flex items-center justify-between">
+              <div class="flex items-start gap-4">
+                <div class="p-3 bg-white/20 rounded-xl">
+                  <svg class="w-8 h-8" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                  </svg>
+                </div>
+                <div class="flex-1">
+                  <h2 class="text-xl font-black mb-1">🤖 Autopilot Mode</h2>
+                  <p class="text-white/90 text-sm">
+                    Set it and forget it! Autopilot automatically keeps your queue full.
+                  </p>
+                  <div id="autopilotStatus" class="mt-2 text-xs text-white/70">
+                    Checking status...
+                  </div>
+                </div>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="autopilotToggle" class="sr-only peer">
+                <div class="w-14 h-7 bg-white/30 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-green-400"></div>
+              </label>
+            </div>
+            
+            <!-- Autopilot Settings (shown when enabled) -->
+            <div id="autopilotSettings" class="hidden mt-6 pt-6 border-t border-white/20">
+              <div class="grid sm:grid-cols-3 gap-4">
+                <div>
+                  <label class="block text-sm font-medium mb-2 text-white/90">Days Ahead</label>
+                  <select id="autopilotDaysAhead" class="w-full border-0 bg-white/20 rounded-lg px-3 py-2 text-sm text-white">
+                    <option value="3">3 days</option>
+                    <option value="7" selected>7 days</option>
+                    <option value="14">14 days</option>
+                    <option value="30">30 days</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium mb-2 text-white/90">Posts per Day</label>
+                  <select id="autopilotPostsPerDay" class="w-full border-0 bg-white/20 rounded-lg px-3 py-2 text-sm text-white">
+                    <option value="1">1 post/day</option>
+                    <option value="2" selected>2 posts/day</option>
+                    <option value="3">3 posts/day</option>
+                    <option value="4">4 posts/day</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium mb-2 text-white/90">Last Run</label>
+                  <div id="autopilotLastRun" class="bg-white/20 rounded-lg px-3 py-2 text-sm">Never</div>
+                </div>
+              </div>
+              <div class="mt-4 flex gap-3">
+                <button id="btnSaveAutopilot" class="px-4 py-2 bg-white text-purple-600 font-bold rounded-lg text-sm hover:bg-white/90 transition-colors">
+                  Save Settings
+                </button>
+                <button id="btnRunAutopilot" class="px-4 py-2 bg-white/20 text-white font-bold rounded-lg text-sm hover:bg-white/30 transition-colors">
+                  Run Now
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Auto-Queue Info Card -->
+          <div class="bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl p-6 text-white">
+            <div class="flex items-start gap-4">
+              <div class="p-3 bg-white/20 rounded-xl">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                </svg>
+              </div>
+              <div class="flex-1">
+                <h2 class="text-xl font-black mb-2">⚡ Manual Queue Generation</h2>
+                <p class="text-white/90 text-sm leading-relaxed">
+                  Manually generate social media posts from your product catalog. 
+                  The system picks products that haven't been posted recently and creates 
+                  unique captions with smart scheduling.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Settings Card -->
+          <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+            <div class="p-4 border-b">
+              <h2 class="font-bold">Auto-Queue Settings</h2>
+            </div>
+            <div class="p-6 space-y-6">
+              <!-- Posts per batch -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Posts to Generate</label>
+                <select id="aqPostCount" class="w-full sm:w-48 border rounded-lg px-3 py-2 text-sm">
+                  <option value="2">2 posts</option>
+                  <option value="4" selected>4 posts</option>
+                  <option value="6">6 posts</option>
+                  <option value="8">8 posts</option>
+                  <option value="10">10 posts</option>
+                </select>
+                <p class="text-xs text-gray-500 mt-1">How many posts to create in each batch</p>
+              </div>
+
+              <!-- Platform selection -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Platforms</label>
+                <div class="flex flex-wrap gap-4">
+                  <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" id="aqPlatformInstagram" value="instagram" checked class="accent-pink-500">
+                    <span class="text-sm">📸 Instagram</span>
+                  </label>
+                  <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" id="aqPlatformFacebook" value="facebook" checked class="accent-blue-600">
+                    <span class="text-sm">📘 Facebook</span>
+                  </label>
+                  <label class="flex items-center gap-2 cursor-pointer opacity-50" title="Pinterest pending approval">
+                    <input type="checkbox" id="aqPlatformPinterest" value="pinterest" disabled class="accent-red-500">
+                    <span class="text-sm">📌 Pinterest (pending)</span>
+                  </label>
+                </div>
+                <p class="text-xs text-gray-500 mt-1">Posts will be created for each selected platform</p>
+              </div>
+
+              <!-- Posting times -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Posting Times</label>
+                <div class="flex flex-wrap gap-2">
+                  <label class="flex items-center gap-2 px-3 py-2 border rounded-lg cursor-pointer hover:bg-gray-50">
+                    <input type="checkbox" id="aqTime1" value="09:00" checked class="accent-green-600">
+                    <span class="text-sm">9:00 AM</span>
+                  </label>
+                  <label class="flex items-center gap-2 px-3 py-2 border rounded-lg cursor-pointer hover:bg-gray-50">
+                    <input type="checkbox" id="aqTime2" value="12:00" class="accent-green-600">
+                    <span class="text-sm">12:00 PM</span>
+                  </label>
+                  <label class="flex items-center gap-2 px-3 py-2 border rounded-lg cursor-pointer hover:bg-gray-50">
+                    <input type="checkbox" id="aqTime3" value="17:00" checked class="accent-green-600">
+                    <span class="text-sm">5:00 PM</span>
+                  </label>
+                  <label class="flex items-center gap-2 px-3 py-2 border rounded-lg cursor-pointer hover:bg-gray-50">
+                    <input type="checkbox" id="aqTime4" value="20:00" class="accent-green-600">
+                    <span class="text-sm">8:00 PM</span>
+                  </label>
+                </div>
+                <p class="text-xs text-gray-500 mt-1">Posts will be spread across these times</p>
+              </div>
+
+              <!-- Caption tones (8 styles with 50+ templates) -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Caption Styles <span class="text-xs text-gray-400">(50+ templates)</span></label>
+                <div class="flex flex-wrap gap-2">
+                  <label class="flex items-center gap-2 px-3 py-2 border rounded-lg cursor-pointer hover:bg-gray-50">
+                    <input type="checkbox" id="aqToneCasual" value="casual" checked class="accent-green-600">
+                    <span class="text-sm">😊 Casual</span>
+                  </label>
+                  <label class="flex items-center gap-2 px-3 py-2 border rounded-lg cursor-pointer hover:bg-gray-50">
+                    <input type="checkbox" id="aqToneUrgency" value="urgency" checked class="accent-green-600">
+                    <span class="text-sm">🔥 Urgency</span>
+                  </label>
+                  <label class="flex items-center gap-2 px-3 py-2 border rounded-lg cursor-pointer hover:bg-gray-50">
+                    <input type="checkbox" id="aqTonePro" value="professional" class="accent-green-600">
+                    <span class="text-sm">💼 Professional</span>
+                  </label>
+                  <label class="flex items-center gap-2 px-3 py-2 border rounded-lg cursor-pointer hover:bg-gray-50">
+                    <input type="checkbox" id="aqTonePlayful" value="playful" class="accent-green-600">
+                    <span class="text-sm">🎉 Playful</span>
+                  </label>
+                  <label class="flex items-center gap-2 px-3 py-2 border rounded-lg cursor-pointer hover:bg-gray-50">
+                    <input type="checkbox" id="aqToneValue" value="value" class="accent-green-600">
+                    <span class="text-sm">💰 Value</span>
+                  </label>
+                  <label class="flex items-center gap-2 px-3 py-2 border rounded-lg cursor-pointer hover:bg-gray-50">
+                    <input type="checkbox" id="aqToneTrending" value="trending" class="accent-green-600">
+                    <span class="text-sm">📈 Trending</span>
+                  </label>
+                  <label class="flex items-center gap-2 px-3 py-2 border rounded-lg cursor-pointer hover:bg-gray-50">
+                    <input type="checkbox" id="aqToneInspirational" value="inspirational" class="accent-green-600">
+                    <span class="text-sm">✨ Inspirational</span>
+                  </label>
+                  <label class="flex items-center gap-2 px-3 py-2 border rounded-lg cursor-pointer hover:bg-gray-50">
+                    <input type="checkbox" id="aqToneMinimalist" value="minimalist" class="accent-green-600">
+                    <span class="text-sm">🪶 Minimalist</span>
+                  </label>
+                </div>
+                <p class="text-xs text-gray-500 mt-1">Mix multiple styles for variety in your posts</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Generate Button -->
+          <div class="flex flex-col sm:flex-row gap-4">
+            <button id="btnPreviewQueue" class="flex-1 px-6 py-4 text-sm font-bold border-2 border-gray-300 rounded-xl hover:border-gray-400 transition-colors flex items-center justify-center gap-2">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+              </svg>
+              Preview Posts
+            </button>
+            <button id="btnGenerateQueue" class="flex-1 px-6 py-4 text-sm font-bold bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+              </svg>
+              Generate & Schedule
+            </button>
+          </div>
+
+          <!-- Preview Results -->
+          <div id="aqPreviewResults" class="hidden">
+            <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+              <div class="p-4 border-b flex items-center justify-between">
+                <h2 class="font-bold">Preview: Generated Posts</h2>
+                <button id="btnConfirmQueue" class="px-4 py-2 text-sm font-bold bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+                  Confirm & Schedule All
+                </button>
+              </div>
+              <div id="aqPreviewList" class="divide-y">
+                <!-- Populated by JS -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Product Stats -->
+          <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+            <div class="p-4 border-b">
+              <h2 class="font-bold">Product Posting Status</h2>
+            </div>
+            <div class="p-6">
+              <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
+                <div>
+                  <div id="aqStatTotal" class="text-2xl font-black">0</div>
+                  <div class="text-xs text-gray-500">Total Products</div>
+                </div>
+                <div>
+                  <div id="aqStatNeverPosted" class="text-2xl font-black text-green-600">0</div>
+                  <div class="text-xs text-gray-500">Never Posted</div>
+                </div>
+                <div>
+                  <div id="aqStatReady" class="text-2xl font-black text-blue-600">0</div>
+                  <div class="text-xs text-gray-500">Ready to Post</div>
+                </div>
+                <div>
+                  <div id="aqStatRecent" class="text-2xl font-black text-gray-400">0</div>
+                  <div class="text-xs text-gray-500">Posted Recently</div>
+                </div>
+              </div>
+              <p class="text-xs text-gray-400 text-center mt-4">
+                Products are considered "ready" if they haven't been posted in the last 14 days
+              </p>
+            </div>
+          </div>
+
+          <!-- Auto-Repost Old Posts -->
+          <div class="bg-gradient-to-r from-amber-500 to-orange-500 rounded-xl p-6 text-white">
+            <div class="flex items-start gap-4">
+              <div class="p-3 bg-white/20 rounded-xl">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+              </div>
+              <div class="flex-1">
+                <h2 class="text-xl font-black mb-2">🔄 Resurface Old Hits</h2>
+                <p class="text-white/90 text-sm leading-relaxed mb-4">
+                  Automatically repost your best content from 30+ days ago with fresh captions. 
+                  Maximize your content's reach!
+                </p>
+                <div class="flex flex-wrap gap-3">
+                  <div class="flex items-center gap-2">
+                    <label class="text-sm text-white/80">Posts to repost:</label>
+                    <select id="repostCount" class="border-0 bg-white/20 rounded-lg px-3 py-1.5 text-sm text-white">
+                      <option value="1">1</option>
+                      <option value="2" selected>2</option>
+                      <option value="3">3</option>
+                      <option value="4">4</option>
+                    </select>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <label class="text-sm text-white/80">Min age:</label>
+                    <select id="repostMinDays" class="border-0 bg-white/20 rounded-lg px-3 py-1.5 text-sm text-white">
+                      <option value="14">14 days</option>
+                      <option value="30" selected>30 days</option>
+                      <option value="60">60 days</option>
+                      <option value="90">90 days</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="flex gap-3 mt-4">
+                  <button id="btnPreviewRepost" class="px-4 py-2 bg-white/20 text-white font-bold rounded-lg text-sm hover:bg-white/30 transition-colors">
+                    👀 Preview
+                  </button>
+                  <button id="btnGenerateRepost" class="px-4 py-2 bg-white text-orange-600 font-bold rounded-lg text-sm hover:bg-white/90 transition-colors">
+                    🔄 Repost Now
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Repost Preview Results -->
+          <div id="repostPreviewResults" class="hidden">
+            <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+              <div class="p-4 border-b flex items-center justify-between">
+                <h2 class="font-bold">Preview: Reposts</h2>
+                <button id="btnConfirmRepost" class="px-4 py-2 text-sm font-bold bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors">
+                  Confirm & Schedule
+                </button>
+              </div>
+              <div id="repostPreviewList" class="divide-y">
+                <!-- Populated by JS -->
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Analytics View -->
+      <div id="tab-analytics" class="tab-panel hidden">
+        <div class="grid gap-6">
+          
+          <!-- Analytics Header -->
+          <div class="bg-gradient-to-r from-blue-600 to-cyan-500 rounded-xl p-6 text-white">
+            <div class="flex items-center gap-4">
+              <div class="p-3 bg-white/20 rounded-xl">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                </svg>
+              </div>
+              <div>
+                <h2 class="text-xl font-black">📊 Performance Dashboard</h2>
+                <p class="text-white/90 text-sm">Track your social media performance and optimize your strategy</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Key Metrics Row -->
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="bg-white rounded-xl shadow-sm border p-4">
+              <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Total Posts</div>
+              <div id="analyticsTotalPosts" class="text-3xl font-black">0</div>
+              <div class="text-xs text-gray-400 mt-1">All time</div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm border p-4">
+              <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Published</div>
+              <div id="analyticsPublished" class="text-3xl font-black text-green-600">0</div>
+              <div class="text-xs text-gray-400 mt-1">Successfully posted</div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm border p-4">
+              <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">This Week</div>
+              <div id="analyticsThisWeek" class="text-3xl font-black text-blue-600">0</div>
+              <div class="text-xs text-gray-400 mt-1">Posts published</div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm border p-4">
+              <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Scheduled</div>
+              <div id="analyticsScheduled" class="text-3xl font-black text-purple-600">0</div>
+              <div class="text-xs text-gray-400 mt-1">Upcoming posts</div>
+            </div>
+          </div>
+
+          <!-- Platform Breakdown -->
+          <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+            <div class="p-4 border-b">
+              <h2 class="font-bold">Platform Performance</h2>
+            </div>
+            <div class="p-6">
+              <div class="grid md:grid-cols-3 gap-6">
+                <!-- Instagram -->
+                <div class="text-center">
+                  <div class="w-16 h-16 mx-auto rounded-full bg-gradient-to-tr from-purple-500 via-pink-500 to-orange-400 flex items-center justify-center mb-3">
+                    <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+                    </svg>
+                  </div>
+                  <div class="font-bold text-lg">Instagram</div>
+                  <div id="analyticsInstagramCount" class="text-2xl font-black text-gray-800">0</div>
+                  <div class="text-xs text-gray-500">posts</div>
+                  <div class="mt-2 h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div id="analyticsInstagramBar" class="h-full bg-gradient-to-r from-purple-500 to-pink-500" style="width: 0%"></div>
+                  </div>
+                </div>
+                
+                <!-- Facebook -->
+                <div class="text-center">
+                  <div class="w-16 h-16 mx-auto rounded-full bg-blue-600 flex items-center justify-center mb-3">
+                    <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                    </svg>
+                  </div>
+                  <div class="font-bold text-lg">Facebook</div>
+                  <div id="analyticsFacebookCount" class="text-2xl font-black text-gray-800">0</div>
+                  <div class="text-xs text-gray-500">posts</div>
+                  <div class="mt-2 h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div id="analyticsFacebookBar" class="h-full bg-blue-600" style="width: 0%"></div>
+                  </div>
+                </div>
+                
+                <!-- Pinterest -->
+                <div class="text-center">
+                  <div class="w-16 h-16 mx-auto rounded-full bg-red-600 flex items-center justify-center mb-3">
+                    <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 0C5.373 0 0 5.372 0 12c0 5.084 3.163 9.426 7.627 11.174-.105-.949-.2-2.405.042-3.441.218-.937 1.407-5.965 1.407-5.965s-.359-.719-.359-1.782c0-1.668.967-2.914 2.171-2.914 1.023 0 1.518.769 1.518 1.69 0 1.029-.655 2.568-.994 3.995-.283 1.194.599 2.169 1.777 2.169 2.133 0 3.772-2.249 3.772-5.495 0-2.873-2.064-4.882-5.012-4.882-3.414 0-5.418 2.561-5.418 5.207 0 1.031.397 2.138.893 2.738.098.119.112.224.083.345l-.333 1.36c-.053.22-.174.267-.402.161-1.499-.698-2.436-2.889-2.436-4.649 0-3.785 2.75-7.262 7.929-7.262 4.163 0 7.398 2.967 7.398 6.931 0 4.136-2.607 7.464-6.227 7.464-1.216 0-2.359-.631-2.75-1.378l-.748 2.853c-.271 1.043-1.002 2.35-1.492 3.146C9.57 23.812 10.763 24 12 24c6.627 0 12-5.373 12-12 0-6.628-5.373-12-12-12z"/>
+                    </svg>
+                  </div>
+                  <div class="font-bold text-lg">Pinterest</div>
+                  <div id="analyticsPinterestCount" class="text-2xl font-black text-gray-800">0</div>
+                  <div class="text-xs text-gray-500">posts</div>
+                  <div class="mt-2 h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div id="analyticsPinterestBar" class="h-full bg-red-600" style="width: 0%"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Posting Activity & Best Times -->
+          <div class="grid md:grid-cols-2 gap-6">
+            <!-- Recent Activity -->
+            <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+              <div class="p-4 border-b">
+                <h2 class="font-bold">Recent Activity</h2>
+              </div>
+              <div id="analyticsRecentActivity" class="divide-y max-h-80 overflow-y-auto">
+                <div class="p-4 text-center text-gray-400 text-sm">Loading...</div>
+              </div>
+            </div>
+
+            <!-- Best Posting Times -->
+            <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+              <div class="p-4 border-b">
+                <h2 class="font-bold">Posting Distribution</h2>
+              </div>
+              <div class="p-6">
+                <div id="analyticsTimeChart" class="space-y-3">
+                  <!-- Time bars will be populated by JS -->
+                </div>
+                <p class="text-xs text-gray-400 mt-4 text-center">Posts by time of day (based on scheduled times)</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Caption Tone Performance -->
+          <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+            <div class="p-4 border-b">
+              <h2 class="font-bold">Caption Tone Usage</h2>
+            </div>
+            <div class="p-6">
+              <div id="analyticsToneChart" class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <!-- Tone stats will be populated by JS -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Status Breakdown -->
+          <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+            <div class="p-4 border-b flex items-center justify-between">
+              <h2 class="font-bold">Post Status Overview</h2>
+              <button id="btnRefreshAnalytics" class="text-xs text-blue-600 hover:underline">Refresh</button>
+            </div>
+            <div class="p-6">
+              <div class="grid grid-cols-2 sm:grid-cols-5 gap-4 text-center">
+                <div>
+                  <div id="analyticsStatusQueued" class="text-2xl font-black text-blue-600">0</div>
+                  <div class="text-xs text-gray-500">Queued</div>
+                </div>
+                <div>
+                  <div id="analyticsStatusPublished" class="text-2xl font-black text-green-600">0</div>
+                  <div class="text-xs text-gray-500">Published</div>
+                </div>
+                <div>
+                  <div id="analyticsStatusFailed" class="text-2xl font-black text-red-600">0</div>
+                  <div class="text-xs text-gray-500">Failed</div>
+                </div>
+                <div>
+                  <div id="analyticsStatusDraft" class="text-2xl font-black text-gray-400">0</div>
+                  <div class="text-xs text-gray-500">Draft</div>
+                </div>
+                <div>
+                  <div id="analyticsStatusCancelled" class="text-2xl font-black text-gray-300">0</div>
+                  <div class="text-xs text-gray-500">Cancelled</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Carousel Builder View -->
+      <div id="tab-carousel" class="tab-panel hidden">
+        <div class="grid gap-6">
+          
+          <!-- Carousel Header -->
+          <div class="bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 rounded-xl p-6 text-white">
+            <div class="flex items-center gap-4">
+              <div class="p-3 bg-white/20 rounded-xl">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                </svg>
+              </div>
+              <div class="flex-1">
+                <h2 class="text-xl font-black">🎠 Carousel Builder</h2>
+                <p class="text-white/90 text-sm">Create multi-image Instagram posts with up to 10 slides</p>
+              </div>
+              <button id="btnNewCarousel" class="px-4 py-2 bg-white text-purple-600 font-bold rounded-lg text-sm hover:bg-white/90 transition-colors">
+                + New Carousel
+              </button>
+            </div>
+          </div>
+
+          <!-- Carousel Builder Card -->
+          <div id="carouselBuilder" class="bg-white rounded-xl shadow-sm border overflow-hidden">
+            <div class="p-4 border-b flex items-center justify-between">
+              <h2 class="font-bold">Build Your Carousel</h2>
+              <span id="carouselImageCount" class="text-sm text-gray-500">0/10 images</span>
+            </div>
+            
+            <div class="p-6 space-y-6">
+              <!-- Image Upload Zone -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-3">Carousel Images (2-10 required)</label>
+                <div id="carouselDropZone" class="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:border-purple-500 transition-colors cursor-pointer">
+                  <input type="file" id="carouselFileInput" accept="image/*" multiple class="hidden">
+                  <svg class="w-10 h-10 mx-auto text-gray-400 mb-3" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/>
+                  </svg>
+                  <p class="text-gray-600 font-medium">Drop images here or click to upload</p>
+                  <p class="text-xs text-gray-400 mt-1">Select 2-10 images for your carousel</p>
+                </div>
+              </div>
+
+              <!-- Image Preview Grid (drag to reorder) -->
+              <div id="carouselPreviewGrid" class="hidden">
+                <div class="flex items-center justify-between mb-3">
+                  <label class="text-sm font-medium text-gray-700">Arrange Slides (drag to reorder)</label>
+                  <button id="btnClearCarousel" class="text-xs text-red-500 hover:underline">Clear All</button>
+                </div>
+                <div id="carouselImages" class="grid grid-cols-5 gap-3">
+                  <!-- Populated by JS -->
+                </div>
+              </div>
+
+              <!-- Product Link -->
+              <div class="relative">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Link to Product (optional)</label>
+                <div class="relative">
+                  <input type="text" id="carouselProductSearch" placeholder="Search products..." class="w-full border rounded-lg px-3 py-2 pr-8">
+                  <svg class="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/>
+                  </svg>
+                  <div id="carouselProductDropdown" class="hidden absolute left-0 right-0 z-50 mt-1 bg-white border rounded-xl shadow-xl max-h-60 overflow-y-auto top-full">
+                    <!-- Populated by JS -->
+                  </div>
+                </div>
+                <div id="carouselSelectedProduct" class="hidden mt-2 flex items-center justify-between bg-purple-50 border border-purple-200 rounded-lg px-3 py-2">
+                  <span id="carouselSelectedProductName" class="text-sm font-medium text-purple-800"></span>
+                  <button id="btnClearCarouselProduct" class="text-purple-500 hover:text-purple-700">✕</button>
+                </div>
+                <input type="hidden" id="carouselProductId" value="">
+              </div>
+
+              <!-- Caption Tone -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Caption Tone</label>
+                <div class="flex flex-wrap gap-2">
+                  <button data-carousel-tone="casual" class="carousel-tone-btn py-2 px-3 border rounded-lg text-sm font-medium hover:bg-gray-50 bg-purple-100 border-purple-300">😊 Casual</button>
+                  <button data-carousel-tone="professional" class="carousel-tone-btn py-2 px-3 border rounded-lg text-sm font-medium hover:bg-gray-50">💼 Pro</button>
+                  <button data-carousel-tone="urgency" class="carousel-tone-btn py-2 px-3 border rounded-lg text-sm font-medium hover:bg-gray-50">🔥 Urgent</button>
+                  <button data-carousel-tone="playful" class="carousel-tone-btn py-2 px-3 border rounded-lg text-sm font-medium hover:bg-gray-50">🎉 Fun</button>
+                  <button data-carousel-tone="trending" class="carousel-tone-btn py-2 px-3 border rounded-lg text-sm font-medium hover:bg-gray-50">📈 Trend</button>
+                </div>
+              </div>
+
+              <!-- Caption -->
+              <div>
+                <div class="flex items-center justify-between mb-2">
+                  <label class="text-sm font-medium text-gray-700">Caption</label>
+                  <button id="btnRegenerateCarouselCaption" class="text-xs text-gray-500 hover:text-black">🔄 Regenerate</button>
+                </div>
+                <textarea id="carouselCaption" rows="3" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Your carousel caption..."></textarea>
+              </div>
+
+              <!-- Hashtags -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Hashtags</label>
+                <textarea id="carouselHashtags" rows="2" class="w-full border rounded-lg px-3 py-2 text-sm text-gray-600" placeholder="#karrykraze #carousel #fashion"></textarea>
+              </div>
+
+              <!-- Schedule -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Schedule</label>
+                <div class="grid grid-cols-2 gap-3">
+                  <input type="date" id="carouselScheduleDate" class="border rounded-lg px-3 py-2">
+                  <input type="time" id="carouselScheduleTime" value="12:00" class="border rounded-lg px-3 py-2">
+                </div>
+              </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="p-4 border-t bg-gray-50 flex items-center justify-between">
+              <p id="carouselStatus" class="text-sm text-gray-500">Add at least 2 images to create a carousel</p>
+              <div class="flex gap-3">
+                <button id="btnPreviewCarousel" class="px-4 py-2 text-sm font-medium border rounded-lg hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                  Preview
+                </button>
+                <button id="btnScheduleCarousel" class="px-6 py-2 text-sm font-bold bg-gradient-to-r from-pink-500 to-purple-600 text-white rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                  Schedule Carousel
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Recent Carousels -->
+          <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+            <div class="p-4 border-b">
+              <h2 class="font-bold">Recent Carousels</h2>
+            </div>
+            <div id="recentCarouselsList" class="divide-y">
+              <div class="p-8 text-center text-gray-400">
+                <svg class="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/>
+                </svg>
+                <p>No carousels created yet</p>
+                <p class="text-xs mt-1">Build your first multi-image post above</p>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Upload Modal -->
+  <div id="uploadModal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-0 sm:p-4">
+    <div class="bg-white sm:rounded-2xl w-full h-full sm:h-auto sm:max-w-2xl sm:min-h-[75vh] sm:max-h-[90vh] overflow-y-auto">
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between p-3 sm:p-4 border-b sticky top-0 bg-white z-10">
+        <h2 class="text-base sm:text-lg font-bold">Create New Post</h2>
+        <button id="btnCloseUpload" class="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      
+      <!-- Modal Body -->
+      <div class="p-3 sm:p-4 space-y-4 sm:space-y-6 overflow-visible">
+        <!-- Step indicator -->
+        <div class="flex items-center justify-center gap-2">
+          <div id="step1Indicator" class="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-black text-white flex items-center justify-center text-xs sm:text-sm font-bold">1</div>
+          <div class="w-8 sm:w-12 h-0.5 bg-gray-200"></div>
+          <div id="step2Indicator" class="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-xs sm:text-sm font-bold">2</div>
+          <div class="w-8 sm:w-12 h-0.5 bg-gray-200"></div>
+          <div id="step3Indicator" class="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-xs sm:text-sm font-bold">3</div>
+        </div>
+        
+        <!-- Step 1: Upload Image -->
+        <div id="uploadStep1" class="space-y-4">
+          <h3 class="font-bold text-center text-sm sm:text-base">Upload Image</h3>
+          
+          <!-- Drop zone -->
+          <div id="dropZone" class="border-2 border-dashed border-gray-300 rounded-xl p-6 sm:p-8 text-center hover:border-black transition-colors cursor-pointer">
+            <input type="file" id="fileInput" accept="image/*" class="hidden">
+            <svg class="w-10 h-10 sm:w-12 sm:h-12 mx-auto text-gray-400 mb-3 sm:mb-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/>
+            </svg>
+            <p class="text-gray-600 font-medium">Drop image here or click to upload</p>
+            <p class="text-xs text-gray-400 mt-1">PNG, JPG up to 10MB</p>
+          </div>
+          
+          <!-- Preview with change button -->
+          <div id="imagePreview" class="hidden relative">
+            <img id="previewImg" class="w-full max-h-64 object-contain rounded-lg bg-gray-100">
+            <button id="btnChangeImage" class="absolute top-2 right-2 bg-black/70 hover:bg-black text-white text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/>
+              </svg>
+              Change
+            </button>
+          </div>
+          
+          <!-- Product link - Searchable -->
+          <div class="relative">
+            <label class="block text-sm font-medium mb-2">Link to Product (optional)</label>
+            <div class="relative">
+              <input type="text" id="productSearch" placeholder="Search products..." class="w-full border rounded-lg px-3 py-2 pr-8">
+              <svg class="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/>
+              </svg>
+            </div>
+            <div id="productDropdown" class="hidden absolute left-0 right-0 z-50 mt-1 bg-white border rounded-xl shadow-xl max-h-80 overflow-y-auto">
+              <!-- Populated by JS -->
+            </div>
+            <div id="selectedProduct" class="hidden mt-2 flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+              <!-- Populated dynamically by JS -->
+            </div>
+            <input type="hidden" id="productSelect" value="">
+          </div>
+        </div>
+        
+        <!-- Step 2: Select Variations -->
+        <div id="uploadStep2" class="hidden space-y-4">
+          <h3 class="font-bold text-center">Select Variations</h3>
+          <p class="text-sm text-gray-500 text-center">Choose which crop variations to generate</p>
+          
+          <div class="grid grid-cols-2 gap-4">
+            <!-- Instagram variations -->
+            <div class="space-y-3">
+              <div class="text-xs font-medium text-instagram uppercase tracking-wide">Instagram</div>
+              <label class="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+                <input type="checkbox" id="varSquare" checked class="w-4 h-4">
+                <div>
+                  <div class="font-medium text-sm">Square (1:1)</div>
+                  <div class="text-xs text-gray-400">Feed post</div>
+                </div>
+              </label>
+              <label class="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+                <input type="checkbox" id="varPortrait" checked class="w-4 h-4">
+                <div>
+                  <div class="font-medium text-sm">Portrait (4:5)</div>
+                  <div class="text-xs text-gray-400">Maximum feed size</div>
+                </div>
+              </label>
+            </div>
+            
+            <!-- Pinterest variations -->
+            <div class="space-y-3">
+              <div class="text-xs font-medium text-pinterest uppercase tracking-wide">Pinterest</div>
+              <label class="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+                <input type="checkbox" id="varVertical" checked class="w-4 h-4">
+                <div>
+                  <div class="font-medium text-sm">Vertical (2:3)</div>
+                  <div class="text-xs text-gray-400">Standard pin</div>
+                </div>
+              </label>
+              <label class="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+                <input type="checkbox" id="varTall" class="w-4 h-4">
+                <div>
+                  <div class="font-medium text-sm">Tall (1:2.1)</div>
+                  <div class="text-xs text-gray-400">Idea pin</div>
+                </div>
+              </label>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Step 3: Caption & Schedule -->
+        <div id="uploadStep3" class="hidden space-y-4">
+          <h3 class="font-bold text-center">Caption & Schedule</h3>
+          
+          <!-- Tone selector (8 styles) -->
+          <div>
+            <label class="block text-sm font-medium mb-2">Caption Tone</label>
+            <div class="flex flex-wrap gap-2">
+              <button data-tone="casual" class="caption-tone-btn py-2 px-3 border rounded-lg text-sm font-medium hover:bg-gray-50">😊 Casual</button>
+              <button data-tone="professional" class="caption-tone-btn py-2 px-3 border rounded-lg text-sm font-medium hover:bg-gray-50">💼 Pro</button>
+              <button data-tone="urgency" class="caption-tone-btn py-2 px-3 border rounded-lg text-sm font-medium hover:bg-gray-50">🔥 Urgent</button>
+              <button data-tone="playful" class="caption-tone-btn py-2 px-3 border rounded-lg text-sm font-medium hover:bg-gray-50">🎉 Fun</button>
+              <button data-tone="value" class="caption-tone-btn py-2 px-3 border rounded-lg text-sm font-medium hover:bg-gray-50">💰 Value</button>
+              <button data-tone="trending" class="caption-tone-btn py-2 px-3 border rounded-lg text-sm font-medium hover:bg-gray-50">📈 Trend</button>
+              <button data-tone="inspirational" class="caption-tone-btn py-2 px-3 border rounded-lg text-sm font-medium hover:bg-gray-50">✨ Inspire</button>
+              <button data-tone="minimalist" class="caption-tone-btn py-2 px-3 border rounded-lg text-sm font-medium hover:bg-gray-50">🪶 Minimal</button>
+            </div>
+          </div>
+          
+          <!-- Generated caption -->
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <label class="text-sm font-medium">Caption</label>
+              <button id="btnRegenerateCaption" class="text-xs text-gray-500 hover:text-black">🔄 Regenerate</button>
+            </div>
+            <textarea id="captionText" rows="3" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Your caption will appear here..."></textarea>
+          </div>
+          
+          <!-- Hashtags -->
+          <div>
+            <label class="block text-sm font-medium mb-2">Hashtags</label>
+            <textarea id="hashtagText" rows="2" class="w-full border rounded-lg px-3 py-2 text-sm text-gray-600" placeholder="#karrykraze #fashion"></textarea>
+          </div>
+          
+          <!-- Platform selection -->
+          <div>
+            <label class="block text-sm font-medium mb-2">Post To</label>
+            <div class="flex flex-wrap gap-3">
+              <label class="flex items-center gap-2 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 flex-1 min-w-[120px]">
+                <input type="checkbox" id="postInstagram" checked class="w-4 h-4 accent-pink-500">
+                <span class="text-sm font-medium">📸 Instagram</span>
+              </label>
+              <label class="flex items-center gap-2 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 flex-1 min-w-[120px]">
+                <input type="checkbox" id="postFacebook" checked class="w-4 h-4 accent-blue-600">
+                <span class="text-sm font-medium">📘 Facebook</span>
+              </label>
+              <label class="flex items-center gap-2 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 flex-1 min-w-[120px]">
+                <input type="checkbox" id="postPinterest" class="w-4 h-4 accent-red-500">
+                <span class="text-sm font-medium">📌 Pinterest</span>
+              </label>
+            </div>
+          </div>
+          
+          <!-- Pinterest board -->
+          <div id="pinterestBoardSelect" class="hidden">
+            <label class="block text-sm font-medium mb-2">Pinterest Board</label>
+            <select id="boardSelect" class="w-full border rounded-lg px-3 py-2">
+              <option value="">— Select board —</option>
+              <!-- Populated by JS -->
+            </select>
+          </div>
+          
+          <!-- Schedule -->
+          <div>
+            <label class="block text-sm font-medium mb-2">Schedule</label>
+            <div class="grid grid-cols-2 gap-3">
+              <input type="date" id="scheduleDate" class="border rounded-lg px-3 py-2">
+              <input type="time" id="scheduleTime" value="12:00" class="border rounded-lg px-3 py-2">
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Modal Footer -->
+      <div class="flex items-center justify-between p-4 border-t sticky bottom-0 bg-white">
+        <button id="btnPrevStep" class="px-4 py-2 text-sm font-medium text-gray-500 hover:text-black hidden">← Back</button>
+        <div></div>
+        <div class="flex gap-3">
+          <button id="btnNextStep" class="px-6 py-2 text-sm font-bold bg-black text-white rounded-lg hover:bg-black/80">Next →</button>
+          <button id="btnSchedulePost" class="px-6 py-2 text-sm font-bold bg-black text-white rounded-lg hover:bg-black/80 hidden">Schedule Post</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl w-full max-w-md">
+      <div class="flex items-center justify-between p-4 border-b">
+        <h2 class="text-lg font-bold">Settings</h2>
+        <button id="btnCloseSettings" class="p-2 hover:bg-gray-100 rounded-lg">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      
+      <div class="p-4 space-y-4">
+        <!-- Auto approve toggle -->
+        <label class="flex items-center justify-between">
+          <div>
+            <div class="font-medium text-sm">Auto-approve posts</div>
+            <div class="text-xs text-gray-400">Posts will be scheduled without manual approval</div>
+          </div>
+          <input type="checkbox" id="settingAutoApprove" checked class="w-5 h-5">
+        </label>
+        
+        <!-- Default tone (8 styles) -->
+        <div>
+          <label class="block text-sm font-medium mb-2">Default Caption Tone</label>
+          <select id="settingDefaultTone" class="w-full border rounded-lg px-3 py-2">
+            <option value="casual">😊 Casual</option>
+            <option value="professional">💼 Professional</option>
+            <option value="urgency">🔥 Urgency</option>
+            <option value="playful">🎉 Playful</option>
+            <option value="value">💰 Value</option>
+            <option value="trending">📈 Trending</option>
+            <option value="inspirational">✨ Inspirational</option>
+            <option value="minimalist">🪶 Minimalist</option>
+          </select>
+        </div>
+        
+        <!-- Instagram settings -->
+        <div class="border-t pt-4">
+          <div class="text-xs font-medium text-instagram uppercase tracking-wide mb-3">Instagram</div>
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-sm">Enabled</span>
+            <input type="checkbox" id="settingInstagramEnabled" checked class="w-5 h-5">
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-sm">Post time</span>
+            <input type="time" id="settingInstagramTime" value="12:00" class="border rounded-lg px-3 py-2 text-sm">
+          </div>
+        </div>
+        
+        <!-- Pinterest settings -->
+        <div class="border-t pt-4">
+          <div class="text-xs font-medium text-pinterest uppercase tracking-wide mb-3">Pinterest</div>
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-sm">Enabled</span>
+            <input type="checkbox" id="settingPinterestEnabled" checked class="w-5 h-5">
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-sm">Post time</span>
+            <input type="time" id="settingPinterestTime" value="12:00" class="border rounded-lg px-3 py-2 text-sm">
+          </div>
+        </div>
+      </div>
+      
+      <div class="p-4 border-t">
+        <button id="btnSaveSettings" class="w-full py-2 text-sm font-bold bg-black text-white rounded-lg hover:bg-black/80">Save Settings</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Post Detail Modal (for viewing/editing scheduled posts) -->
+  <div id="postDetailModal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between p-4 border-b sticky top-0 bg-white">
+        <h2 class="text-lg font-bold">Post Details</h2>
+        <button id="btnClosePostDetail" class="p-2 hover:bg-gray-100 rounded-lg">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      
+      <div class="p-4 space-y-4">
+        <!-- Image preview -->
+        <div class="aspect-square bg-gray-100 rounded-lg overflow-hidden">
+          <img id="postDetailImage" class="w-full h-full object-cover">
+        </div>
+        
+        <!-- Platform badge -->
+        <div class="flex items-center gap-2">
+          <span id="postDetailPlatform" class="px-3 py-1 rounded-full text-xs font-bold"></span>
+          <span id="postDetailStatus" class="px-3 py-1 rounded-full text-xs font-bold"></span>
+        </div>
+        
+        <!-- Caption -->
+        <div>
+          <label class="block text-sm font-medium mb-2">Caption</label>
+          <textarea id="postDetailCaption" rows="3" class="w-full border rounded-lg px-3 py-2 text-sm"></textarea>
+        </div>
+        
+        <!-- Hashtags -->
+        <div>
+          <label class="block text-sm font-medium mb-2">Hashtags</label>
+          <textarea id="postDetailHashtags" rows="2" class="w-full border rounded-lg px-3 py-2 text-sm"></textarea>
+        </div>
+        
+        <!-- Pinterest Board (only shown for Pinterest posts) -->
+        <div id="postDetailBoardSection" class="hidden">
+          <label class="block text-sm font-medium mb-2">Pinterest Board</label>
+          <select id="postDetailBoard" class="w-full border rounded-lg px-3 py-2 text-sm">
+            <option value="">Select a board...</option>
+          </select>
+        </div>
+        
+        <!-- Schedule -->
+        <div>
+          <label class="block text-sm font-medium mb-2">Scheduled For</label>
+          <div class="grid grid-cols-2 gap-3">
+            <input type="date" id="postDetailDate" class="border rounded-lg px-3 py-2">
+            <input type="time" id="postDetailTime" class="border rounded-lg px-3 py-2">
+          </div>
+        </div>
+      </div>
+      
+      <div class="flex items-center justify-between p-4 border-t sticky bottom-0 bg-white">
+        <button id="btnDeletePost" class="px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg">Delete</button>
+        <div class="flex gap-3">
+          <button id="btnPostNow" class="px-4 py-2 text-sm font-medium border rounded-lg hover:bg-gray-50">Post Now</button>
+          <button id="btnSavePost" class="px-6 py-2 text-sm font-bold bg-black text-white rounded-lg hover:bg-black/80">Save Changes</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/js/admin/social/index.js"></script>
+</body>
+</html>

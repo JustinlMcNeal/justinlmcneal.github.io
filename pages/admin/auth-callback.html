@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>Admin · Auth Callback</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="min-h-screen bg-white text-black">
+  <main class="max-w-md mx-auto p-6">
+    <div class="border-4 border-black rounded-2xl p-5">
+      <h1 class="text-2xl font-black">Auth callback</h1>
+      <p id="status" class="mt-2 text-sm">Processing…</p>
+
+      <div id="debugBox" class="mt-4 hidden">
+        <pre id="debug" class="text-xs whitespace-pre-wrap bg-neutral-100 p-3 rounded-lg border"></pre>
+      </div>
+
+      <a href="/pages/admin/reset.html" class="inline-block mt-5 text-sm underline">
+        Go to reset page
+      </a>
+    </div>
+  </main>
+
+  <script type="module" src="/js/admin/auth-callback/index.js"></script>
+</body>
+</html>

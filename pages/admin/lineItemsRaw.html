@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin · Line Items (Raw)</title>
+
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Keep your global KK theme files -->
+  <link rel="stylesheet" href="/css/theme/base.css">
+  <link rel="stylesheet" href="/css/theme/components.css">
+</head>
+
+<body class="kk-page bg-white text-black">
+  <!-- Admin Nav mount -->
+  <div id="kkAdminNavMount"></div>
+
+  <main class="max-w-6xl mx-auto px-4 py-6">
+
+    <!-- Header -->
+    <header class="bg-white border-[4px] border-black p-5 shadow-[8px_8px_0_0_#000]">
+      <div class="text-[11px] font-black uppercase tracking-[.25em] opacity-70">Admin</div>
+      <h1 class="text-2xl sm:text-3xl font-black tracking-tight mt-2">Line Items Raw</h1>
+      <p class="text-sm text-black/70 mt-2">
+        Item-level truth. View via joined orders, edit raw line rows if needed.
+      </p>
+      <div id="lir_status" class="text-xs text-black/60 mt-3">Loading…</div>
+    </header>
+
+    <!-- APP -->
+    <section id="appPanel" class="mt-4">
+
+      <!-- Controls -->
+      <section class="grid gap-3 md:grid-cols-[1fr_auto] items-end">
+        <div class="bg-white border-[4px] border-black p-4">
+          <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-2" for="searchInput">
+            Search
+          </label>
+          <input
+            id="searchInput"
+            type="search"
+            placeholder="Order / email / product / variant…"
+            class="w-full border-[4px] border-black px-3 py-2 text-[14px] outline-none"
+          />
+          <div class="mt-3 text-xs text-black/60" id="countLabel">0 rows</div>
+        </div>
+
+        <div class="bg-white border-[4px] border-black p-4 flex gap-2 justify-start md:justify-end">
+          <button
+            id="btnRefresh"
+            type="button"
+            class="border-[4px] border-black bg-white px-4 py-2
+                   font-black uppercase tracking-[.12em] text-[11px]
+                   hover:bg-black hover:text-white transition"
+          >
+            Refresh
+          </button>
+        </div>
+      </section>
+
+      <!-- Table -->
+      <section class="mt-4 bg-white border-[4px] border-black overflow-x-auto shadow-[8px_8px_0_0_#000]">
+        <table class="min-w-[980px] w-full">
+          <thead class="bg-black text-white">
+            <tr class="text-left">
+              <th class="px-3 py-3 text-[11px] font-black uppercase tracking-[.18em]">Date</th>
+              <th class="px-3 py-3 text-[11px] font-black uppercase tracking-[.18em]">Order</th>
+              <th class="px-3 py-3 text-[11px] font-black uppercase tracking-[.18em]">Product</th>
+              <th class="px-3 py-3 text-[11px] font-black uppercase tracking-[.18em]">Variant</th>
+              <th class="px-3 py-3 text-[11px] font-black uppercase tracking-[.18em]">Qty</th>
+              <th class="px-3 py-3 text-[11px] font-black uppercase tracking-[.18em]">Unit</th>
+              <th class="px-3 py-3 text-[11px] font-black uppercase tracking-[.18em]">Paid Unit</th>
+              <th class="px-3 py-3 text-[11px] font-black uppercase tracking-[.18em]">Line Total</th>
+              <th class="px-3 py-3 text-[11px] font-black uppercase tracking-[.18em]">Actions</th>
+            </tr>
+          </thead>
+
+          <!-- IMPORTANT: keep this exact id -->
+          <tbody id="lineItemRows" class="divide-y divide-black">
+            <!-- rows injected by /js/admin/lineItemsRaw/renderTable.js -->
+          </tbody>
+        </table>
+
+        <!-- Load more -->
+        <div class="p-4 border-t-[4px] border-black flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <button
+            id="btnLoadMore"
+            type="button"
+            class="border-[4px] border-black bg-white px-4 py-2
+                   font-black uppercase tracking-[.12em] text-[11px]
+                   hover:bg-black hover:text-white transition w-full sm:w-auto"
+          >
+            Load more
+          </button>
+
+          <div id="loadMoreStatus" class="text-xs text-black/60"></div>
+        </div>
+      </section>
+
+    </section>
+
+    <!-- MODAL -->
+    <div id="modal" class="hidden fixed inset-0 z-[999]" aria-hidden="true">
+      <div class="absolute inset-0 bg-black/50"></div>
+
+      <div class="relative min-h-full flex items-end sm:items-center justify-center p-3 sm:p-6">
+        <div class="w-full max-w-2xl bg-white border-[4px] border-black shadow-[10px_10px_0_0_#000]">
+          <!-- Head -->
+          <div class="p-4 sm:p-5 border-b-[4px] border-black flex items-start justify-between gap-3">
+            <div>
+              <div class="text-[11px] font-black uppercase tracking-[.25em] opacity-70">Admin</div>
+              <h3 class="text-xl font-black mt-1">Edit Line Item</h3>
+            </div>
+
+            <button
+              id="btnClose"
+              type="button"
+              class="border-[4px] border-black bg-white px-3 py-2
+                     font-black uppercase tracking-[.12em] text-[11px]
+                     hover:bg-black hover:text-white transition"
+            >
+              Close
+            </button>
+          </div>
+
+          <!-- Body -->
+          <div class="p-4 sm:p-5">
+            <!-- Identifiers -->
+            <div class="text-[11px] font-black uppercase tracking-[.25em] opacity-70">Identifiers</div>
+
+            <div class="mt-3 grid gap-3 sm:grid-cols-2">
+              <div>
+                <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-2">Row ID</label>
+                <input id="fLineRowId" disabled class="w-full border-[4px] border-black px-3 py-2 text-sm bg-black/5" />
+              </div>
+
+              <div>
+                <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-2">Checkout Session</label>
+                <input id="fSessionId" disabled class="w-full border-[4px] border-black px-3 py-2 text-sm bg-black/5" />
+              </div>
+
+              <div class="sm:col-span-2">
+                <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-2">Stripe Line Item ID</label>
+                <input id="fStripeLineItemId" disabled class="w-full border-[4px] border-black px-3 py-2 text-sm bg-black/5" />
+              </div>
+            </div>
+
+            <div class="my-5 border-t-[4px] border-black"></div>
+
+            <!-- Editable -->
+            <div class="text-[11px] font-black uppercase tracking-[.25em] opacity-70">Line Item</div>
+
+            <div class="mt-3 grid gap-3 sm:grid-cols-2">
+              <div>
+                <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-2">Product ID</label>
+                <input id="fProductId" class="w-full border-[4px] border-black px-3 py-2 text-sm" />
+              </div>
+
+              <div>
+                <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-2">Product Name</label>
+                <input id="fProductName" class="w-full border-[4px] border-black px-3 py-2 text-sm" />
+              </div>
+
+              <div>
+                <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-2">Variant</label>
+                <input id="fVariant" class="w-full border-[4px] border-black px-3 py-2 text-sm" />
+              </div>
+
+              <div>
+                <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-2">Quantity</label>
+                <input id="fQuantity" type="number" min="1" class="w-full border-[4px] border-black px-3 py-2 text-sm" />
+              </div>
+
+              <div>
+                <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-2">Item Weight (g)</label>
+                <input id="fWeightG" type="number" min="0" class="w-full border-[4px] border-black px-3 py-2 text-sm" />
+              </div>
+            </div>
+
+            <div class="my-5 border-t-[4px] border-black"></div>
+
+            <!-- Money -->
+            <div class="text-[11px] font-black uppercase tracking-[.25em] opacity-70">Money</div>
+            <div class="text-xs text-black/60 mt-2">Stored in cents. Displayed in dollars.</div>
+
+            <div class="mt-3 grid gap-3 sm:grid-cols-2">
+              <div>
+                <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-2">Unit Price</label>
+                <input id="fUnitPrice" type="number" step="0.01" min="0" class="w-full border-[4px] border-black px-3 py-2 text-sm" />
+              </div>
+
+              <div>
+                <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-2">Paid Unit Price</label>
+                <input id="fPostDiscount" type="number" step="0.01" min="0" class="w-full border-[4px] border-black px-3 py-2 text-sm" />
+              </div>
+            </div>
+
+            <div id="modalMsg" class="hidden mt-4 border-[4px] border-black p-3 text-sm"></div>
+          </div>
+
+          <!-- Footer -->
+          <div class="p-4 sm:p-5 border-t-[4px] border-black flex flex-col sm:flex-row gap-2 sm:justify-between">
+            <button
+              id="btnHardDelete"
+              type="button"
+              class="border-[4px] border-black bg-white px-4 py-2
+                     font-black uppercase tracking-[.12em] text-[11px]
+                     hover:bg-black hover:text-white transition"
+            >
+              Delete Line
+            </button>
+
+            <button
+              id="btnSave"
+              type="button"
+              class="border-[4px] border-black bg-black text-white px-4 py-2
+                     font-black uppercase tracking-[.12em] text-[11px]
+                     hover:bg-white hover:text-black transition"
+            >
+              Save Changes
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Footer mount -->
+  <div id="kkFooterMount"></div>
+
+  <!-- keep your existing JS entry -->
+  <script type="module" src="/js/admin/lineItemsRaw/index.js"></script>
+</body>
+</html>

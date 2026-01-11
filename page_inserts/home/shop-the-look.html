@@ -1,0 +1,124 @@
+<!-- Shop The Look Insert -->
+<section class="max-w-6xl mx-auto px-4 mb-24 mt-12 hidden" id="shopTheLookSection">
+  
+  <!-- Header Section (Full Width) -->
+  <div class="mb-8 flex flex-col items-center text-center">
+    <h2 class="font-black text-3xl md:text-5xl uppercase tracking-tighter leading-none relative inline-block" id="stlTitle">
+        Shop the Look
+        <!-- Squiggle Underline -->
+        <div class="absolute -bottom-3 md:-bottom-4 left-0 w-full h-3 md:h-4 text-kkpink">
+            <svg viewBox="0 0 100 20" preserveAspectRatio="none" class="w-full h-full">
+                <path d="M0 10 Q 25 20, 50 10 T 100 10" stroke="currentColor" stroke-width="4" fill="none" />
+            </svg>
+        </div>
+    </h2>
+    <p class="mt-4 text-sm text-gray-500 font-medium">Complete outfits curated for you</p>
+  </div>
+
+  <div class="flex flex-col md:flex-row gap-8 lg:gap-12 items-center justify-center">
+    
+    <!-- Left: Interactive Image Area (Larger) -->
+    <div class="w-full md:w-3/5 max-w-3xl relative group select-none">
+       <img id="stlImage" src="" class="w-full h-auto object-cover border border-gray-100 shadow-sm" alt="Shop The Look">
+       <div id="stlHotspots" class="absolute inset-0 z-10 block"></div>
+       
+       <!-- Mobile Instruction Hint -->
+       <div class="absolute bottom-4 left-4 bg-white/90 backdrop-blur px-3 py-1 text-[10px] font-bold uppercase tracking-widest shadow-sm md:hidden pointer-events-none z-20">
+          Tap dots to view items
+       </div>
+    </div>
+
+    <!-- Right: Product Card Slider (Compact) -->
+    <div class="w-full md:w-2/5 max-w-sm h-fit">
+       
+       <!-- Product Carousel Window -->
+       <div class="relative group/slider">
+           <div id="stlProductMount" class="flex overflow-x-auto snap-x snap-mandatory pb-4 gap-0 px-[15vw] md:px-0 cursor-grab active:cursor-grabbing select-none items-start no-scrollbar" style="scroll-behavior: smooth;">
+              <!-- Cards Injected Here -->
+           </div>
+       </div>
+
+       <!-- Pagination Dots (Hidden/Removed) -->
+       <div id="stlPagination" class="hidden"></div>
+    </div>
+
+  </div>
+</section>
+
+<style>
+  /* Utility to hide scrollbar cross-browser */
+  .no-scrollbar::-webkit-scrollbar {
+      display: none;
+  }
+  .no-scrollbar {
+      -ms-overflow-style: none;  /* IE and Edge */
+      scrollbar-width: none;  /* Firefox */
+  }
+
+  .stl-dot {
+    position: absolute;
+    width: 48px; /* Larger hit area / halo */
+    height: 48px;
+    transform: translate(-50%, -50%);
+    
+    /* Outer Halo: Semi-transparent Black */
+    background-color: rgba(0, 0, 0, 0.4); 
+    border-radius: 50%;
+    
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    z-index: 50; /* High z-index to ensure visibility */
+    
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    box-shadow: none;
+  }
+  
+  /* Inner Solid Dot */
+  .stl-dot::after {
+    content: '';
+    width: 16px;
+    height: 16px;
+    background: white; /* Contrast center */
+    border-radius: 50%;
+    transition: all 0.3s;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  }
+
+  /* Hover Effect */
+  .stl-dot:hover {
+    transform: translate(-50%, -50%) scale(1.1);
+    background-color: rgba(0, 0, 0, 0.6);
+  }
+  
+  /* Active State */
+  .stl-dot.active {
+    background-color: rgba(0, 0, 0, 0.8);
+    transform: translate(-50%, -50%) scale(1.15);
+  }
+  .stl-dot.active::after {
+    width: 20px;
+    height: 20px;
+  }
+  
+  /* Pagination Dots */
+  .stl-page-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background-color: black;
+      opacity: 0.3;
+      transition: all 0.3s;
+      cursor: pointer;
+  }
+  .stl-page-dot.active {
+      background-color: transparent;
+      border: 1.5px solid black;
+      opacity: 1;
+      width: 8px;
+      height: 8px;
+      transform: scale(1.2);
+  }
+</style>

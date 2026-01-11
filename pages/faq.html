@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FAQ | KarryKraze</title>
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            kkpink: '#f58f86',
+            kkpeach: '#f6dcc6',
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- KK base + components -->
+  <link rel="stylesheet" href="/css/theme/base.css">
+  <link rel="stylesheet" href="/css/theme/components.css">
+
+  <style>
+    .faq-item details[open] summary .faq-icon {
+      transform: rotate(45deg);
+    }
+    .faq-item details[open] .faq-answer {
+      animation: fadeIn 0.2s ease-out;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+
+<body class="bg-gray-50 min-h-screen">
+
+  <!-- ✅ NAVBAR INSERT MOUNT (DO NOT REMOVE) -->
+  <div id="kkNavbarMount"></div>
+
+  <!-- Main Content -->
+  <main class="max-w-3xl mx-auto px-4 py-12">
+    
+    <!-- Header -->
+    <div class="text-center mb-12">
+      <h1 class="text-3xl sm:text-4xl font-black tracking-tight mb-3">Frequently Asked Questions</h1>
+      <p class="text-gray-500 max-w-md mx-auto">
+        Got questions? We've got answers! Can't find what you're looking for? <a href="/pages/contact.html" class="text-kkpink hover:underline font-medium">Contact us</a>.
+      </p>
+    </div>
+
+    <!-- FAQ Categories -->
+    <div class="space-y-8">
+
+      <!-- Shipping -->
+      <section>
+        <h2 class="font-black text-lg uppercase tracking-wider mb-4 flex items-center gap-2">
+          <span class="w-8 h-8 bg-kkpink/10 rounded-lg flex items-center justify-center">
+            <svg class="w-4 h-4 text-kkpink" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+            </svg>
+          </span>
+          Shipping
+        </h2>
+        <div class="space-y-3">
+
+          <div class="faq-item bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+            <details>
+              <summary class="flex items-center justify-between p-5 cursor-pointer hover:bg-gray-50 transition-colors">
+                <span class="font-bold text-sm pr-4">How long does shipping take?</span>
+                <span class="faq-icon w-6 h-6 flex-shrink-0 bg-black text-white rounded-full flex items-center justify-center text-lg font-bold transition-transform">+</span>
+              </summary>
+              <div class="faq-answer px-5 pb-5 text-gray-600 text-sm leading-relaxed">
+                <p>We ship from the USA! Standard shipping typically takes <strong>3-7 business days</strong> within the continental US. Express options are available at checkout for faster delivery.</p>
+                <p class="mt-2">International shipping times vary by location, usually 7-21 business days.</p>
+              </div>
+            </details>
+          </div>
+
+          <div class="faq-item bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+            <details>
+              <summary class="flex items-center justify-between p-5 cursor-pointer hover:bg-gray-50 transition-colors">
+                <span class="font-bold text-sm pr-4">How much does shipping cost?</span>
+                <span class="faq-icon w-6 h-6 flex-shrink-0 bg-black text-white rounded-full flex items-center justify-center text-lg font-bold transition-transform">+</span>
+              </summary>
+              <div class="faq-answer px-5 pb-5 text-gray-600 text-sm leading-relaxed">
+                <p>Shipping costs are calculated at checkout based on your location and the weight of your order. We often run <strong>free shipping promotions</strong> — check our homepage for current deals!</p>
+              </div>
+            </details>
+          </div>
+
+          <div class="faq-item bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+            <details>
+              <summary class="flex items-center justify-between p-5 cursor-pointer hover:bg-gray-50 transition-colors">
+                <span class="font-bold text-sm pr-4">Do you ship internationally?</span>
+                <span class="faq-icon w-6 h-6 flex-shrink-0 bg-black text-white rounded-full flex items-center justify-center text-lg font-bold transition-transform">+</span>
+              </summary>
+              <div class="faq-answer px-5 pb-5 text-gray-600 text-sm leading-relaxed">
+                <p>Yes! We ship to most countries worldwide. International shipping rates and delivery times will be shown at checkout. Note that international orders may be subject to customs fees or import duties, which are the responsibility of the buyer.</p>
+              </div>
+            </details>
+          </div>
+
+          <div class="faq-item bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+            <details>
+              <summary class="flex items-center justify-between p-5 cursor-pointer hover:bg-gray-50 transition-colors">
+                <span class="font-bold text-sm pr-4">How do I track my order?</span>
+                <span class="faq-icon w-6 h-6 flex-shrink-0 bg-black text-white rounded-full flex items-center justify-center text-lg font-bold transition-transform">+</span>
+              </summary>
+              <div class="faq-answer px-5 pb-5 text-gray-600 text-sm leading-relaxed">
+                <p>Once your order ships, you'll receive an email with your tracking number and a link to track your package. You can also check your order status by logging into your account.</p>
+              </div>
+            </details>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- Orders -->
+      <section>
+        <h2 class="font-black text-lg uppercase tracking-wider mb-4 flex items-center gap-2">
+          <span class="w-8 h-8 bg-kkpink/10 rounded-lg flex items-center justify-center">
+            <svg class="w-4 h-4 text-kkpink" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+            </svg>
+          </span>
+          Orders
+        </h2>
+        <div class="space-y-3">
+
+          <div class="faq-item bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+            <details>
+              <summary class="flex items-center justify-between p-5 cursor-pointer hover:bg-gray-50 transition-colors">
+                <span class="font-bold text-sm pr-4">Can I modify or cancel my order?</span>
+                <span class="faq-icon w-6 h-6 flex-shrink-0 bg-black text-white rounded-full flex items-center justify-center text-lg font-bold transition-transform">+</span>
+              </summary>
+              <div class="faq-answer px-5 pb-5 text-gray-600 text-sm leading-relaxed">
+                <p>We process orders quickly! If you need to modify or cancel, please <a href="/pages/contact.html" class="text-kkpink hover:underline">contact us</a> ASAP with your order number. We'll do our best to accommodate your request if the order hasn't shipped yet.</p>
+              </div>
+            </details>
+          </div>
+
+          <div class="faq-item bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+            <details>
+              <summary class="flex items-center justify-between p-5 cursor-pointer hover:bg-gray-50 transition-colors">
+                <span class="font-bold text-sm pr-4">What payment methods do you accept?</span>
+                <span class="faq-icon w-6 h-6 flex-shrink-0 bg-black text-white rounded-full flex items-center justify-center text-lg font-bold transition-transform">+</span>
+              </summary>
+              <div class="faq-answer px-5 pb-5 text-gray-600 text-sm leading-relaxed">
+                <p>We accept all major credit cards (Visa, Mastercard, American Express, Discover) as well as Apple Pay, Google Pay, and other digital wallets through our secure Stripe checkout.</p>
+              </div>
+            </details>
+          </div>
+
+          <div class="faq-item bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+            <details>
+              <summary class="flex items-center justify-between p-5 cursor-pointer hover:bg-gray-50 transition-colors">
+                <span class="font-bold text-sm pr-4">Is my payment information secure?</span>
+                <span class="faq-icon w-6 h-6 flex-shrink-0 bg-black text-white rounded-full flex items-center justify-center text-lg font-bold transition-transform">+</span>
+              </summary>
+              <div class="faq-answer px-5 pb-5 text-gray-600 text-sm leading-relaxed">
+                <p>Absolutely! We use <strong>Stripe</strong> for payment processing, which is PCI-DSS compliant and uses bank-level encryption. Your payment info is transmitted directly to Stripe and never stored on our servers.</p>
+              </div>
+            </details>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- Returns & Exchanges -->
+      <section>
+        <h2 class="font-black text-lg uppercase tracking-wider mb-4 flex items-center gap-2">
+          <span class="w-8 h-8 bg-kkpink/10 rounded-lg flex items-center justify-center">
+            <svg class="w-4 h-4 text-kkpink" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </span>
+          Returns & Exchanges
+        </h2>
+        <div class="space-y-3">
+
+          <div class="faq-item bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+            <details>
+              <summary class="flex items-center justify-between p-5 cursor-pointer hover:bg-gray-50 transition-colors">
+                <span class="font-bold text-sm pr-4">What is your return policy?</span>
+                <span class="faq-icon w-6 h-6 flex-shrink-0 bg-black text-white rounded-full flex items-center justify-center text-lg font-bold transition-transform">+</span>
+              </summary>
+              <div class="faq-answer px-5 pb-5 text-gray-600 text-sm leading-relaxed">
+                <p>We want you to love your purchase! If you're not satisfied, you can return unused items in original condition within <strong>30 days</strong> of delivery for a refund. Just <a href="/pages/contact.html" class="text-kkpink hover:underline">contact us</a> to start the return process.</p>
+              </div>
+            </details>
+          </div>
+
+          <div class="faq-item bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+            <details>
+              <summary class="flex items-center justify-between p-5 cursor-pointer hover:bg-gray-50 transition-colors">
+                <span class="font-bold text-sm pr-4">How do I exchange an item?</span>
+                <span class="faq-icon w-6 h-6 flex-shrink-0 bg-black text-white rounded-full flex items-center justify-center text-lg font-bold transition-transform">+</span>
+              </summary>
+              <div class="faq-answer px-5 pb-5 text-gray-600 text-sm leading-relaxed">
+                <p>For exchanges, please <a href="/pages/contact.html" class="text-kkpink hover:underline">contact us</a> with your order number and what you'd like to exchange it for. We'll send you return instructions and get your new item shipped out ASAP!</p>
+              </div>
+            </details>
+          </div>
+
+          <div class="faq-item bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+            <details>
+              <summary class="flex items-center justify-between p-5 cursor-pointer hover:bg-gray-50 transition-colors">
+                <span class="font-bold text-sm pr-4">What if my item arrives damaged?</span>
+                <span class="faq-icon w-6 h-6 flex-shrink-0 bg-black text-white rounded-full flex items-center justify-center text-lg font-bold transition-transform">+</span>
+              </summary>
+              <div class="faq-answer px-5 pb-5 text-gray-600 text-sm leading-relaxed">
+                <p>Oh no! We're so sorry if that happened. Please <a href="/pages/contact.html" class="text-kkpink hover:underline">contact us</a> within 48 hours of delivery with photos of the damage, and we'll make it right — either with a replacement or full refund.</p>
+              </div>
+            </details>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- Products -->
+      <section>
+        <h2 class="font-black text-lg uppercase tracking-wider mb-4 flex items-center gap-2">
+          <span class="w-8 h-8 bg-kkpink/10 rounded-lg flex items-center justify-center">
+            <svg class="w-4 h-4 text-kkpink" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+            </svg>
+          </span>
+          Products
+        </h2>
+        <div class="space-y-3">
+
+          <div class="faq-item bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+            <details>
+              <summary class="flex items-center justify-between p-5 cursor-pointer hover:bg-gray-50 transition-colors">
+                <span class="font-bold text-sm pr-4">Are the product photos accurate?</span>
+                <span class="faq-icon w-6 h-6 flex-shrink-0 bg-black text-white rounded-full flex items-center justify-center text-lg font-bold transition-transform">+</span>
+              </summary>
+              <div class="faq-answer px-5 pb-5 text-gray-600 text-sm leading-relaxed">
+                <p>We do our best to show products accurately! Colors may vary slightly due to monitor settings and lighting. Product descriptions include measurements and materials to help you know exactly what you're getting.</p>
+              </div>
+            </details>
+          </div>
+
+          <div class="faq-item bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+            <details>
+              <summary class="flex items-center justify-between p-5 cursor-pointer hover:bg-gray-50 transition-colors">
+                <span class="font-bold text-sm pr-4">Will items be restocked?</span>
+                <span class="faq-icon w-6 h-6 flex-shrink-0 bg-black text-white rounded-full flex items-center justify-center text-lg font-bold transition-transform">+</span>
+              </summary>
+              <div class="faq-answer px-5 pb-5 text-gray-600 text-sm leading-relaxed">
+                <p>We try to restock popular items, but some styles are limited edition! Follow us on <a href="https://instagram.com/karrykraze" target="_blank" class="text-kkpink hover:underline">Instagram</a> to be the first to know about restocks and new arrivals.</p>
+              </div>
+            </details>
+          </div>
+
+          <div class="faq-item bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+            <details>
+              <summary class="flex items-center justify-between p-5 cursor-pointer hover:bg-gray-50 transition-colors">
+                <span class="font-bold text-sm pr-4">How do I care for my items?</span>
+                <span class="faq-icon w-6 h-6 flex-shrink-0 bg-black text-white rounded-full flex items-center justify-center text-lg font-bold transition-transform">+</span>
+              </summary>
+              <div class="faq-answer px-5 pb-5 text-gray-600 text-sm leading-relaxed">
+                <p>Care instructions vary by product. Generally, we recommend spot cleaning bags and accessories with a damp cloth. For hats, avoid getting them wet and store them on a flat surface to maintain their shape.</p>
+              </div>
+            </details>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- Discounts & Promos -->
+      <section>
+        <h2 class="font-black text-lg uppercase tracking-wider mb-4 flex items-center gap-2">
+          <span class="w-8 h-8 bg-kkpink/10 rounded-lg flex items-center justify-center">
+            <svg class="w-4 h-4 text-kkpink" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+            </svg>
+          </span>
+          Discounts & Promos
+        </h2>
+        <div class="space-y-3">
+
+          <div class="faq-item bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+            <details>
+              <summary class="flex items-center justify-between p-5 cursor-pointer hover:bg-gray-50 transition-colors">
+                <span class="font-bold text-sm pr-4">How do I use a discount code?</span>
+                <span class="faq-icon w-6 h-6 flex-shrink-0 bg-black text-white rounded-full flex items-center justify-center text-lg font-bold transition-transform">+</span>
+              </summary>
+              <div class="faq-answer px-5 pb-5 text-gray-600 text-sm leading-relaxed">
+                <p>Enter your code in the "Promo Code" field at checkout. The discount will be applied to your order total. Note: only one code can be used per order, and some codes have minimum purchase requirements.</p>
+              </div>
+            </details>
+          </div>
+
+          <div class="faq-item bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+            <details>
+              <summary class="flex items-center justify-between p-5 cursor-pointer hover:bg-gray-50 transition-colors">
+                <span class="font-bold text-sm pr-4">How do I get notified about sales?</span>
+                <span class="faq-icon w-6 h-6 flex-shrink-0 bg-black text-white rounded-full flex items-center justify-center text-lg font-bold transition-transform">+</span>
+              </summary>
+              <div class="faq-answer px-5 pb-5 text-gray-600 text-sm leading-relaxed">
+                <p>Follow us on social media! We announce all our sales, new arrivals, and exclusive discounts on <a href="https://instagram.com/karrykraze" target="_blank" class="text-kkpink hover:underline">Instagram</a>, <a href="https://tiktok.com/@karrykraze" target="_blank" class="text-kkpink hover:underline">TikTok</a>, and <a href="https://pinterest.com/karrykraze" target="_blank" class="text-kkpink hover:underline">Pinterest</a>.</p>
+              </div>
+            </details>
+          </div>
+
+        </div>
+      </section>
+
+    </div>
+
+    <!-- Still Have Questions -->
+    <div class="mt-12 bg-gradient-to-r from-kkpink/10 to-kkpeach/20 rounded-2xl p-8 text-center">
+      <h2 class="font-black text-xl mb-2">Still have questions?</h2>
+      <p class="text-gray-600 mb-4">We're here to help! Reach out and we'll get back to you within 24-48 hours.</p>
+      <a 
+        href="/pages/contact.html" 
+        class="inline-flex items-center gap-2 bg-black text-white font-bold px-6 py-3 rounded-xl hover:bg-gray-800 transition-colors"
+      >
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+        </svg>
+        Contact Us
+      </a>
+    </div>
+
+  </main>
+
+  <!-- ✅ FOOTER INSERT MOUNT -->
+  <div id="kkFooterMount"></div>
+
+  <!-- Page logic -->
+  <script type="module">
+    import { initNavbar } from '/js/shared/navbar.js';
+    import { initFooter } from '/js/shared/footer.js';
+    
+    document.addEventListener('DOMContentLoaded', async () => {
+      await initNavbar();
+      await initFooter();
+    });
+  </script>
+
+</body>
+</html>

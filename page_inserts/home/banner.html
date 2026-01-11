@@ -1,0 +1,26 @@
+<!-- HOME HERO / PROMO BANNER SLIDER -->
+<header class="w-full mt-4 animate-fade-in-up mb-8">
+  <section class="w-full relative group">
+
+    <!-- SLIDER CONTAINER (Native Scroll Snap) -->
+    <!-- gap-4: spacing between slides -->
+    <!-- Added 'relative' to ensure offsetLeft calculations are scoped to this container -->
+    <div id="promoSliderTrack"
+         class="relative flex gap-4 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-4 min-h-[300px] md:min-h-[400px] items-stretch px-[7.5vw] md:px-[20%]">
+       <!-- Slides injected via JS -->
+    </div>
+
+    <!-- Navigation Dots -->
+    <div id="promoSliderDots" class="absolute bottom-8 left-1/2 -translate-x-1/2 z-50 flex gap-2"></div>
+
+    <!-- Swipe Indicator (Mobile) -->
+    <div class="md:hidden absolute bottom-6 right-8 z-50 text-black/50 text-[10px] uppercase font-bold animate-pulse pointer-events-none mix-blend-multiply">
+       Swipe &rarr;
+    </div>
+
+  </section>
+  <style>
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</header>

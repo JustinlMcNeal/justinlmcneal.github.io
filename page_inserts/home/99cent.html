@@ -1,0 +1,42 @@
+<!-- =========================
+     99¢ SLIDER SECTION
+========================== -->
+<section class="mt-[40px] mb-[20px] max-w-6xl mx-auto px-4">
+  <div class="flex items-center justify-between gap-3 mb-[16px] border-b-[4px] border-black/10 pb-2">
+    <div>
+        <h2 class="inline-block bg-yellow-400 text-black px-3 py-1 uppercase font-[1000] text-2xl sm:text-3xl tracking-tight transform -skew-x-6">
+          <span class="block transform skew-x-6">99¢ Deals</span>
+        </h2>
+        <p class="mt-2 text-[13px] font-bold uppercase tracking-wider opacity-60">
+            Grab them before they're gone
+        </p>
+    </div>
+    
+    <!-- View All Button -->
+    <a href="/pages/catalog.html" class="hidden sm:inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest border-2 border-black px-4 py-2 hover:bg-black hover:text-white transition-all group">
+      View All
+      <svg class="w-4 h-4 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+      </svg>
+    </a>
+  </div>
+
+  <div 
+    class="grid grid-flow-col gap-[14px] overflow-x-auto py-[6px] px-[2px] pb-[20px] 
+           snap-x snap-mandatory scroll-smooth
+           auto-cols-[160px] 
+           min-[500px]:auto-cols-[200px]
+           min-[900px]:auto-cols-[240px]
+           [&::-webkit-scrollbar]:h-[6px]
+           [&::-webkit-scrollbar-track]:bg-gray-100
+           [&::-webkit-scrollbar-thumb]:bg-black
+           [&::-webkit-scrollbar-thumb]:hover:bg-yellow-400"
+    data-99c-track
+  >
+    <!-- JS populates cards here -->
+  </div>
+  
+  <div class="hidden text-center py-10 opacity-50 font-black uppercase tracking-widest text-sm" data-99c-empty>
+    No 99¢ items found right now.
+  </div>
+</section>

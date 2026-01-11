@@ -1,0 +1,196 @@
+<!-- KARRY KRAZE NAVBAR (Tailwind-only) -->
+<!-- Page top padding (replaces .kk-page { padding-top: 76px; }) -->
+<div class="h-[76px]"></div>
+
+<header data-kk-nav class="fixed top-0 left-0 right-0 z-[80] bg-transparent pointer-events-none">
+  <div class="max-w-6xl mx-auto px-4 py-[14px] grid grid-cols-[1fr_auto_1fr] items-center gap-3 pointer-events-auto">
+
+    <!-- MENU -->
+    <button
+      class="justify-self-start bg-transparent border-0 p-0 cursor-pointer font-black uppercase tracking-[.14em] text-[12px] hover:underline
+             focus:outline-none focus-visible:outline-[4px] focus-visible:outline-offset-[4px] focus-visible:outline-[#f58f86]"
+      type="button"
+      data-kk-open="menu"
+      aria-label="Open menu"
+    >
+      MENU
+    </button>
+
+    <!-- LOGO -->
+    <a class="justify-self-center" href="/" aria-label="Karry Kraze Home">
+      <span class="inline-flex items-center px-[10px] py-[6px] border-[4px] border-black bg-white/30 backdrop-blur-[10px]">
+        <img src="/imgs/brand/logo-bwp.png" alt="Karry Kraze" class="h-[34px] block" />
+      </span>
+    </a>
+
+    <!-- CART (we'll hide on admin pages via JS) -->
+    <button
+      class="justify-self-end bg-transparent border-0 p-0 cursor-pointer font-black uppercase tracking-[.14em] text-[12px] hover:underline
+             focus:outline-none focus-visible:outline-[4px] focus-visible:outline-offset-[4px] focus-visible:outline-[#f58f86]"
+      type="button"
+      data-kk-open="cart"
+      aria-label="Open cart"
+      data-kk-cart-trigger
+    >
+      CART
+      <span
+        class="inline-flex items-center justify-center min-w-[22px] h-[22px] ml-2 border-[3px] border-black bg-white text-[11px] font-black"
+        data-kk-cart-count
+      >0</span>
+    </button>
+  </div>
+</header>
+
+<!-- Overlay -->
+<div
+  data-kk-overlay
+  hidden
+  class="fixed inset-0 z-[90] bg-black/35 backdrop-blur-[6px]"
+></div>
+
+<!-- MENU DRAWER -->
+<aside
+  data-kk-drawer="menu"
+  aria-hidden="true"
+  class="fixed top-0 bottom-0 left-0 z-[100] w-[min(420px,92vw)] bg-white border-[4px] border-black
+         -translate-x-[110%] transition-transform duration-200 ease-out flex flex-col"
+>
+  <div class="p-4 border-b-2 border-black/15 flex items-center justify-between">
+    <div class="font-black uppercase tracking-[.14em]">MENU</div>
+    <button
+      class="w-11 h-11 border-[4px] border-black bg-white font-black hover:bg-black hover:text-white"
+      type="button"
+      data-kk-close
+      aria-label="Close menu"
+    >✕</button>
+  </div>
+
+  <nav class="p-4 overflow-auto flex-1">
+    <!-- Public -->
+    <a class="block px-3 py-[14px] border-[4px] border-black mb-3 font-black uppercase tracking-[.14em] hover:bg-black hover:text-white"
+       href="/pages/catalog.html">Shop</a>
+    <a class="block px-3 py-[14px] border-[4px] border-black mb-3 font-black uppercase tracking-[.14em] hover:bg-black hover:text-white"
+       href="/pages/reviews.html">Reviews</a>
+    <a class="block px-3 py-[14px] border-[4px] border-black mb-3 font-black uppercase tracking-[.14em] hover:bg-black hover:text-white"
+       href="/pages/faq.html">FAQ</a>
+    <a class="block px-3 py-[14px] border-[4px] border-black mb-3 font-black uppercase tracking-[.14em] hover:bg-black hover:text-white"
+       href="/pages/contact.html">Contact</a>
+
+    <!-- Admin-only -->
+    <div class="kk-admin-only hidden">
+      <div class="border-t-2 border-black/15 my-4"></div>
+      
+      <a
+        id="menuAdminLink"
+        class="hidden w-full mb-3 block border-[4px] border-black bg-white px-4 py-3 font-black uppercase tracking-[.14em] text-[12px]
+               hover:bg-black hover:text-white transition-colors text-center no-underline"
+        href="/pages/admin/index.html"
+      >Admin Home</a>
+
+      <button
+        id="btnLogout"
+        class="hidden w-full border-[4px] border-black bg-white px-4 py-3 font-black uppercase tracking-[.14em] text-[12px]
+               hover:bg-black hover:text-white"
+        type="button"
+      >
+        Logout
+      </button>
+    </div>
+  </nav>
+</aside>
+
+<!-- CART DRAWER -->
+<aside
+  data-kk-drawer="cart"
+  aria-hidden="true"
+  class="fixed top-0 bottom-0 right-0 z-[100] w-[min(400px,94vw)] bg-[#fafafa]
+         translate-x-[110%] transition-transform duration-200 ease-out flex flex-col shadow-2xl"
+>
+  <!-- Header -->
+  <div class="px-5 py-4 bg-white border-b border-black/10 flex items-center justify-between">
+    <div class="flex items-center gap-2">
+      <span class="font-black uppercase tracking-wide text-sm">Your Cart</span>
+      <span data-kk-cart-count class="text-xs bg-black text-white rounded-full w-5 h-5 flex items-center justify-center font-bold">0</span>
+    </div>
+    <button
+      class="w-9 h-9 rounded-full bg-black/5 hover:bg-black hover:text-white flex items-center justify-center transition-colors"
+      type="button"
+      data-kk-close
+      aria-label="Close cart"
+    >
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- Free Shipping Progress (moves to top) -->
+  <div id="kk-free-shipping-bar" class="bg-white border-b border-black/10 px-4"></div>
+
+  <!-- Cart Items (scrollable) -->
+  <div class="flex-1 overflow-auto px-4 py-3">
+    <div data-kk-cart-items></div>
+    
+    <!-- Recommendations Section -->
+    <div id="kk-cart-recommendations" class="mt-4 hidden"></div>
+  </div>
+
+  <!-- Footer (sticky bottom) -->
+  <div class="bg-white border-t border-black/10 px-5 py-4">
+    <!-- Coupon Input -->
+    <div class="mb-4">
+      <div class="flex gap-2">
+        <input
+          type="text"
+          id="kk-coupon-input"
+          placeholder="Coupon code"
+          class="flex-1 border border-black/20 rounded-lg px-3 py-2.5 text-sm uppercase bg-white focus:border-black focus:outline-none transition-colors"
+        />
+        <button
+          id="kk-coupon-apply"
+          class="bg-black text-white px-4 py-2.5 rounded-lg font-bold uppercase text-xs tracking-wide hover:bg-black/80 transition-colors"
+        >
+          Apply
+        </button>
+      </div>
+      <div id="kk-coupon-message" class="mt-2 text-xs hidden"></div>
+    </div>
+
+    <!-- Totals -->
+    <div class="space-y-2 text-sm">
+      <div class="flex justify-between items-center text-black/60">
+        <span>Subtotal</span>
+        <span data-kk-cart-subtotal class="font-medium text-black">$0.00</span>
+      </div>
+
+      <!-- Auto promotions -->
+      <div id="cart-promotions"></div>
+
+      <!-- Coupon discount -->
+      <div id="cart-coupon-discount" class="hidden flex justify-between items-center text-green-600">
+        <span class="truncate">Coupon</span>
+        <span class="font-bold">-$0.00</span>
+      </div>
+    </div>
+
+    <div class="border-t border-black/10 my-3"></div>
+
+    <!-- Total -->
+    <div class="flex justify-between items-center mb-4">
+      <span class="font-black text-base">Total</span>
+      <span id="cart-total" class="font-black text-xl">$0.00</span>
+    </div>
+
+    <button
+      class="w-full bg-black text-white py-3.5 rounded-lg font-black uppercase tracking-wide text-sm hover:bg-black/90 transition-colors"
+      type="button"
+      data-kk-checkout
+    >
+      Checkout
+    </button>
+
+    <p class="mt-3 text-center text-xs text-black/50">
+      Shipping & tax calculated at checkout
+    </p>
+  </div>
+</aside>

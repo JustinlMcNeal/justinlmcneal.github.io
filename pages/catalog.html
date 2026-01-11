@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KARRY KRAZE — Catalog</title>
+
+  <!-- Global theme -->
+  <link rel="stylesheet" href="/css/theme/base.css">
+  <link rel="stylesheet" href="/css/theme/components.css">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            kkpink: '#f58f86',
+            kkpeach: '#f6dcc6',
+          },
+          borderWidth: {
+            '4': '4px',
+          }
+        }
+      }
+    }
+  </script>
+</head>
+
+<body class="kk-page">
+
+  <!-- ✅ NAVBAR INSERT MOUNT (DO NOT REMOVE) -->
+  <div id="kkNavbarMount"></div>
+
+  <!-- TOOLS & FILTERS -->
+  <div class="max-w-6xl mx-auto px-4 pt-4 md:pt-8 pb-4 relative z-20">
+    
+    <!-- CATEGORY CONTEXT (Dynamic) -->
+    <div id="catContext" class="hidden mb-4 animate-fade-in-down">
+      <h2 id="catContextTitle" class="font-black uppercase tracking-tight text-xl md:text-2xl leading-none"></h2>
+      <p id="catContextDesc" class="text-xs md:text-sm text-neutral-500 font-medium mt-1 max-w-[600px]"></p>
+    </div>
+
+    <!-- Row 1: Search and Sort -->
+    <div class="flex flex-row items-end justify-between gap-3 md:gap-6 mb-4 md:mb-6">
+      
+      <!-- Minimal Search (Top Left) -->
+      <div class="flex-1 md:w-[300px] md:flex-none relative min-w-0 z-30">
+        <label for="catalogSearch" class="sr-only">Search</label>
+        <div class="relative">
+          <input
+            id="catalogSearch"
+            type="search"
+            class="peer w-full bg-transparent border-b-2 border-neutral-200 py-2 md:py-2.5 pr-7 md:pr-8 font-bold text-xs md:text-sm uppercase tracking-wider text-black focus:border-black outline-none transition-colors placeholder:text-neutral-300 rounded-none"
+            placeholder="Search..."
+            autocomplete="off"
+          />
+          <div class="absolute right-0 top-1/2 -translate-y-1/2 text-neutral-300 peer-focus:text-black transition-colors pointer-events-none">
+            <svg class="w-3.5 h-3.5 md:w-4 md:h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          </div>
+          
+          <!-- PREDICTIVE SEARCH DROPDOWN -->
+          <div id="predictiveResults" class="absolute top-full left-0 right-0 bg-white border-2 border-black border-t-0 shadow-lg hidden max-h-[300px] overflow-y-auto"></div>
+        </div>
+        <div id="catalogCount" class="text-[9px] font-black text-neutral-300 mt-1 uppercase tracking-widest hidden md:block"></div>
+      </div>
+
+      <!-- Sort (Top Right) -->
+      <div class="shrink-0">
+        <div class="relative group">
+          <select
+            id="catalogSort"
+            class="appearance-none bg-transparent border-b-2 border-neutral-200 py-2 md:py-2.5 pl-1 md:pl-2 pr-6 md:pr-8 font-bold text-[10px] md:text-[11px] uppercase tracking-wider text-black focus:border-black outline-none cursor-pointer rounded-none max-w-[140px] md:max-w-none truncate"
+          >
+            <option value="newest">Newest</option>
+            <option value="best_seller">Best Sellers</option>
+            <option value="price_asc">Price: Low-High</option>
+            <option value="price_desc">Price: High-Low</option>
+            <option value="name_asc">Name: A-Z</option>
+            <option value="name_desc">Name: Z-A</option>
+          </select>
+          <div class="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-400">
+            <svg class="w-2.5 h-2.5 md:w-3 md:h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 2: Categories (Bottom) -->
+    <div class="w-full overflow-hidden">
+        <div
+          id="categoryChips"
+          class="flex gap-2 overflow-x-auto pb-2 scrollbar-hide items-center touch-pan-x"
+        >
+          <!-- JS injects category chips -->
+        </div>
+    </div>
+  </div>
+
+  <!-- PRODUCT GRID -->
+  <main class="max-w-6xl mx-auto px-4 mt-2 mb-20">
+    <div id="productGrid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-3 gap-y-8 md:gap-x-4 md:gap-y-10"></div>
+  </main>
+
+  <!-- ✅ FOOTER INSERT MOUNT -->
+  <div id="kkFooterMount"></div>
+
+  <!-- Catalog logic (navbar + grid rendering) -->
+  <script type="module" src="/js/catalog/index.js"></script>
+
+</body>
+</html>

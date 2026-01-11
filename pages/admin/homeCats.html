@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin · Home Categories</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            kkpink: '#f58f86',
+            kkpeach: '#f6dcc6'
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="stylesheet" href="/css/theme/base.css" />
+  <link rel="stylesheet" href="/css/theme/components.css" />
+  <style>
+    .cat-card {
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .cat-card:hover {
+      transform: translateY(-2px);
+    }
+    .cat-card.dragging {
+      opacity: 0.5;
+      transform: scale(0.95);
+    }
+    .cat-card.drag-over {
+      border-color: #f58f86 !important;
+      box-shadow: 0 0 0 3px rgba(245, 143, 134, 0.3);
+    }
+    .sortable-ghost {
+      opacity: 0.4;
+    }
+    .upload-overlay {
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .cat-card:hover .upload-overlay {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body class="kk-page kk-admin bg-gray-50 hidden">
+  
+  <div id="kkAdminNavMount"></div>
+
+  <main class="max-w-6xl mx-auto px-4 py-8">
+    <header class="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
+      <div>
+        <div class="text-[10px] uppercase font-black tracking-[0.25em] text-gray-500 mb-2">Visual Merchandising</div>
+        <h1 class="text-4xl font-black uppercase tracking-tight">Home Categories</h1>
+        <p class="mt-2 text-gray-600 max-w-xl">Control which categories appear on the homepage strip, their images, and display order.</p>
+      </div>
+      <div class="flex gap-3">
+        <a href="/pages/admin/index.html" class="px-5 py-3 border-2 border-black font-black uppercase tracking-widest text-xs hover:bg-gray-100">Back</a>
+        <button id="btnSaveOrder" class="px-5 py-3 bg-black text-white border-2 border-black font-black uppercase tracking-widest text-xs hover:bg-kkpink hover:text-black disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+          Save Order
+        </button>
+      </div>
+    </header>
+
+    <!-- Instructions -->
+    <div class="bg-white border-2 border-black p-4 mb-6">
+      <div class="flex items-start gap-4">
+        <div class="w-10 h-10 bg-black text-white rounded-full flex items-center justify-center flex-shrink-0 font-bold">?</div>
+        <div>
+          <h3 class="font-bold mb-1">How it works</h3>
+          <ul class="text-sm text-gray-600 space-y-1">
+            <li>• <strong>Toggle visibility:</strong> Click the eye icon to show/hide categories on the homepage</li>
+            <li>• <strong>Change image:</strong> Hover over a card and click "Change Image" to upload a new photo</li>
+            <li>• <strong>Reorder:</strong> Drag and drop cards to change display order, then click "Save Order"</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Categories Grid -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6" id="categoriesGrid">
+      <div class="p-8 text-center text-gray-400 col-span-full">
+        <div class="animate-pulse">Loading categories...</div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="mt-8 flex flex-wrap gap-4 text-sm text-gray-500">
+      <div id="statsTotal" class="bg-white border border-gray-200 px-4 py-2 rounded-lg">Total: 0</div>
+      <div id="statsVisible" class="bg-green-50 border border-green-200 text-green-700 px-4 py-2 rounded-lg">Visible: 0</div>
+      <div id="statsHidden" class="bg-gray-100 border border-gray-200 px-4 py-2 rounded-lg">Hidden: 0</div>
+    </div>
+  </main>
+
+  <!-- Image Upload Modal -->
+  <dialog id="imageModal" class="p-0 border-4 border-black w-full max-w-md bg-white backdrop:bg-black/50 rounded-none">
+    <div class="p-6">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="font-black uppercase text-xl">Change Image</h3>
+        <button onclick="document.getElementById('imageModal').close()" class="text-2xl hover:text-kkpink">&times;</button>
+      </div>
+      
+      <p class="text-sm text-gray-600 mb-4">Upload a new image for <strong id="modalCatName">this category</strong></p>
+      
+      <!-- Current Image Preview -->
+      <div id="modalCurrentImage" class="mb-4 border-2 border-gray-200 rounded-lg overflow-hidden hidden">
+        <p class="text-xs text-gray-500 p-2 bg-gray-50">Current image:</p>
+        <img id="modalPreviewImg" src="" class="w-full h-40 object-cover" />
+      </div>
+      
+      <!-- Upload Area -->
+      <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-black transition-colors cursor-pointer" id="dropZone">
+        <input type="file" id="fileInput" accept="image/*" class="hidden" />
+        <div class="text-4xl mb-2">📷</div>
+        <p class="text-sm text-gray-600">Drag & drop an image or <span class="text-black font-bold underline">browse</span></p>
+        <p class="text-xs text-gray-400 mt-2">Recommended: 600x840px (10:14 ratio)</p>
+      </div>
+      
+      <!-- Upload Progress -->
+      <div id="uploadProgress" class="hidden mt-4">
+        <div class="h-2 bg-gray-200 rounded-full overflow-hidden">
+          <div id="progressBar" class="h-full bg-black transition-all duration-300" style="width: 0%"></div>
+        </div>
+        <p class="text-xs text-gray-500 mt-1 text-center">Uploading...</p>
+      </div>
+
+      <div class="flex gap-3 mt-6">
+        <button onclick="document.getElementById('imageModal').close()" class="flex-1 px-4 py-3 border-2 border-black font-bold uppercase text-xs">Cancel</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Footer -->
+  <div id="kkFooterMount"></div>
+
+  <script type="module" src="/js/admin/homeCats/index.js"></script>
+</body>
+</html>

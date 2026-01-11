@@ -1,0 +1,49 @@
+<!-- /page_inserts/product/gallery.html -->
+<!-- NOTE: Thumbnail containers are in product.html to avoid Live Server script injection issues -->
+<section class="w-full">
+
+  <!-- MAIN IMAGE / CAROUSEL -->
+  <div class="relative w-full aspect-square bg-[#fafafa] rounded-xl overflow-hidden">
+
+    <!-- prev -->
+    <button
+      id="imgPrev"
+      type="button"
+      aria-label="Previous image"
+      class="absolute left-3 top-1/2 -translate-y-1/2 z-10
+             h-10 w-10 flex items-center justify-center
+             bg-white/90 backdrop-blur-sm rounded-full shadow-lg
+             hover:bg-white hover:scale-105 active:scale-95
+             transition-all duration-150"
+    >
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"></path></svg>
+    </button>
+
+    <!-- track -->
+    <div
+      id="mainCarousel"
+      class="absolute inset-0
+             flex overflow-x-auto overflow-y-hidden scroll-smooth
+             snap-x snap-mandatory max-w-full"
+      style="scrollbar-width:none; -ms-overflow-style:none;"
+    ></div>
+
+    <!-- next -->
+    <button
+      id="imgNext"
+      type="button"
+      aria-label="Next image"
+      class="absolute right-3 top-1/2 -translate-y-1/2 z-10
+             h-10 w-10 flex items-center justify-center
+             bg-white/90 backdrop-blur-sm rounded-full shadow-lg
+             hover:bg-white hover:scale-105 active:scale-95
+             transition-all duration-150"
+    >
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"></path></svg>
+    </button>
+
+    <!-- Slide indicator dots (mobile) -->
+    <div id="slideIndicators" class="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 flex gap-1.5 lg:hidden"></div>
+  </div>
+
+</section>

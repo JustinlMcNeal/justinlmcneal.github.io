@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Shipping Info | KarryKraze</title>
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            kkpink: '#f58f86',
+            kkpeach: '#f6dcc6',
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- KK base + components -->
+  <link rel="stylesheet" href="/css/theme/base.css">
+  <link rel="stylesheet" href="/css/theme/components.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <style>
+    .info-card {
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .info-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px -5px rgba(0, 0, 0, 0.1);
+    }
+    .timeline-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #000;
+      position: absolute;
+      left: -24px;
+      top: 6px;
+    }
+    .timeline-line {
+      position: absolute;
+      left: -18px;
+      top: 0;
+      bottom: 0;
+      width: 1px;
+      background: #e5e7eb;
+    }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-800 min-h-screen flex flex-col">
+
+  <!-- ✅ NAVBAR INSERT MOUNT (DO NOT REMOVE) -->
+  <div id="kkNavbarMount"></div>
+
+  <main class="flex-1 max-w-4xl mx-auto px-4 py-12 w-full">
+    <!-- Header -->
+    <div class="text-center mb-12">
+      <h1 class="text-4xl font-bold mb-4">Shipping Information</h1>
+      <p class="text-gray-600 text-lg">Everything you need to know about getting your order</p>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
+      <div class="bg-white rounded-2xl p-6 text-center shadow-sm">
+        <div class="text-3xl font-bold text-black mb-1">1-3</div>
+        <div class="text-sm text-gray-500">Processing Days</div>
+      </div>
+      <div class="bg-white rounded-2xl p-6 text-center shadow-sm">
+        <div class="text-3xl font-bold text-black mb-1">7-14</div>
+        <div class="text-sm text-gray-500">Delivery Days</div>
+      </div>
+      <div class="bg-white rounded-2xl p-6 text-center shadow-sm">
+        <div class="text-3xl font-bold text-green-600 mb-1">FREE</div>
+        <div class="text-sm text-gray-500">Standard Shipping</div>
+      </div>
+      <div class="bg-white rounded-2xl p-6 text-center shadow-sm">
+        <div class="text-3xl font-bold text-black mb-1">100%</div>
+        <div class="text-sm text-gray-500">Trackable</div>
+      </div>
+    </div>
+
+    <!-- Shipping Methods -->
+    <section class="mb-12">
+      <h2 class="text-2xl font-bold mb-6 flex items-center gap-3">
+        <i class="fas fa-truck text-gray-400"></i>
+        Shipping Methods
+      </h2>
+      <div class="space-y-4">
+        <div class="info-card bg-white rounded-2xl p-6 shadow-sm border-l-4 border-green-500">
+          <div class="flex items-start justify-between flex-wrap gap-4">
+            <div>
+              <h3 class="font-bold text-lg flex items-center gap-2">
+                Standard Shipping
+                <span class="bg-green-100 text-green-700 text-xs px-2 py-1 rounded-full">FREE</span>
+              </h3>
+              <p class="text-gray-600 mt-1">USPS Ground Advantage - Reliable delivery to your door</p>
+            </div>
+            <div class="text-right">
+              <div class="text-sm text-gray-500">Estimated Delivery</div>
+              <div class="font-semibold">7-14 business days</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="info-card bg-white rounded-2xl p-6 shadow-sm border-l-4 border-blue-500">
+          <div class="flex items-start justify-between flex-wrap gap-4">
+            <div>
+              <h3 class="font-bold text-lg flex items-center gap-2">
+                Express Shipping
+                <span class="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full">PRIORITY</span>
+              </h3>
+              <p class="text-gray-600 mt-1">Faster delivery for when you need it sooner</p>
+            </div>
+            <div class="text-right">
+              <div class="text-sm text-gray-500">Estimated Delivery</div>
+              <div class="font-semibold">3-7 business days</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Order Timeline -->
+    <section class="mb-12">
+      <h2 class="text-2xl font-bold mb-6 flex items-center gap-3">
+        <i class="fas fa-clock text-gray-400"></i>
+        Order Timeline
+      </h2>
+      <div class="bg-white rounded-2xl p-6 shadow-sm">
+        <div class="relative pl-8">
+          <div class="timeline-line"></div>
+          
+          <div class="relative pb-8">
+            <div class="timeline-dot bg-green-500"></div>
+            <h3 class="font-bold">Order Placed</h3>
+            <p class="text-gray-600 text-sm">You'll receive an email confirmation immediately</p>
+          </div>
+
+          <div class="relative pb-8">
+            <div class="timeline-dot bg-yellow-500"></div>
+            <h3 class="font-bold">Processing (1-3 days)</h3>
+            <p class="text-gray-600 text-sm">We prepare and pack your order with care</p>
+          </div>
+
+          <div class="relative pb-8">
+            <div class="timeline-dot bg-blue-500"></div>
+            <h3 class="font-bold">Shipped</h3>
+            <p class="text-gray-600 text-sm">Tracking number sent via email</p>
+          </div>
+
+          <div class="relative pb-8">
+            <div class="timeline-dot bg-purple-500"></div>
+            <h3 class="font-bold">In Transit (7-14 days)</h3>
+            <p class="text-gray-600 text-sm">Track your package every step of the way</p>
+          </div>
+
+          <div class="relative">
+            <div class="timeline-dot bg-black"></div>
+            <h3 class="font-bold">Delivered!</h3>
+            <p class="text-gray-600 text-sm">Enjoy your new KarryKraze gear</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Important Info -->
+    <section class="mb-12">
+      <h2 class="text-2xl font-bold mb-6 flex items-center gap-3">
+        <i class="fas fa-info-circle text-gray-400"></i>
+        Important Information
+      </h2>
+      <div class="grid md:grid-cols-2 gap-4">
+        <div class="info-card bg-white rounded-2xl p-6 shadow-sm">
+          <div class="flex items-center gap-3 mb-3">
+            <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+              <i class="fas fa-map-marker-alt text-blue-600"></i>
+            </div>
+            <h3 class="font-bold">Shipping Address</h3>
+          </div>
+          <p class="text-gray-600 text-sm">
+            Please double-check your shipping address at checkout. We cannot modify addresses once an order has been placed.
+          </p>
+        </div>
+
+        <div class="info-card bg-white rounded-2xl p-6 shadow-sm">
+          <div class="flex items-center gap-3 mb-3">
+            <div class="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+              <i class="fas fa-search-location text-green-600"></i>
+            </div>
+            <h3 class="font-bold">Tracking</h3>
+          </div>
+          <p class="text-gray-600 text-sm">
+            All orders include tracking. You'll receive your tracking number via email once your order ships.
+          </p>
+        </div>
+
+        <div class="info-card bg-white rounded-2xl p-6 shadow-sm">
+          <div class="flex items-center gap-3 mb-3">
+            <div class="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center">
+              <i class="fas fa-calendar-alt text-yellow-600"></i>
+            </div>
+            <h3 class="font-bold">Business Days</h3>
+          </div>
+          <p class="text-gray-600 text-sm">
+            Processing and delivery times are calculated in business days (Monday-Friday, excluding holidays).
+          </p>
+        </div>
+
+        <div class="info-card bg-white rounded-2xl p-6 shadow-sm">
+          <div class="flex items-center gap-3 mb-3">
+            <div class="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
+              <i class="fas fa-globe-americas text-purple-600"></i>
+            </div>
+            <h3 class="font-bold">US Shipping Only</h3>
+          </div>
+          <p class="text-gray-600 text-sm">
+            We currently only ship within the United States. International shipping coming soon!
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Delays Notice -->
+    <section class="mb-12">
+      <div class="bg-amber-50 border border-amber-200 rounded-2xl p-6">
+        <div class="flex items-start gap-4">
+          <div class="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0">
+            <i class="fas fa-exclamation-triangle text-amber-600"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-amber-800 mb-2">Possible Delays</h3>
+            <p class="text-amber-700 text-sm">
+              During peak seasons (holidays, sales events), processing and shipping times may be slightly longer than usual. 
+              We appreciate your patience and will always keep you updated on your order status.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Questions CTA -->
+    <section class="text-center">
+      <div class="bg-black text-white rounded-2xl p-8">
+        <h2 class="text-2xl font-bold mb-2">Have Questions?</h2>
+        <p class="text-gray-300 mb-6">We're here to help with any shipping concerns</p>
+        <div class="flex flex-wrap justify-center gap-4">
+          <a href="contact.html" class="inline-flex items-center gap-2 bg-white text-black px-6 py-3 rounded-full font-semibold hover:bg-gray-100 transition-colors">
+            <i class="fas fa-envelope"></i>
+            Contact Us
+          </a>
+          <a href="faq.html" class="inline-flex items-center gap-2 border border-white text-white px-6 py-3 rounded-full font-semibold hover:bg-white hover:text-black transition-colors">
+            <i class="fas fa-question-circle"></i>
+            View FAQ
+          </a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ✅ FOOTER INSERT MOUNT -->
+  <div id="kkFooterMount"></div>
+
+  <!-- Page logic -->
+  <script type="module">
+    import { initNavbar } from '/js/shared/navbar.js';
+    import { initFooter } from '/js/shared/footer.js';
+    
+    document.addEventListener('DOMContentLoaded', async () => {
+      await initNavbar();
+      await initFooter();
+    });
+  </script>
+</body>
+</html>
