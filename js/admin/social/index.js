@@ -3290,21 +3290,41 @@ async function loadEngagementMetrics() {
   try {
     const client = getSupabaseClient();
     
-    // Fetch Instagram posts with engagement data
+    // Fetch Instagram posts with engagement data (exclude deleted posts)
     const { data: posts, error } = await client
       .from("social_posts")
-      .select("id, likes, comments, saves, impressions, reach, engagement_rate, engagement_updated_at, caption, hashtags, posted_at")
+      .select("id, likes, comments, saves, impressions, reach, engagement_rate, engagement_updated_at, caption, hashtags, posted_at, status")
       .eq("platform", "instagram")
       .eq("status", "posted")
+      .neq("status", "deleted")
       .not("engagement_updated_at", "is", null)
       .order("engagement_rate", { ascending: false });
     
     if (error) throw error;
     
-    const allPosts = posts || [];
+    // Double filter to ensure no deleted posts slip through
+    const allPosts = (posts || []).filter(p => p.status === "posted");
+    
+    console.log(`Engagement metrics: Found ${posts?.length || 0} posts, filtered to ${allPosts.length} (excluding deleted)`);
     
     if (allPosts.length === 0) {
-      return; // No engagement data yet
+      // Reset UI to zeros if no posts
+      const setEl = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = val;
+      };
+      setEl("analyticsLikes", "0");
+      setEl("analyticsComments", "0");
+      setEl("analyticsSaves", "0");
+      setEl("analyticsImpressions", "0");
+      setEl("analyticsReach", "0");
+      setEl("analyticsEngagementRate", "0%");
+      
+      const topPostsContainer = document.getElementById("analyticsTopPosts");
+      if (topPostsContainer) {
+        topPostsContainer.innerHTML = '<div class="p-4 text-center text-gray-400 text-sm">No engagement data yet</div>';
+      }
+      return;
     }
     
     // Calculate totals
