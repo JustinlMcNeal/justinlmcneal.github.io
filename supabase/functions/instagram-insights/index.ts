@@ -165,7 +165,7 @@ serve(async (req) => {
           if (isDeleted) {
             // Mark post as deleted in our database and clear engagement metrics
             console.log(`Post ${post.id} (media ${mediaId}) appears to be deleted on Instagram`);
-            await supabase
+            const { error: deleteError } = await supabase
               .from("social_posts")
               .update({
                 status: "deleted",
@@ -183,7 +183,15 @@ serve(async (req) => {
                 updated_at: new Date().toISOString()
               })
               .eq("id", post.id);
-            results.deleted++;
+            
+            if (deleteError) {
+              console.error(`Failed to mark post ${post.id} as deleted:`, deleteError);
+              results.failed++;
+              results.errors.push(`${post.id}: Failed to mark as deleted - ${deleteError.message}`);
+            } else {
+              console.log(`Successfully marked post ${post.id} as deleted`);
+              results.deleted++;
+            }
             continue;
           }
           
