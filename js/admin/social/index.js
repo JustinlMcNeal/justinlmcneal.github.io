@@ -3188,6 +3188,166 @@ async function loadRecentCarousels() {
 
 function setupAnalytics() {
   document.getElementById("btnRefreshAnalytics")?.addEventListener("click", loadAnalytics);
+  document.getElementById("btnSyncInstagramInsights")?.addEventListener("click", syncInstagramInsights);
+}
+
+async function syncInstagramInsights() {
+  const btn = document.getElementById("btnSyncInstagramInsights");
+  const spinner = document.getElementById("syncInsightsSpinner");
+  
+  try {
+    if (btn) btn.disabled = true;
+    if (spinner) spinner.classList.remove("hidden");
+    
+    const client = getSupabaseClient();
+    const { data, error } = await client.functions.invoke("instagram-insights", {
+      body: { syncAll: true, daysBack: 30 }
+    });
+    
+    if (error) throw error;
+    
+    console.log("Insights sync result:", data);
+    
+    // Reload analytics to show updated data
+    await loadAnalytics();
+    await loadEngagementMetrics();
+    
+    // Show success message
+    const lastSync = document.getElementById("analyticsLastSync");
+    if (lastSync) {
+      lastSync.textContent = `Last synced: ${new Date().toLocaleTimeString()} • ${data.updated || 0} posts updated`;
+    }
+    
+  } catch (err) {
+    console.error("Failed to sync insights:", err);
+    alert("Failed to sync insights: " + (err.message || "Unknown error"));
+  } finally {
+    if (btn) btn.disabled = false;
+    if (spinner) spinner.classList.add("hidden");
+  }
+}
+
+async function loadEngagementMetrics() {
+  try {
+    const client = getSupabaseClient();
+    
+    // Fetch Instagram posts with engagement data
+    const { data: posts, error } = await client
+      .from("social_posts")
+      .select("id, likes, comments, saves, impressions, reach, engagement_rate, engagement_updated_at, caption, hashtags, posted_at")
+      .eq("platform", "instagram")
+      .eq("status", "posted")
+      .not("engagement_updated_at", "is", null)
+      .order("engagement_rate", { ascending: false });
+    
+    if (error) throw error;
+    
+    const allPosts = posts || [];
+    
+    if (allPosts.length === 0) {
+      return; // No engagement data yet
+    }
+    
+    // Calculate totals
+    const totals = allPosts.reduce((acc, p) => {
+      acc.likes += p.likes || 0;
+      acc.comments += p.comments || 0;
+      acc.saves += p.saves || 0;
+      acc.impressions += p.impressions || 0;
+      acc.reach += p.reach || 0;
+      return acc;
+    }, { likes: 0, comments: 0, saves: 0, impressions: 0, reach: 0 });
+    
+    // Calculate average engagement rate
+    const avgEngRate = allPosts.length > 0
+      ? (allPosts.reduce((sum, p) => sum + (p.engagement_rate || 0), 0) / allPosts.length).toFixed(2)
+      : 0;
+    
+    // Update UI
+    const setEl = (id, val) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = val;
+    };
+    
+    const formatNum = (n) => n >= 1000 ? (n / 1000).toFixed(1) + "k" : n.toString();
+    
+    setEl("analyticsLikes", formatNum(totals.likes));
+    setEl("analyticsComments", formatNum(totals.comments));
+    setEl("analyticsSaves", formatNum(totals.saves));
+    setEl("analyticsImpressions", formatNum(totals.impressions));
+    setEl("analyticsReach", formatNum(totals.reach));
+    setEl("analyticsEngagementRate", avgEngRate + "%");
+    
+    // Find last sync time
+    const lastUpdate = allPosts.reduce((latest, p) => {
+      const d = new Date(p.engagement_updated_at);
+      return d > latest ? d : latest;
+    }, new Date(0));
+    
+    const lastSync = document.getElementById("analyticsLastSync");
+    if (lastSync && lastUpdate.getTime() > 0) {
+      lastSync.textContent = `Last updated: ${lastUpdate.toLocaleDateString()} ${lastUpdate.toLocaleTimeString()}`;
+    }
+    
+    // Top performing posts
+    const topPosts = allPosts.slice(0, 5);
+    const topPostsContainer = document.getElementById("analyticsTopPosts");
+    if (topPostsContainer && topPosts.length > 0) {
+      topPostsContainer.innerHTML = topPosts.map((p, idx) => {
+        const date = new Date(p.posted_at);
+        const dateStr = date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+        return `
+          <div class="p-3 flex items-center gap-3 hover:bg-gray-50">
+            <span class="text-lg font-black text-gray-300">#${idx + 1}</span>
+            <div class="flex-1 min-w-0">
+              <div class="text-sm truncate">${p.caption?.substring(0, 60) || "No caption"}...</div>
+              <div class="text-xs text-gray-400">${dateStr}</div>
+            </div>
+            <div class="flex items-center gap-3 text-xs">
+              <span class="text-pink-500">❤️ ${p.likes || 0}</span>
+              <span class="text-blue-500">💬 ${p.comments || 0}</span>
+              <span class="text-yellow-500">🔖 ${p.saves || 0}</span>
+              <span class="px-2 py-1 bg-orange-100 text-orange-700 font-bold rounded">${p.engagement_rate || 0}%</span>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+    
+    // Hashtag performance
+    const { data: hashtagData } = await client
+      .from("hashtag_performance")
+      .select("*")
+      .eq("platform", "instagram")
+      .order("avg_effectiveness", { ascending: false })
+      .limit(15);
+    
+    const hashtagsContainer = document.getElementById("analyticsHashtags");
+    if (hashtagsContainer && hashtagData && hashtagData.length > 0) {
+      const maxEff = Math.max(...hashtagData.map(h => h.avg_effectiveness || 0)) || 1;
+      hashtagsContainer.innerHTML = `
+        <div class="flex flex-wrap gap-2">
+          ${hashtagData.map(h => {
+            const eff = h.avg_effectiveness || 0;
+            const size = Math.max(0.8, Math.min(1.4, eff / maxEff + 0.8));
+            const colors = eff > 3 ? "bg-green-100 text-green-700 border-green-200" 
+                         : eff > 1.5 ? "bg-blue-100 text-blue-700 border-blue-200"
+                         : "bg-gray-100 text-gray-700 border-gray-200";
+            return `
+              <span class="inline-flex items-center gap-1 px-2 py-1 border rounded-full ${colors}" style="font-size: ${size}rem">
+                #${h.hashtag}
+                <span class="text-xs opacity-70">${eff.toFixed(1)}%</span>
+              </span>
+            `;
+          }).join("")}
+        </div>
+        <p class="text-xs text-gray-400 mt-4">Size and color indicate engagement effectiveness. Green = high performing.</p>
+      `;
+    }
+    
+  } catch (err) {
+    console.error("Failed to load engagement metrics:", err);
+  }
 }
 
 async function loadAnalytics() {
@@ -3233,6 +3393,9 @@ async function loadAnalytics() {
     setEl("analyticsPublished", published);
     setEl("analyticsThisWeek", thisWeek);
     setEl("analyticsScheduled", scheduled);
+    
+    // Also load engagement metrics
+    loadEngagementMetrics();
     
     // Platform breakdown
     const platforms = { instagram: 0, facebook: 0, pinterest: 0 };
