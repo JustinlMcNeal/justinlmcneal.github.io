@@ -163,13 +163,23 @@ serve(async (req) => {
             errorMsg.includes("nonexisting field");
           
           if (isDeleted) {
-            // Mark post as deleted in our database
+            // Mark post as deleted in our database and clear engagement metrics
             console.log(`Post ${post.id} (media ${mediaId}) appears to be deleted on Instagram`);
             await supabase
               .from("social_posts")
               .update({
                 status: "deleted",
                 error_message: "Post was deleted on Instagram",
+                // Clear all engagement metrics so they don't persist
+                likes: 0,
+                comments: 0,
+                shares: 0,
+                saves: 0,
+                impressions: 0,
+                reach: 0,
+                clicks: 0,
+                engagement_rate: 0,
+                engagement_updated_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
               })
               .eq("id", post.id);
