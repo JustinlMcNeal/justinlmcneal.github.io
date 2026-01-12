@@ -166,9 +166,13 @@ function renderPostPill(post) {
   // Time
   const time = post.scheduled_for ? formatTime(post.scheduled_for) : "";
   
+  // Special styling for deleted posts
+  const deletedClass = status === "deleted" ? "opacity-50 line-through" : "";
+  const icon = status === "deleted" ? "❌" : (platform === "instagram" ? "📸" : platform === "facebook" ? "📘" : "📌");
+  
   return `
-    <div class="cal-post ${platform} ${status}" data-post-id="${post.id}" title="${post.caption || ""}">
-      ${time} ${platform === "instagram" ? "📸" : "📌"}
+    <div class="cal-post ${platform} ${status} ${deletedClass}" data-post-id="${post.id}" title="${status === 'deleted' ? '[DELETED] ' : ''}${post.caption || ""}">
+      ${time} ${icon}
     </div>
   `;
 }

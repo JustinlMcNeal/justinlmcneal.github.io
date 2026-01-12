@@ -130,6 +130,13 @@
   color: #991b1b !important;
 }
 
+.cal-post.deleted {
+  background: #e5e7eb !important;
+  color: #6b7280 !important;
+  opacity: 0.6;
+  text-decoration: line-through;
+}
+
 /* Queue list items */
 .queue-item {
   display: flex;

@@ -131,6 +131,7 @@ serve(async (req) => {
     const results = {
       updated: 0,
       failed: 0,
+      deleted: 0,
       errors: [] as string[]
     };
 
@@ -148,6 +149,33 @@ serve(async (req) => {
 
         if (basicData.error) {
           console.error(`Error fetching basic metrics for ${mediaId}:`, basicData.error);
+          
+          // Check if the post was deleted on Instagram
+          // Error codes: 100 = invalid media ID, 190 = expired token
+          // OAuthException with "does not exist" or "been deleted" indicates deleted post
+          const errorMsg = basicData.error.message?.toLowerCase() || "";
+          const isDeleted = 
+            basicData.error.code === 100 ||
+            errorMsg.includes("does not exist") ||
+            errorMsg.includes("been deleted") ||
+            errorMsg.includes("unsupported get request") ||
+            errorMsg.includes("nonexisting field");
+          
+          if (isDeleted) {
+            // Mark post as deleted in our database
+            console.log(`Post ${post.id} (media ${mediaId}) appears to be deleted on Instagram`);
+            await supabase
+              .from("social_posts")
+              .update({
+                status: "deleted",
+                error_message: "Post was deleted on Instagram",
+                updated_at: new Date().toISOString()
+              })
+              .eq("id", post.id);
+            results.deleted++;
+            continue;
+          }
+          
           results.failed++;
           results.errors.push(`${post.id}: ${basicData.error.message}`);
           continue;
@@ -255,7 +283,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Updated ${results.updated} posts, ${results.failed} failed`,
+        message: `Updated ${results.updated} posts, ${results.deleted} deleted, ${results.failed} failed`,
         ...results
       }),
       { headers: corsHeaders }

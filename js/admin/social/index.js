@@ -3165,7 +3165,8 @@ async function loadRecentCarousels() {
         queued: "bg-blue-100 text-blue-700",
         posted: "bg-green-100 text-green-700",
         published: "bg-green-100 text-green-700",
-        failed: "bg-red-100 text-red-700"
+        failed: "bg-red-100 text-red-700",
+        deleted: "bg-gray-200 text-gray-500 line-through"
       };
       
       return `
@@ -3376,15 +3377,17 @@ async function loadAnalytics() {
     const weekAgo = new Date(now);
     weekAgo.setDate(weekAgo.getDate() - 7);
     
-    const totalPosts = allPosts.length;
+    // Exclude deleted posts from counts
+    const activePosts = allPosts.filter(p => p.status !== "deleted");
+    const totalPosts = activePosts.length;
     // Support both 'posted' and 'published' status
-    const published = allPosts.filter(p => p.status === "published" || p.status === "posted").length;
-    const thisWeek = allPosts.filter(p => {
+    const published = activePosts.filter(p => p.status === "published" || p.status === "posted").length;
+    const thisWeek = activePosts.filter(p => {
       const isPublished = p.status === "published" || p.status === "posted";
       const publishDate = p.posted_at || p.published_at;
       return isPublished && publishDate && new Date(publishDate) >= weekAgo;
     }).length;
-    const scheduled = allPosts.filter(p => 
+    const scheduled = activePosts.filter(p => 
       p.status === "queued" && 
       new Date(p.scheduled_for) > now
     ).length;
@@ -3490,6 +3493,7 @@ async function loadAnalytics() {
             failed: "bg-red-100 text-red-700",
             draft: "bg-gray-100 text-gray-700",
             cancelled: "bg-gray-100 text-gray-400",
+            deleted: "bg-gray-200 text-gray-500 line-through"
           };
           
           const platformIcons = {
