@@ -109,11 +109,21 @@ serve(async (req) => {
         // Get image URL - convert storage paths to full public URLs
         // Priority: variation image_path > asset original_image_path > product catalog_image_url
         if (variation?.image_path) {
-          // Storage path - convert to public URL
-          imageUrl = `${supabaseUrl}/storage/v1/object/public/social-media/${variation.image_path}`;
+          // Check if it's already a full URL or a storage path
+          if (variation.image_path.startsWith('http://') || variation.image_path.startsWith('https://')) {
+            imageUrl = variation.image_path;
+          } else {
+            // Storage path - convert to public URL
+            imageUrl = `${supabaseUrl}/storage/v1/object/public/social-media/${variation.image_path}`;
+          }
         } else if (asset?.original_image_path) {
-          // Storage path - convert to public URL
-          imageUrl = `${supabaseUrl}/storage/v1/object/public/social-media/${asset.original_image_path}`;
+          // Check if it's already a full URL or a storage path
+          if (asset.original_image_path.startsWith('http://') || asset.original_image_path.startsWith('https://')) {
+            imageUrl = asset.original_image_path;
+          } else {
+            // Storage path - convert to public URL
+            imageUrl = `${supabaseUrl}/storage/v1/object/public/social-media/${asset.original_image_path}`;
+          }
         } else if (product?.catalog_image_url) {
           // Already a full URL
           imageUrl = product.catalog_image_url;

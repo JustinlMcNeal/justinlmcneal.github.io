@@ -1874,8 +1874,14 @@ async function handlePostNow() {
   // Get required data - construct public URL from image_path
   let imageUrl = post.image_url;
   if (!imageUrl && post.variation?.image_path) {
-    // Construct the public URL from the storage path
-    imageUrl = `https://yxdzvzscufkvewecvagq.supabase.co/storage/v1/object/public/social-media/${post.variation.image_path}`;
+    const imagePath = post.variation.image_path;
+    // Check if it's already a full URL or a storage path
+    if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+      imageUrl = imagePath;
+    } else {
+      // Construct the public URL from the storage path
+      imageUrl = `https://yxdzvzscufkvewecvagq.supabase.co/storage/v1/object/public/social-media/${imagePath}`;
+    }
   }
   
   if (!imageUrl) {
