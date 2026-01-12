@@ -3260,14 +3260,21 @@ async function syncInstagramInsights() {
     
     console.log("Insights sync result:", data);
     
-    // Reload analytics to show updated data
+    // Reload ALL views to reflect changes (including deleted posts)
     await loadAnalytics();
     await loadEngagementMetrics();
     
-    // Show success message
+    // Also refresh calendar to show deleted status
+    await loadCalendarPosts();
+    
+    // And queue if there are any changes
+    await loadQueuePosts();
+    
+    // Show success message with deleted count
     const lastSync = document.getElementById("analyticsLastSync");
     if (lastSync) {
-      lastSync.textContent = `Last synced: ${new Date().toLocaleTimeString()} • ${data.updated || 0} posts updated`;
+      const deletedMsg = data.deleted > 0 ? `, ${data.deleted} deleted` : "";
+      lastSync.textContent = `Last synced: ${new Date().toLocaleTimeString()} • ${data.updated || 0} updated${deletedMsg}`;
     }
     
   } catch (err) {
