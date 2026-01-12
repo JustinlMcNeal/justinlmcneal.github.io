@@ -33,6 +33,7 @@ interface MediaInsightsResponse {
 interface MediaBasicResponse {
   like_count?: number;
   comments_count?: number;
+  permalink?: string;
   id: string;
   error?: { message: string; code: number };
 }
@@ -140,8 +141,8 @@ serve(async (req) => {
       try {
         const mediaId = post.external_id;
         
-        // Fetch basic metrics (likes, comments)
-        const basicFields = "like_count,comments_count";
+        // Fetch basic metrics (likes, comments) AND permalink if we don't have it
+        const basicFields = "like_count,comments_count,permalink";
         const basicResp = await fetch(
           `https://graph.facebook.com/v18.0/${mediaId}?fields=${basicFields}&access_token=${accessToken}`
         );
@@ -220,19 +221,28 @@ serve(async (req) => {
           ? Number((((likes + comments + saves) / reach) * 100).toFixed(2))
           : 0;
 
+        // Build update object - include permalink if we got it
+        const updateData: any = {
+          likes,
+          comments,
+          saves,
+          impressions,
+          reach,
+          engagement_rate: engagementRate,
+          engagement_updated_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        
+        // Backfill permalink if available and not already set
+        if (basicData.permalink) {
+          updateData.permalink = basicData.permalink;
+          updateData.instagram_permalink = basicData.permalink;
+        }
+
         // Update post with engagement metrics
         const { error: updateError } = await supabase
           .from("social_posts")
-          .update({
-            likes,
-            comments,
-            saves,
-            impressions,
-            reach,
-            engagement_rate: engagementRate,
-            engagement_updated_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          })
+          .update(updateData)
           .eq("id", post.id);
 
         if (updateError) {

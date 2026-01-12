@@ -1783,7 +1783,52 @@ function openPostDetail(post) {
   }
   
   // Show/hide post now button based on status
-  els.btnPostNow.classList.toggle("hidden", post.status === "posted" || post.status === "published");
+  els.btnPostNow.classList.toggle("hidden", post.status === "posted" || post.status === "published" || post.status === "deleted");
+  
+  // Show/hide "View on Instagram" link
+  const viewOnPlatformBtn = document.getElementById("btnViewOnPlatform");
+  if (viewOnPlatformBtn) {
+    const permalink = post.permalink || post.instagram_permalink;
+    if ((post.status === "posted" || post.status === "published") && permalink) {
+      viewOnPlatformBtn.classList.remove("hidden");
+      viewOnPlatformBtn.href = permalink;
+      viewOnPlatformBtn.textContent = post.platform === "instagram" ? "📸 View on Instagram" 
+                                    : post.platform === "pinterest" ? "📌 View on Pinterest"
+                                    : post.platform === "facebook" ? "📘 View on Facebook"
+                                    : "🔗 View Post";
+    } else if ((post.status === "posted" || post.status === "published") && post.external_id) {
+      // Fallback: construct Instagram URL from media ID (may not always work)
+      viewOnPlatformBtn.classList.remove("hidden");
+      if (post.platform === "instagram") {
+        // Instagram doesn't support direct media ID URLs easily, but we can try
+        viewOnPlatformBtn.href = `https://www.instagram.com/`;
+        viewOnPlatformBtn.textContent = "📸 Open Instagram";
+      } else {
+        viewOnPlatformBtn.classList.add("hidden");
+      }
+    } else {
+      viewOnPlatformBtn.classList.add("hidden");
+    }
+  }
+  
+  // Show engagement stats if available
+  const engagementSection = document.getElementById("postDetailEngagement");
+  if (engagementSection) {
+    if (post.likes !== undefined && post.likes !== null) {
+      engagementSection.classList.remove("hidden");
+      engagementSection.innerHTML = `
+        <div class="flex items-center gap-4 text-sm mt-3 pt-3 border-t">
+          <span class="text-pink-500">❤️ ${post.likes || 0}</span>
+          <span class="text-blue-500">💬 ${post.comments || 0}</span>
+          <span class="text-yellow-500">🔖 ${post.saves || 0}</span>
+          <span class="text-green-500">👁️ ${post.impressions || 0}</span>
+          <span class="text-purple-500">📊 ${post.engagement_rate || 0}%</span>
+        </div>
+      `;
+    } else {
+      engagementSection.classList.add("hidden");
+    }
+  }
   
   els.postDetailModal.classList.remove("hidden");
   els.postDetailModal.classList.add("flex");

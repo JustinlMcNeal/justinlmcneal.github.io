@@ -159,11 +159,27 @@ serve(async (req) => {
     // Update post status to posted
     if (postId) {
       console.log("Updating post status for postId:", postId);
+      
+      // Fetch the permalink for the posted media
+      let permalink = null;
+      try {
+        const permalinkResp = await fetch(
+          `https://graph.facebook.com/v18.0/${publishResult.id}?fields=permalink&access_token=${accessToken}`
+        );
+        const permalinkData = await permalinkResp.json();
+        permalink = permalinkData.permalink || null;
+        console.log("Fetched permalink:", permalink);
+      } catch (err) {
+        console.warn("Failed to fetch permalink:", err);
+      }
+      
       const updateResult = await supabase
         .from("social_posts")
         .update({
           status: "posted",
           external_id: publishResult.id,
+          permalink: permalink,
+          instagram_permalink: permalink,
           posted_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         })
