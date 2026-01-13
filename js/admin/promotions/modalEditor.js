@@ -8,6 +8,8 @@ import {
   fetchCategories,
   fetchTags,
   fetchProducts,
+  uploadBannerFile,
+  formatFileSize,
 } from "./api.js";
 
 import { state } from "./state.js";
@@ -140,20 +142,153 @@ export function bindModal(els, refreshTable) {
     return s.startsWith("/") ? s : `/${s}`;
   }
 
-  function setBannerPreview(rawPath) {
+  function isVideoPath(path) {
+    const p = String(path || "").toLowerCase();
+    return p.endsWith(".mp4") || p.endsWith(".webm") || p.endsWith(".mov");
+  }
+
+  function isGifPath(path) {
+    return String(path || "").toLowerCase().endsWith(".gif");
+  }
+
+  function setBannerPreview(rawPath, fileSize = null) {
     const previewWrap = document.getElementById("promoBannerPreviewWrap");
     const previewImg = document.getElementById("promoBannerPreviewImg");
-    if (!previewImg) return;
+    const previewVideo = document.getElementById("promoBannerPreviewVideo");
+    const previewSizeEl = document.getElementById("promoBannerPreviewSize");
+    
+    if (!previewImg || !previewVideo) return;
 
     const path = String(rawPath ?? "").trim();
     if (!path) {
       previewImg.src = "";
+      previewVideo.src = "";
+      show(previewImg, false);
+      show(previewVideo, false);
       if (previewWrap) show(previewWrap, false);
+      if (previewSizeEl) previewSizeEl.textContent = "";
       return;
     }
 
-    previewImg.src = normalizeBannerPath(path) || "";
+    const normalizedPath = normalizeBannerPath(path) || "";
+    const isVideo = isVideoPath(path);
+    
+    // Show appropriate preview element
+    if (isVideo) {
+      previewVideo.src = normalizedPath;
+      previewImg.src = "";
+      show(previewImg, false);
+      show(previewVideo, true);
+    } else {
+      // Image or GIF
+      previewImg.src = normalizedPath;
+      previewVideo.src = "";
+      show(previewImg, true);
+      show(previewVideo, false);
+    }
+    
     if (previewWrap) show(previewWrap, true);
+    
+    // Show file size if provided
+    if (previewSizeEl) {
+      if (fileSize) {
+        previewSizeEl.textContent = formatFileSize(fileSize);
+      } else {
+        previewSizeEl.textContent = "";
+      }
+    }
+  }
+
+  // Track pending file upload
+  let pendingBannerFile = null;
+  let pendingBannerUrl = null;
+
+  function showFileInfo(file) {
+    const fileInfo = document.getElementById("promoBannerFileInfo");
+    const fileName = document.getElementById("promoBannerFileName");
+    const fileSize = document.getElementById("promoBannerFileSize");
+    const fileIcon = document.getElementById("promoBannerFileIcon");
+    
+    if (!fileInfo || !file) {
+      if (fileInfo) show(fileInfo, false);
+      return;
+    }
+    
+    fileName.textContent = file.name;
+    fileSize.textContent = formatFileSize(file.size);
+    
+    // Update icon based on file type
+    const isVideo = file.type.startsWith("video/");
+    if (isVideo) {
+      fileIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>`;
+    } else {
+      fileIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>`;
+    }
+    
+    show(fileInfo, true);
+  }
+
+  function clearFileInfo() {
+    const fileInfo = document.getElementById("promoBannerFileInfo");
+    if (fileInfo) show(fileInfo, false);
+    pendingBannerFile = null;
+    pendingBannerUrl = null;
+  }
+
+  async function handleFileSelect(file) {
+    if (!file) return;
+    
+    // Validate file size (50MB max)
+    const maxSize = 50 * 1024 * 1024;
+    if (file.size > maxSize) {
+      setMsg(els.modalMsg, `File too large. Max size is 50MB. Your file is ${formatFileSize(file.size)}`, true);
+      return;
+    }
+    
+    // Validate file type
+    const validTypes = ["image/jpeg", "image/png", "image/webp", "image/gif", "video/mp4", "video/webm"];
+    if (!validTypes.includes(file.type)) {
+      setMsg(els.modalMsg, "Invalid file type. Please upload an image (JPG, PNG, WebP, GIF) or video (MP4, WebM).", true);
+      return;
+    }
+    
+    // Store for later upload
+    pendingBannerFile = file;
+    
+    // Show file info
+    showFileInfo(file);
+    
+    // Create local preview URL
+    const localUrl = URL.createObjectURL(file);
+    pendingBannerUrl = localUrl;
+    
+    // Clear the URL input since we're using file
+    const bannerEl = document.getElementById("fBannerImage");
+    if (bannerEl) bannerEl.value = "";
+    
+    // Show preview
+    setBannerPreview(localUrl, file.size);
+  }
+
+  async function uploadPendingFile() {
+    if (!pendingBannerFile) return null;
+    
+    const progressEl = document.getElementById("promoBannerUploadProgress");
+    
+    try {
+      if (progressEl) show(progressEl, true);
+      
+      const result = await uploadBannerFile(pendingBannerFile);
+      
+      // Clean up
+      if (pendingBannerUrl) URL.revokeObjectURL(pendingBannerUrl);
+      pendingBannerFile = null;
+      pendingBannerUrl = null;
+      
+      return result.url;
+    } finally {
+      if (progressEl) show(progressEl, false);
+    }
   }
 
   function lockScroll(yes) {
@@ -184,6 +319,11 @@ export function bindModal(els, refreshTable) {
   async function openEdit(promotionId) {
     try {
       await loadScopeOptions();
+
+      // Clear any pending file from previous edits
+      clearFileInfo();
+      const fileInput = document.getElementById("fBannerFile");
+      if (fileInput) fileInput.value = "";
 
       els.modalTitle.textContent = "Edit Promotion";
       setMsg(els.modalMsg, "Loading promotion…", false);
@@ -250,6 +390,11 @@ export function bindModal(els, refreshTable) {
   function openNew() {
     loadScopeOptions();
 
+    // Clear any pending file
+    clearFileInfo();
+    const fileInput = document.getElementById("fBannerFile");
+    if (fileInput) fileInput.value = "";
+
     state.editing = {
       id: null,
       name: "",
@@ -306,8 +451,18 @@ export function bindModal(els, refreshTable) {
       const rawCode = els.fCode.value.trim();
       const code = rawCode ? rawCode.toUpperCase() : null;
 
-      const bannerEl = els.fBannerImage || document.getElementById("fBannerImage");
-      const banner_image_path = normalizeBannerPath(bannerEl ? bannerEl.value : null);
+      // Handle banner - either uploaded file or URL
+      let banner_image_path = null;
+      
+      if (pendingBannerFile) {
+        // Upload the file first
+        setMsg(els.modalMsg, "Uploading banner...", false);
+        banner_image_path = await uploadPendingFile();
+      } else {
+        // Use the URL input
+        const bannerEl = els.fBannerImage || document.getElementById("fBannerImage");
+        banner_image_path = normalizeBannerPath(bannerEl ? bannerEl.value : null);
+      }
 
       const scopeType = (document.getElementById("fScopeType")?.value || "all").trim();
       const scopeData = scopeType === "all" ? [] : getSelectedScopeIds();
@@ -381,8 +536,34 @@ export function bindModal(els, refreshTable) {
   // Live banner preview
   const bannerEl = els.fBannerImage || document.getElementById("fBannerImage");
   if (bannerEl) {
-    bannerEl.addEventListener("input", () => setBannerPreview(bannerEl.value));
-    bannerEl.addEventListener("change", () => setBannerPreview(bannerEl.value));
+    bannerEl.addEventListener("input", () => {
+      clearFileInfo(); // Clear file if user types URL
+      setBannerPreview(bannerEl.value);
+    });
+    bannerEl.addEventListener("change", () => {
+      clearFileInfo();
+      setBannerPreview(bannerEl.value);
+    });
+  }
+
+  // File upload handler
+  const fileInput = document.getElementById("fBannerFile");
+  if (fileInput) {
+    fileInput.addEventListener("change", (e) => {
+      const file = e.target.files?.[0];
+      if (file) handleFileSelect(file);
+    });
+  }
+
+  // Remove file button
+  const removeFileBtn = document.getElementById("promoBannerRemoveFile");
+  if (removeFileBtn) {
+    removeFileBtn.addEventListener("click", () => {
+      clearFileInfo();
+      setBannerPreview("");
+      const fileInput = document.getElementById("fBannerFile");
+      if (fileInput) fileInput.value = "";
+    });
   }
 
   // Scope type change
