@@ -1,7 +1,6 @@
 // /js/shared/components/productCardHome.js
 
 import { parseColorValue } from "../colorUtils.js";
-import { getOptimizedImageUrl, IMAGE_SIZES } from "../imageOptimizer.js";
 
 function esc(s) {
   return String(s ?? "")
@@ -27,9 +26,7 @@ export function renderHomeCard(product, variants = [], opts = {}) {
   const slug = product?.slug || "";
   const href = slug ? `/pages/product.html?slug=${encodeURIComponent(slug)}` : "#";
 
-  const rawImg = product?.catalog_image_url || product?.primary_image_url || "";
-  // Optimize image for card display (400x400 WebP)
-  const defaultImg = getOptimizedImageUrl(rawImg, IMAGE_SIZES.card);
+  const defaultImg = product?.catalog_image_url || product?.primary_image_url || "";
   const name = product?.name || "Product";
   const price = money(product?.price);
 
