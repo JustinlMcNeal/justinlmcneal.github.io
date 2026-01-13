@@ -1,6 +1,7 @@
 // /js/home/categoryStrip.js
 // Generates the entire category strip section - no HTML insert needed
 import { fetchHomeCategoryStrip } from "./api.js";
+import { getOptimizedImageUrl, IMAGE_SIZES } from "../shared/imageOptimizer.js";
 
 function esc(s) {
   return String(s ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
@@ -99,7 +100,9 @@ function renderCategoryCard(c, index) {
   const name = titleCase(c.name);
   const count = Number(c.product_count || 0);
   const href = `/pages/catalog.html?cat=${encodeURIComponent(c.id)}`;
-  const img = c.home_image_url || c.home_image_path || "";
+  const rawImg = c.home_image_url || c.home_image_path || "";
+  // Optimize category images (300x400 WebP)
+  const img = getOptimizedImageUrl(rawImg, IMAGE_SIZES.categoryStrip);
 
   return `
     <a class="cat-card relative w-[260px] sm:w-[280px] lg:w-[300px] shrink-0 snap-start no-underline text-white block overflow-hidden aspect-[10/14] group rounded-lg shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1" 

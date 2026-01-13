@@ -1,5 +1,7 @@
 // /js/product/render.js
 
+import { getOptimizedImageUrl, IMAGE_SIZES } from "../shared/imageOptimizer.js";
+
 function esc(str) {
   return String(str).replace(/[&<>"']/g, (m) => (
     { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[m]
@@ -38,12 +40,14 @@ export function renderMainCarousel(trackEl, images = [], onIndexChange) {
   if (!list.length) return null;
 
   list.forEach((url, idx) => {
+    // Optimize gallery images (800x800 for product view)
+    const optimizedUrl = getOptimizedImageUrl(url, IMAGE_SIZES.product);
     const slide = document.createElement("div");
     slide.className = "snap-start shrink-0 w-full h-full flex items-center justify-center overflow-hidden";
     slide.dataset.idx = String(idx);
     slide.innerHTML = `
       <img
-        src="${esc(url)}"
+        src="${esc(optimizedUrl)}"
         alt="Image ${idx + 1}"
         loading="${idx === 0 ? "eager" : "lazy"}"
         class="w-full h-full object-contain max-w-full"

@@ -1,5 +1,6 @@
 // renderCard.js
 import { parseColorValue } from "../shared/colorUtils.js";
+import { getOptimizedImageUrl, IMAGE_SIZES } from "../shared/imageOptimizer.js";
 
 function formatPrice(num) {
   try {
@@ -30,8 +31,12 @@ function getColorVariants(product) {
 export function renderProductCard(product) {
   const href = `/pages/product.html?sku=${encodeURIComponent(product.slug)}`;
 
-  const img = product.images?.catalog || "";
-  const hover = product.images?.hover || img;
+  const rawImg = product.images?.catalog || "";
+  const rawHover = product.images?.hover || rawImg;
+  
+  // Optimize images for card display (400x400 WebP)
+  const img = getOptimizedImageUrl(rawImg, IMAGE_SIZES.card);
+  const hover = getOptimizedImageUrl(rawHover, IMAGE_SIZES.cardHover);
 
   const colors = getColorVariants(product);
   const shown = colors.slice(0, 3);
