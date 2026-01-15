@@ -344,21 +344,34 @@ async function initProductPage() {
     // Tags
     renderTags(els.tagRow, (tags || []).map((t) => t.name));
 
-    // Variants (color boxes)
-    renderVariantSwatches(els.variantSwatches, variants, (v) => {
-      selectedVariant = v || null;
+    // Variants (color boxes) - hide section if no variants
+    const variantSection = document.getElementById("variantSection");
+    const variantDivider = document.getElementById("variantDivider");
+    
+    if (!variants || variants.length === 0) {
+      // Hide the variant section and divider if no variants
+      if (variantSection) variantSection.style.display = "none";
+      if (variantDivider) variantDivider.style.display = "none";
+    } else {
+      // Show and render variants
+      if (variantSection) variantSection.style.display = "";
+      if (variantDivider) variantDivider.style.display = "";
+      
+      renderVariantSwatches(els.variantSwatches, variants, (v) => {
+        selectedVariant = v || null;
 
-      // jump to matching variant image
-      if (v?.preview_image_url) {
-        const idx = uniqueImgs.indexOf(v.preview_image_url);
-        if (idx >= 0) {
-          carousel?.setIndex(idx);
-          thumbsM?.setActive(idx);
-          thumbsD?.setActive(idx);
-          slideDots?.setActive(idx);
+        // jump to matching variant image
+        if (v?.preview_image_url) {
+          const idx = uniqueImgs.indexOf(v.preview_image_url);
+          if (idx >= 0) {
+            carousel?.setIndex(idx);
+            thumbsM?.setActive(idx);
+            thumbsD?.setActive(idx);
+            slideDots?.setActive(idx);
+          }
         }
-      }
-    });
+      });
+    }
 
     // Details accordions
     renderDetailsSections(els.details, sections);
