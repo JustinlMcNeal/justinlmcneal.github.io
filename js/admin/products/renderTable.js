@@ -210,13 +210,13 @@ export function renderTable({
       let marginHtml = '<span class="text-gray-400">—</span>';
       if (p.unit_cost && p.price) {
         const projections = calculateProfitProjections({
-          price: p.price,
+          target_price: p.price,
           weight_g: p.weight_g,
           unit_cost: p.unit_cost
         });
-        if (projections) {
-          const indicator = getProfitIndicator(projections.cpiPaidShipping.marginPercent);
-          marginHtml = `<span class="px-2 py-1 text-xs font-bold rounded-sm ${indicator.colorClass}">${projections.cpiPaidShipping.marginPercent.toFixed(1)}%</span>`;
+        if (projections && projections.hasEnoughData && typeof projections.marginPaidShipping === 'number') {
+          const indicator = getProfitIndicator(projections);
+          marginHtml = indicator.html || '<span class="text-gray-400">—</span>';
         }
       }
 
