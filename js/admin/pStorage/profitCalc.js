@@ -173,6 +173,20 @@ export function findOptimalBulkQty(unitCost, weightG) {
  * @returns {Object} Profit calculations and recommendations
  */
 export function calculateProfitProjections(item) {
+  // Guard against undefined/null item
+  if (!item) {
+    return {
+      hasEnoughData: false,
+      unitCost: 0,
+      targetPrice: 0,
+      profitPerUnit: 0,
+      profitMargin: 0,
+      profitHealth: "unknown",
+      healthColor: "gray",
+      healthEmoji: "⚪",
+    };
+  }
+  
   const unitCost = Number(item.unit_cost) || 0;
   const supplierShipManual = Number(item.supplier_ship) || 0;
   const stccManual = Number(item.stcc) || 0; // Ship to customer cost (manual override)
