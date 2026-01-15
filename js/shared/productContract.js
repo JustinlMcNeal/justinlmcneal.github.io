@@ -6,6 +6,7 @@ export const PRODUCT_SELECT = `
   category_id,
   price,
   weight_g,
+  unit_cost,
   shipping_status,
   amazon_url,
   catalog_image_url,
