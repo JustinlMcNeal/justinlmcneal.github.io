@@ -75,13 +75,13 @@ function mobileCardRow(p, cat, active, readOnly) {
   let marginBadge = '';
   if (p.unit_cost && p.price) {
     const projections = calculateProfitProjections({
-      price: p.price,
+      target_price: p.price,
       weight_g: p.weight_g,
       unit_cost: p.unit_cost
     });
-    if (projections) {
-      const indicator = getProfitIndicator(projections.cpiPaidShipping.marginPercent);
-      marginBadge = `<span class="px-1.5 py-0.5 text-[8px] font-bold rounded-sm ${indicator.colorClass}">${projections.cpiPaidShipping.marginPercent.toFixed(0)}%</span>`;
+    if (projections && projections.hasEnoughData && typeof projections.marginPaidShipping === 'number') {
+      const indicator = getProfitIndicator(projections);
+      marginBadge = `<span class="px-1.5 py-0.5 text-[8px] font-bold rounded-sm ${indicator.hasData ? '' : 'bg-gray-100 text-gray-500'}">${indicator.html || ''}</span>`;
     }
   }
 
