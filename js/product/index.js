@@ -47,6 +47,84 @@ function killJump(e) {
   e.stopPropagation();
 }
 
+/* ---------------- SEO / Social Sharing Meta ---------------- */
+
+function updateSeoMeta(product, categoryName, gallery) {
+  const name = product.name || "Product";
+  const price = Number(product.price || 0).toFixed(2);
+  const description = `Shop ${name} at KARRY KRAZE${categoryName ? ` in ${categoryName}` : ""}. $${price} - Quality fashion accessories with free shipping on orders over $35!`;
+  
+  // Get best image for sharing (prefer primary, then catalog, then first gallery)
+  const shareImage = product.primary_image_url 
+    || product.catalog_image_url 
+    || (gallery && gallery[0]?.url) 
+    || "https://karrykraze.com/imgs/brand/og-default.jpg";
+  
+  const pageUrl = window.location.href;
+  const canonicalUrl = `https://karrykraze.com/pages/product.html?slug=${encodeURIComponent(product.slug || "")}`;
+  
+  // Helper to update or create meta tag
+  const setMeta = (selector, content) => {
+    const el = document.querySelector(selector);
+    if (el) el.setAttribute("content", content);
+  };
+  
+  // Update document title (already done, but ensure consistency)
+  document.title = `${name} — KARRY KRAZE`;
+  
+  // Update basic SEO meta
+  setMeta('meta[name="description"]', description);
+  
+  // Update canonical URL
+  const canonical = document.querySelector('link[rel="canonical"]');
+  if (canonical) canonical.setAttribute("href", canonicalUrl);
+  
+  // Update Open Graph tags
+  setMeta('meta[property="og:title"]', `${name} — KARRY KRAZE`);
+  setMeta('meta[property="og:description"]', description);
+  setMeta('meta[property="og:image"]', shareImage);
+  setMeta('meta[property="og:url"]', canonicalUrl);
+  
+  // Update Twitter Card tags
+  setMeta('meta[name="twitter:title"]', `${name} — KARRY KRAZE`);
+  setMeta('meta[name="twitter:description"]', description);
+  setMeta('meta[name="twitter:image"]', shareImage);
+  
+  // Update structured data (JSON-LD)
+  const schemaEl = document.getElementById("productSchema");
+  if (schemaEl) {
+    const schema = {
+      "@context": "https://schema.org",
+      "@type": "Product",
+      "name": name,
+      "description": description,
+      "image": shareImage,
+      "sku": product.code || product.slug,
+      "brand": {
+        "@type": "Brand",
+        "name": "KARRY KRAZE"
+      },
+      "offers": {
+        "@type": "Offer",
+        "url": canonicalUrl,
+        "priceCurrency": "USD",
+        "price": price,
+        "availability": product.is_active ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+        "seller": {
+          "@type": "Organization",
+          "name": "KARRY KRAZE"
+        }
+      }
+    };
+    
+    if (categoryName) {
+      schema.category = categoryName;
+    }
+    
+    schemaEl.textContent = JSON.stringify(schema);
+  }
+}
+
 /* ---------------- sticky soft dock ---------------- */
 
 function initStickyDockFX() {
@@ -160,6 +238,8 @@ async function initProductPage() {
     if (els.name) els.name.textContent = product.name || "";
     if (els.code) els.code.textContent = product.code || "";
 
+    // Update SEO meta tags for social sharing
+    updateSeoMeta(product, categoryName, gallery);
     // Promotions (auto promos only)
     const promos = await getProductPromotions(
       product.id,
