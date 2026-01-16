@@ -1,0 +1,11 @@
+# KARRY KRAZE robots.txt
+# https://karrykraze.com
+
+User-agent: *
+Allow: /
+
+# Sitemap location
+Sitemap: https://karrykraze.com/sitemap.xml
+
+# Disallow admin pages from indexing
+Disallow: /pages/admin/
