@@ -1,223 +1,312 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Admin · Line Items (Raw)</title>
 
-  <!-- Tailwind CDN -->
+  <!-- Tailwind -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            kkpink: '#ff69b4',
+          }
+        }
+      }
+    }
+  </script>
 
-  <!-- Keep your global KK theme files -->
+  <!-- KK base + components -->
   <link rel="stylesheet" href="/css/theme/base.css">
   <link rel="stylesheet" href="/css/theme/components.css">
+
+  <style>
+    /* Custom scrollbar for tables */
+    .custom-scrollbar::-webkit-scrollbar { height: 8px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #000; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #333; }
+
+    /* Row hover effect */
+    .item-row:hover { background: #fafafa; }
+    .item-row:hover .row-actions { opacity: 1; }
+    .row-actions { opacity: 0.5; transition: opacity 0.15s; }
+
+    /* Mobile improvements */
+    @media (max-width: 640px) {
+      button, [role="button"] { min-height: 44px; }
+      input, select, textarea { font-size: 16px !important; }
+    }
+  </style>
 </head>
 
-<body class="kk-page bg-white text-black">
+<body class="kk-page kk-admin bg-gray-50 min-h-screen">
   <!-- Admin Nav mount -->
   <div id="kkAdminNavMount"></div>
 
-  <main class="max-w-6xl mx-auto px-4 py-6">
+  <main class="max-w-7xl mx-auto px-2 sm:px-6 py-4 sm:py-8">
 
-    <!-- Header -->
-    <header class="bg-white border-[4px] border-black p-5 shadow-[8px_8px_0_0_#000]">
-      <div class="text-[11px] font-black uppercase tracking-[.25em] opacity-70">Admin</div>
-      <h1 class="text-2xl sm:text-3xl font-black tracking-tight mt-2">Line Items Raw</h1>
-      <p class="text-sm text-black/70 mt-2">
-        Item-level truth. View via joined orders, edit raw line rows if needed.
-      </p>
-      <div id="lir_status" class="text-xs text-black/60 mt-3">Loading…</div>
+    <!-- Header Card -->
+    <header class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6">
+      <div class="flex flex-col gap-4">
+        <div>
+          <div class="inline-block bg-black text-white px-2 py-1 text-[10px] font-black uppercase tracking-[.25em] mb-2">
+            Admin Panel
+          </div>
+          <h1 class="text-2xl sm:text-4xl font-black tracking-tight">
+            Line Items Raw
+          </h1>
+          <p class="text-xs sm:text-sm text-gray-500 mt-1">
+            Item-level truth. View via joined orders, edit raw line rows if needed.
+          </p>
+          <div id="lir_status" class="text-xs text-gray-400 mt-2">Loading…</div>
+        </div>
+      </div>
     </header>
 
-    <!-- APP -->
-    <section id="appPanel" class="mt-4">
-
-      <!-- Controls -->
-      <section class="grid gap-3 md:grid-cols-[1fr_auto] items-end">
-        <div class="bg-white border-[4px] border-black p-4">
-          <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-2" for="searchInput">
+    <!-- Controls -->
+    <section class="bg-white rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4 mb-4 sm:mb-6">
+      <div class="flex flex-col sm:flex-row gap-3 sm:gap-4 items-stretch sm:items-end">
+        <!-- Search -->
+        <div class="flex-1">
+          <label for="searchInput"
+                 class="block text-[9px] sm:text-[10px] font-black uppercase tracking-[.18em] mb-1 sm:mb-2 text-gray-500">
             Search
           </label>
-          <input
-            id="searchInput"
-            type="search"
-            placeholder="Order / email / product / variant…"
-            class="w-full border-[4px] border-black px-3 py-2 text-[14px] outline-none"
-          />
-          <div class="mt-3 text-xs text-black/60" id="countLabel">0 rows</div>
+          <div class="relative">
+            <input
+              id="searchInput"
+              type="search"
+              placeholder="Order / email / product / variant..."
+              class="w-full border-4 border-black px-3 sm:px-4 py-2 sm:py-3 text-sm outline-none pr-10 focus:border-kkpink transition-colors"
+            />
+            <svg class="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+            </svg>
+          </div>
         </div>
 
-        <div class="bg-white border-[4px] border-black p-4 flex gap-2 justify-start md:justify-end">
+        <!-- Refresh Button -->
+        <div class="w-full sm:w-auto">
           <button
             id="btnRefresh"
             type="button"
-            class="border-[4px] border-black bg-white px-4 py-2
-                   font-black uppercase tracking-[.12em] text-[11px]
-                   hover:bg-black hover:text-white transition"
+            class="w-full sm:w-auto border-4 border-black bg-black text-white px-6 py-2 sm:py-3 font-black uppercase tracking-[.12em] text-xs
+                   hover:bg-white hover:text-black transition-all"
           >
             Refresh
           </button>
         </div>
-      </section>
+      </div>
 
-      <!-- Table -->
-      <section class="mt-4 bg-white border-[4px] border-black overflow-x-auto shadow-[8px_8px_0_0_#000]">
-        <table class="min-w-[980px] w-full">
-          <thead class="bg-black text-white">
-            <tr class="text-left">
-              <th class="px-3 py-3 text-[11px] font-black uppercase tracking-[.18em]">Date</th>
-              <th class="px-3 py-3 text-[11px] font-black uppercase tracking-[.18em]">Order</th>
-              <th class="px-3 py-3 text-[11px] font-black uppercase tracking-[.18em]">Product</th>
-              <th class="px-3 py-3 text-[11px] font-black uppercase tracking-[.18em]">Variant</th>
-              <th class="px-3 py-3 text-[11px] font-black uppercase tracking-[.18em]">Qty</th>
-              <th class="px-3 py-3 text-[11px] font-black uppercase tracking-[.18em]">Unit</th>
-              <th class="px-3 py-3 text-[11px] font-black uppercase tracking-[.18em]">Paid Unit</th>
-              <th class="px-3 py-3 text-[11px] font-black uppercase tracking-[.18em]">Line Total</th>
-              <th class="px-3 py-3 text-[11px] font-black uppercase tracking-[.18em]">Actions</th>
-            </tr>
-          </thead>
-
-          <!-- IMPORTANT: keep this exact id -->
-          <tbody id="lineItemRows" class="divide-y divide-black">
-            <!-- rows injected by /js/admin/lineItemsRaw/renderTable.js -->
-          </tbody>
-        </table>
-
-        <!-- Load more -->
-        <div class="p-4 border-t-[4px] border-black flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <button
-            id="btnLoadMore"
-            type="button"
-            class="border-[4px] border-black bg-white px-4 py-2
-                   font-black uppercase tracking-[.12em] text-[11px]
-                   hover:bg-black hover:text-white transition w-full sm:w-auto"
-          >
-            Load more
-          </button>
-
-          <div id="loadMoreStatus" class="text-xs text-black/60"></div>
-        </div>
-      </section>
-
+      <div class="mt-3 text-xs text-gray-500" id="countLabel">0 rows</div>
     </section>
 
-    <!-- MODAL -->
-    <div id="modal" class="hidden fixed inset-0 z-[999]" aria-hidden="true">
-      <div class="absolute inset-0 bg-black/50"></div>
+    <!-- Table -->
+    <section id="tableWrap" class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+      <!-- Mobile Card View -->
+      <div id="mobileLineItemCards" class="sm:hidden"></div>
 
-      <div class="relative min-h-full flex items-end sm:items-center justify-center p-3 sm:p-6">
-        <div class="w-full max-w-2xl bg-white border-[4px] border-black shadow-[10px_10px_0_0_#000]">
+      <!-- Desktop Table View -->
+      <div class="hidden sm:block overflow-x-auto custom-scrollbar">
+        <table class="w-full border-collapse text-sm min-w-[980px]">
+          <thead class="bg-black text-white">
+            <tr class="text-left uppercase tracking-[.12em] text-[11px] font-black">
+              <th class="px-3 py-4">Date</th>
+              <th class="px-3 py-4">Order</th>
+              <th class="px-3 py-4">Product</th>
+              <th class="px-3 py-4">Variant</th>
+              <th class="px-3 py-4 text-center">Qty</th>
+              <th class="px-3 py-4 text-right">Unit</th>
+              <th class="px-3 py-4 text-right">Paid Unit</th>
+              <th class="px-3 py-4 text-right">Line Total</th>
+              <th class="px-3 py-4 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="lineItemRows" class="divide-y divide-gray-200"></tbody>
+        </table>
+      </div>
+
+      <!-- Empty State -->
+      <div id="emptyState" class="hidden p-8 text-center">
+        <div class="text-4xl mb-3">📦</div>
+        <div class="text-gray-500 text-sm">No line items found</div>
+      </div>
+
+      <!-- Load More -->
+      <div class="p-4 border-t border-gray-200 flex items-center justify-between">
+        <div id="loadMoreStatus" class="text-xs text-gray-500"></div>
+        <button id="btnLoadMore" type="button"
+          class="border-4 border-black bg-white text-black px-4 py-2 font-black uppercase tracking-[.12em] text-xs
+                 hover:bg-black hover:text-white transition-all">
+          Load More
+        </button>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- EDIT MODAL -->
+  <div id="modal" class="hidden fixed inset-0 z-[200]" aria-hidden="true">
+    <!-- Backdrop -->
+    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" data-modal-close></div>
+
+    <!-- Stage -->
+    <div class="relative h-full w-full overflow-y-auto">
+      <div class="min-h-full flex items-end sm:items-center justify-center p-0 sm:p-6">
+        <!-- Card -->
+        <div class="w-full sm:max-w-2xl bg-white border-0 sm:border-4 border-black shadow-none sm:shadow-[8px_8px_0_0_rgba(0,0,0,0.1)] min-h-screen sm:min-h-0">
           <!-- Head -->
-          <div class="p-4 sm:p-5 border-b-[4px] border-black flex items-start justify-between gap-3">
-            <div>
-              <div class="text-[11px] font-black uppercase tracking-[.25em] opacity-70">Admin</div>
-              <h3 class="text-xl font-black mt-1">Edit Line Item</h3>
+          <div class="sticky top-0 z-10 flex items-center justify-between gap-3 p-3 sm:p-5 border-b-4 border-black bg-white">
+            <div class="min-w-0">
+              <div class="inline-block bg-orange-500 text-white px-2 py-0.5 text-[8px] sm:text-[9px] font-black uppercase tracking-[.2em] mb-1">
+                Line Item
+              </div>
+              <h3 class="text-lg sm:text-2xl font-black tracking-tight">
+                Edit Line Item
+              </h3>
             </div>
 
             <button
               id="btnClose"
               type="button"
-              class="border-[4px] border-black bg-white px-3 py-2
-                     font-black uppercase tracking-[.12em] text-[11px]
-                     hover:bg-black hover:text-white transition"
+              class="border-4 border-black bg-white w-10 h-10 flex items-center justify-center font-black text-lg
+                     hover:bg-black hover:text-white transition-colors flex-shrink-0"
+              aria-label="Close"
             >
-              Close
+              ✕
             </button>
           </div>
 
           <!-- Body -->
-          <div class="p-4 sm:p-5">
-            <!-- Identifiers -->
-            <div class="text-[11px] font-black uppercase tracking-[.25em] opacity-70">Identifiers</div>
+          <div class="p-3 sm:p-6 space-y-6 pb-24 sm:pb-6">
+            <!-- Message -->
+            <div id="modalMsg" class="hidden p-3 border-4 border-red-300 bg-red-50 text-red-700 text-sm"></div>
 
-            <div class="mt-3 grid gap-3 sm:grid-cols-2">
-              <div>
-                <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-2">Row ID</label>
-                <input id="fLineRowId" disabled class="w-full border-[4px] border-black px-3 py-2 text-sm bg-black/5" />
+            <!-- Identifiers Section -->
+            <section>
+              <div class="text-[11px] font-black uppercase tracking-[.25em] flex items-center gap-2 mb-4">
+                <span class="w-5 h-5 bg-black text-white text-[10px] flex items-center justify-center">1</span>
+                Identifiers
               </div>
 
-              <div>
-                <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-2">Checkout Session</label>
-                <input id="fSessionId" disabled class="w-full border-[4px] border-black px-3 py-2 text-sm bg-black/5" />
+              <div class="grid sm:grid-cols-2 gap-4">
+                <div>
+                  <label for="fLineRowId" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
+                    Row ID
+                  </label>
+                  <input id="fLineRowId" disabled class="w-full border-[4px] border-gray-300 bg-gray-50 px-3 py-2 text-sm outline-none" />
+                </div>
+
+                <div>
+                  <label for="fSessionId" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
+                    Checkout Session
+                  </label>
+                  <input id="fSessionId" disabled class="w-full border-[4px] border-gray-300 bg-gray-50 px-3 py-2 text-sm outline-none" />
+                </div>
+
+                <div class="sm:col-span-2">
+                  <label for="fStripeLineItemId" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
+                    Stripe Line Item ID
+                  </label>
+                  <input id="fStripeLineItemId" disabled class="w-full border-[4px] border-gray-300 bg-gray-50 px-3 py-2 text-sm outline-none" />
+                </div>
+              </div>
+            </section>
+
+            <div class="border-t-4 border-gray-100"></div>
+
+            <!-- Line Item Section -->
+            <section>
+              <div class="text-[11px] font-black uppercase tracking-[.25em] flex items-center gap-2 mb-4">
+                <span class="w-5 h-5 bg-black text-white text-[10px] flex items-center justify-center">2</span>
+                Line Item
               </div>
 
-              <div class="sm:col-span-2">
-                <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-2">Stripe Line Item ID</label>
-                <input id="fStripeLineItemId" disabled class="w-full border-[4px] border-black px-3 py-2 text-sm bg-black/5" />
+              <div class="grid sm:grid-cols-2 gap-4">
+                <div>
+                  <label for="fProductId" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
+                    Product ID
+                  </label>
+                  <input id="fProductId" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors" />
+                </div>
+
+                <div>
+                  <label for="fProductName" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
+                    Product Name
+                  </label>
+                  <input id="fProductName" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors" />
+                </div>
+
+                <div>
+                  <label for="fVariant" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
+                    Variant
+                  </label>
+                  <input id="fVariant" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors" />
+                </div>
+
+                <div>
+                  <label for="fQuantity" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
+                    Quantity
+                  </label>
+                  <input id="fQuantity" type="number" min="1" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors" />
+                </div>
+
+                <div>
+                  <label for="fWeightG" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
+                    Item Weight (g)
+                  </label>
+                  <input id="fWeightG" type="number" min="0" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors" />
+                </div>
               </div>
-            </div>
+            </section>
 
-            <div class="my-5 border-t-[4px] border-black"></div>
+            <div class="border-t-4 border-gray-100"></div>
 
-            <!-- Editable -->
-            <div class="text-[11px] font-black uppercase tracking-[.25em] opacity-70">Line Item</div>
-
-            <div class="mt-3 grid gap-3 sm:grid-cols-2">
-              <div>
-                <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-2">Product ID</label>
-                <input id="fProductId" class="w-full border-[4px] border-black px-3 py-2 text-sm" />
+            <!-- Money Section -->
+            <section>
+              <div class="text-[11px] font-black uppercase tracking-[.25em] flex items-center gap-2 mb-4">
+                <span class="w-5 h-5 bg-black text-white text-[10px] flex items-center justify-center">3</span>
+                Money
               </div>
+              <p class="text-xs text-gray-500 mb-4">Stored in cents. Displayed in dollars.</p>
 
-              <div>
-                <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-2">Product Name</label>
-                <input id="fProductName" class="w-full border-[4px] border-black px-3 py-2 text-sm" />
+              <div class="grid sm:grid-cols-2 gap-4">
+                <div>
+                  <label for="fUnitPrice" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
+                    Unit Price ($)
+                  </label>
+                  <input id="fUnitPrice" type="number" step="0.01" min="0" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors" />
+                </div>
+
+                <div>
+                  <label for="fPostDiscount" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
+                    Paid Unit Price ($)
+                  </label>
+                  <input id="fPostDiscount" type="number" step="0.01" min="0" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors" />
+                </div>
               </div>
-
-              <div>
-                <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-2">Variant</label>
-                <input id="fVariant" class="w-full border-[4px] border-black px-3 py-2 text-sm" />
-              </div>
-
-              <div>
-                <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-2">Quantity</label>
-                <input id="fQuantity" type="number" min="1" class="w-full border-[4px] border-black px-3 py-2 text-sm" />
-              </div>
-
-              <div>
-                <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-2">Item Weight (g)</label>
-                <input id="fWeightG" type="number" min="0" class="w-full border-[4px] border-black px-3 py-2 text-sm" />
-              </div>
-            </div>
-
-            <div class="my-5 border-t-[4px] border-black"></div>
-
-            <!-- Money -->
-            <div class="text-[11px] font-black uppercase tracking-[.25em] opacity-70">Money</div>
-            <div class="text-xs text-black/60 mt-2">Stored in cents. Displayed in dollars.</div>
-
-            <div class="mt-3 grid gap-3 sm:grid-cols-2">
-              <div>
-                <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-2">Unit Price</label>
-                <input id="fUnitPrice" type="number" step="0.01" min="0" class="w-full border-[4px] border-black px-3 py-2 text-sm" />
-              </div>
-
-              <div>
-                <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-2">Paid Unit Price</label>
-                <input id="fPostDiscount" type="number" step="0.01" min="0" class="w-full border-[4px] border-black px-3 py-2 text-sm" />
-              </div>
-            </div>
-
-            <div id="modalMsg" class="hidden mt-4 border-[4px] border-black p-3 text-sm"></div>
+            </section>
           </div>
 
-          <!-- Footer -->
-          <div class="p-4 sm:p-5 border-t-[4px] border-black flex flex-col sm:flex-row gap-2 sm:justify-between">
+          <!-- Foot -->
+          <div class="sticky bottom-0 flex items-center justify-between gap-3 p-3 sm:p-5 border-t-4 border-black bg-gray-50">
             <button
               id="btnHardDelete"
               type="button"
-              class="border-[4px] border-black bg-white px-4 py-2
-                     font-black uppercase tracking-[.12em] text-[11px]
-                     hover:bg-black hover:text-white transition"
+              class="border-4 border-red-500 bg-white text-red-600 px-4 py-2 font-black uppercase tracking-[.12em] text-xs
+                     hover:bg-red-500 hover:text-white transition-all"
             >
-              Delete Line
+              Delete
             </button>
-
             <button
               id="btnSave"
               type="button"
-              class="border-[4px] border-black bg-black text-white px-4 py-2
-                     font-black uppercase tracking-[.12em] text-[11px]
-                     hover:bg-white hover:text-black transition"
+              class="border-4 border-black bg-black text-white px-6 py-2 font-black uppercase tracking-[.12em] text-xs
+                     hover:bg-kkpink hover:border-kkpink hover:text-black transition-all"
             >
               Save Changes
             </button>
@@ -225,13 +314,22 @@
         </div>
       </div>
     </div>
-
-  </main>
+  </div>
 
   <!-- Footer mount -->
   <div id="kkFooterMount"></div>
 
-  <!-- keep your existing JS entry -->
+  <!-- Click backdrop to close -->
+  <script>
+    (function () {
+      const modal = document.getElementById("modal");
+      const backdrop = modal?.querySelector("[data-modal-close]");
+      const closeBtn = document.getElementById("btnClose");
+      if (!modal || !backdrop || !closeBtn) return;
+      backdrop.addEventListener("click", () => closeBtn.click());
+    })();
+  </script>
+
   <script type="module" src="/js/admin/lineItemsRaw/index.js"></script>
 </body>
 </html>

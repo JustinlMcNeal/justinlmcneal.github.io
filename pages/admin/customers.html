@@ -1,210 +1,325 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Admin · Customers</title>
 
-  <!-- Global theme -->
-  <link rel="stylesheet" href="/css/theme/base.css" />
-  <link rel="stylesheet" href="/css/theme/components.css" />
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            kkpink: '#ff69b4',
+          }
+        }
+      }
+    }
+  </script>
 
-  <!-- Navbar -->
-  <link rel="stylesheet" href="/css/components/navbar.css" />
+  <!-- KK base + components -->
+  <link rel="stylesheet" href="/css/theme/base.css">
+  <link rel="stylesheet" href="/css/theme/components.css">
 
-  <!-- Admin shared -->
-  <link rel="stylesheet" href="/css/pages/admin/admin.css" />
+  <style>
+    /* Custom scrollbar for tables */
+    .custom-scrollbar::-webkit-scrollbar { height: 8px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #000; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #333; }
 
-  <!-- Page styles -->
-  <link rel="stylesheet" href="/css/pages/admin/customers.css" />
+    /* Row hover effect */
+    .customer-row:hover { background: #fafafa; }
+    .customer-row:hover .row-actions { opacity: 1; }
+    .row-actions { opacity: 0.5; transition: opacity 0.15s; }
+
+    /* Mobile improvements */
+    @media (max-width: 640px) {
+      button, [role="button"] { min-height: 44px; }
+      input, select, textarea { font-size: 16px !important; }
+    }
+  </style>
 </head>
 
-<body class="kk-page kk-admin kk-admin-customers">
-
+<body class="kk-page kk-admin bg-gray-50 min-h-screen">
   <!-- Admin Nav mount -->
   <div id="kkAdminNavMount"></div>
 
-  <main class="kk-container">
+  <main class="max-w-7xl mx-auto px-2 sm:px-6 py-4 sm:py-8">
 
-    <!-- HEADER -->
-    <section class="kk-card kk-card-pad kk-admin-header">
-      <div class="kk-kicker">Admin</div>
-      <h1 class="kk-h1">Customers</h1>
-      <p class="kk-sub">
-        View customer profiles, lifetime value, order history, and contact details.
-      </p>
-    </section>
+    <!-- Header Card -->
+    <header class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6">
+      <div class="flex flex-col gap-4">
+        <div>
+          <div class="inline-block bg-black text-white px-2 py-1 text-[10px] font-black uppercase tracking-[.25em] mb-2">
+            Admin Panel
+          </div>
+          <h1 class="text-2xl sm:text-4xl font-black tracking-tight">
+            Customers
+          </h1>
+          <p class="text-xs sm:text-sm text-gray-500 mt-1">
+            View customer profiles, lifetime value, order history, and contact details
+          </p>
+        </div>
+      </div>
+    </header>
 
-    <!-- CONTROLS -->
-    <section class="kk-card kk-card-pad kk-admin-controls">
-      <div class="kk-kicker">Filter</div>
-
-      <div class="kk-grid kk-grid-2">
-        <div class="kk-field">
-          <label class="kk-label" for="searchCustomer">Search</label>
-          <input
-            class="kk-input"
-            id="searchCustomer"
-            type="search"
-            placeholder="Name, email, address…"
-            autocomplete="off"
-          />
-          <div class="kk-sub">Search runs server-side.</div>
+    <!-- Search & Filters -->
+    <section class="bg-white rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4 mb-4 sm:mb-6">
+      <div class="flex flex-col sm:flex-row gap-3 sm:gap-4 items-stretch sm:items-end">
+        <!-- Search -->
+        <div class="flex-1">
+          <label for="searchCustomer"
+                 class="block text-[9px] sm:text-[10px] font-black uppercase tracking-[.18em] mb-1 sm:mb-2 text-gray-500">
+            Search Customers
+          </label>
+          <div class="relative">
+            <input
+              id="searchCustomer"
+              type="search"
+              placeholder="Name, email, address..."
+              class="w-full border-4 border-black px-3 sm:px-4 py-2 sm:py-3 text-sm outline-none pr-10 focus:border-kkpink transition-colors"
+            />
+            <svg class="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+            </svg>
+          </div>
         </div>
 
-        <div class="kk-field">
-          <label class="kk-label" for="sortBy">Sort By</label>
-          <select class="kk-input" id="sortBy">
+        <!-- Sort -->
+        <div class="w-full sm:w-48">
+          <label for="sortBy"
+                 class="block text-[9px] sm:text-[10px] font-black uppercase tracking-[.18em] mb-1 sm:mb-2 text-gray-500">
+            Sort By
+          </label>
+          <select id="sortBy" class="w-full border-4 border-black px-3 py-2 sm:py-3 text-sm outline-none bg-white focus:border-kkpink transition-colors">
             <option value="last_order">Last Order</option>
             <option value="total_spent">Total Spent</option>
             <option value="order_count">Order Count</option>
             <option value="name">Name</option>
           </select>
         </div>
-      </div>
 
-      <div class="kk-divider"></div>
-
-      <div class="kk-admin-metaRow">
-        <div id="customerCount" class="kk-sub">0 customers</div>
-        <div id="status" class="kk-sub"></div>
+        <!-- Count -->
+        <div class="flex items-center justify-between sm:justify-end gap-3">
+          <div class="text-xs sm:text-sm font-bold uppercase tracking-wider text-gray-500" id="customerCount">
+            0 customers
+          </div>
+        </div>
       </div>
+      <div id="status" class="text-xs text-gray-400 mt-2"></div>
     </section>
 
-    <!-- TABLE -->
-    <section class="kk-card kk-admin-section">
-      <div class="kk-admin-table-wrap">
-        <table class="kk-admin-table kk-admin-customers-table" id="customersTable">
-          <thead>
-            <tr>
-              <th>Customer</th>
-              <th>Email</th>
-              <th>Address</th>
-              <th>Orders</th>
-              <th>Total Spent</th>
-              <th>Last Order</th>
-              <th></th>
+    <!-- Table -->
+    <section id="tableWrap" class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+      <!-- Mobile Card View -->
+      <div id="mobileCustomerCards" class="sm:hidden"></div>
+      
+      <!-- Desktop Table View -->
+      <div class="hidden sm:block overflow-x-auto custom-scrollbar">
+        <table class="w-full border-collapse text-sm" id="customersTable">
+          <thead class="bg-black text-white">
+            <tr class="text-left uppercase tracking-[.12em] text-[11px] font-black">
+              <th class="px-4 py-4">Customer</th>
+              <th class="px-4 py-4">Email</th>
+              <th class="px-4 py-4 hidden lg:table-cell">Address</th>
+              <th class="px-4 py-4 text-center">Orders</th>
+              <th class="px-4 py-4 text-right">Total Spent</th>
+              <th class="px-4 py-4 hidden md:table-cell">Last Order</th>
+              <th class="px-4 py-4 text-right">Actions</th>
             </tr>
           </thead>
-
-          <tbody id="customersRows">
-            <!-- JS will inject rows -->
-          </tbody>
+          <tbody id="customersRows" class="divide-y divide-gray-200"></tbody>
         </table>
       </div>
 
-      <div class="kk-admin-loadmore">
-        <button id="btnLoadMore" class="kk-admin-btn" type="button">Load more</button>
-        <div id="loadMoreStatus" class="kk-sub"></div>
+      <!-- Empty State -->
+      <div id="emptyState" class="hidden p-8 text-center">
+        <div class="text-4xl mb-3">👥</div>
+        <div class="text-gray-500 text-sm">No customers found</div>
+      </div>
+
+      <!-- Load More -->
+      <div class="p-4 border-t border-gray-200 flex items-center justify-between">
+        <div id="loadMoreStatus" class="text-xs text-gray-500"></div>
+        <button id="btnLoadMore" type="button"
+          class="border-4 border-black bg-white text-black px-4 py-2 font-black uppercase tracking-[.12em] text-xs
+                 hover:bg-black hover:text-white transition-all">
+          Load More
+        </button>
       </div>
     </section>
 
   </main>
 
   <!-- CUSTOMER MODAL -->
-  <div id="customerModal" class="kk-admin-modal" aria-hidden="true">
-    <div class="kk-admin-modal-backdrop"></div>
+  <div id="customerModal" class="hidden fixed inset-0 z-[200]" aria-hidden="true">
+    <!-- Backdrop -->
+    <div id="customerModalBackdrop" class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
 
-    <div class="kk-admin-modal-stage">
-      <div class="kk-admin-modal-card">
+    <!-- Stage -->
+    <div class="relative h-full w-full overflow-y-auto">
+      <div class="min-h-full flex items-end sm:items-center justify-center p-0 sm:p-6">
+        <!-- Card -->
+        <div class="w-full sm:max-w-3xl bg-white border-0 sm:border-4 border-black shadow-none sm:shadow-[8px_8px_0_0_rgba(0,0,0,0.1)] min-h-screen sm:min-h-0">
+          <!-- Head -->
+          <div class="sticky top-0 z-10 flex items-center justify-between gap-3 p-3 sm:p-5 border-b-4 border-black bg-white">
+            <div class="min-w-0">
+              <div class="inline-block bg-teal-500 text-white px-2 py-0.5 text-[8px] sm:text-[9px] font-black uppercase tracking-[.2em] mb-1">
+                Customer Profile
+              </div>
+              <h3 id="modalCustomerName" class="text-lg sm:text-2xl font-black tracking-tight truncate">
+                Customer Details
+              </h3>
+              <div id="modalCustomerEmail" class="text-xs text-gray-500">—</div>
+            </div>
 
-        <div class="kk-admin-modal-head">
-          <div>
-            <div class="kk-kicker">Customer</div>
-            <h2 class="kk-h2" id="modalCustomerName">Customer Details</h2>
-            <div class="kk-sub" id="modalCustomerEmail">—</div>
+            <button
+              id="btnCloseCustomer"
+              type="button"
+              class="border-4 border-black bg-white w-10 h-10 flex items-center justify-center font-black text-lg
+                     hover:bg-black hover:text-white transition-colors flex-shrink-0"
+              aria-label="Close"
+            >
+              ✕
+            </button>
           </div>
-          <button class="kk-admin-modal-close" id="btnCloseCustomer" type="button">✕</button>
+
+          <!-- Body -->
+          <div class="p-3 sm:p-6 space-y-6 pb-24 sm:pb-6">
+            <!-- Message -->
+            <div id="modalMsg" class="hidden p-3 border-4 border-red-300 bg-red-50 text-red-700 text-sm"></div>
+
+            <!-- Customer Info Section -->
+            <section>
+              <div class="text-[11px] font-black uppercase tracking-[.25em] flex items-center gap-2 mb-4">
+                <span class="w-5 h-5 bg-black text-white text-[10px] flex items-center justify-center">1</span>
+                Customer Info
+              </div>
+
+              <div class="grid sm:grid-cols-2 gap-4">
+                <div>
+                  <label for="fFirstName" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
+                    First Name
+                  </label>
+                  <input id="fFirstName" type="text" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors" />
+                </div>
+
+                <div>
+                  <label for="fLastName" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
+                    Last Name
+                  </label>
+                  <input id="fLastName" type="text" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors" />
+                </div>
+
+                <div>
+                  <label for="fEmail" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
+                    Email
+                  </label>
+                  <input id="fEmail" type="email" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors" />
+                </div>
+
+                <div>
+                  <label for="fPhone" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
+                    Phone
+                  </label>
+                  <input id="fPhone" type="tel" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors" />
+                </div>
+              </div>
+            </section>
+
+            <div class="border-t-4 border-gray-100"></div>
+
+            <!-- Address Section -->
+            <section>
+              <div class="text-[11px] font-black uppercase tracking-[.25em] flex items-center gap-2 mb-4">
+                <span class="w-5 h-5 bg-black text-white text-[10px] flex items-center justify-center">2</span>
+                Address
+              </div>
+
+              <div class="grid sm:grid-cols-2 gap-4">
+                <div class="sm:col-span-2">
+                  <label for="fStreet" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
+                    Street Address
+                  </label>
+                  <input id="fStreet" type="text" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors" />
+                </div>
+
+                <div>
+                  <label for="fCity" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
+                    City
+                  </label>
+                  <input id="fCity" type="text" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors" />
+                </div>
+
+                <div>
+                  <label for="fState" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
+                    State
+                  </label>
+                  <input id="fState" type="text" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors" />
+                </div>
+
+                <div>
+                  <label for="fZip" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
+                    ZIP Code
+                  </label>
+                  <input id="fZip" type="text" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors" />
+                </div>
+              </div>
+            </section>
+
+            <div class="border-t-4 border-gray-100"></div>
+
+            <!-- Order History Section -->
+            <section>
+              <div class="text-[11px] font-black uppercase tracking-[.25em] flex items-center gap-2 mb-4">
+                <span class="w-5 h-5 bg-black text-white text-[10px] flex items-center justify-center">3</span>
+                Order History
+              </div>
+
+              <div class="border-4 border-black overflow-hidden">
+                <div class="overflow-x-auto">
+                  <table class="w-full text-sm">
+                    <thead class="bg-gray-100">
+                      <tr class="text-left uppercase tracking-[.1em] text-[10px] font-black text-gray-600">
+                        <th class="px-3 py-2">Date</th>
+                        <th class="px-3 py-2">Order</th>
+                        <th class="px-3 py-2 text-center">Items</th>
+                        <th class="px-3 py-2 text-right">Total</th>
+                        <th class="px-3 py-2">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody id="customerOrdersRows" class="divide-y divide-gray-200">
+                      <!-- JS inject -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <!-- Foot -->
+          <div class="sticky bottom-0 flex items-center justify-end gap-3 p-3 sm:p-5 border-t-4 border-black bg-gray-50">
+            <button
+              id="btnCancelCustomer"
+              type="button"
+              class="border-4 border-black bg-white text-black px-4 py-2 font-black uppercase tracking-[.12em] text-xs
+                     hover:bg-gray-100 transition-all"
+            >
+              Cancel
+            </button>
+            <button
+              id="btnSaveCustomer"
+              type="button"
+              class="border-4 border-black bg-black text-white px-6 py-2 font-black uppercase tracking-[.12em] text-xs
+                     hover:bg-kkpink hover:border-kkpink hover:text-black transition-all"
+            >
+              Save
+            </button>
+          </div>
         </div>
-
-        <div class="kk-divider"></div>
-
-        <div class="kk-admin-modal-body">
-<div id="modalMsg" class="kk-sub"></div>
-
-          <!-- CUSTOMER INFO -->
-          <div class="kk-section-title">Customer Info</div>
-
-          <div class="kk-grid kk-grid-2 gap-16">
-            <div class="kk-field">
-              <label class="kk-label">First Name</label>
-              <input class="kk-input" id="fFirstName" type="text" />
-            </div>
-
-            <div class="kk-field">
-              <label class="kk-label">Last Name</label>
-              <input class="kk-input" id="fLastName" type="text" />
-            </div>
-
-            <div class="kk-field">
-              <label class="kk-label">Email</label>
-              <input class="kk-input" id="fEmail" type="email" />
-            </div>
-
-            <div class="kk-field">
-              <label class="kk-label">Phone</label>
-              <input class="kk-input" id="fPhone" type="tel" />
-            </div>
-          </div>
-
-          <div class="kk-divider"></div>
-
-          <!-- ADDRESS -->
-          <div class="kk-section-title">Address</div>
-
-          <div class="kk-grid kk-grid-2 gap-16">
-            <div class="kk-field">
-              <label class="kk-label">Street</label>
-              <input class="kk-input" id="fStreet" type="text" />
-            </div>
-
-            <div class="kk-field">
-              <label class="kk-label">City</label>
-              <input class="kk-input" id="fCity" type="text" />
-            </div>
-
-            <div class="kk-field">
-              <label class="kk-label">State</label>
-              <input class="kk-input" id="fState" type="text" />
-            </div>
-
-            <div class="kk-field">
-              <label class="kk-label">ZIP</label>
-              <input class="kk-input" id="fZip" type="text" />
-            </div>
-          </div>
-
-          <div class="kk-divider"></div>
-
-          <!-- ORDER HISTORY -->
-          <div class="kk-section-title">Order History</div>
-
-          <div class="kk-admin-table-wrap">
-            <table class="kk-admin-table kk-admin-customer-orders">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Order</th>
-                  <th>Items</th>
-                  <th>Total</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody id="customerOrdersRows">
-                <!-- JS inject -->
-              </tbody>
-            </table>
-          </div>
-
-        </div>
-
-        <div class="kk-divider"></div>
-
-        <div class="kk-admin-modal-foot">
-          <button class="kk-admin-btn kk-admin-btn-ghost" id="btnCancelCustomer">Cancel</button>
-          <button class="kk-admin-btn" id="btnSaveCustomer">Save</button>
-        </div>
-
       </div>
     </div>
   </div>
@@ -212,8 +327,17 @@
   <!-- Footer mount -->
   <div id="kkFooterMount"></div>
 
-<script type="module" src="/js/admin/customers/index.js"></script>
+  <!-- Click backdrop to close -->
+  <script>
+    (function () {
+      const modal = document.getElementById("customerModal");
+      const backdrop = document.getElementById("customerModalBackdrop");
+      const closeBtn = document.getElementById("btnCloseCustomer");
+      if (!modal || !backdrop || !closeBtn) return;
+      backdrop.addEventListener("click", () => closeBtn.click());
+    })();
+  </script>
 
-
+  <script type="module" src="/js/admin/customers/index.js"></script>
 </body>
 </html>

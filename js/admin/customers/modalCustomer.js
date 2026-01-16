@@ -19,12 +19,12 @@ function moneyFromCents(cents) {
 }
 
 export function openCustomerModal(els) {
-  els.customerModal?.classList.add("is-open");
+  els.customerModal?.classList.remove("hidden");
   els.customerModal?.setAttribute("aria-hidden", "false");
 }
 
 export function closeCustomerModal(els) {
-  els.customerModal?.classList.remove("is-open");
+  els.customerModal?.classList.add("hidden");
   els.customerModal?.setAttribute("aria-hidden", "true");
 }
 
@@ -74,9 +74,16 @@ export function setModalBusy(els, busy, msg = "") {
   if (els.btnCancelCustomer) els.btnCancelCustomer.disabled = !!busy;
   if (els.btnCloseCustomer) els.btnCloseCustomer.disabled = !!busy;
 
-  // If you don’t have modalMsg in HTML, this safely does nothing.
-  if (els.modalMsg) els.modalMsg.textContent = msg || "";
-  else {
+  // Show/hide modalMsg and set content
+  if (els.modalMsg) {
+    if (msg) {
+      els.modalMsg.textContent = msg;
+      els.modalMsg.classList.remove("hidden");
+    } else {
+      els.modalMsg.textContent = "";
+      els.modalMsg.classList.add("hidden");
+    }
+  } else {
     // fallback: show status in header email line if no modalMsg element exists
     if (msg) els.modalCustomerEmail.textContent = msg;
   }
@@ -87,7 +94,7 @@ export function renderOrderHistory(els, orders) {
 
   if (!orders?.length) {
     els.customerOrdersRows.innerHTML = `
-      <tr><td colspan="5" style="padding:14px;">No orders found.</td></tr>
+      <tr><td colspan="5" class="px-3 py-4 text-gray-500 text-center">No orders found.</td></tr>
     `;
     return;
   }
@@ -98,14 +105,27 @@ export function renderOrderHistory(els, orders) {
     const items = Number(o.total_items || 0);
     const total = esc(moneyFromCents(o.total_paid_cents));
     const status = esc(o.label_status || "—");
+    
+    // Status badge color
+    const statusLower = status.toLowerCase();
+    let badgeClass = "bg-gray-100 text-gray-600";
+    if (statusLower.includes("delivered") || statusLower.includes("complete")) {
+      badgeClass = "bg-green-100 text-green-700";
+    } else if (statusLower.includes("transit") || statusLower.includes("shipped")) {
+      badgeClass = "bg-blue-100 text-blue-700";
+    } else if (statusLower.includes("cancel") || statusLower.includes("fail")) {
+      badgeClass = "bg-red-100 text-red-700";
+    }
 
     return `
-      <tr>
-        <td>${date}</td>
-        <td>${kk}</td>
-        <td>${items}</td>
-        <td>${total}</td>
-        <td>${status}</td>
+      <tr class="hover:bg-gray-50">
+        <td class="px-3 py-2 text-sm text-gray-600">${date}</td>
+        <td class="px-3 py-2 text-sm font-mono">${kk}</td>
+        <td class="px-3 py-2 text-sm text-center">${items}</td>
+        <td class="px-3 py-2 text-sm font-bold text-right">${total}</td>
+        <td class="px-3 py-2">
+          <span class="inline-block px-2 py-0.5 text-[10px] font-bold uppercase ${badgeClass}">${status}</span>
+        </td>
       </tr>
     `;
   }).join("");

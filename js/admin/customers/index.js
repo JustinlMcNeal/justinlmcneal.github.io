@@ -7,7 +7,12 @@ import { initFooter } from "/js/shared/footer.js";
 import { initCustomersState } from "./state.js";
 import { getCustomersList, upsertCustomerProfile, getCustomerOrderHistory } from "./api.js";
 import { getEls, bindUI } from "./dom.js";
-import { renderCustomersTable, wireCustomerRowClicks } from "./renderTable.js";
+import { 
+  renderCustomersTable, 
+  wireCustomerRowClicks,
+  renderMobileCustomerCards,
+  wireMobileCardClicks
+} from "./renderTable.js";
 import {
   openCustomerModal,
   closeCustomerModal,
@@ -73,6 +78,12 @@ async function loadCustomers({ reset = false } = {}) {
 
     renderCustomersTable(els.customersRows, state.rows);
     wireCustomerRowClicks(els.customersRows, async (email) => {
+      await openCustomer(email);
+    });
+
+    // Render mobile cards
+    renderMobileCustomerCards(els.mobileCustomerCards, state.rows);
+    wireMobileCardClicks(els.mobileCustomerCards, async (email) => {
       await openCustomer(email);
     });
 

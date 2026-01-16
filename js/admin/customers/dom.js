@@ -5,6 +5,7 @@ export function getEls() {
     searchCustomer: document.getElementById("searchCustomer"),
     sortBy: document.getElementById("sortBy"),
     customersRows: document.getElementById("customersRows"),
+    mobileCustomerCards: document.getElementById("mobileCustomerCards"),
     customerCount: document.getElementById("customerCount"),
     status: document.getElementById("status"),
     btnLoadMore: document.getElementById("btnLoadMore"),
@@ -52,11 +53,6 @@ export function bindUI(els, handlers) {
   // Modal close buttons
   els.btnCloseCustomer?.addEventListener("click", () => handlers.onCloseModal?.());
   els.btnCancelCustomer?.addEventListener("click", () => handlers.onCancelModal?.());
-
-  // Backdrop click
-  els.customerModal?.querySelector(".kk-admin-modal-backdrop")?.addEventListener("click", () => {
-    handlers.onCloseModal?.();
-  });
 
   // Save
   els.btnSaveCustomer?.addEventListener("click", () => handlers.onSaveModal?.());

@@ -1,87 +1,136 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Admin · Site Settings</title>
 
-  <!-- Tailwind CDN -->
+  <!-- Tailwind -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            kkpink: '#ff69b4',
+          }
+        }
+      }
+    }
+  </script>
 
-  <!-- Global brand theme -->
+  <!-- KK base + components -->
   <link rel="stylesheet" href="/css/theme/base.css">
   <link rel="stylesheet" href="/css/theme/components.css">
 
   <style>
-    :root { --kk-border: 4px solid #000; }
-    .kk-border { border: var(--kk-border); }
-    .kk-shadow { box-shadow: 0 14px 30px rgba(0,0,0,.08); }
-    @media (prefers-reduced-motion: reduce) {
-      * { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+    /* Mobile improvements */
+    @media (max-width: 640px) {
+      button, [role="button"] { min-height: 44px; }
+      input, select, textarea { font-size: 16px !important; }
+    }
+
+    /* Toggle switch */
+    .toggle-switch {
+      position: relative;
+      width: 56px;
+      height: 32px;
+      background: #e5e7eb;
+      border-radius: 9999px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .toggle-switch.active { background: #000; }
+    .toggle-switch::after {
+      content: '';
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      width: 24px;
+      height: 24px;
+      background: #fff;
+      border-radius: 9999px;
+      transition: transform 0.2s;
+    }
+    .toggle-switch.active::after {
+      transform: translateX(24px);
     }
   </style>
 </head>
 
-<body class="bg-white text-black">
+<body class="kk-page kk-admin bg-gray-50 min-h-screen">
   <!-- Admin Nav mount -->
   <div id="kkAdminNavMount"></div>
 
-  <main class="max-w-4xl mx-auto px-4 py-8">
-    <!-- Header -->
-    <header class="text-center">
-      <div class="uppercase tracking-[.25em] font-black text-xs opacity-70">Admin</div>
-      <h1 class="font-black tracking-tight text-2xl sm:text-3xl mt-2">Site Settings</h1>
-      <p class="text-sm opacity-70 mt-2">Manage announcement bar, shipping settings, and more</p>
+  <main class="max-w-4xl mx-auto px-2 sm:px-6 py-4 sm:py-8">
+
+    <!-- Header Card -->
+    <header class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6 text-center">
+      <div class="inline-block bg-black text-white px-2 py-1 text-[10px] font-black uppercase tracking-[.25em] mb-2">
+        Admin Panel
+      </div>
+      <h1 class="text-2xl sm:text-4xl font-black tracking-tight">
+        Site Settings
+      </h1>
+      <p class="text-xs sm:text-sm text-gray-500 mt-1">
+        Manage announcement bar, shipping settings, and more
+      </p>
     </header>
 
     <!-- APP -->
-    <section id="appPanel" class="hidden mt-8 space-y-6">
-      
+    <section id="appPanel" class="hidden space-y-4 sm:space-y-6">
+
       <!-- Announcement Bar Section -->
-      <section class="kk-border kk-shadow bg-white p-4 sm:p-6">
-        <div class="flex items-center justify-between gap-4 mb-6">
+      <section class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6">
+        <div class="flex items-start justify-between gap-4 mb-6">
           <div>
-            <h2 class="font-black text-lg uppercase tracking-wide">📢 Announcement Bar</h2>
-            <p class="text-sm opacity-70 mt-1">Display a message at the top of your site</p>
+            <h2 class="text-lg sm:text-xl font-black flex items-center gap-2">
+              <span>📢</span> Announcement Bar
+            </h2>
+            <p class="text-xs sm:text-sm text-gray-500 mt-1">Display a message at the top of your site</p>
           </div>
-          <label class="relative inline-flex items-center cursor-pointer">
-            <input type="checkbox" id="announcementEnabled" class="sr-only peer">
-            <div class="w-14 h-8 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-black"></div>
-          </label>
+          <div
+            id="announcementToggle"
+            class="toggle-switch"
+            role="switch"
+            aria-checked="false"
+            tabindex="0"
+          ></div>
+          <input type="checkbox" id="announcementEnabled" class="hidden">
         </div>
 
-        <div class="grid gap-4">
+        <div class="space-y-4">
           <!-- Text -->
           <div>
-            <label class="block text-xs font-black uppercase tracking-[.15em] opacity-70 mb-2">
+            <label for="announcementText" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
               Announcement Text
             </label>
             <input
               id="announcementText"
               type="text"
               placeholder="FREE SHIPPING on orders over $50!"
-              class="w-full kk-border px-4 py-3 outline-none text-[16px]"
+              class="w-full border-[4px] border-black px-3 py-2 sm:py-3 text-sm outline-none focus:border-kkpink transition-colors"
             />
           </div>
 
           <!-- Link (Optional) -->
           <div>
-            <label class="block text-xs font-black uppercase tracking-[.15em] opacity-70 mb-2">
+            <label for="announcementLink" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
               Link (Optional)
             </label>
             <input
               id="announcementLink"
               type="text"
               placeholder="/pages/catalog.html or https://..."
-              class="w-full kk-border px-4 py-3 outline-none text-[16px]"
+              class="w-full border-[4px] border-black px-3 py-2 sm:py-3 text-sm outline-none focus:border-kkpink transition-colors"
             />
-            <p class="text-xs opacity-50 mt-1">Leave empty for no link</p>
+            <p class="text-xs text-gray-400 mt-1">Leave empty for no link</p>
           </div>
 
           <!-- Colors -->
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <label class="block text-xs font-black uppercase tracking-[.15em] opacity-70 mb-2">
+              <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
                 Background Color
               </label>
               <div class="flex gap-2">
@@ -89,18 +138,18 @@
                   id="announcementBgColor"
                   type="color"
                   value="#000000"
-                  class="w-12 h-12 kk-border cursor-pointer"
+                  class="w-12 h-12 border-4 border-black cursor-pointer"
                 />
                 <input
                   id="announcementBgColorText"
                   type="text"
                   value="#000000"
-                  class="flex-1 kk-border px-3 py-2 outline-none uppercase text-[14px]"
+                  class="flex-1 border-4 border-black px-3 py-2 text-sm uppercase outline-none focus:border-kkpink transition-colors"
                 />
               </div>
             </div>
             <div>
-              <label class="block text-xs font-black uppercase tracking-[.15em] opacity-70 mb-2">
+              <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
                 Text Color
               </label>
               <div class="flex gap-2">
@@ -108,13 +157,13 @@
                   id="announcementTextColor"
                   type="color"
                   value="#ffffff"
-                  class="w-12 h-12 kk-border cursor-pointer"
+                  class="w-12 h-12 border-4 border-black cursor-pointer"
                 />
                 <input
                   id="announcementTextColorText"
                   type="text"
                   value="#ffffff"
-                  class="flex-1 kk-border px-3 py-2 outline-none uppercase text-[14px]"
+                  class="flex-1 border-4 border-black px-3 py-2 text-sm uppercase outline-none focus:border-kkpink transition-colors"
                 />
               </div>
             </div>
@@ -122,16 +171,16 @@
 
           <!-- Show Close Button -->
           <div class="flex items-center gap-3">
-            <input type="checkbox" id="announcementShowClose" checked class="w-5 h-5 accent-black">
+            <input type="checkbox" id="announcementShowClose" checked class="w-5 h-5 accent-black border-2 border-black">
             <label for="announcementShowClose" class="text-sm font-bold">Allow visitors to dismiss the bar</label>
           </div>
 
           <!-- Preview -->
           <div>
-            <label class="block text-xs font-black uppercase tracking-[.15em] opacity-70 mb-2">
+            <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-2 text-black/70">
               Preview
             </label>
-            <div id="announcementPreview" class="kk-border p-0 overflow-hidden">
+            <div id="announcementPreview" class="border-4 border-black overflow-hidden rounded-lg">
               <div class="flex items-center justify-center gap-4 py-3 px-4 text-center text-sm font-bold" style="background: #000; color: #fff;">
                 <span id="previewText">FREE SHIPPING on orders over $50!</span>
                 <button class="opacity-60 hover:opacity-100 text-lg leading-none">✕</button>
@@ -142,39 +191,48 @@
       </section>
 
       <!-- Free Shipping Progress Section -->
-      <section class="kk-border kk-shadow bg-white p-4 sm:p-6">
-        <div class="flex items-center justify-between gap-4 mb-6">
+      <section class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6">
+        <div class="flex items-start justify-between gap-4 mb-6">
           <div>
-            <h2 class="font-black text-lg uppercase tracking-wide">🚚 Free Shipping Progress</h2>
-            <p class="text-sm opacity-70 mt-1">Show progress bar in cart drawer</p>
+            <h2 class="text-lg sm:text-xl font-black flex items-center gap-2">
+              <span>🚚</span> Free Shipping Progress
+            </h2>
+            <p class="text-xs sm:text-sm text-gray-500 mt-1">Show progress bar in cart drawer</p>
           </div>
-          <label class="relative inline-flex items-center cursor-pointer">
-            <input type="checkbox" id="freeShippingEnabled" class="sr-only peer">
-            <div class="w-14 h-8 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-black"></div>
-          </label>
+          <div
+            id="freeShippingToggle"
+            class="toggle-switch active"
+            role="switch"
+            aria-checked="true"
+            tabindex="0"
+          ></div>
+          <input type="checkbox" id="freeShippingEnabled" checked class="hidden">
         </div>
 
-        <div class="grid gap-4">
+        <div class="space-y-4">
           <!-- Threshold -->
           <div>
-            <label class="block text-xs font-black uppercase tracking-[.15em] opacity-70 mb-2">
+            <label for="freeShippingThreshold" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
               Free Shipping Threshold ($)
             </label>
-            <input
-              id="freeShippingThreshold"
-              type="number"
-              min="0"
-              step="0.01"
-              value="50.00"
-              placeholder="50.00"
-              class="w-full kk-border px-4 py-3 outline-none text-[16px]"
-            />
-            <p class="text-xs opacity-50 mt-1">Orders at or above this amount get free shipping</p>
+            <div class="relative w-full sm:w-48">
+              <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">$</span>
+              <input
+                id="freeShippingThreshold"
+                type="number"
+                min="0"
+                step="0.01"
+                value="50.00"
+                placeholder="50.00"
+                class="w-full border-[4px] border-black pl-7 pr-3 py-2 sm:py-3 text-sm outline-none focus:border-kkpink transition-colors"
+              />
+            </div>
+            <p class="text-xs text-gray-400 mt-1">Orders at or above this amount get free shipping</p>
           </div>
 
           <!-- Message Under Threshold -->
           <div>
-            <label class="block text-xs font-black uppercase tracking-[.15em] opacity-70 mb-2">
+            <label for="freeShippingMsgUnder" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
               Message (Under Threshold)
             </label>
             <input
@@ -182,14 +240,14 @@
               type="text"
               value="Spend ${remaining} more for FREE shipping!"
               placeholder="Spend ${remaining} more for FREE shipping!"
-              class="w-full kk-border px-4 py-3 outline-none text-[16px]"
+              class="w-full border-[4px] border-black px-3 py-2 sm:py-3 text-sm outline-none focus:border-kkpink transition-colors"
             />
-            <p class="text-xs opacity-50 mt-1">Use ${remaining} as placeholder for remaining amount</p>
+            <p class="text-xs text-gray-400 mt-1">Use ${remaining} as placeholder for remaining amount</p>
           </div>
 
           <!-- Message When Reached -->
           <div>
-            <label class="block text-xs font-black uppercase tracking-[.15em] opacity-70 mb-2">
+            <label for="freeShippingMsgReached" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
               Message (Threshold Reached)
             </label>
             <input
@@ -197,18 +255,18 @@
               type="text"
               value="🎉 You qualify for FREE shipping!"
               placeholder="🎉 You qualify for FREE shipping!"
-              class="w-full kk-border px-4 py-3 outline-none text-[16px]"
+              class="w-full border-[4px] border-black px-3 py-2 sm:py-3 text-sm outline-none focus:border-kkpink transition-colors"
             />
           </div>
 
           <!-- Preview -->
           <div>
-            <label class="block text-xs font-black uppercase tracking-[.15em] opacity-70 mb-2">
+            <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-2 text-black/70">
               Preview (Under Threshold)
             </label>
-            <div class="kk-border p-4 bg-gray-50">
+            <div class="border-4 border-black p-4 bg-gray-50 rounded-lg">
               <div class="text-sm font-bold text-center mb-2">Spend $25.00 more for FREE shipping!</div>
-              <div class="h-2 bg-gray-200 rounded-full overflow-hidden">
+              <div class="h-3 bg-gray-200 rounded-full overflow-hidden">
                 <div class="h-full bg-black rounded-full transition-all" style="width: 50%"></div>
               </div>
             </div>
@@ -221,7 +279,8 @@
         <button
           id="btnSave"
           type="button"
-          class="kk-border bg-black text-white font-black px-8 py-4 uppercase tracking-[.15em] text-sm hover:bg-white hover:text-black transition-colors"
+          class="border-4 border-black bg-black text-white px-8 py-3 font-black uppercase tracking-[.12em] text-sm
+                 hover:bg-kkpink hover:border-kkpink hover:text-black transition-all"
         >
           💾 Save Settings
         </button>
@@ -231,9 +290,9 @@
 
     <!-- Loading State -->
     <section id="loadingPanel" class="mt-8">
-      <div class="kk-border kk-shadow bg-white p-6 text-center">
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 text-center">
         <div class="inline-block w-8 h-8 border-4 border-black border-t-transparent rounded-full animate-spin"></div>
-        <p class="mt-4 text-sm opacity-70">Loading settings...</p>
+        <p class="mt-4 text-sm text-gray-500">Loading settings...</p>
       </div>
     </section>
 
@@ -256,6 +315,7 @@
 
     // Announcement Bar
     const announcementEnabled = document.getElementById("announcementEnabled");
+    const announcementToggle = document.getElementById("announcementToggle");
     const announcementText = document.getElementById("announcementText");
     const announcementLink = document.getElementById("announcementLink");
     const announcementBgColor = document.getElementById("announcementBgColor");
@@ -268,11 +328,41 @@
 
     // Free Shipping
     const freeShippingEnabled = document.getElementById("freeShippingEnabled");
+    const freeShippingToggle = document.getElementById("freeShippingToggle");
     const freeShippingThreshold = document.getElementById("freeShippingThreshold");
     const freeShippingMsgUnder = document.getElementById("freeShippingMsgUnder");
     const freeShippingMsgReached = document.getElementById("freeShippingMsgReached");
 
     const btnSave = document.getElementById("btnSave");
+
+    // Toggle switch helpers
+    function setupToggle(toggle, checkbox) {
+      const update = () => {
+        if (checkbox.checked) {
+          toggle.classList.add("active");
+          toggle.setAttribute("aria-checked", "true");
+        } else {
+          toggle.classList.remove("active");
+          toggle.setAttribute("aria-checked", "false");
+        }
+      };
+      
+      toggle.addEventListener("click", () => {
+        checkbox.checked = !checkbox.checked;
+        update();
+      });
+      
+      toggle.addEventListener("keydown", (e) => {
+        if (e.key === " " || e.key === "Enter") {
+          e.preventDefault();
+          checkbox.checked = !checkbox.checked;
+          update();
+        }
+      });
+      
+      // Initial state
+      update();
+    }
 
     async function init() {
       await initAdminNav("Settings");
@@ -282,8 +372,11 @@
       const check = await requireAdmin();
       if (!check.ok) {
         console.warn("[Settings] Not admin:", check.reason);
-        // Could redirect or disable save
       }
+      
+      // Setup toggle switches
+      setupToggle(announcementToggle, announcementEnabled);
+      setupToggle(freeShippingToggle, freeShippingEnabled);
       
       await loadSettings();
       setupListeners();
@@ -302,6 +395,8 @@
       if (announcementData?.value) {
         const v = announcementData.value;
         announcementEnabled.checked = v.enabled ?? false;
+        announcementToggle.classList.toggle("active", v.enabled ?? false);
+        announcementToggle.setAttribute("aria-checked", String(v.enabled ?? false));
         announcementText.value = v.text ?? "";
         announcementLink.value = v.link ?? "";
         announcementBgColor.value = v.bg_color ?? "#000000";
@@ -322,6 +417,8 @@
       if (freeShippingData?.value) {
         const v = freeShippingData.value;
         freeShippingEnabled.checked = v.enabled ?? true;
+        freeShippingToggle.classList.toggle("active", v.enabled ?? true);
+        freeShippingToggle.setAttribute("aria-checked", String(v.enabled ?? true));
         freeShippingThreshold.value = v.threshold ?? 50;
         freeShippingMsgUnder.value = v.message_under ?? "Spend ${remaining} more for FREE shipping!";
         freeShippingMsgReached.value = v.message_reached ?? "🎉 You qualify for FREE shipping!";
