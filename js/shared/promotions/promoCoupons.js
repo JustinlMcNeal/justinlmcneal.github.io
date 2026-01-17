@@ -29,9 +29,8 @@ export async function validateCouponCode(code = "", cartItems = []) {
       return { valid: false, promo: null, message: "This promotion does not accept a code." };
     }
 
-    if (!data.is_public) {
-      return { valid: false, promo: null, message: "Coupon is not available." };
-    }
+    // Note: is_public check removed - code-based coupons work regardless of is_public
+    // since the user needs the secret code to apply them anyway.
 
     if (!isWithinDateWindow(data)) {
       return { valid: false, promo: null, message: "Coupon is not active." };
