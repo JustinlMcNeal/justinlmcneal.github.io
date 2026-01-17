@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reviews · Karry Kraze</title>
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            kkpink: '#ff69b4',
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- KK base + components -->
+  <link rel="stylesheet" href="/css/theme/base.css">
+  <link rel="stylesheet" href="/css/theme/components.css">
+
+  <style>
+    .construction-icon {
+      animation: bounce 2s ease-in-out infinite;
+    }
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+  </style>
+</head>
+
+<body class="kk-page bg-gray-50 min-h-screen flex flex-col">
+  <!-- Navbar mount -->
+  <div id="kkNavbarMount"></div>
+
+  <main class="flex-1 flex items-center justify-center px-4 py-12">
+    <div class="max-w-lg w-full text-center">
+      <!-- Construction Icon -->
+      <div class="construction-icon text-6xl sm:text-8xl mb-6">
+        🚧
+      </div>
+
+      <!-- Badge -->
+      <div class="inline-block bg-black text-white px-3 py-1 text-[10px] font-black uppercase tracking-[.25em] mb-4">
+        Coming Soon
+      </div>
+
+      <!-- Title -->
+      <h1 class="text-3xl sm:text-5xl font-black tracking-tight mb-4">
+        Reviews
+      </h1>
+
+      <!-- Description -->
+      <p class="text-gray-600 text-sm sm:text-base mb-8 max-w-md mx-auto">
+        We're building something special! Soon you'll be able to read and share reviews from our amazing customers.
+      </p>
+
+      <!-- Decorative Box -->
+      <div class="bg-white border-4 border-black p-6 sm:p-8 shadow-[8px_8px_0_0_rgba(0,0,0,0.1)] mb-8">
+        <div class="flex items-center justify-center gap-2 mb-4">
+          <span class="text-2xl">⭐</span>
+          <span class="text-2xl">⭐</span>
+          <span class="text-2xl">⭐</span>
+          <span class="text-2xl">⭐</span>
+          <span class="text-2xl">⭐</span>
+        </div>
+        <p class="text-sm text-gray-500 font-medium">
+          Customer reviews coming soon...
+        </p>
+      </div>
+
+      <!-- Back to Shop Button -->
+      <a
+        href="/pages/catalog.html"
+        class="inline-block border-4 border-black bg-black text-white px-8 py-3 font-black uppercase tracking-[.12em] text-sm
+               hover:bg-kkpink hover:border-kkpink hover:text-black transition-all"
+      >
+        Shop Now
+      </a>
+    </div>
+  </main>
+
+  <!-- Footer mount -->
+  <div id="kkFooterMount"></div>
+
+  <script type="module">
+    import { initNavbar } from "/js/shared/navbar.js";
+    import { initFooter } from "/js/shared/footer.js";
+    
+    initNavbar();
+    initFooter();
+  </script>
+</body>
+</html>
