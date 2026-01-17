@@ -121,7 +121,8 @@ export async function buildCheckoutPromoPayload(items) {
   if (couponId) appliedIds.push(String(couponId));
 
   // ✅ Pass coupon type so Edge Function knows if it's a free_shipping coupon
-  const couponType = String(totals.coupon?.type || "").toLowerCase();
+  // Normalize to underscore format for consistency
+  const couponType = String(totals.coupon?.type || "").toLowerCase().replace("-", "_");
 
   return {
     code, // only 1 manual code

@@ -107,10 +107,10 @@ Deno.serve(async (req) => {
       console.warn("[create-checkout-session] Could not fetch free shipping settings, using defaults");
     }
 
-    // ✅ Check for free_shipping type coupon
+    // ✅ Check for free_shipping type coupon (handles both free-shipping and free_shipping)
     const promo = body?.promo ?? {};
     const couponType = String(promo?.coupon_type || "").toLowerCase();
-    const hasFreeShippingCoupon = couponType === "free_shipping";
+    const hasFreeShippingCoupon = couponType === "free_shipping" || couponType === "free-shipping";
 
     // Qualifies if: (a) cart meets threshold OR (b) has free_shipping coupon applied
     const qualifiesForFreeShipping = 
