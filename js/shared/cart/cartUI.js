@@ -96,9 +96,9 @@ export function renderCartItems(items = [], totals = {}, els = {}) {
   if (els.subtotalEl) els.subtotalEl.textContent = money(subtotal);
   if (els.totalEl) els.totalEl.textContent = money(total);
 
-  // Free shipping progress bar
+  // Free shipping progress bar - use total (after discounts) for accurate threshold check
   if (els.freeShippingEl) {
-    renderFreeShippingBar(subtotal, els.freeShippingEl);
+    renderFreeShippingBar(total, els.freeShippingEl);
   }
 
   // Safety

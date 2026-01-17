@@ -120,8 +120,12 @@ export async function buildCheckoutPromoPayload(items) {
   const couponId = totals.coupon?.id || totals.coupon?.uuid;
   if (couponId) appliedIds.push(String(couponId));
 
+  // ✅ Pass coupon type so Edge Function knows if it's a free_shipping coupon
+  const couponType = String(totals.coupon?.type || "").toLowerCase();
+
   return {
     code, // only 1 manual code
+    coupon_type: couponType,                // ✅ for free_shipping detection
     savings_cents: totalSavingsCents,       // ✅ auto + code
     savings_code_cents: codeSavingsCents,   // ✅ code only
     savings_auto_cents: autoSavingsCents,   // ✅ auto only

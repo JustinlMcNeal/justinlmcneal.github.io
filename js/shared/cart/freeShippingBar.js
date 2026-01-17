@@ -31,10 +31,10 @@ export async function getFreeShippingSettings() {
 
 /**
  * Render the free shipping progress bar
- * @param {number} subtotal - Current cart subtotal
+ * @param {number} cartTotal - Current cart total (after discounts)
  * @param {HTMLElement} container - Where to render the bar
  */
-export async function renderFreeShippingBar(subtotal, container) {
+export async function renderFreeShippingBar(cartTotal, container) {
   if (!container) return;
 
   const settings = await getFreeShippingSettings();
@@ -49,8 +49,8 @@ export async function renderFreeShippingBar(subtotal, container) {
   const msgUnder = settings.message_under || "Spend ${remaining} more for FREE shipping!";
   const msgReached = settings.message_reached || "🎉 You qualify for FREE shipping!";
 
-  const remaining = Math.max(0, threshold - subtotal);
-  const progress = Math.min(100, (subtotal / threshold) * 100);
+  const remaining = Math.max(0, threshold - cartTotal);
+  const progress = Math.min(100, (cartTotal / threshold) * 100);
   const qualified = remaining <= 0;
 
   // Build message

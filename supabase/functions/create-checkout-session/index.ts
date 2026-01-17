@@ -107,7 +107,15 @@ Deno.serve(async (req) => {
       console.warn("[create-checkout-session] Could not fetch free shipping settings, using defaults");
     }
 
-    const qualifiesForFreeShipping = freeShippingEnabled && cartSubtotal >= freeShippingThreshold;
+    // ✅ Check for free_shipping type coupon
+    const promo = body?.promo ?? {};
+    const couponType = String(promo?.coupon_type || "").toLowerCase();
+    const hasFreeShippingCoupon = couponType === "free_shipping";
+
+    // Qualifies if: (a) cart meets threshold OR (b) has free_shipping coupon applied
+    const qualifiesForFreeShipping = 
+      (freeShippingEnabled && cartSubtotal >= freeShippingThreshold) || 
+      hasFreeShippingCoupon;
 
     // order id
     const kk_order_id =
@@ -134,8 +142,7 @@ Deno.serve(async (req) => {
     const orderSource = metaStr(body?.source || "website", 60) || "website";
     const orderShippingType = metaStr(body?.shipping_type || "", 60) || "";
 
-    // promo truth (since Stripe doesn’t discount for you)
-    const promo = body?.promo ?? {};
+    // promo truth (since Stripe doesn't discount for you) - promo already declared above
     const promoCode = metaStr(promo?.code || "", 80);
     const savingsCents = Math.max(0, safeInt(promo?.savings_cents, 0));
     const savingsCodeCents = Math.max(0, safeInt(promo?.savings_code_cents, 0));
