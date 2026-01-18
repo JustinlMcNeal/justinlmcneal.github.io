@@ -140,11 +140,26 @@
           </div>
         </div>
 
-        <!-- Count + Sort (mobile) -->
+        <!-- Count + View Toggle + Sort -->
         <div class="flex items-center justify-between sm:justify-end gap-3">
           <div class="text-xs sm:text-sm font-bold uppercase tracking-wider text-gray-500" id="countLabel">
             0 items
           </div>
+          
+          <!-- View Toggle (Desktop) -->
+          <div id="viewToggle" class="hidden sm:flex border-2 border-black rounded overflow-hidden">
+            <button type="button" data-view="table" class="view-toggle-btn px-2 py-1 text-xs font-bold bg-black text-white" title="Table View">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
+              </svg>
+            </button>
+            <button type="button" data-view="cards" class="view-toggle-btn px-2 py-1 text-xs font-bold bg-white text-black" title="Card View">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/>
+              </svg>
+            </button>
+          </div>
+          
           <!-- Mobile sort dropdown -->
           <select id="mobileSortSelect" class="sm:hidden border-2 border-black px-2 py-1 text-xs font-bold bg-white">
             <option value="">Sort by...</option>
@@ -164,10 +179,15 @@
       <!-- Mobile Card View -->
       <div id="mobileProductCards" class="sm:hidden"></div>
       
+      <!-- Desktop Card View (hidden by default) -->
+      <div id="desktopCardView" class="hidden p-4">
+        <div id="desktopProductCards" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4"></div>
+      </div>
+      
       <!-- Desktop Table View -->
-      <div class="hidden sm:block overflow-x-auto custom-scrollbar">
+      <div id="desktopTableView" class="hidden sm:block overflow-x-auto custom-scrollbar max-h-[70vh]">
         <table class="w-full border-collapse text-sm">
-          <thead class="bg-black text-white">
+          <thead class="bg-black text-white sticky top-0 z-10">
             <tr class="text-left uppercase tracking-[.12em] text-[11px] font-black">
               <th class="px-4 py-4 cursor-pointer hover:bg-gray-800 transition-colors" data-sort="name">
                 <span class="flex items-center gap-1">Product <span data-sort-icon="name">↕</span></span>

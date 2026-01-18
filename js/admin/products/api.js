@@ -94,6 +94,17 @@ export async function upsertProduct(payload) {
   return data;
 }
 
+export async function quickUpdateProduct(productId, updates) {
+  const { data, error } = await sb()
+    .from("products")
+    .update(updates)
+    .eq("id", productId)
+    .select("*")
+    .single();
+  await must(true, error, "Quick update failed");
+  return data;
+}
+
 export async function setProductActive(productId, isActive) {
   const { error } = await sb().from("products").update({ is_active: isActive }).eq("id", productId);
   await must(true, error, "Update active flag failed");

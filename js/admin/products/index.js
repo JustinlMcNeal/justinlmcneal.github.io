@@ -103,6 +103,9 @@ async function boot() {
     { fetchSectionItemsForProduct, upsertSectionItemsForProduct }
   );
 
+  // Track current desktop view mode
+  let desktopViewMode = 'table'; // 'table' or 'cards'
+
   // 5) Render function
   function refreshTable() {
     renderTable({
@@ -111,11 +114,53 @@ async function boot() {
       searchValue: els.searchInput?.value || "",
       onEdit: modal.openEdit,
       onEditError: (err) => console.warn("[Admin Products] Edit failed:", err),
-      readOnly: false, // admin only page, so never readOnly here
+      readOnly: false,
+      refreshCallback: refreshTable,
     });
   }
 
-  // 6) Wire UI
+  // 6) View toggle functionality
+  const viewToggle = $("viewToggle");
+  const desktopTableView = $("desktopTableView");
+  const desktopCardView = $("desktopCardView");
+
+  function setDesktopView(mode) {
+    desktopViewMode = mode;
+    
+    // Update button styles
+    viewToggle?.querySelectorAll('.view-toggle-btn').forEach(btn => {
+      const isActive = btn.dataset.view === mode;
+      btn.classList.toggle('bg-black', isActive);
+      btn.classList.toggle('text-white', isActive);
+      btn.classList.toggle('bg-white', !isActive);
+      btn.classList.toggle('text-black', !isActive);
+    });
+    
+    // Toggle views
+    if (mode === 'table') {
+      desktopTableView?.classList.remove('hidden');
+      desktopTableView?.classList.add('sm:block');
+      desktopCardView?.classList.add('hidden');
+    } else {
+      desktopTableView?.classList.add('hidden');
+      desktopTableView?.classList.remove('sm:block');
+      desktopCardView?.classList.remove('hidden');
+    }
+    
+    // Save preference
+    localStorage.setItem('adminProductsView', mode);
+  }
+
+  // Load saved view preference
+  const savedView = localStorage.getItem('adminProductsView') || 'table';
+  setDesktopView(savedView);
+
+  // Bind view toggle buttons
+  viewToggle?.querySelectorAll('.view-toggle-btn').forEach(btn => {
+    btn.addEventListener('click', () => setDesktopView(btn.dataset.view));
+  });
+
+  // 7) Wire UI
   els.searchInput?.addEventListener("input", refreshTable);
 
   els.btnNew?.addEventListener("click", () => {

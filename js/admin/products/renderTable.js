@@ -1,6 +1,7 @@
 import { escapeHtml, money } from "./dom.js";
 import { state } from "./state.js";
 import { getProfitIndicator, calculateProfitProjections } from "../pStorage/profitCalc.js";
+import { quickUpdateProduct, fetchProducts } from "./api.js";
 
 /**
  * Sort products based on current sort state
@@ -150,6 +151,7 @@ export function renderTable({
   onEditError,
   readOnly = false,
   mobileCardsEl = null,
+  refreshCallback = null,
 }) {
   if (!productRowsEl) return;
 
@@ -255,8 +257,14 @@ export function renderTable({
           <td class="px-4 py-3">
             ${escapeHtml(cat || "—")}
           </td>
-          <td class="px-4 py-3 text-right font-bold">
-            ${money(p.price)}
+          <td class="px-4 py-3 text-right">
+            <span class="inline-price-edit font-bold cursor-pointer hover:bg-yellow-100 hover:text-kkpink px-2 py-1 rounded transition-colors" 
+                  data-product-id="${p.id}" 
+                  data-field="price" 
+                  data-value="${p.price || 0}"
+                  title="Click to edit price">
+              ${money(p.price)}
+            </span>
           </td>
           <td class="px-4 py-3 text-center hidden lg:table-cell">
             ${marginHtml}
@@ -298,5 +306,160 @@ export function renderTable({
         }
       });
     });
+
+    // Inline price editing
+    productRowsEl.querySelectorAll(".inline-price-edit").forEach((el) => {
+      el.addEventListener("click", (e) => {
+        e.stopPropagation();
+        startInlineEdit(el, refreshCallback);
+      });
+    });
   }
+
+  /* ---------------- DESKTOP CARDS (toggle view) ---------------- */
+  const desktopCardsEl = document.getElementById('desktopProductCards');
+  if (desktopCardsEl) {
+    desktopCardsEl.innerHTML = sorted
+      .map((p) => {
+        const cat = catMap.get(String(p.category_id)) || "";
+        const imgUrl = p.catalog_image_url || p.primary_image_url || "";
+        const statusClass = p.is_active ? "status-active" : "status-inactive";
+        const statusText = p.is_active ? "Active" : "Inactive";
+        const productPageUrl = p.slug ? `/pages/product.html?slug=${encodeURIComponent(p.slug)}` : null;
+        const supplierUrl = p.supplier_url || null;
+
+        // Calculate margin
+        let marginBadge = '';
+        if (p.unit_cost && p.price) {
+          const indicator = getProfitIndicator({
+            target_price: p.price,
+            weight_g: p.weight_g,
+            unit_cost: p.unit_cost
+          });
+          if (indicator.hasData) {
+            marginBadge = indicator.html;
+          }
+        }
+
+        return `
+          <div class="bg-white border-2 border-gray-200 rounded-lg overflow-hidden hover:border-black hover:shadow-lg transition-all group">
+            <!-- Image -->
+            <div class="aspect-square bg-gray-100 overflow-hidden relative">
+              ${imgUrl 
+                ? `<img src="${escapeHtml(imgUrl)}" class="w-full h-full object-cover group-hover:scale-105 transition-transform" alt="" loading="lazy" />` 
+                : `<div class="w-full h-full flex items-center justify-center text-gray-400 text-xs">No image</div>`}
+              <span class="${statusClass} absolute top-2 right-2 px-2 py-0.5 text-[9px] font-bold uppercase rounded">
+                ${statusText}
+              </span>
+            </div>
+            
+            <!-- Info -->
+            <div class="p-3">
+              ${productPageUrl 
+                ? `<a href="${productPageUrl}" target="_blank" class="font-bold text-sm line-clamp-2 hover:text-kkpink">${escapeHtml(p.name || "")}</a>`
+                : `<div class="font-bold text-sm line-clamp-2">${escapeHtml(p.name || "")}</div>`}
+              
+              <div class="flex items-center justify-between mt-2">
+                <div class="font-black text-lg">${money(p.price)}</div>
+                ${marginBadge}
+              </div>
+              
+              <div class="text-xs text-gray-500 mt-1 truncate">${escapeHtml(cat || "No category")}</div>
+              
+              ${supplierUrl 
+                ? `<a href="${escapeHtml(supplierUrl)}" target="_blank" class="text-[10px] text-gray-400 hover:text-kkpink mt-1 block truncate">${escapeHtml(p.slug || "")}</a>`
+                : `<div class="text-[10px] text-gray-400 mt-1 truncate">${escapeHtml(p.slug || "")}</div>`}
+              
+              ${!readOnly ? `
+                <button type="button" data-edit="${p.id}"
+                  class="w-full mt-3 border-2 border-black px-3 py-2 text-[10px] font-black uppercase tracking-wider
+                         hover:bg-black hover:text-white transition-colors">
+                  Edit
+                </button>
+              ` : ''}
+            </div>
+          </div>
+        `;
+      })
+      .join("");
+
+    if (!readOnly) {
+      desktopCardsEl.querySelectorAll("[data-edit]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          try {
+            await onEdit(btn.dataset.edit);
+          } catch (err) {
+            console.error(err);
+            onEditError?.(err);
+          }
+        });
+      });
+    }
+  }
+
+  // Store refresh callback for inline edits
+  window.__productRefreshCallback = refreshCallback;
+}
+
+/**
+ * Start inline editing for a field
+ */
+function startInlineEdit(el, refreshCallback) {
+  const productId = el.dataset.productId;
+  const field = el.dataset.field;
+  const currentValue = el.dataset.value;
+  
+  // Create input
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.step = '0.01';
+  input.value = currentValue;
+  input.className = 'w-20 px-2 py-1 text-sm font-bold border-2 border-kkpink rounded outline-none text-right';
+  
+  // Replace span with input
+  const originalHtml = el.innerHTML;
+  el.innerHTML = '';
+  el.appendChild(input);
+  input.focus();
+  input.select();
+  
+  const saveEdit = async () => {
+    const newValue = parseFloat(input.value) || 0;
+    
+    if (newValue !== parseFloat(currentValue)) {
+      try {
+        el.innerHTML = '<span class="text-gray-400 text-xs">Saving...</span>';
+        await quickUpdateProduct(productId, { [field]: newValue });
+        
+        // Update local state
+        const product = state.products.find(p => p.id === productId);
+        if (product) product[field] = newValue;
+        
+        // Refresh the table
+        if (refreshCallback) refreshCallback();
+      } catch (err) {
+        console.error('Inline edit failed:', err);
+        el.innerHTML = originalHtml;
+        alert('Failed to save: ' + err.message);
+      }
+    } else {
+      el.innerHTML = originalHtml;
+    }
+  };
+  
+  const cancelEdit = () => {
+    el.innerHTML = originalHtml;
+  };
+  
+  input.addEventListener('blur', saveEdit);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      input.blur();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      input.removeEventListener('blur', saveEdit);
+      cancelEdit();
+    }
+  });
 }
