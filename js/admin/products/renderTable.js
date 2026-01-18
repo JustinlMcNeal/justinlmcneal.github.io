@@ -74,15 +74,24 @@ function mobileCardRow(p, cat, active, readOnly) {
 
   // Calculate margin for mobile card
   let marginBadge = '';
-  if (p.unit_cost && p.price) {
+  const price = Number(p.price) || 0;
+  const unitCost = Number(p.unit_cost) || 0;
+  const weightG = Number(p.weight_g) || 0;
+  
+  if (unitCost > 0 && price > 0) {
     const projections = calculateProfitProjections({
-      target_price: p.price,
-      weight_g: p.weight_g,
-      unit_cost: p.unit_cost
+      target_price: price,
+      weight_g: weightG,
+      unit_cost: unitCost
     });
-    if (projections && projections.hasEnoughData && typeof projections.marginPaidShipping === 'number') {
+    if (projections && projections.hasEnoughData && projections.marginPaidShipping > 0) {
       const indicator = getProfitIndicator(projections);
-      marginBadge = `<span class="px-1.5 py-0.5 text-[8px] font-bold rounded-sm ${indicator.hasData ? '' : 'bg-gray-100 text-gray-500'}">${indicator.html || ''}</span>`;
+      marginBadge = `<span class="px-1.5 py-0.5 text-[8px] font-bold rounded-sm">${indicator.html || ''}</span>`;
+    } else {
+      // Fallback: basic margin
+      const basicMargin = Math.round(((price - unitCost) / price) * 100);
+      const color = basicMargin >= 50 ? 'text-green-600' : basicMargin >= 30 ? 'text-yellow-600' : 'text-red-600';
+      marginBadge = `<span class="px-1.5 py-0.5 text-[8px] font-bold rounded-sm ${color}">${basicMargin}%</span>`;
     }
   }
 
@@ -209,28 +218,29 @@ export function renderTable({
 
       // Calculate margin if we have unit_cost and price
       let marginHtml = '<span class="text-gray-400" title="Missing cost data">—</span>';
-      if (p.unit_cost && p.price) {
+      const price = Number(p.price) || 0;
+      const unitCost = Number(p.unit_cost) || 0;
+      const weightG = Number(p.weight_g) || 0;
+      
+      if (unitCost > 0 && price > 0) {
+        // Try full profit calculation first
         const projections = calculateProfitProjections({
-          target_price: p.price,
-          weight_g: p.weight_g || 0,
-          unit_cost: p.unit_cost
+          target_price: price,
+          weight_g: weightG,
+          unit_cost: unitCost
         });
-        if (projections && projections.hasEnoughData && typeof projections.marginPaidShipping === 'number') {
+        
+        if (projections && projections.hasEnoughData && projections.marginPaidShipping > 0) {
           const indicator = getProfitIndicator(projections);
           marginHtml = indicator.html || '<span class="text-gray-400">—</span>';
-        } else if (projections && typeof projections.marginPaidShipping === 'number') {
-          // Show simple margin even if not all data is present
-          const pct = Math.round(projections.marginPaidShipping);
-          const color = pct >= 50 ? 'text-green-600' : pct >= 30 ? 'text-yellow-600' : 'text-red-600';
-          marginHtml = `<span class="${color} font-bold">${pct}%</span>`;
         } else {
-          // Show basic margin calculation
-          const basicMargin = Math.round(((p.price - p.unit_cost) / p.price) * 100);
+          // Fallback: show basic margin calculation (price - cost / price)
+          const basicMargin = Math.round(((price - unitCost) / price) * 100);
           const color = basicMargin >= 50 ? 'text-green-600' : basicMargin >= 30 ? 'text-yellow-600' : 'text-red-600';
-          marginHtml = `<span class="${color} font-bold" title="Basic margin (no shipping)">${basicMargin}%*</span>`;
+          marginHtml = `<span class="${color} font-bold">${basicMargin}%</span>`;
         }
-      } else if (p.price && !p.unit_cost) {
-        marginHtml = '<span class="text-gray-400" title="Missing unit cost">No cost</span>';
+      } else if (price > 0 && unitCost === 0) {
+        marginHtml = '<span class="text-gray-400 text-xs" title="Missing unit cost">No cost</span>';
       }
 
       const productUrl = p.slug ? `/pages/product.html?slug=${encodeURIComponent(p.slug)}` : '#';
