@@ -9,7 +9,7 @@ const SUMMARY = "v_order_summary_plus";
 const SHIP = "fulfillment_shipments";
 
 /**
- * Fetch full order details including line items
+ * Fetch full order details including line items with product images and costs
  */
 export async function fetchOrderDetails(stripe_checkout_session_id) {
   if (!stripe_checkout_session_id) throw new Error("Missing session ID");
@@ -32,6 +32,67 @@ export async function fetchOrderDetails(stripe_checkout_session_id) {
 
   if (liErr) throw liErr;
 
+  // Get product codes from line items (product_id in line_items is actually the product code like "KK-0016")
+  const productCodes = [...new Set((lineItems || []).map(li => li.product_id).filter(Boolean))];
+  let productsMap = new Map();
+  let variantsMap = new Map(); // key: "productCode|variantName" -> variant
+  
+  if (productCodes.length > 0) {
+    // Fetch products by code with their variants and costs
+    // Cost data is in product_costs table (unit_cost, supplier_ship_per_unit)
+    const { data: products, error: pErr } = await supabase
+      .from("products")
+      .select(`
+        id, code, name, primary_image_url, catalog_image_url,
+        product_variants (option_value, preview_image_url),
+        product_costs (unit_cost, supplier_ship_per_unit)
+      `)
+      .in("code", productCodes);
+    
+    if (pErr) console.error("[fetchOrderDetails] Products error:", pErr);
+    
+    for (const p of products || []) {
+      // product_costs can come back as [] or object depending on relationships
+      const pcRaw = p.product_costs;
+      const pc = Array.isArray(pcRaw) ? pcRaw[0] : pcRaw;
+      productsMap.set(p.code, { ...p, _costs: pc || {} });
+      // Build variant image map
+      for (const v of p.product_variants || []) {
+        if (v.option_value && v.preview_image_url) {
+          variantsMap.set(`${p.code}|${v.option_value}`, v.preview_image_url);
+        }
+      }
+    }
+  }
+
+  // Enrich line items with product data and calculate costs
+  // TRUE CPI = unit_cost + supplier_ship_per_unit (from product_costs table)
+  let calculatedCostCents = 0;
+  const enrichedLineItems = (lineItems || []).map(li => {
+    const product = productsMap.get(li.product_id);
+    const costs = product?._costs || {};
+    const qty = Number(li.quantity ?? 1);
+    const unitCostDollars = Number(costs.unit_cost ?? 0);
+    const supplierShipDollars = Number(costs.supplier_ship_per_unit ?? 0);
+    const trueCpiDollars = unitCostDollars + supplierShipDollars;
+    const lineCostCents = Math.round(trueCpiDollars * 100 * qty);
+    calculatedCostCents += lineCostCents;
+    
+    // Get variant-specific image, or fall back to product images
+    const variantKey = `${li.product_id}|${li.variant}`;
+    const variantImage = variantsMap.get(variantKey);
+    const imageUrl = variantImage || product?.primary_image_url || product?.catalog_image_url || null;
+    
+    return {
+      ...li,
+      product_image_url: imageUrl,
+      unit_cost_cents: Math.round(unitCostDollars * 100),
+      supplier_ship_cents: Math.round(supplierShipDollars * 100),
+      cpi_cents: Math.round(trueCpiDollars * 100), // True CPI per unit
+      line_cost_cents: lineCostCents, // CPI × quantity
+    };
+  });
+
   // Get shipment info
   const { data: shipment } = await supabase
     .from(SHIP)
@@ -39,9 +100,20 @@ export async function fetchOrderDetails(stripe_checkout_session_id) {
     .eq("stripe_checkout_session_id", stripe_checkout_session_id)
     .single();
 
+  // Calculate costs - always use our calculated value for accuracy
+  const labelCostCents = shipment?.label_cost_cents || 0;
+  const totalPaidCents = orderData.total_paid_cents || 0;
+  const profitCents = totalPaidCents - calculatedCostCents - labelCostCents;
+
+  const orderWithCost = {
+    ...orderData,
+    order_cost_total_cents: calculatedCostCents,
+    profit_cents: profitCents,
+  };
+
   return {
-    order: orderData,
-    lineItems: lineItems || [],
+    order: orderWithCost,
+    lineItems: enrichedLineItems,
     shipment: shipment || null,
   };
 }
@@ -152,15 +224,107 @@ export async function fetchOrderSummaryPage({
   const sessionIds = rows.map((r) => r.stripe_checkout_session_id).filter(Boolean);
 
   const shipMap = await getShipmentsMap(sessionIds);
-  const merged = rows.map((r) => ({
-    ...r,
-    shipment: shipMap.get(r.stripe_checkout_session_id) || null,
-  }));
+  
+  // Recalculate profit from line items and product costs
+  const profitMap = await calculateProfitsForOrders(sessionIds);
+
+  const merged = rows.map((r) => {
+    const shipment = shipMap.get(r.stripe_checkout_session_id) || null;
+    const calcProfit = profitMap.get(r.stripe_checkout_session_id);
+    
+    return {
+      ...r,
+      shipment,
+      // Use calculated profit if available, recalculating based on actual product costs
+      order_cost_total_cents: calcProfit?.costCents ?? r.order_cost_total_cents ?? 0,
+      profit_cents: calcProfit?.profitCents ?? r.profit_cents ?? 0,
+    };
+  });
 
   const totalCount = Number(count ?? 0);
   const hasMore = O + merged.length < totalCount;
 
   return { rows: merged, totalCount, hasMore };
+}
+
+/**
+ * Calculate actual profits for orders based on product unit_cost
+ */
+async function calculateProfitsForOrders(sessionIds) {
+  const profitMap = new Map();
+  if (!sessionIds?.length) return profitMap;
+
+  // Get all line items for these orders
+  const { data: lineItems } = await supabase
+    .from("line_items_raw")
+    .select("stripe_checkout_session_id, product_id, quantity")
+    .in("stripe_checkout_session_id", sessionIds);
+
+  if (!lineItems?.length) return profitMap;
+
+  // Get unique product codes
+  const productCodes = [...new Set(lineItems.map(li => li.product_id).filter(Boolean))];
+  
+  // Fetch products with their costs from product_costs table
+  const { data: products } = await supabase
+    .from("products")
+    .select("code, product_costs (unit_cost, supplier_ship_per_unit)")
+    .in("code", productCodes);
+
+  // TRUE CPI = unit_cost + supplier_ship_per_unit (from product_costs)
+  const productCostMap = new Map();
+  for (const p of products || []) {
+    const pcRaw = p.product_costs;
+    const pc = Array.isArray(pcRaw) ? pcRaw[0] : pcRaw;
+    const unitCost = Number(pc?.unit_cost ?? 0);
+    const supplierShip = Number(pc?.supplier_ship_per_unit ?? 0);
+    productCostMap.set(p.code, unitCost + supplierShip);
+  }
+
+  // Get shipments for label costs
+  const { data: shipments } = await supabase
+    .from(SHIP)
+    .select("stripe_checkout_session_id, label_cost_cents")
+    .in("stripe_checkout_session_id", sessionIds);
+
+  const labelCostMap = new Map();
+  for (const s of shipments || []) {
+    labelCostMap.set(s.stripe_checkout_session_id, s.label_cost_cents || 0);
+  }
+
+  // Get order totals
+  const { data: orders } = await supabase
+    .from(SUMMARY)
+    .select("stripe_checkout_session_id, total_paid_cents")
+    .in("stripe_checkout_session_id", sessionIds);
+
+  const orderTotalMap = new Map();
+  for (const o of orders || []) {
+    orderTotalMap.set(o.stripe_checkout_session_id, o.total_paid_cents || 0);
+  }
+
+  // Calculate cost per order (using TRUE CPI)
+  const orderCostMap = new Map();
+  for (const li of lineItems) {
+    const sid = li.stripe_checkout_session_id;
+    const qty = Number(li.quantity ?? 1);
+    const trueCpi = productCostMap.get(li.product_id) || 0;
+    const lineCostCents = Math.round(trueCpi * 100 * qty);
+    
+    orderCostMap.set(sid, (orderCostMap.get(sid) || 0) + lineCostCents);
+  }
+
+  // Build final profit map
+  for (const sid of sessionIds) {
+    const costCents = orderCostMap.get(sid) || 0;
+    const labelCents = labelCostMap.get(sid) || 0;
+    const totalPaid = orderTotalMap.get(sid) || 0;
+    const profitCents = totalPaid - costCents - labelCents;
+    
+    profitMap.set(sid, { costCents, profitCents });
+  }
+
+  return profitMap;
 }
 
 export async function fetchOrderSummaryAllForExport(filters = {}) {

@@ -42,37 +42,32 @@ function renderMobileCards(rows = []) {
 
       const customer =
         `${r.first_name || ""} ${r.last_name || ""}`.trim() || "—";
-      const email = r.email || "—";
 
       const items = r.total_items ?? r.li_total_items ?? "—";
-      const weightG = r.total_weight_g ?? r.li_total_weight_g ?? null;
-      const weightOz = weightG != null ? gramsToOz(weightG) : null;
 
       const paid = moneyFromCents(r.total_paid_cents);
-      const cost = moneyFromCents(r.order_cost_total_cents);
       const profit = moneyFromCents(r.profit_cents);
+      const profitColor = Number(r.profit_cents) > 0 ? 'text-emerald-600' : 'text-red-600';
 
       const labelStatus = ship?.label_status || "pending";
-      const tracking = formatTracking(ship?.tracking_number);
 
       return `
         <tr>
-          <td colspan="12" class="p-0">
+          <td colspan="8" class="p-0">
             <div class="border-b border-black/15 px-4 py-4">
               <!-- top line -->
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0">
                   <div class="text-[11px] font-black uppercase tracking-[.18em] text-black/60">
-                    ${esc(date)} · Order
-                    <span class="text-black">${esc(orderId)}</span>
+                    ${esc(date)} · 
+                    <button type="button" data-view="${idx}" class="text-kkpink hover:underline cursor-pointer">
+                      ${esc(orderId)}
+                    </button>
                   </div>
 
                   <div class="mt-2">
                     <div class="font-black uppercase tracking-[.06em] text-[12px]">
                       ${esc(customer)}
-                    </div>
-                    <div class="text-xs text-black/60 mt-1 break-words">
-                      ${esc(email)}
                     </div>
                   </div>
                 </div>
@@ -82,44 +77,26 @@ function renderMobileCards(rows = []) {
                     ${esc(displayStatus(labelStatus))}
                   </span>
 
-                  <div class="flex gap-2">
-                    <button
-                      type="button"
-                      data-view="${idx}"
-                      class="inline-flex items-center gap-1 border-[4px] border-black bg-white px-3 py-2
-                             font-black uppercase tracking-[.14em] text-[11px]
-                             hover:bg-gray-100 transition"
-                      aria-label="View order details"
-                      title="View Details"
-                    >
-                      <span aria-hidden="true" class="text-[12px] leading-none">👁</span>
-                    </button>
-                    <button
-                      type="button"
-                      data-edit="${idx}"
-                      class="inline-flex items-center gap-2 border-[4px] border-black bg-white px-3 py-2
-                             font-black uppercase tracking-[.14em] text-[11px]
-                             hover:bg-black hover:text-white transition"
-                      aria-label="Edit order"
-                      title="Edit"
-                    >
-                      <span aria-hidden="true" class="text-[12px] leading-none">✎</span>
-                      <span>Edit</span>
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    data-edit="${idx}"
+                    class="inline-flex items-center gap-2 border-[4px] border-black bg-white px-3 py-2
+                           font-black uppercase tracking-[.14em] text-[11px]
+                           hover:bg-black hover:text-white transition"
+                    aria-label="Edit order"
+                    title="Edit"
+                  >
+                    <span aria-hidden="true" class="text-[12px] leading-none">✎</span>
+                    <span>Edit</span>
+                  </button>
                 </div>
               </div>
 
               <!-- stats grid -->
-              <div class="mt-4 grid grid-cols-2 gap-3 text-sm">
+              <div class="mt-4 grid grid-cols-3 gap-3 text-sm">
                 <div class="border-[3px] border-black p-3">
                   <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60">Items</div>
                   <div class="mt-1 font-black">${esc(items)}</div>
-                </div>
-
-                <div class="border-[3px] border-black p-3">
-                  <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60">Weight</div>
-                  <div class="mt-1 font-black">${esc(formatOz(weightOz))}</div>
                 </div>
 
                 <div class="border-[3px] border-black p-3">
@@ -129,16 +106,7 @@ function renderMobileCards(rows = []) {
 
                 <div class="border-[3px] border-black p-3">
                   <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60">Profit</div>
-                  <div class="mt-1 font-black">${esc(profit)}</div>
-                  <div class="text-xs text-black/60 mt-1">Cost: ${esc(cost)}</div>
-                </div>
-              </div>
-
-              <!-- tracking -->
-              <div class="mt-3 border-[3px] border-black p-3">
-                <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60">Tracking</div>
-                <div class="mt-1 font-mono text-[12px] break-all">
-                  ${esc(tracking)}
+                  <div class="mt-1 font-black ${profitColor}">${esc(profit)}</div>
                 </div>
               </div>
             </div>
@@ -159,18 +127,13 @@ function renderDesktopRows(rows = []) {
 
       const customer =
         `${r.first_name || ""} ${r.last_name || ""}`.trim() || "—";
-      const email = r.email || "—";
 
       const items = r.total_items ?? r.li_total_items ?? "—";
-      const weightG = r.total_weight_g ?? r.li_total_weight_g ?? null;
-      const weightOz = weightG != null ? gramsToOz(weightG) : null;
 
       const paid = moneyFromCents(r.total_paid_cents);
-      const cost = moneyFromCents(r.order_cost_total_cents);
       const profit = moneyFromCents(r.profit_cents);
 
       const labelStatus = ship?.label_status || "pending";
-      const tracking = formatTracking(ship?.tracking_number);
 
       const date = formatDateShort(r.order_date);
 
@@ -180,35 +143,28 @@ function renderDesktopRows(rows = []) {
             ${esc(date)}
           </td>
 
-          <td class="px-4 py-3 text-sm whitespace-nowrap" title="${esc(r.kk_order_id || "")}">
-            <span class="font-black">${esc(r.kk_order_id || "—")}</span>
+          <td class="px-4 py-3 text-sm whitespace-nowrap">
+            <button
+              type="button"
+              data-view="${idx}"
+              class="font-black text-kkpink hover:underline cursor-pointer"
+              title="Click to view details"
+            >${esc(r.kk_order_id || "—")}</button>
           </td>
 
           <td class="px-4 py-3 text-sm">
             <span class="font-black uppercase tracking-[.04em]">${esc(customer)}</span>
           </td>
 
-          <td class="px-4 py-3 text-sm text-black/70">
-            ${esc(email)}
-          </td>
-
-          <td class="px-4 py-3 text-sm whitespace-nowrap">
+          <td class="px-4 py-3 text-sm whitespace-nowrap text-center">
             ${esc(items)}
           </td>
 
-          <td class="px-4 py-3 text-sm whitespace-nowrap">
-            ${esc(formatOz(weightOz))}
-          </td>
-
-          <td class="px-4 py-3 text-sm whitespace-nowrap font-black">
+          <td class="px-4 py-3 text-sm whitespace-nowrap font-black text-right">
             ${esc(paid)}
           </td>
 
-          <td class="px-4 py-3 text-sm whitespace-nowrap">
-            ${esc(cost)}
-          </td>
-
-          <td class="px-4 py-3 text-sm whitespace-nowrap font-black">
+          <td class="px-4 py-3 text-sm whitespace-nowrap font-black text-right ${Number(r.profit_cents) > 0 ? 'text-emerald-600' : 'text-red-600'}">
             ${esc(profit)}
           </td>
 
@@ -218,36 +174,19 @@ function renderDesktopRows(rows = []) {
             </span>
           </td>
 
-          <td class="px-4 py-3 text-sm whitespace-nowrap font-mono text-[12px]">
-            ${esc(tracking)}
-          </td>
-
           <td class="px-4 py-3 text-right whitespace-nowrap">
-            <div class="flex items-center justify-end gap-2">
-              <button
-                type="button"
-                data-view="${idx}"
-                class="inline-flex items-center justify-center border-[4px] border-black bg-white w-10 h-10
-                       font-black text-[14px]
-                       hover:bg-gray-100 transition"
-                aria-label="View order details"
-                title="View Details"
-              >
-                👁
-              </button>
-              <button
-                type="button"
-                data-edit="${idx}"
-                class="inline-flex items-center gap-2 border-[4px] border-black bg-white px-3 py-2
-                       font-black uppercase tracking-[.14em] text-[11px]
-                       hover:bg-black hover:text-white transition"
-                aria-label="Edit order"
-                title="Edit"
-              >
-                <span aria-hidden="true" class="text-[12px] leading-none">✎</span>
-                <span>Edit</span>
-              </button>
-            </div>
+            <button
+              type="button"
+              data-edit="${idx}"
+              class="inline-flex items-center gap-2 border-[4px] border-black bg-white px-3 py-2
+                     font-black uppercase tracking-[.14em] text-[11px]
+                     hover:bg-black hover:text-white transition"
+              aria-label="Edit order"
+              title="Edit"
+            >
+              <span aria-hidden="true" class="text-[12px] leading-none">✎</span>
+              <span>Edit</span>
+            </button>
           </td>
         </tr>
       `;

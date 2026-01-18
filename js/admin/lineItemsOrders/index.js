@@ -85,14 +85,13 @@ function renderOrderDetailsHtml(order, lineItems, shipment) {
   const email = order.email || "—";
   const phone = order.phone || "—";
 
-  // Address
+  // Address - using actual field names from orders_raw
   const addr = [
-    order.shipping_line1,
-    order.shipping_line2,
-    order.shipping_city,
-    order.shipping_state,
-    order.shipping_postal_code,
-    order.shipping_country,
+    order.street_address,
+    order.city,
+    order.state,
+    order.zip,
+    order.country,
   ].filter(Boolean).join(", ") || "—";
 
   // Status
@@ -150,21 +149,32 @@ function renderOrderDetailsHtml(order, lineItems, shipment) {
       </div>
       <div class="space-y-3">
         ${lineItems.length === 0 ? '<div class="text-gray-500 text-sm">No line items found</div>' : 
-          lineItems.map(li => `
+          lineItems.map(li => {
+            const qty = Number(li.quantity ?? 1);
+            const unitCents = li.post_discount_unit_price_cents ?? li.unit_price_cents;
+            const lineTotalCents = unitCents != null ? unitCents * qty : null;
+            const imgHtml = li.product_image_url 
+              ? `<img src="${esc(li.product_image_url)}" class="w-16 h-16 object-cover border-2 border-black flex-shrink-0" onerror="this.outerHTML='<div class=\\'w-16 h-16 bg-gray-100 border-2 border-black flex items-center justify-center text-[10px] text-gray-400 flex-shrink-0\\'>📦</div>'" />`
+              : `<div class="w-16 h-16 bg-gray-100 border-2 border-black flex items-center justify-center text-[10px] text-gray-400 flex-shrink-0">📦</div>`;
+            return `
             <div class="border-4 border-black p-4 flex gap-4">
-              ${li.product_image_url 
-                ? `<img src="${esc(li.product_image_url)}" class="w-16 h-16 object-cover border-2 border-black flex-shrink-0" />`
-                : `<div class="w-16 h-16 bg-gray-100 border-2 border-black flex items-center justify-center text-[10px] text-gray-400 flex-shrink-0">No img</div>`}
+              ${imgHtml}
               <div class="flex-1 min-w-0">
-                <div class="font-black text-sm line-clamp-2">${esc(li.product_name || "Unknown Product")}</div>
+                <div class="font-black text-sm line-clamp-2">${esc(li.product_name || li.product_id || "Unknown Product")}</div>
                 ${li.variant ? `<div class="text-xs text-gray-500 mt-1">Variant: ${esc(li.variant)}</div>` : ""}
-                <div class="flex items-center gap-4 mt-2 text-sm">
-                  <span>Qty: <strong>${esc(li.quantity || 1)}</strong></span>
-                  <span>Price: <strong>${money(li.amount_cents)}</strong></span>
+                <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm">
+                  <span>Qty: <strong>${qty}</strong></span>
+                  <span>Price: <strong>${money(unitCents)}</strong></span>
+                  <span>Revenue: <strong>${money(lineTotalCents)}</strong></span>
                 </div>
+                ${li.cpi_cents ? `
+                <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-xs text-red-600">
+                  <span>CPI: ${money(li.cpi_cents)}/ea</span>
+                  <span>×${qty} = <strong>${money(li.line_cost_cents)}</strong></span>
+                </div>` : ''}
               </div>
             </div>
-          `).join("")}
+          `}).join("")}
       </div>
     </section>
 
@@ -179,11 +189,11 @@ function renderOrderDetailsHtml(order, lineItems, shipment) {
       <div class="grid sm:grid-cols-3 gap-4">
         <div class="border-4 border-black p-4">
           <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">Subtotal</div>
-          <div class="font-black text-lg">${money(order.subtotal_cents)}</div>
+          <div class="font-black text-lg">${money(order.subtotal_paid_cents)}</div>
         </div>
         <div class="border-4 border-black p-4">
           <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">Shipping</div>
-          <div class="font-black text-lg">${money(order.shipping_cents)}</div>
+          <div class="font-black text-lg">${money(order.shipping_paid_cents)}</div>
         </div>
         <div class="border-4 border-black p-4 bg-black text-white">
           <div class="text-[10px] font-black uppercase tracking-[.18em] text-white/60 mb-1">Total Paid</div>
@@ -194,10 +204,35 @@ function renderOrderDetailsHtml(order, lineItems, shipment) {
 
     <div class="border-t-4 border-gray-100"></div>
 
-    <!-- Fulfillment Status -->
+    <!-- Cost & Profit -->
     <section>
       <div class="text-[11px] font-black uppercase tracking-[.25em] flex items-center gap-2 mb-4">
         <span class="w-5 h-5 bg-black text-white text-[10px] flex items-center justify-center">5</span>
+        Cost & Profit
+      </div>
+      <div class="grid sm:grid-cols-3 gap-4">
+        <div class="border-4 border-black p-4">
+          <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">Product CPI</div>
+          <div class="font-black text-lg text-red-600">${money(order.order_cost_total_cents)}</div>
+          <div class="text-[9px] text-black/50 mt-1">Unit + China Ship</div>
+        </div>
+        <div class="border-4 border-black p-4">
+          <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">USPS Label</div>
+          <div class="font-black text-lg text-red-600">${money(shipment?.label_cost_cents)}</div>
+        </div>
+        <div class="border-4 border-black p-4 bg-emerald-50">
+          <div class="text-[10px] font-black uppercase tracking-[.18em] text-emerald-700/60 mb-1">Profit</div>
+          <div class="font-black text-lg text-emerald-600">${money(order.profit_cents)}</div>
+        </div>
+      </div>
+    </section>
+
+    <div class="border-t-4 border-gray-100"></div>
+
+    <!-- Fulfillment Status -->
+    <section>
+      <div class="text-[11px] font-black uppercase tracking-[.25em] flex items-center gap-2 mb-4">
+        <span class="w-5 h-5 bg-black text-white text-[10px] flex items-center justify-center">6</span>
         Fulfillment
       </div>
       <div class="grid sm:grid-cols-3 gap-4">
