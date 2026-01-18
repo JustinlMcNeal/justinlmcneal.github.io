@@ -74,14 +74,13 @@ function mobileCardRow(p, cat, active, readOnly) {
   // Calculate margin for mobile card
   let marginBadge = '';
   if (p.unit_cost && p.price) {
-    const projections = calculateProfitProjections({
+    const indicator = getProfitIndicator({
       target_price: p.price,
       weight_g: p.weight_g,
       unit_cost: p.unit_cost
     });
-    if (projections && projections.hasEnoughData && typeof projections.marginPaidShipping === 'number') {
-      const indicator = getProfitIndicator(projections);
-      marginBadge = `<span class="px-1.5 py-0.5 text-[8px] font-bold rounded-sm ${indicator.hasData ? '' : 'bg-gray-100 text-gray-500'}">${indicator.html || ''}</span>`;
+    if (indicator.hasData) {
+      marginBadge = `<span class="px-1.5 py-0.5 text-[8px] font-bold rounded-sm">${indicator.html}</span>`;
     }
   }
 
@@ -209,14 +208,13 @@ export function renderTable({
       // Calculate margin if we have unit_cost and price
       let marginHtml = '<span class="text-gray-400">—</span>';
       if (p.unit_cost && p.price) {
-        const projections = calculateProfitProjections({
+        const indicator = getProfitIndicator({
           target_price: p.price,
           weight_g: p.weight_g,
           unit_cost: p.unit_cost
         });
-        if (projections && projections.hasEnoughData && typeof projections.marginPaidShipping === 'number') {
-          const indicator = getProfitIndicator(projections);
-          marginHtml = indicator.html || '<span class="text-gray-400">—</span>';
+        if (indicator.hasData) {
+          marginHtml = indicator.html;
         }
       }
 
