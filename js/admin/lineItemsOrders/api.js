@@ -1,6 +1,7 @@
 // /js/admin/lineItemsOrders/api.js
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "/js/config/env.js";
+import { getSupplierShippingDetails, calculateCustomerShipping } from "/js/admin/pStorage/profitCalc.js";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -38,14 +39,13 @@ export async function fetchOrderDetails(stripe_checkout_session_id) {
   let variantsMap = new Map(); // key: "productCode|variantName" -> variant
   
   if (productCodes.length > 0) {
-    // Fetch products by code with their variants
-    // unit_cost is on products table, supplier_ship_per_unit is in product_costs
+    // Fetch products by code with their variants and weight
+    // CPI is calculated from: unit_cost + supplier_ship (from weight formula)
     const { data: products, error: pErr } = await supabase
       .from("products")
       .select(`
-        id, code, name, unit_cost, primary_image_url, catalog_image_url,
-        product_variants (option_value, preview_image_url),
-        product_costs (supplier_ship_per_unit)
+        id, code, name, unit_cost, weight_g, primary_image_url, catalog_image_url,
+        product_variants (option_value, preview_image_url)
       `)
       .in("code", productCodes);
     
@@ -54,11 +54,13 @@ export async function fetchOrderDetails(stripe_checkout_session_id) {
     console.log("[fetchOrderDetails] Products data:", products);
     
     for (const p of products || []) {
-      // product_costs can come back as [] or object depending on relationships
-      const pcRaw = p.product_costs;
-      const pc = Array.isArray(pcRaw) ? pcRaw[0] : pcRaw;
-      console.log(`[fetchOrderDetails] Product ${p.code} unit_cost:`, p.unit_cost, "costs:", pc);
-      productsMap.set(p.code, { ...p, _costs: pc || {} });
+      // Calculate supplier ship per unit using the weight formula (default 30 qty)
+      const weightG = Number(p.weight_g ?? 0);
+      const shipDetails = getSupplierShippingDetails(weightG, 30);
+      const supplierShipPerUnit = shipDetails.perUnitUSD || 0;
+      
+      console.log(`[fetchOrderDetails] Product ${p.code} unit_cost:`, p.unit_cost, "weight_g:", weightG, "supplierShip:", supplierShipPerUnit);
+      productsMap.set(p.code, { ...p, _supplierShipPerUnit: supplierShipPerUnit });
       // Build variant image map
       for (const v of p.product_variants || []) {
         if (v.option_value && v.preview_image_url) {
@@ -69,16 +71,16 @@ export async function fetchOrderDetails(stripe_checkout_session_id) {
   }
 
   // Enrich line items with product data and calculate costs
-  // TRUE CPI = unit_cost (from products) + supplier_ship_per_unit (from product_costs)
+  // CPI (Paid Shipping) = unit_cost + supplier_ship_per_unit (calculated from weight)
   let calculatedCostCents = 0;
   const enrichedLineItems = (lineItems || []).map(li => {
     const product = productsMap.get(li.product_id);
-    const costs = product?._costs || {};
     const qty = Number(li.quantity ?? 1);
     const unitCostDollars = Number(product?.unit_cost ?? 0);
-    const supplierShipDollars = Number(costs.supplier_ship_per_unit ?? 0);
-    const trueCpiDollars = unitCostDollars + supplierShipDollars;
-    const lineCostCents = Math.round(trueCpiDollars * 100 * qty);
+    const supplierShipDollars = Number(product?._supplierShipPerUnit ?? 0);
+    // CPI for Paid Shipping scenario (customer pays USPS, we only pay supplier ship)
+    const cpiDollars = unitCostDollars + supplierShipDollars;
+    const lineCostCents = Math.round(cpiDollars * 100 * qty);
     calculatedCostCents += lineCostCents;
     
     // Get variant-specific image, or fall back to product images
@@ -91,7 +93,7 @@ export async function fetchOrderDetails(stripe_checkout_session_id) {
       product_image_url: imageUrl,
       unit_cost_cents: Math.round(unitCostDollars * 100),
       supplier_ship_cents: Math.round(supplierShipDollars * 100),
-      cpi_cents: Math.round(trueCpiDollars * 100), // True CPI per unit
+      cpi_cents: Math.round(cpiDollars * 100), // CPI per unit (Paid Shipping)
       line_cost_cents: lineCostCents, // CPI × quantity
     };
   });
@@ -251,7 +253,8 @@ export async function fetchOrderSummaryPage({
 }
 
 /**
- * Calculate actual profits for orders based on product unit_cost
+ * Calculate actual profits for orders based on product CPI
+ * CPI = unit_cost + supplier_ship_per_unit (calculated from weight)
  */
 async function calculateProfitsForOrders(sessionIds) {
   const profitMap = new Map();
@@ -268,19 +271,19 @@ async function calculateProfitsForOrders(sessionIds) {
   // Get unique product codes
   const productCodes = [...new Set(lineItems.map(li => li.product_id).filter(Boolean))];
   
-  // Fetch products - unit_cost is on products table, supplier_ship on product_costs
+  // Fetch products with unit_cost and weight
   const { data: products } = await supabase
     .from("products")
-    .select("code, unit_cost, product_costs (supplier_ship_per_unit)")
+    .select("code, unit_cost, weight_g")
     .in("code", productCodes);
 
-  // TRUE CPI = unit_cost (products) + supplier_ship_per_unit (product_costs)
+  // CPI = unit_cost + supplier_ship_per_unit (calculated from weight)
   const productCostMap = new Map();
   for (const p of products || []) {
-    const pcRaw = p.product_costs;
-    const pc = Array.isArray(pcRaw) ? pcRaw[0] : pcRaw;
     const unitCost = Number(p.unit_cost ?? 0);
-    const supplierShip = Number(pc?.supplier_ship_per_unit ?? 0);
+    const weightG = Number(p.weight_g ?? 0);
+    const shipDetails = getSupplierShippingDetails(weightG, 30);
+    const supplierShip = shipDetails.perUnitUSD || 0;
     productCostMap.set(p.code, unitCost + supplierShip);
   }
 
