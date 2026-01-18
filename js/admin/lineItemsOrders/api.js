@@ -1,5 +1,5 @@
 // /js/admin/lineItemsOrders/api.js
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "/js/config/env.js";
 import { getSupplierShippingDetails, calculateCustomerShipping } from "/js/admin/pStorage/profitCalc.js";
 
@@ -260,18 +260,28 @@ async function calculateProfitsForOrders(sessionIds) {
   const profitMap = new Map();
   if (!sessionIds?.length) return profitMap;
 
-  // Get all line items for these orders
-  const { data: lineItems } = await supabase
-    .from("line_items_raw")
-    .select("stripe_checkout_session_id, product_id, quantity")
-    .in("stripe_checkout_session_id", sessionIds);
+  // Run all queries in parallel for speed
+  const [lineItemsRes, shipmentsRes, ordersRes] = await Promise.all([
+    supabase
+      .from("line_items_raw")
+      .select("stripe_checkout_session_id, product_id, quantity")
+      .in("stripe_checkout_session_id", sessionIds),
+    supabase
+      .from(SHIP)
+      .select("stripe_checkout_session_id, label_cost_cents")
+      .in("stripe_checkout_session_id", sessionIds),
+    supabase
+      .from(SUMMARY)
+      .select("stripe_checkout_session_id, total_paid_cents")
+      .in("stripe_checkout_session_id", sessionIds),
+  ]);
 
-  if (!lineItems?.length) return profitMap;
+  const lineItems = lineItemsRes.data || [];
+  if (!lineItems.length) return profitMap;
 
-  // Get unique product codes
+  // Get unique product codes and fetch products
   const productCodes = [...new Set(lineItems.map(li => li.product_id).filter(Boolean))];
   
-  // Fetch products with unit_cost and weight
   const { data: products } = await supabase
     .from("products")
     .select("code, unit_cost, weight_g")
@@ -287,25 +297,13 @@ async function calculateProfitsForOrders(sessionIds) {
     productCostMap.set(p.code, unitCost + supplierShip);
   }
 
-  // Get shipments for label costs
-  const { data: shipments } = await supabase
-    .from(SHIP)
-    .select("stripe_checkout_session_id, label_cost_cents")
-    .in("stripe_checkout_session_id", sessionIds);
-
   const labelCostMap = new Map();
-  for (const s of shipments || []) {
+  for (const s of shipmentsRes.data || []) {
     labelCostMap.set(s.stripe_checkout_session_id, s.label_cost_cents || 0);
   }
 
-  // Get order totals
-  const { data: orders } = await supabase
-    .from(SUMMARY)
-    .select("stripe_checkout_session_id, total_paid_cents")
-    .in("stripe_checkout_session_id", sessionIds);
-
   const orderTotalMap = new Map();
-  for (const o of orders || []) {
+  for (const o of ordersRes.data || []) {
     orderTotalMap.set(o.stripe_checkout_session_id, o.total_paid_cents || 0);
   }
 
@@ -394,7 +392,10 @@ export async function upsertFulfillmentShipment({
 }
 
 export async function fetchOrderKpis({ q = "", status = "", dateFrom = "", dateTo = "" } = {}) {
-  // Get base KPIs from RPC (orders count, revenue, unfulfilled)
+  // Get KPIs from RPC (orders count, revenue, profit, unfulfilled)
+  // Note: profit_cents from RPC uses database values (order_cost_total_cents)
+  // For more accurate profit, we'd need to recalculate using CPI formula,
+  // but that's too expensive for all orders. The per-row profit in the table is recalculated.
   const { data, error } = await supabase.rpc("rpc_order_kpis", {
     p_q: (q || "").trim() || null,
     p_status: (status || "").trim() || null,
@@ -405,54 +406,7 @@ export async function fetchOrderKpis({ q = "", status = "", dateFrom = "", dateT
   if (error) throw error;
 
   const row = Array.isArray(data) ? data[0] : data;
-  const baseKpis = row || { orders_count: 0, revenue_cents: 0, profit_cents: 0, unfulfilled_count: 0 };
-  
-  // Recalculate profit using the proper CPI formula (client-side)
-  // Get all session IDs for matching orders
-  let ordersQ = supabase.from(SUMMARY).select("stripe_checkout_session_id, total_paid_cents");
-  
-  const Q = (q || "").trim();
-  if (Q) {
-    const or = buildSearchOr(Q);
-    ordersQ = ordersQ.or(or);
-  }
-  
-  ordersQ = applyDateRange(ordersQ, dateFrom, dateTo);
-  
-  if (status) {
-    const statusSessionIds = await getSessionIdsByStatus(status);
-    if (statusSessionIds && statusSessionIds.length > 0) {
-      ordersQ = ordersQ.in("stripe_checkout_session_id", statusSessionIds);
-    } else if (status) {
-      // No matching orders for this status
-      return { ...baseKpis, profit_cents: 0 };
-    }
-  }
-  
-  const { data: orders, error: ordersErr } = await ordersQ;
-  if (ordersErr) throw ordersErr;
-  
-  if (!orders || orders.length === 0) {
-    return { ...baseKpis, profit_cents: 0 };
-  }
-  
-  const sessionIds = orders.map(o => o.stripe_checkout_session_id).filter(Boolean);
-  
-  // Calculate proper profit using CPI formula
-  const profitMap = await calculateProfitsForOrders(sessionIds);
-  
-  let totalProfit = 0;
-  for (const sid of sessionIds) {
-    const calc = profitMap.get(sid);
-    if (calc) {
-      totalProfit += calc.profitCents;
-    }
-  }
-  
-  return {
-    ...baseKpis,
-    profit_cents: totalProfit,
-  };
+  return row || { orders_count: 0, revenue_cents: 0, profit_cents: 0, unfulfilled_count: 0 };
 }
 
 export async function importPirateShipExport({ batchId, rows } = {}) {
