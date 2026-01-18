@@ -1,4 +1,4 @@
-import { stccFromGrams } from "./calc.js";
+import { stccFromGrams, calcSupplierShipPerUnit } from "./calc.js";
 
 export function bindPcalcEvents(els, store, { recomputeAndRender }) {
   let stccTouched = false;
@@ -27,22 +27,23 @@ export function bindPcalcEvents(els, store, { recomputeAndRender }) {
     recomputeAndRender(els, store);
   });
 
-  // Unit cost + supplier ship per unit
-  const onOtherInput = () => {
-    store.setInputs({
-      unit_cost: els.unitCost.value,
-      supplier_ship_per_unit: els.shipPerUnit.value,
-    });
+  // Unit cost manual edit
+  els.unitCost.addEventListener("input", () => {
+    store.setInputs({ unit_cost: els.unitCost.value });
     recomputeAndRender(els, store);
-  };
-  els.unitCost.addEventListener("input", onOtherInput);
-  els.shipPerUnit.addEventListener("input", onOtherInput);
+  });
 
-  // Weight change -> auto STCC if not touched
+  // Weight change -> recalculate supplier ship and STCC
   els.weightOz.addEventListener("input", () => {
     const g = Number(els.weightOz.value || 0);
     store.setInputs({ weight_g: g });
 
+    // Recalculate supplier ship per unit from weight
+    const shipPerUnit = calcSupplierShipPerUnit(g);
+    els.shipPerUnit.value = shipPerUnit.toFixed(2);
+    store.setInputs({ supplier_ship_per_unit: shipPerUnit });
+
+    // Auto STCC if not touched
     if (!stccTouched) {
       setStccMode(els, "auto");
       const est = stccFromGrams(g);
@@ -50,7 +51,6 @@ export function bindPcalcEvents(els, store, { recomputeAndRender }) {
       if (est == null) {
         els.stcc.value = "0.00";
         store.setInputs({ stcc: 0 });
-        // stays auto, but you can override
       } else {
         els.stcc.value = Number(est).toFixed(2);
         store.setInputs({ stcc: est });
@@ -143,24 +143,28 @@ function syncInputsFromSelected(els, store, { stccTouched }) {
   const selected = store.findSelected();
   if (!selected) return;
 
+  const weightG = Number(selected.weight_g || 0);
+  
+  // Unit cost from product (set in products.html)
   els.unitCost.value = moneyNum(selected.unit_cost);
-  els.shipPerUnit.value = moneyNum(selected.supplier_ship_per_unit);
-  els.weightOz.value = intNum(selected.weight_g);
-
-  const dbStcc = Number(selected.stcc || 0);
-  let stccVal = dbStcc;
-
-  if (!stccVal && !stccTouched) {
-    const est = stccFromGrams(Number(els.weightOz.value || 0));
+  els.weightOz.value = intNum(weightG);
+  
+  // Calculate supplier ship per unit from weight (auto-calculated)
+  const shipPerUnit = calcSupplierShipPerUnit(weightG);
+  els.shipPerUnit.value = moneyNum(shipPerUnit);
+  
+  // Auto-calculate STCC from weight
+  let stccVal = 0;
+  if (!stccTouched) {
+    const est = stccFromGrams(weightG);
     stccVal = est == null ? 0 : est;
   }
-
   els.stcc.value = moneyNum(stccVal);
 
   store.setInputs({
     unit_cost: selected.unit_cost,
-    supplier_ship_per_unit: selected.supplier_ship_per_unit,
-    weight_g: selected.weight_g,
+    supplier_ship_per_unit: shipPerUnit,
+    weight_g: weightG,
     stcc: stccVal,
   });
 }

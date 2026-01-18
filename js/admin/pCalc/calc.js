@@ -167,6 +167,34 @@ export function stccFromGrams(itemWeightG) {
   return null;
 }
 
+/**
+ * Calculate supplier shipping per unit based on weight
+ * Uses the same formula as profitCalc.js but inline here for simplicity
+ * Formula: EUB for ≤2000g total, HK-UPS for heavier
+ * @param {number} weightG - Weight per unit in grams
+ * @param {number} qty - Quantity (default 30)
+ * @returns {number} Shipping cost per unit in USD
+ */
+export function calcSupplierShipPerUnit(weightG, qty = 30) {
+  const g = num(weightG);
+  if (g <= 0) return 0;
+  
+  const totalWeight = g * qty;
+  const cnyToUsd = 0.1437;
+  
+  let totalCNY;
+  if (totalWeight <= 2000) {
+    // EUB: cheapest for light shipments
+    totalCNY = 88 + (totalWeight * 0.12);
+  } else {
+    // HK-UPS: reliable for heavier shipments
+    totalCNY = 297 + (totalWeight * 0.0523);
+  }
+  
+  const totalUSD = totalCNY * cnyToUsd;
+  return totalUSD / qty;
+}
+
 function indexOfMin(arr, fn) {
   let bestI = -1;
   let bestV = Infinity;

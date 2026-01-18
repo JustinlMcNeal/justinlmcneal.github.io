@@ -1,43 +1,28 @@
 import { getSupabaseClient } from "/js/shared/supabaseClient.js";
 import { PRODUCT_SELECT } from "/js/shared/productContract.js";
+import { getSupplierShippingDetails } from "/js/admin/pStorage/profitCalc.js";
 
 export async function fetchProductsWithCosts() {
   const sb = getSupabaseClient();
 
-  // Use the shared contract for products columns (includes weight_g)
+  // Use the shared contract for products columns (includes weight_g and unit_cost)
   const { data, error } = await sb
     .from("products")
-    .select(`
-      ${PRODUCT_SELECT},
-      product_costs (
-        product_id,
-        unit_cost,
-        supplier_ship_per_unit,
-        weight_oz_override,
-        stcc_override,
-        notes,
-        updated_at
-      )
-    `)
+    .select(PRODUCT_SELECT)
     .eq("is_active", true)
     .order("created_at", { ascending: false });
 
   if (error) throw new Error(error.message);
 
   return (data || []).map((p) => {
-    // product_costs can come back as [] or object depending on relationships
-    const pcRaw = p.product_costs;
-    const pc = Array.isArray(pcRaw) ? pcRaw[0] : pcRaw;
-
-    const unit_cost = num(pc?.unit_cost);
-    const supplier_ship_per_unit = num(pc?.supplier_ship_per_unit);
-
-    // ✅ grams: products.weight_g
-    // legacy override field name (weight_oz_override) is treated as GRAMS override
-    const weight_g = num(pc?.weight_oz_override ?? p.weight_g);
-
-    // ✅ STCC override (per unit)
-    const stcc = num(pc?.stcc_override);
+    // unit_cost is stored directly on products table (set via products.html)
+    const unit_cost = num(p.unit_cost);
+    const weight_g = num(p.weight_g);
+    
+    // Calculate supplier_ship_per_unit from weight using the formula
+    // Uses default qty of 30 for bulk shipping calculation
+    const shipDetails = getSupplierShippingDetails(weight_g, 30);
+    const supplier_ship_per_unit = shipDetails.perUnitUSD || 0;
 
     return {
       id: p.id,
@@ -50,10 +35,7 @@ export async function fetchProductsWithCosts() {
       unit_cost,
       supplier_ship_per_unit,
       weight_g,
-      stcc,
-
-      notes: pc?.notes || "",
-      cost_updated_at: pc?.updated_at || null,
+      stcc: 0, // Will be auto-calculated from weight in UI
     };
   });
 }

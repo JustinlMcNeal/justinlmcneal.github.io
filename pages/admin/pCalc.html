@@ -121,14 +121,16 @@
 
           <!-- Supplier Ship / Unit -->
           <div>
-            <label for="pc_ship_per_unit" class="block text-[9px] sm:text-[10px] font-black uppercase tracking-[.18em] mb-1 sm:mb-2 text-gray-500">
+            <label for="pc_ship_per_unit" class="flex items-center gap-2 text-[9px] sm:text-[10px] font-black uppercase tracking-[.18em] mb-1 sm:mb-2 text-gray-500">
               Supplier Ship / Unit
+              <span class="px-2 py-0.5 bg-blue-100 text-blue-700 text-[8px] rounded">AUTO</span>
             </label>
             <div class="relative">
               <span class="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">$</span>
-              <input id="pc_ship_per_unit" type="number" step="0.01" min="0" placeholder="Auto-calculated"
-                     class="w-full border-4 border-black pl-8 pr-3 py-2 sm:py-3 text-sm outline-none focus:border-kkpink transition-colors" />
+              <input id="pc_ship_per_unit" type="number" step="0.01" min="0" placeholder="Calculated from weight" readonly
+                     class="w-full border-4 border-gray-300 bg-gray-50 pl-8 pr-3 py-2 sm:py-3 text-sm outline-none cursor-not-allowed" />
             </div>
+            <div class="text-[9px] text-gray-400 mt-1">Based on weight × 30 units bulk shipping</div>
           </div>
 
           <!-- Weight -->
