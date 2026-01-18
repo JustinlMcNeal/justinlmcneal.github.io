@@ -9,6 +9,7 @@ export const PRODUCT_SELECT = `
   unit_cost,
   shipping_status,
   amazon_url,
+  supplier_url,
   catalog_image_url,
   catalog_hover_url,
   primary_image_url,

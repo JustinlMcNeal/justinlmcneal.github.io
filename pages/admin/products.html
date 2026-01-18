@@ -339,6 +339,32 @@
                 <p class="text-xs text-gray-500 mt-1">Optional: Add an Amazon product link to show "Buy on Amazon" button</p>
               </div>
 
+              <!-- Supplier URL (internal) -->
+              <div class="col-span-2">
+                <label for="fSupplierUrl" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
+                  <span class="flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                    </svg>
+                    Supplier Link
+                    <span class="text-[9px] font-normal text-gray-400">(internal)</span>
+                  </span>
+                </label>
+                <div class="flex gap-2">
+                  <input id="fSupplierUrl"
+                    class="flex-1 border-[4px] border-black px-3 py-2 text-sm outline-none"
+                    placeholder="https://detail.1688.com/..." />
+                  <button type="button" id="btnOpenSupplier" onclick="document.getElementById('fSupplierUrl').value && window.open(document.getElementById('fSupplierUrl').value, '_blank')"
+                    class="border-[4px] border-black px-3 py-2 text-sm font-bold hover:bg-black hover:text-white transition-colors"
+                    title="Open supplier link">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                  </button>
+                </div>
+                <p class="text-xs text-gray-500 mt-1">Internal: 1688, Alibaba, or other supplier product page</p>
+              </div>
+
               <div class="flex items-center gap-3 pt-6">
                 <input id="fActive" type="checkbox" class="h-5 w-5 border-[4px] border-black accent-kkpink" />
                 <label for="fActive" class="text-sm font-black uppercase tracking-[.12em]">

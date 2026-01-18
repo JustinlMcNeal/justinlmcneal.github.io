@@ -75,6 +75,7 @@ async function boot() {
     fPrimaryImg: $("fPrimaryImg"),
     fTags: $("fTags"),
     fAmazonUrl: $("fAmazonUrl"),
+    fSupplierUrl: $("fSupplierUrl"),
     profitProjectionsPanel: $("profitProjectionsPanel"),
 
     // Image upload elements

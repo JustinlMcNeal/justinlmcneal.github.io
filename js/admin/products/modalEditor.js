@@ -133,6 +133,7 @@ export function bindModal(els, refreshTable, sectionApi = {}) {
     els.fUnitCost.value = full.product.unit_cost ?? "";
     els.fShipping.value = full.product.shipping_status || "";
     els.fAmazonUrl.value = full.product.amazon_url || "";
+    if (els.fSupplierUrl) els.fSupplierUrl.value = full.product.supplier_url || "";
     els.fActive.checked = !!full.product.is_active;
 
     els.fCatalogImg.value = full.product.catalog_image_url || "";
@@ -214,6 +215,7 @@ export function bindModal(els, refreshTable, sectionApi = {}) {
     els.fUnitCost.value = "";
     els.fShipping.value = "";
     els.fAmazonUrl.value = "";
+    if (els.fSupplierUrl) els.fSupplierUrl.value = "";
     els.fActive.checked = true;
 
     els.fCatalogImg.value = "";
@@ -261,6 +263,7 @@ export function bindModal(els, refreshTable, sectionApi = {}) {
         unit_cost: els.fUnitCost?.value ? Number(els.fUnitCost.value) : null,
         shipping_status: els.fShipping.value.trim() || null,
         amazon_url: els.fAmazonUrl.value.trim() || null,
+        supplier_url: els.fSupplierUrl?.value?.trim() || null,
         catalog_image_url: els.fCatalogImg.value.trim() || null,
         catalog_hover_url: els.fHoverImg.value.trim() || null,
         primary_image_url: els.fPrimaryImg.value.trim() || null,
