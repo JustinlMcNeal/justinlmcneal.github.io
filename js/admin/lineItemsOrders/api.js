@@ -8,6 +8,44 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const SUMMARY = "v_order_summary_plus";
 const SHIP = "fulfillment_shipments";
 
+/**
+ * Fetch full order details including line items
+ */
+export async function fetchOrderDetails(stripe_checkout_session_id) {
+  if (!stripe_checkout_session_id) throw new Error("Missing session ID");
+
+  // Get order from summary view
+  const { data: orderData, error: orderErr } = await supabase
+    .from(SUMMARY)
+    .select("*")
+    .eq("stripe_checkout_session_id", stripe_checkout_session_id)
+    .single();
+
+  if (orderErr) throw orderErr;
+
+  // Get line items
+  const { data: lineItems, error: liErr } = await supabase
+    .from("v_order_lines")
+    .select("*")
+    .eq("stripe_checkout_session_id", stripe_checkout_session_id)
+    .order("line_item_row_id", { ascending: true });
+
+  if (liErr) throw liErr;
+
+  // Get shipment info
+  const { data: shipment } = await supabase
+    .from(SHIP)
+    .select("*")
+    .eq("stripe_checkout_session_id", stripe_checkout_session_id)
+    .single();
+
+  return {
+    order: orderData,
+    lineItems: lineItems || [],
+    shipment: shipment || null,
+  };
+}
+
 async function getSessionIdsByStatus(label_status) {
   if (!label_status) return null;
   const { data, error } = await supabase

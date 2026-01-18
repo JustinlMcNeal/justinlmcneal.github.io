@@ -82,18 +82,31 @@ function renderMobileCards(rows = []) {
                     ${esc(displayStatus(labelStatus))}
                   </span>
 
-                  <button
-                    type="button"
-                    data-edit="${idx}"
-                    class="inline-flex items-center gap-2 border-[4px] border-black bg-white px-3 py-2
-                           font-black uppercase tracking-[.14em] text-[11px]
-                           hover:bg-black hover:text-white transition"
-                    aria-label="Edit order"
-                    title="Edit"
-                  >
-                    <span aria-hidden="true" class="text-[12px] leading-none">✎</span>
-                    <span>Edit</span>
-                  </button>
+                  <div class="flex gap-2">
+                    <button
+                      type="button"
+                      data-view="${idx}"
+                      class="inline-flex items-center gap-1 border-[4px] border-black bg-white px-3 py-2
+                             font-black uppercase tracking-[.14em] text-[11px]
+                             hover:bg-gray-100 transition"
+                      aria-label="View order details"
+                      title="View Details"
+                    >
+                      <span aria-hidden="true" class="text-[12px] leading-none">👁</span>
+                    </button>
+                    <button
+                      type="button"
+                      data-edit="${idx}"
+                      class="inline-flex items-center gap-2 border-[4px] border-black bg-white px-3 py-2
+                             font-black uppercase tracking-[.14em] text-[11px]
+                             hover:bg-black hover:text-white transition"
+                      aria-label="Edit order"
+                      title="Edit"
+                    >
+                      <span aria-hidden="true" class="text-[12px] leading-none">✎</span>
+                      <span>Edit</span>
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -210,18 +223,31 @@ function renderDesktopRows(rows = []) {
           </td>
 
           <td class="px-4 py-3 text-right whitespace-nowrap">
-            <button
-              type="button"
-              data-edit="${idx}"
-              class="inline-flex items-center gap-2 border-[4px] border-black bg-white px-3 py-2
-                     font-black uppercase tracking-[.14em] text-[11px]
-                     hover:bg-black hover:text-white transition"
-              aria-label="Edit order"
-              title="Edit"
-            >
-              <span aria-hidden="true" class="text-[12px] leading-none">✎</span>
-              <span>Edit</span>
-            </button>
+            <div class="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                data-view="${idx}"
+                class="inline-flex items-center justify-center border-[4px] border-black bg-white w-10 h-10
+                       font-black text-[14px]
+                       hover:bg-gray-100 transition"
+                aria-label="View order details"
+                title="View Details"
+              >
+                👁
+              </button>
+              <button
+                type="button"
+                data-edit="${idx}"
+                class="inline-flex items-center gap-2 border-[4px] border-black bg-white px-3 py-2
+                       font-black uppercase tracking-[.14em] text-[11px]
+                       hover:bg-black hover:text-white transition"
+                aria-label="Edit order"
+                title="Edit"
+              >
+                <span aria-hidden="true" class="text-[12px] leading-none">✎</span>
+                <span>Edit</span>
+              </button>
+            </div>
           </td>
         </tr>
       `;
@@ -232,7 +258,7 @@ function renderDesktopRows(rows = []) {
 /* -------------------------
    MAIN
 -------------------------- */
-export function renderOrdersRows({ tbodyEl, rows = [], onEdit, countLabelEl } = {}) {
+export function renderOrdersRows({ tbodyEl, rows = [], onEdit, onView, countLabelEl } = {}) {
   if (!tbodyEl) return;
 
   if (countLabelEl) {
@@ -258,6 +284,15 @@ export function renderOrdersRows({ tbodyEl, rows = [], onEdit, countLabelEl } = 
       const idx = Number(btn.getAttribute("data-edit"));
       const row = rows[idx];
       if (row) onEdit?.(row);
+    });
+  });
+
+  // bind view
+  tbodyEl.querySelectorAll("[data-view]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const idx = Number(btn.getAttribute("data-view"));
+      const row = rows[idx];
+      if (row) onView?.(row);
     });
   });
 }

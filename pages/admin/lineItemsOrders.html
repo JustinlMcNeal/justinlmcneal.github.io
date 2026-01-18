@@ -422,6 +422,47 @@
     </div>
   </div>
 
+  <!-- VIEW DETAILS MODAL -->
+  <div id="viewModal" class="hidden fixed inset-0 z-[200]" aria-hidden="true">
+    <!-- Backdrop -->
+    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" data-view-modal-close></div>
+
+    <!-- Stage -->
+    <div class="relative h-full w-full overflow-y-auto">
+      <div class="min-h-full flex items-end sm:items-center justify-center p-0 sm:p-6">
+        <!-- Card -->
+        <div class="w-full sm:max-w-4xl bg-white border-0 sm:border-4 border-black shadow-none sm:shadow-[8px_8px_0_0_rgba(0,0,0,0.1)] min-h-screen sm:min-h-0 sm:max-h-[90vh] overflow-y-auto">
+          <!-- Head -->
+          <div class="sticky top-0 z-10 flex items-center justify-between gap-3 p-3 sm:p-5 border-b-4 border-black bg-white">
+            <div class="min-w-0">
+              <div class="inline-block bg-green-500 text-white px-2 py-0.5 text-[8px] sm:text-[9px] font-black uppercase tracking-[.2em] mb-1">
+                Order Details
+              </div>
+              <h3 id="viewModalTitle" class="text-lg sm:text-2xl font-black tracking-tight truncate">
+                Loading...
+              </h3>
+            </div>
+
+            <button
+              id="btnViewClose"
+              type="button"
+              class="border-4 border-black bg-white w-10 h-10 flex items-center justify-center font-black text-lg
+                     hover:bg-black hover:text-white transition-colors flex-shrink-0"
+              aria-label="Close"
+            >
+              ✕
+            </button>
+          </div>
+
+          <!-- Body -->
+          <div id="viewModalBody" class="p-3 sm:p-6 space-y-6">
+            <div class="text-center py-8 text-gray-500">Loading order details...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Footer mount -->
   <div id="kkFooterMount"></div>
 
@@ -431,6 +472,15 @@
       const modal = document.getElementById("modal");
       const backdrop = modal?.querySelector("[data-modal-close]");
       const closeBtn = document.getElementById("btnClose");
+      if (!modal || !backdrop || !closeBtn) return;
+      backdrop.addEventListener("click", () => closeBtn.click());
+    })();
+    
+    // View modal backdrop
+    (function () {
+      const modal = document.getElementById("viewModal");
+      const backdrop = modal?.querySelector("[data-view-modal-close]");
+      const closeBtn = document.getElementById("btnViewClose");
       if (!modal || !backdrop || !closeBtn) return;
       backdrop.addEventListener("click", () => closeBtn.click());
     })();
