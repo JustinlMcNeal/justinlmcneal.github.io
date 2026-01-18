@@ -32,8 +32,8 @@ function sortProducts(products, catMap) {
         break;
       case 'margin':
         // Calculate margin for sorting
-        const aProj = (a.unit_cost && a.price) ? calculateProfitProjections({ price: a.price, weight_g: a.weight_g, unit_cost: a.unit_cost }) : null;
-        const bProj = (b.unit_cost && b.price) ? calculateProfitProjections({ price: b.price, weight_g: b.weight_g, unit_cost: b.unit_cost }) : null;
+        const aProj = (a.unit_cost && a.price) ? calculateProfitProjections({ target_price: a.price, weight_g: a.weight_g, unit_cost: a.unit_cost }) : null;
+        const bProj = (b.unit_cost && b.price) ? calculateProfitProjections({ target_price: b.price, weight_g: b.weight_g, unit_cost: b.unit_cost }) : null;
         aVal = aProj?.cpiPaidShipping?.marginPercent ?? -999;
         bVal = bProj?.cpiPaidShipping?.marginPercent ?? -999;
         break;
@@ -79,14 +79,16 @@ function mobileCardRow(p, cat, active, readOnly) {
   const weightG = Number(p.weight_g) || 0;
   
   if (unitCost > 0 && price > 0) {
-    const projections = calculateProfitProjections({
+    // Build item object for profit calculation
+    const item = {
       target_price: price,
       weight_g: weightG,
       unit_cost: unitCost
-    });
-    if (projections && projections.hasEnoughData && projections.marginPaidShipping > 0) {
-      const indicator = getProfitIndicator(projections);
-      marginBadge = `<span class="px-1.5 py-0.5 text-[8px] font-bold rounded-sm">${indicator.html || ''}</span>`;
+    };
+    
+    const indicator = getProfitIndicator(item);
+    if (indicator && indicator.hasData && indicator.html) {
+      marginBadge = `<span class="px-1.5 py-0.5 text-[8px] font-bold rounded-sm">${indicator.html}</span>`;
     } else {
       // Fallback: basic margin
       const basicMargin = Math.round(((price - unitCost) / price) * 100);
@@ -222,22 +224,19 @@ export function renderTable({
       const unitCost = Number(p.unit_cost) || 0;
       const weightG = Number(p.weight_g) || 0;
       
-      // Debug: log product data for troubleshooting
-      if (p.name?.toLowerCase().includes('velvet')) {
-        console.log('[DEBUG] Velvet product data:', { name: p.name, price, unitCost, weightG, raw_unit_cost: p.unit_cost });
-      }
-      
       if (unitCost > 0 && price > 0) {
-        // Try full profit calculation first
-        const projections = calculateProfitProjections({
+        // Build item object for profit calculation
+        const item = {
           target_price: price,
           weight_g: weightG,
           unit_cost: unitCost
-        });
+        };
         
-        if (projections && projections.hasEnoughData && projections.marginPaidShipping > 0) {
-          const indicator = getProfitIndicator(projections);
-          marginHtml = indicator.html || '<span class="text-gray-400">—</span>';
+        // Get profit indicator (it calls calculateProfitProjections internally)
+        const indicator = getProfitIndicator(item);
+        
+        if (indicator && indicator.hasData && indicator.html) {
+          marginHtml = indicator.html;
         } else {
           // Fallback: show basic margin calculation (price - cost / price)
           const basicMargin = Math.round(((price - unitCost) / price) * 100);
