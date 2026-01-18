@@ -50,11 +50,14 @@ export async function fetchOrderDetails(stripe_checkout_session_id) {
       .in("code", productCodes);
     
     if (pErr) console.error("[fetchOrderDetails] Products error:", pErr);
+    console.log("[fetchOrderDetails] Product codes:", productCodes);
+    console.log("[fetchOrderDetails] Products data:", products);
     
     for (const p of products || []) {
       // product_costs can come back as [] or object depending on relationships
       const pcRaw = p.product_costs;
       const pc = Array.isArray(pcRaw) ? pcRaw[0] : pcRaw;
+      console.log(`[fetchOrderDetails] Product ${p.code} costs:`, pcRaw, "→", pc);
       productsMap.set(p.code, { ...p, _costs: pc || {} });
       // Build variant image map
       for (const v of p.product_variants || []) {
