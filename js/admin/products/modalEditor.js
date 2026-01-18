@@ -480,29 +480,28 @@ export function applyJsonToForm(els, data) {
     });
   }
 
-  // Description list - populate description section if available
-  if (Array.isArray(data.descriptionList) && data.descriptionList.length > 0) {
-    const descTextarea = document.querySelector('[data-section="description"] textarea');
-    if (descTextarea) {
-      descTextarea.value = data.descriptionList.map(item => `• ${item}`).join("\n");
+  // Helper to populate section via paste input and auto-apply
+  function populateSection(sectionName, items) {
+    if (!Array.isArray(items) || items.length === 0) return;
+    
+    const pasteInput = document.querySelector(`[data-sec-paste-input="${sectionName}"]`);
+    const applyBtn = document.querySelector(`[data-sec-paste-apply="${sectionName}"]`);
+    const pasteArea = document.querySelector(`[data-sec-paste-area="${sectionName}"]`);
+    
+    if (pasteInput && applyBtn) {
+      // Show the paste area
+      if (pasteArea) pasteArea.style.display = "block";
+      // Fill the textarea with items (one per line)
+      pasteInput.value = items.join("\n");
+      // Trigger the apply button to add the rows
+      applyBtn.click();
     }
   }
 
-  // Sizing list - populate sizing section if available
-  if (Array.isArray(data.sizingList) && data.sizingList.length > 0) {
-    const sizingTextarea = document.querySelector('[data-section="sizing"] textarea');
-    if (sizingTextarea) {
-      sizingTextarea.value = data.sizingList.map(item => `• ${item}`).join("\n");
-    }
-  }
-
-  // Care list - populate care section if available
-  if (Array.isArray(data.careList) && data.careList.length > 0) {
-    const careTextarea = document.querySelector('[data-section="care"] textarea');
-    if (careTextarea) {
-      careTextarea.value = data.careList.map(item => `• ${item}`).join("\n");
-    }
-  }
+  // Populate description, sizing, and care sections
+  populateSection("description", data.descriptionList);
+  populateSection("sizing", data.sizingList);
+  populateSection("care", data.careList);
 }
 
 /**
