@@ -38,14 +38,14 @@ export async function fetchOrderDetails(stripe_checkout_session_id) {
   let variantsMap = new Map(); // key: "productCode|variantName" -> variant
   
   if (productCodes.length > 0) {
-    // Fetch products by code with their variants and costs
-    // Cost data is in product_costs table (unit_cost, supplier_ship_per_unit)
+    // Fetch products by code with their variants
+    // unit_cost is on products table, supplier_ship_per_unit is in product_costs
     const { data: products, error: pErr } = await supabase
       .from("products")
       .select(`
-        id, code, name, primary_image_url, catalog_image_url,
+        id, code, name, unit_cost, primary_image_url, catalog_image_url,
         product_variants (option_value, preview_image_url),
-        product_costs (unit_cost, supplier_ship_per_unit)
+        product_costs (supplier_ship_per_unit)
       `)
       .in("code", productCodes);
     
@@ -57,7 +57,7 @@ export async function fetchOrderDetails(stripe_checkout_session_id) {
       // product_costs can come back as [] or object depending on relationships
       const pcRaw = p.product_costs;
       const pc = Array.isArray(pcRaw) ? pcRaw[0] : pcRaw;
-      console.log(`[fetchOrderDetails] Product ${p.code} costs:`, pcRaw, "→", pc);
+      console.log(`[fetchOrderDetails] Product ${p.code} unit_cost:`, p.unit_cost, "costs:", pc);
       productsMap.set(p.code, { ...p, _costs: pc || {} });
       // Build variant image map
       for (const v of p.product_variants || []) {
@@ -69,13 +69,13 @@ export async function fetchOrderDetails(stripe_checkout_session_id) {
   }
 
   // Enrich line items with product data and calculate costs
-  // TRUE CPI = unit_cost + supplier_ship_per_unit (from product_costs table)
+  // TRUE CPI = unit_cost (from products) + supplier_ship_per_unit (from product_costs)
   let calculatedCostCents = 0;
   const enrichedLineItems = (lineItems || []).map(li => {
     const product = productsMap.get(li.product_id);
     const costs = product?._costs || {};
     const qty = Number(li.quantity ?? 1);
-    const unitCostDollars = Number(costs.unit_cost ?? 0);
+    const unitCostDollars = Number(product?.unit_cost ?? 0);
     const supplierShipDollars = Number(costs.supplier_ship_per_unit ?? 0);
     const trueCpiDollars = unitCostDollars + supplierShipDollars;
     const lineCostCents = Math.round(trueCpiDollars * 100 * qty);
@@ -268,18 +268,18 @@ async function calculateProfitsForOrders(sessionIds) {
   // Get unique product codes
   const productCodes = [...new Set(lineItems.map(li => li.product_id).filter(Boolean))];
   
-  // Fetch products with their costs from product_costs table
+  // Fetch products - unit_cost is on products table, supplier_ship on product_costs
   const { data: products } = await supabase
     .from("products")
-    .select("code, product_costs (unit_cost, supplier_ship_per_unit)")
+    .select("code, unit_cost, product_costs (supplier_ship_per_unit)")
     .in("code", productCodes);
 
-  // TRUE CPI = unit_cost + supplier_ship_per_unit (from product_costs)
+  // TRUE CPI = unit_cost (products) + supplier_ship_per_unit (product_costs)
   const productCostMap = new Map();
   for (const p of products || []) {
     const pcRaw = p.product_costs;
     const pc = Array.isArray(pcRaw) ? pcRaw[0] : pcRaw;
-    const unitCost = Number(pc?.unit_cost ?? 0);
+    const unitCost = Number(p.unit_cost ?? 0);
     const supplierShip = Number(pc?.supplier_ship_per_unit ?? 0);
     productCostMap.set(p.code, unitCost + supplierShip);
   }
