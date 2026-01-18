@@ -394,6 +394,7 @@ export async function upsertFulfillmentShipment({
 }
 
 export async function fetchOrderKpis({ q = "", status = "", dateFrom = "", dateTo = "" } = {}) {
+  // Get base KPIs from RPC (orders count, revenue, unfulfilled)
   const { data, error } = await supabase.rpc("rpc_order_kpis", {
     p_q: (q || "").trim() || null,
     p_status: (status || "").trim() || null,
@@ -403,9 +404,55 @@ export async function fetchOrderKpis({ q = "", status = "", dateFrom = "", dateT
 
   if (error) throw error;
 
-  // RPC returns an array with 1 row in Supabase JS
   const row = Array.isArray(data) ? data[0] : data;
-  return row || { orders_count: 0, revenue_cents: 0, profit_cents: 0, unfulfilled_count: 0 };
+  const baseKpis = row || { orders_count: 0, revenue_cents: 0, profit_cents: 0, unfulfilled_count: 0 };
+  
+  // Recalculate profit using the proper CPI formula (client-side)
+  // Get all session IDs for matching orders
+  let ordersQ = supabase.from(SUMMARY).select("stripe_checkout_session_id, total_paid_cents");
+  
+  const Q = (q || "").trim();
+  if (Q) {
+    const or = buildSearchOr(Q);
+    ordersQ = ordersQ.or(or);
+  }
+  
+  ordersQ = applyDateRange(ordersQ, dateFrom, dateTo);
+  
+  if (status) {
+    const statusSessionIds = await getSessionIdsByStatus(status);
+    if (statusSessionIds && statusSessionIds.length > 0) {
+      ordersQ = ordersQ.in("stripe_checkout_session_id", statusSessionIds);
+    } else if (status) {
+      // No matching orders for this status
+      return { ...baseKpis, profit_cents: 0 };
+    }
+  }
+  
+  const { data: orders, error: ordersErr } = await ordersQ;
+  if (ordersErr) throw ordersErr;
+  
+  if (!orders || orders.length === 0) {
+    return { ...baseKpis, profit_cents: 0 };
+  }
+  
+  const sessionIds = orders.map(o => o.stripe_checkout_session_id).filter(Boolean);
+  
+  // Calculate proper profit using CPI formula
+  const profitMap = await calculateProfitsForOrders(sessionIds);
+  
+  let totalProfit = 0;
+  for (const sid of sessionIds) {
+    const calc = profitMap.get(sid);
+    if (calc) {
+      totalProfit += calc.profitCents;
+    }
+  }
+  
+  return {
+    ...baseKpis,
+    profit_cents: totalProfit,
+  };
 }
 
 export async function importPirateShipExport({ batchId, rows } = {}) {
