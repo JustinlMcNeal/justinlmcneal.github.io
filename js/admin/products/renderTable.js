@@ -34,8 +34,8 @@ function sortProducts(products, catMap) {
         // Calculate margin for sorting
         const aProj = (a.unit_cost && a.price) ? calculateProfitProjections({ target_price: a.price, weight_g: a.weight_g, unit_cost: a.unit_cost }) : null;
         const bProj = (b.unit_cost && b.price) ? calculateProfitProjections({ target_price: b.price, weight_g: b.weight_g, unit_cost: b.unit_cost }) : null;
-        aVal = aProj?.cpiPaidShipping?.marginPercent ?? -999;
-        bVal = bProj?.cpiPaidShipping?.marginPercent ?? -999;
+        aVal = aProj?.marginPaidShipping ?? -999;
+        bVal = bProj?.marginPaidShipping ?? -999;
         break;
       case 'status':
         aVal = a.is_active ? 1 : 0;
