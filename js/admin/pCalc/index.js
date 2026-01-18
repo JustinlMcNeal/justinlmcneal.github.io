@@ -65,6 +65,8 @@ function getEls() {
     sumWeight: document.getElementById("pc_sum_weight"),
     sumStcc: document.getElementById("pc_sum_stcc"),
     sumShip: document.getElementById("pc_sum_ship"),
+    sumCpiPaid: document.getElementById("pc_sum_cpi_paid"),
+    sumCpiFree: document.getElementById("pc_sum_cpi_free"),
 
     tbody: document.getElementById("pc_tbody"),
   };

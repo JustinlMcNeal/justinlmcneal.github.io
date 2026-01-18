@@ -62,24 +62,37 @@ export function recomputeAndRender(els, store, { silent = false } = {}) {
 
   // Render
   els.tbody.innerHTML = "";
+  
+  // Track best CPIs for summary
+  let bestPaidCpi = smartPaidIdx >= 0 ? rows[smartPaidIdx].cpiPaid : null;
+  let bestFreeCpi = smartFreeIdx >= 0 ? rows[smartFreeIdx].cpiFree : null;
+  
   rows.forEach((r, idx) => {
     const tr = document.createElement("tr");
 
-    if (idx === smartPaidIdx) tr.classList.add("kk-pcalc-best-paid");
-    if (idx === smartFreeIdx) tr.classList.add("kk-pcalc-best-free");
+    if (idx === smartPaidIdx) tr.classList.add("best-paid");
+    if (idx === smartFreeIdx) tr.classList.add("best-free");
 
     tr.innerHTML = `
-      <td>${r.qty}</td>
-      <td>${money(r.itemAmount)}</td>
-      <td>${Math.round(r.totalWeightG)}</td>
-      <td>${money(r.sc)}</td>
-      <td>${money(r.totalPaid)}</td>
-      <td>${money(r.totalFree)}</td>
-      <td>${money(r.cpiFree)}</td>
-      <td>${money(r.cpiPaid)}</td>
+      <td class="py-2 px-2 font-bold">${r.qty}</td>
+      <td class="py-2 px-2 text-right">${money(r.itemAmount)}</td>
+      <td class="py-2 px-2 text-right">${Math.round(r.totalWeightG)}g</td>
+      <td class="py-2 px-2 text-right">${money(r.sc)}</td>
+      <td class="py-2 px-2 text-right bg-emerald-50/50">${money(r.totalPaid)}</td>
+      <td class="py-2 px-2 text-right bg-pink-50/50">${money(r.totalFree)}</td>
+      <td class="py-2 px-2 text-right font-bold bg-emerald-50/50">${money(r.cpiPaid)}</td>
+      <td class="py-2 px-2 text-right font-bold bg-pink-50/50">${money(r.cpiFree)}</td>
     `;
     els.tbody.appendChild(tr);
   });
+  
+  // Update best CPI summary cards
+  if (els.sumCpiPaid) {
+    els.sumCpiPaid.textContent = bestPaidCpi != null ? money(bestPaidCpi) : "—";
+  }
+  if (els.sumCpiFree) {
+    els.sumCpiFree.textContent = bestFreeCpi != null ? money(bestFreeCpi) : "—";
+  }
 
   if (!silent) els.status.textContent = `Calculated ${rows.length} row(s).`;
 }

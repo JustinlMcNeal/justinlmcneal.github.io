@@ -117,12 +117,12 @@ function setStccMode(els, mode) {
   if (!els.stccMode) return;
   if (mode === "manual") {
     els.stccMode.textContent = "MANUAL";
-    els.stccMode.classList.remove("kk-pill-auto");
-    els.stccMode.classList.add("kk-pill-manual");
+    els.stccMode.classList.remove("bg-gray-100");
+    els.stccMode.classList.add("bg-pink-100", "text-pink-700");
   } else {
     els.stccMode.textContent = "AUTO";
-    els.stccMode.classList.add("kk-pill-auto");
-    els.stccMode.classList.remove("kk-pill-manual");
+    els.stccMode.classList.add("bg-gray-100");
+    els.stccMode.classList.remove("bg-pink-100", "text-pink-700");
   }
 }
 
