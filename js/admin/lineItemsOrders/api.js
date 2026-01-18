@@ -392,10 +392,7 @@ export async function upsertFulfillmentShipment({
 }
 
 export async function fetchOrderKpis({ q = "", status = "", dateFrom = "", dateTo = "" } = {}) {
-  // Get KPIs from RPC (orders count, revenue, profit, unfulfilled)
-  // Note: profit_cents from RPC uses database values (order_cost_total_cents)
-  // For more accurate profit, we'd need to recalculate using CPI formula,
-  // but that's too expensive for all orders. The per-row profit in the table is recalculated.
+  // Get base KPIs from RPC (orders count, revenue, unfulfilled)
   const { data, error } = await supabase.rpc("rpc_order_kpis", {
     p_q: (q || "").trim() || null,
     p_status: (status || "").trim() || null,
@@ -406,7 +403,57 @@ export async function fetchOrderKpis({ q = "", status = "", dateFrom = "", dateT
   if (error) throw error;
 
   const row = Array.isArray(data) ? data[0] : data;
-  return row || { orders_count: 0, revenue_cents: 0, profit_cents: 0, unfulfilled_count: 0 };
+  const baseKpis = row || { orders_count: 0, revenue_cents: 0, profit_cents: 0, unfulfilled_count: 0 };
+
+  // Recalculate profit using the proper CPI formula (unit_cost + supplier_ship from weight)
+  // Limit to 500 orders max for performance
+  let ordersQ = supabase
+    .from(SUMMARY)
+    .select("stripe_checkout_session_id")
+    .order("order_date", { ascending: false })
+    .limit(500);
+  
+  const Q = (q || "").trim();
+  if (Q) {
+    const or = buildSearchOr(Q);
+    ordersQ = ordersQ.or(or);
+  }
+  
+  ordersQ = applyDateRange(ordersQ, dateFrom, dateTo);
+  
+  if (status) {
+    const statusSessionIds = await getSessionIdsByStatus(status);
+    if (statusSessionIds && statusSessionIds.length > 0) {
+      ordersQ = ordersQ.in("stripe_checkout_session_id", statusSessionIds);
+    } else if (status) {
+      return { ...baseKpis, profit_cents: 0 };
+    }
+  }
+  
+  const { data: orders, error: ordersErr } = await ordersQ;
+  if (ordersErr) throw ordersErr;
+  
+  if (!orders || orders.length === 0) {
+    return { ...baseKpis, profit_cents: 0 };
+  }
+  
+  const sessionIds = orders.map(o => o.stripe_checkout_session_id).filter(Boolean);
+  
+  // Calculate proper profit using CPI formula
+  const profitMap = await calculateProfitsForOrders(sessionIds);
+  
+  let totalProfit = 0;
+  for (const sid of sessionIds) {
+    const calc = profitMap.get(sid);
+    if (calc) {
+      totalProfit += calc.profitCents;
+    }
+  }
+  
+  return {
+    ...baseKpis,
+    profit_cents: totalProfit,
+  };
 }
 
 export async function importPirateShipExport({ batchId, rows } = {}) {
