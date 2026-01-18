@@ -70,6 +70,8 @@ function mobileCardRow(p, cat, active, readOnly) {
   const statusClass = p.is_active ? "status-active" : "status-inactive";
   const statusText = p.is_active ? "Active" : "Inactive";
   const code = p.code || "";
+  const productPageUrl = p.slug ? `/pages/product.html?slug=${encodeURIComponent(p.slug)}` : null;
+  const supplierUrl = p.supplier_url || null;
 
   // Calculate margin for mobile card
   let marginBadge = '';
@@ -98,7 +100,9 @@ function mobileCardRow(p, cat, active, readOnly) {
           <!-- Top row: Name + Status -->
           <div>
             <div class="flex items-start justify-between gap-2">
-              <div class="font-black text-sm leading-tight line-clamp-2">${escapeHtml(p.name || "")}</div>
+              ${productPageUrl 
+                ? `<a href="${productPageUrl}" target="_blank" class="font-black text-sm leading-tight line-clamp-2 hover:text-kkpink hover:underline">${escapeHtml(p.name || "")}</a>`
+                : `<div class="font-black text-sm leading-tight line-clamp-2">${escapeHtml(p.name || "")}</div>`}
               <span class="${statusClass} px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider rounded-sm flex-shrink-0">
                 ${statusText}
               </span>
@@ -106,7 +110,11 @@ function mobileCardRow(p, cat, active, readOnly) {
             
             <!-- Meta row -->
             <div class="flex items-center gap-2 mt-1 text-[10px] text-gray-500">
-              ${code ? `<span class="bg-gray-100 px-1.5 py-0.5 font-mono">${escapeHtml(code)}</span>` : ''}
+              ${code 
+                ? (supplierUrl 
+                    ? `<a href="${escapeHtml(supplierUrl)}" target="_blank" class="bg-gray-100 px-1.5 py-0.5 font-mono hover:bg-kkpink hover:text-white" title="Open supplier">${escapeHtml(code)}</a>`
+                    : `<span class="bg-gray-100 px-1.5 py-0.5 font-mono">${escapeHtml(code)}</span>`)
+                : ''}
               <span class="truncate">${escapeHtml(cat || "No category")}</span>
             </div>
           </div>
@@ -218,6 +226,10 @@ export function renderTable({
         }
       }
 
+      // Build product page URL
+      const productPageUrl = p.slug ? `/pages/product.html?slug=${encodeURIComponent(p.slug)}` : null;
+      const supplierUrl = p.supplier_url || null;
+
       return `
         <tr class="product-row hover:bg-gray-50 transition-colors">
           <td class="px-4 py-3">
@@ -227,11 +239,15 @@ export function renderTable({
                   ? `<img src="${escapeHtml(imgUrl)}" class="w-full h-full object-cover" alt="" loading="lazy" />` 
                   : `<div class="w-full h-full flex items-center justify-center text-gray-400 text-[8px]">No img</div>`}
               </div>
-              <span class="font-bold">${escapeHtml(p.name || "")}</span>
+              ${productPageUrl 
+                ? `<a href="${productPageUrl}" target="_blank" class="font-bold hover:text-kkpink hover:underline transition-colors">${escapeHtml(p.name || "")}</a>`
+                : `<span class="font-bold">${escapeHtml(p.name || "")}</span>`}
             </div>
           </td>
           <td class="px-4 py-3 text-gray-500 hidden md:table-cell">
-            <span class="text-xs font-mono">${escapeHtml(p.slug || "—")}</span>
+            ${supplierUrl 
+              ? `<a href="${escapeHtml(supplierUrl)}" target="_blank" class="text-xs font-mono hover:text-kkpink hover:underline transition-colors" title="Open supplier link">${escapeHtml(p.slug || "—")}</a>`
+              : `<span class="text-xs font-mono">${escapeHtml(p.slug || "—")}</span>`}
           </td>
           <td class="px-4 py-3 hidden sm:table-cell">
             <span class="bg-gray-100 px-2 py-1 text-xs font-mono">${escapeHtml(p.code || "—")}</span>
