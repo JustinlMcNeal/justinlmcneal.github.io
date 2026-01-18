@@ -70,6 +70,7 @@ function mobileCardRow(p, cat, active, readOnly) {
   const statusClass = p.is_active ? "status-active" : "status-inactive";
   const statusText = p.is_active ? "Active" : "Inactive";
   const code = p.code || "";
+  const productUrl = p.slug ? `/pages/product.html?slug=${encodeURIComponent(p.slug)}` : '#';
 
   // Calculate margin for mobile card
   let marginBadge = '';
@@ -99,7 +100,7 @@ function mobileCardRow(p, cat, active, readOnly) {
           <!-- Top row: Name + Status -->
           <div>
             <div class="flex items-start justify-between gap-2">
-              <div class="font-black text-sm leading-tight line-clamp-2">${escapeHtml(p.name || "")}</div>
+              <a href="${productUrl}" target="_blank" class="font-black text-sm leading-tight line-clamp-2 hover:text-kkpink hover:underline transition-colors">${escapeHtml(p.name || "")}</a>
               <span class="${statusClass} px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider rounded-sm flex-shrink-0">
                 ${statusText}
               </span>
@@ -207,18 +208,32 @@ export function renderTable({
       const statusText = p.is_active ? "Active" : "Inactive";
 
       // Calculate margin if we have unit_cost and price
-      let marginHtml = '<span class="text-gray-400">—</span>';
+      let marginHtml = '<span class="text-gray-400" title="Missing cost data">—</span>';
       if (p.unit_cost && p.price) {
         const projections = calculateProfitProjections({
           target_price: p.price,
-          weight_g: p.weight_g,
+          weight_g: p.weight_g || 0,
           unit_cost: p.unit_cost
         });
         if (projections && projections.hasEnoughData && typeof projections.marginPaidShipping === 'number') {
           const indicator = getProfitIndicator(projections);
           marginHtml = indicator.html || '<span class="text-gray-400">—</span>';
+        } else if (projections && typeof projections.marginPaidShipping === 'number') {
+          // Show simple margin even if not all data is present
+          const pct = Math.round(projections.marginPaidShipping);
+          const color = pct >= 50 ? 'text-green-600' : pct >= 30 ? 'text-yellow-600' : 'text-red-600';
+          marginHtml = `<span class="${color} font-bold">${pct}%</span>`;
+        } else {
+          // Show basic margin calculation
+          const basicMargin = Math.round(((p.price - p.unit_cost) / p.price) * 100);
+          const color = basicMargin >= 50 ? 'text-green-600' : basicMargin >= 30 ? 'text-yellow-600' : 'text-red-600';
+          marginHtml = `<span class="${color} font-bold" title="Basic margin (no shipping)">${basicMargin}%*</span>`;
         }
+      } else if (p.price && !p.unit_cost) {
+        marginHtml = '<span class="text-gray-400" title="Missing unit cost">No cost</span>';
       }
+
+      const productUrl = p.slug ? `/pages/product.html?slug=${encodeURIComponent(p.slug)}` : '#';
 
       return `
         <tr class="product-row hover:bg-gray-50 transition-colors">
@@ -229,7 +244,7 @@ export function renderTable({
                   ? `<img src="${escapeHtml(imgUrl)}" class="w-full h-full object-cover" alt="" loading="lazy" />` 
                   : `<div class="w-full h-full flex items-center justify-center text-gray-400 text-[8px]">No img</div>`}
               </div>
-              <span class="font-bold">${escapeHtml(p.name || "")}</span>
+              <a href="${productUrl}" target="_blank" class="font-bold hover:text-kkpink hover:underline transition-colors">${escapeHtml(p.name || "")}</a>
             </div>
           </td>
           <td class="px-4 py-3 text-gray-500 hidden md:table-cell">
