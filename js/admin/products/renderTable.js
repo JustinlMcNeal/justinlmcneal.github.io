@@ -222,6 +222,11 @@ export function renderTable({
       const unitCost = Number(p.unit_cost) || 0;
       const weightG = Number(p.weight_g) || 0;
       
+      // Debug: log product data for troubleshooting
+      if (p.name?.toLowerCase().includes('velvet')) {
+        console.log('[DEBUG] Velvet product data:', { name: p.name, price, unitCost, weightG, raw_unit_cost: p.unit_cost });
+      }
+      
       if (unitCost > 0 && price > 0) {
         // Try full profit calculation first
         const projections = calculateProfitProjections({
