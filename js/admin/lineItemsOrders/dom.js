@@ -8,7 +8,14 @@ export const els = {
   dateTo: document.getElementById("dateTo"),
   btnRefresh: document.getElementById("btnRefresh"),
   btnExportShipReady: document.getElementById("btnExportShipReady"),
-  btnImportPirateShip: document.getElementById("btnImportPirateShip"), // ✅ NEW
+  btnImportPirateShip: document.getElementById("btnImportPirateShip"),
+
+  // import result panel
+  importResultPanel: document.getElementById("importResultPanel"),
+  importUpdatedCount: document.getElementById("importUpdatedCount"),
+  importSkippedCount: document.getElementById("importSkippedCount"),
+  importBatchId: document.getElementById("importBatchId"),
+  importResultClose: document.getElementById("importResultClose"),
 
   // status + count
   status: document.getElementById("status"),
@@ -39,7 +46,7 @@ export function wireDomHelpers() {
     "dateTo",
     "btnRefresh",
     "btnExportShipReady",
-    "btnImportPirateShip", // ✅ NEW (optional but recommended)
+    "btnImportPirateShip",
     "status",
     "countLabel",
     "ordersRows",
@@ -49,6 +56,28 @@ export function wireDomHelpers() {
 
   const missing = required.filter((k) => !els[k]);
   if (missing.length) console.error("[lineItemsOrders] Missing DOM ids:", missing);
+
+  // Wire close button for import result panel
+  if (els.importResultClose) {
+    els.importResultClose.addEventListener("click", () => {
+      if (els.importResultPanel) els.importResultPanel.classList.add("hidden");
+    });
+  }
+}
+
+export function showImportResult({ updated, skipped, batchId }) {
+  if (!els.importResultPanel) return;
+  
+  if (els.importUpdatedCount) els.importUpdatedCount.textContent = String(updated || 0);
+  if (els.importSkippedCount) els.importSkippedCount.textContent = String(skipped || 0);
+  if (els.importBatchId) els.importBatchId.textContent = batchId || "—";
+  
+  els.importResultPanel.classList.remove("hidden");
+  
+  // Auto-hide after 10 seconds
+  setTimeout(() => {
+    els.importResultPanel.classList.add("hidden");
+  }, 10000);
 }
 
 export function setStatus(msg, isError = false) {

@@ -43,6 +43,18 @@
     .status-voided { background: #fee2e2; color: #991b1b; }
     .status-returned { background: #f3f4f6; color: #374151; }
 
+    /* Drop zone styling */
+    .drop-zone.is-drop-active {
+      border-color: #10b981 !important;
+      background: #d1fae5 !important;
+      color: #065f46 !important;
+      animation: pulse-border 0.5s ease-in-out infinite alternate;
+    }
+    @keyframes pulse-border {
+      from { border-color: #10b981; box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2); }
+      to { border-color: #059669; box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.3); }
+    }
+
     /* Mobile improvements */
     @media (max-width: 640px) {
       button, [role="button"] { min-height: 44px; }
@@ -188,13 +200,38 @@
           <button
             id="btnImportPirateShip"
             type="button"
-            disabled
-            class="border-4 border-gray-300 bg-gray-100 text-gray-400 px-4 py-2 font-black uppercase tracking-[.12em] text-[10px] cursor-not-allowed"
+            class="border-4 border-black bg-white text-black px-4 py-2 font-black uppercase tracking-[.12em] text-[10px]
+                   hover:bg-black hover:text-white transition-all
+                   drop-zone"
           >
             🏴‍☠️ Import Pirate Ship
           </button>
 
-          <span class="text-xs text-gray-400 ml-2">CSV for batch label printing</span>
+          <span class="text-xs text-gray-400 ml-2">Click or drag & drop CSV</span>
+        </div>
+        
+        <!-- Import Result Panel (hidden by default) -->
+        <div id="importResultPanel" class="hidden mt-4 p-4 border-4 border-emerald-500 bg-emerald-50 rounded-lg">
+          <div class="flex items-start gap-3">
+            <div class="text-2xl">✅</div>
+            <div class="flex-1">
+              <div class="font-black text-emerald-800">Import Complete</div>
+              <div class="grid grid-cols-2 gap-4 mt-2 text-sm">
+                <div>
+                  <span class="text-emerald-600">Updated:</span>
+                  <span id="importUpdatedCount" class="font-bold">0</span>
+                </div>
+                <div>
+                  <span class="text-gray-500">Skipped:</span>
+                  <span id="importSkippedCount" class="font-bold">0</span>
+                </div>
+              </div>
+              <div class="text-xs text-emerald-600 mt-2">
+                Batch ID: <code id="importBatchId" class="bg-emerald-100 px-1 py-0.5 rounded"></code>
+              </div>
+            </div>
+            <button id="importResultClose" type="button" class="text-emerald-600 hover:text-emerald-800 text-lg font-bold">×</button>
+          </div>
         </div>
       </div>
     </section>
