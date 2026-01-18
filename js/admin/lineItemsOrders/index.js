@@ -1,7 +1,7 @@
 // /js/admin/lineItemsOrders/index.js
 import { initAdminNav } from "/js/shared/adminNav.js";
 import { initFooter } from "/js/shared/footer.js";
-import { els, wireDomHelpers, setStatus, setCountLabel, moneyFromCents, showImportResult } from "./dom.js";
+import { els, wireDomHelpers, setStatus, setCountLabel, moneyFromCents, showImportResult, showImportPreview, hideImportPreview } from "./dom.js";
 import { state } from "./state.js";
 import { fetchOrderSummaryPage, fetchOrderSummaryAllForExport, fetchOrderKpis, importPirateShipExport, fetchOrderDetails } from "./api.js";
 import { renderOrdersRows } from "./renderTable.js";
@@ -271,6 +271,7 @@ function wireEvents() {
   wirePirateShipImport({
     buttonEl: els.btnImportPirateShip,
     setStatus,
+    showImportPreview,
     importFn: async ({ batchId, rows }) => {
       return await importPirateShipExport({ batchId, rows });
     },

@@ -210,6 +210,26 @@
           <span class="text-xs text-gray-400 ml-2">Click or drag & drop CSV</span>
         </div>
         
+        <!-- Import Preview Panel (confirm before import) -->
+        <div id="importPreviewPanel" class="hidden mt-4 p-4 border-4 border-amber-500 bg-amber-50 rounded-lg">
+          <div class="flex items-start gap-3">
+            <div class="text-2xl">📦</div>
+            <div class="flex-1">
+              <div class="font-black text-amber-800">Ready to Import</div>
+              <div class="mt-2 text-sm text-amber-700">
+                <div>File: <span id="importFileName" class="font-bold"></span></div>
+                <div>Rows detected: <span id="importRowCount" class="font-bold"></span></div>
+                <div class="text-xs mt-1">Batch ID: <code id="importPreviewBatchId" class="bg-amber-100 px-1 py-0.5 rounded"></code></div>
+              </div>
+              <div class="text-xs text-amber-600 mt-2">This will update fulfillment_shipments (status, tracking, label cost, printed_at).</div>
+              <div class="flex gap-2 mt-3">
+                <button id="importConfirmBtn" type="button" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-1.5 rounded font-bold text-sm transition-colors">✓ Confirm Import</button>
+                <button id="importCancelBtn" type="button" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-1.5 rounded font-bold text-sm transition-colors">Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        
         <!-- Import Result Panel (hidden by default) -->
         <div id="importResultPanel" class="hidden mt-4 p-4 border-4 border-emerald-500 bg-emerald-50 rounded-lg">
           <div class="flex items-start gap-3">

@@ -10,6 +10,14 @@ export const els = {
   btnExportShipReady: document.getElementById("btnExportShipReady"),
   btnImportPirateShip: document.getElementById("btnImportPirateShip"),
 
+  // import preview panel (confirm before import)
+  importPreviewPanel: document.getElementById("importPreviewPanel"),
+  importFileName: document.getElementById("importFileName"),
+  importRowCount: document.getElementById("importRowCount"),
+  importPreviewBatchId: document.getElementById("importPreviewBatchId"),
+  importConfirmBtn: document.getElementById("importConfirmBtn"),
+  importCancelBtn: document.getElementById("importCancelBtn"),
+
   // import result panel
   importResultPanel: document.getElementById("importResultPanel"),
   importUpdatedCount: document.getElementById("importUpdatedCount"),
@@ -63,6 +71,43 @@ export function wireDomHelpers() {
       if (els.importResultPanel) els.importResultPanel.classList.add("hidden");
     });
   }
+  
+  // Wire cancel button for import preview panel
+  if (els.importCancelBtn) {
+    els.importCancelBtn.addEventListener("click", () => {
+      hideImportPreview();
+      setStatus("Import canceled.");
+    });
+  }
+}
+
+export function showImportPreview({ fileName, rowCount, batchId, onConfirm }) {
+  if (!els.importPreviewPanel) return;
+  
+  // Hide result panel if visible
+  if (els.importResultPanel) els.importResultPanel.classList.add("hidden");
+  
+  if (els.importFileName) els.importFileName.textContent = fileName || "—";
+  if (els.importRowCount) els.importRowCount.textContent = String(rowCount || 0);
+  if (els.importPreviewBatchId) els.importPreviewBatchId.textContent = batchId || "—";
+  
+  els.importPreviewPanel.classList.remove("hidden");
+  
+  // Wire confirm button (remove old listener first)
+  if (els.importConfirmBtn) {
+    const newBtn = els.importConfirmBtn.cloneNode(true);
+    els.importConfirmBtn.parentNode.replaceChild(newBtn, els.importConfirmBtn);
+    els.importConfirmBtn = newBtn;
+    
+    newBtn.addEventListener("click", () => {
+      hideImportPreview();
+      onConfirm?.();
+    });
+  }
+}
+
+export function hideImportPreview() {
+  if (els.importPreviewPanel) els.importPreviewPanel.classList.add("hidden");
 }
 
 export function showImportResult({ updated, skipped, batchId }) {

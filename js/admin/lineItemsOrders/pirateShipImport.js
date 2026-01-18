@@ -157,6 +157,7 @@ export function wirePirateShipImport({
   setStatus,
   onImported,
   importFn, // async ({ batchId, rows }) => { updated_count, skipped_count }
+  showImportPreview, // ({ fileName, rowCount, batchId, onConfirm }) => void
 } = {}) {
   if (!buttonEl) return;
 
@@ -193,17 +194,29 @@ export function wirePirateShipImport({
 
       const batchId = makeBatchId();
 
-      const ok = window.confirm(
-        `Import Pirate Ship export?\n\n` +
-          `Rows detected: ${rows.length}\n` +
-          `Batch ID: ${batchId}\n\n` +
-          `This will update fulfillment_shipments (status, tracking, label cost, printed_at).`
-      );
-      if (!ok) {
-        setStatus?.("Import canceled.");
-        return;
+      // Show preview panel with confirm/cancel buttons
+      if (showImportPreview) {
+        showImportPreview({
+          fileName: file.name,
+          rowCount: rows.length,
+          batchId,
+          onConfirm: async () => {
+            await doImport({ batchId, rows });
+          },
+        });
+        setStatus?.(`Ready to import ${rows.length} rows.`);
+      } else {
+        // Fallback to immediate import if no preview function
+        await doImport({ batchId, rows });
       }
+    } catch (e) {
+      console.error(e);
+      setStatus?.(`Import failed: ${e?.message || e}`, true);
+    }
+  }
 
+  async function doImport({ batchId, rows }) {
+    try {
       setStatus?.(`Importing ${rows.length} rows…`);
       const result = await importFn?.({ batchId, rows });
 
