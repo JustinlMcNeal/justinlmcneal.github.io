@@ -202,11 +202,27 @@ serve(async (req) => {
 
         // Fetch insights metrics (impressions, reach, saved)
         // Note: Insights are only available for Business/Creator accounts
+        // Note: Reels use different metrics (plays instead of impressions)
         const insightsMetrics = "impressions,reach,saved";
         const insightsResp = await fetch(
           `https://graph.facebook.com/v18.0/${mediaId}/insights?metric=${insightsMetrics}&access_token=${accessToken}`
         );
         const insightsData: MediaInsightsResponse = await insightsResp.json();
+        
+        // Log insights errors (but don't fail - some media types don't support all metrics)
+        if (insightsData.error) {
+          console.warn(`Insights API error for ${mediaId}:`, insightsData.error.message);
+          // Try fetching Reels metrics if standard insights fail
+          const reelsMetrics = "plays,reach,saved,shares";
+          const reelsResp = await fetch(
+            `https://graph.facebook.com/v18.0/${mediaId}/insights?metric=${reelsMetrics}&access_token=${accessToken}`
+          );
+          const reelsData: MediaInsightsResponse = await reelsResp.json();
+          if (!reelsData.error && reelsData.data) {
+            console.log(`Using Reels metrics for ${mediaId}`);
+            insightsData.data = reelsData.data;
+          }
+        }
 
         // Parse metrics
         const likes = basicData.like_count || 0;
@@ -215,6 +231,8 @@ serve(async (req) => {
         let impressions = 0;
         let reach = 0;
         let saves = 0;
+        let shares = 0;
+        let plays = 0;
 
         if (insightsData.data) {
           for (const metric of insightsData.data) {
@@ -229,9 +247,19 @@ serve(async (req) => {
               case "saved":
                 saves = value;
                 break;
+              case "shares":
+                shares = value;
+                break;
+              case "plays":
+                // For Reels, "plays" is similar to impressions
+                plays = value;
+                if (impressions === 0) impressions = value;
+                break;
             }
           }
         }
+        
+        console.log(`Metrics for ${mediaId}: likes=${likes}, comments=${comments}, saves=${saves}, impressions=${impressions}, reach=${reach}, plays=${plays}`);
 
         // Calculate engagement rate
         // Formula: (likes + comments + saves) / reach * 100
@@ -244,6 +272,7 @@ serve(async (req) => {
           likes,
           comments,
           saves,
+          shares,
           impressions,
           reach,
           engagement_rate: engagementRate,
