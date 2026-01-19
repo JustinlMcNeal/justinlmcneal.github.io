@@ -524,11 +524,25 @@ export function applyJsonToForm(els, data) {
     });
   }
 
-  // Description list - populate description section if available
+  // Section content - description, sizing, care
   if (Array.isArray(data.descriptionList) && data.descriptionList.length > 0) {
     const descTextarea = document.querySelector('[data-section="description"] textarea');
     if (descTextarea) {
       descTextarea.value = data.descriptionList.map(item => `• ${item}`).join("\n");
+    }
+  }
+  
+  if (Array.isArray(data.sizingList) && data.sizingList.length > 0) {
+    const sizingTextarea = document.querySelector('[data-section="sizing"] textarea');
+    if (sizingTextarea) {
+      sizingTextarea.value = data.sizingList.map(item => `• ${item}`).join("\n");
+    }
+  }
+  
+  if (Array.isArray(data.careList) && data.careList.length > 0) {
+    const careTextarea = document.querySelector('[data-section="care"] textarea');
+    if (careTextarea) {
+      careTextarea.value = data.careList.map(item => `• ${item}`).join("\n");
     }
   }
 }
