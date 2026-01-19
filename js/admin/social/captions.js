@@ -154,7 +154,12 @@ async function generateAICaption(tone, productData, platform) {
   // Get top performing posts for context
   const topPosts = await getTopPerformingCaptions(productData.category, 5);
   
+  // Get brand voice templates as examples
+  const brandTemplates = await getTemplatesForTone(tone);
+  const templateExamples = brandTemplates.slice(0, 3).map(t => t.template);
+  
   console.log('[Caption AI] Using', learningPatterns.ai_learnings.length, 'AI learnings for generation');
+  console.log('[Caption AI] Including', templateExamples.length, 'brand templates as voice examples');
   if (learningPatterns.category_insights) {
     console.log('[Caption AI] Category strategy:', learningPatterns.category_insights.caption_strategy?.tone_that_works || 'not specified');
   }
@@ -177,6 +182,7 @@ async function generateAICaption(tone, productData, platform) {
       platform,
       learningPatterns,
       topPosts: topPosts.map(c => ({ caption: c, engagement: 100 })),
+      brandTemplates: templateExamples, // Feed templates as brand voice examples
     }),
   });
   

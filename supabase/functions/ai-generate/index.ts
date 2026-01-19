@@ -22,6 +22,7 @@ interface GenerateRequest {
   caption?: string; // For scoring existing captions
   topPosts?: Array<{ caption: string; engagement: number; hashtags?: string[]; posted_at?: string }>; // Learning context
   learningPatterns?: Record<string, any>; // From post_learning_patterns
+  brandTemplates?: string[]; // Brand voice template examples
   // For deep post analysis
   postData?: {
     caption: string;
@@ -72,13 +73,13 @@ serve(async (req) => {
     }
 
     const body: GenerateRequest = await req.json();
-    const { type, product, tone, platform, caption, topPosts, learningPatterns, postData, performanceData, categoryData } = body;
+    const { type, product, tone, platform, caption, topPosts, learningPatterns, brandTemplates, postData, performanceData, categoryData } = body;
 
     let prompt = "";
     let systemPrompt = "";
 
     // Build context from learning data
-    const learningContext = buildLearningContext(learningPatterns, topPosts);
+    const learningContext = buildLearningContext(learningPatterns, topPosts, brandTemplates);
 
     switch (type) {
       case "caption":
@@ -184,7 +185,7 @@ serve(async (req) => {
 // Learning Context Builder
 // ============================================
 
-function buildLearningContext(patterns?: Record<string, any>, topPosts?: Array<{ caption: string; engagement: number }>): string {
+function buildLearningContext(patterns?: Record<string, any>, topPosts?: Array<{ caption: string; engagement: number }>, brandTemplates?: string[]): string {
   let context = "";
 
   if (patterns) {
@@ -244,6 +245,15 @@ CRITICAL: Use these category-specific learnings! They are based on what actually
 - Content mix: ${JSON.stringify(cal.content_mix || {})}
 `;
     }
+  }
+
+  // Include brand templates as voice examples
+  if (brandTemplates && brandTemplates.length > 0) {
+    context += `\nBRAND VOICE EXAMPLES (use these as style reference):
+${brandTemplates.slice(0, 3).map((t, i) => `${i + 1}. "${t}"`).join("\n")}
+
+Match this tone and style but create something unique - don't copy these exactly.
+`;
   }
 
   if (topPosts && topPosts.length > 0) {
