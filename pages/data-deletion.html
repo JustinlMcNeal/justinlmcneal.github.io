@@ -5,8 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Data Deletion Request | KarryKraze</title>
   <meta name="description" content="Learn how to request deletion of your personal data from KarryKraze.">
-  <link rel="stylesheet" href="../css/theme/base.css">
-  <link rel="stylesheet" href="../css/theme/components.css">
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            kkpink: '#ff69b4',
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- KK base + components -->
+  <link rel="stylesheet" href="/css/theme/base.css">
+  <link rel="stylesheet" href="/css/theme/components.css">
   <style>
     .deletion-container {
       max-width: 800px;
@@ -55,8 +71,9 @@
     }
   </style>
 </head>
-<body>
-  <div id="navbar-placeholder"></div>
+<body class="bg-gray-50 min-h-screen">
+  <!-- ✅ NAVBAR INSERT MOUNT (DO NOT REMOVE) -->
+  <div id="kkNavbarMount"></div>
 
   <main class="deletion-container">
     <h1>Data Deletion Request</h1>
@@ -102,12 +119,12 @@
     <p class="last-updated">Last updated: January 2026</p>
   </main>
 
-  <div id="footer-placeholder"></div>
+  <!-- ✅ FOOTER INSERT MOUNT -->
+  <div id="kkFooterMount"></div>
 
   <script type="module">
-    import { initNavbar } from '../js/shared/navbar.js';
-    import { initFooter } from '../js/shared/footer.js';
-    
+    import { initNavbar } from "/js/shared/navbar.js";
+    import { initFooter } from "/js/shared/footer.js";
     initNavbar();
     initFooter();
   </script>
