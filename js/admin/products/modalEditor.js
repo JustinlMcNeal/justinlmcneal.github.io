@@ -417,11 +417,13 @@ export function bindModal(els, refreshTable, sectionApi = {}) {
  * 
  * Expected JSON format:
  * {
- *   name, category, product_id, price, weight_oz, tags[],
+ *   name, category, product_id, price, weight_oz, weight_g, tags[],
  *   catalogImage, catalogImageHover, image,
  *   descriptionList[], custom1Options (pipe-separated),
  *   variantStock{color: count}, variantImages{color: url},
- *   thumbnails[]
+ *   thumbnails[],
+ *   // Additional fields from copy:
+ *   slug, unit_cost, shipping_status, amazon_url, supplier_url, is_active
  * }
  */
 export function applyJsonToForm(els, data) {
@@ -430,18 +432,29 @@ export function applyJsonToForm(els, data) {
   if (data.product_id) els.fCode.value = data.product_id;
   if (data.price) els.fPrice.value = data.price;
   
-  // Weight: convert oz to grams if present (1 oz ≈ 28.35g)
-  if (data.weight_oz) {
+  // Weight: prefer weight_g, fall back to weight_oz conversion
+  if (data.weight_g) {
+    els.fWeight.value = data.weight_g;
+  } else if (data.weight_oz) {
     els.fWeight.value = Math.round(data.weight_oz * 28.35);
   }
 
-  // Generate slug from name
-  if (data.name) {
+  // Slug: use provided slug or generate from name
+  if (data.slug) {
+    els.fSlug.value = data.slug;
+  } else if (data.name) {
     els.fSlug.value = data.name
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "");
   }
+
+  // Additional fields from copy JSON
+  if (data.unit_cost != null && els.fUnitCost) els.fUnitCost.value = data.unit_cost;
+  if (data.shipping_status && els.fShipping) els.fShipping.value = data.shipping_status;
+  if (data.amazon_url && els.fAmazonUrl) els.fAmazonUrl.value = data.amazon_url;
+  if (data.supplier_url && els.fSupplierUrl) els.fSupplierUrl.value = data.supplier_url;
+  if (data.is_active != null && els.fActive) els.fActive.checked = !!data.is_active;
 
   // Tags
   if (Array.isArray(data.tags)) {
@@ -491,11 +504,11 @@ export function applyJsonToForm(els, data) {
       const stock = data.variantStock?.[color] ?? 0;
       const imageUrl = data.variantImages?.[color] || "";
       
-      // Add variant row with data
+      // Add variant row with data (using correct property names for addVariantRow)
       addVariantRow(els.variantList, {
-        color_name: color,
-        stock_count: stock,
-        image_url: imageUrl,
+        option_value: color,
+        stock: stock,
+        preview_image_url: imageUrl,
       });
     });
   }
@@ -505,8 +518,8 @@ export function applyJsonToForm(els, data) {
     els.galleryList.innerHTML = "";
     data.thumbnails.forEach((url, i) => {
       addGalleryRow(els.galleryList, {
-        image_url: url,
-        sort_order: i,
+        url: url,
+        position: i + 1,
       });
     });
   }
@@ -534,6 +547,7 @@ function updatePreviewEl(previewEl, url) {
 
 /**
  * Builds a JSON object from the current form state for copying/exporting
+ * Compatible with applyJsonToForm() for paste functionality
  */
 function buildProductJson(els) {
   // Get category name from select
@@ -541,24 +555,29 @@ function buildProductJson(els) {
   
   // Collect variants from the list
   const variantRows = els.variantList?.querySelectorAll('[data-row="variant"]') || [];
-  const variants = Array.from(variantRows).map((row, idx) => {
+  const variantStock = {};
+  const variantImages = {};
+  const colorList = [];
+  
+  Array.from(variantRows).forEach((row) => {
     const optionValue = row.querySelector('[data-v="value"]')?.value?.trim() || "";
     const stock = parseInt(row.querySelector('[data-v="stock"]')?.value || "0", 10);
-    const previewUrl = row.querySelector('[data-v="img"]')?.value?.trim() || null;
-    return {
-      option_value: optionValue,
-      stock: stock,
-      preview_image_url: previewUrl,
-      sort_order: idx,
-    };
-  }).filter(v => v.option_value);
+    const previewUrl = row.querySelector('[data-v="img"]')?.value?.trim() || "";
+    
+    if (optionValue) {
+      colorList.push(optionValue);
+      variantStock[optionValue] = stock;
+      if (previewUrl) {
+        variantImages[optionValue] = previewUrl;
+      }
+    }
+  });
   
-  // Collect gallery from the list
+  // Collect gallery from the list as thumbnails array
   const galleryRows = els.galleryList?.querySelectorAll('[data-row="gallery"]') || [];
-  const gallery = Array.from(galleryRows).map((row, idx) => {
-    const url = row.querySelector('[data-g="url"]')?.value?.trim() || "";
-    return { url, position: idx + 1 };
-  }).filter(g => g.url);
+  const thumbnails = Array.from(galleryRows)
+    .map((row) => row.querySelector('[data-g="url"]')?.value?.trim() || "")
+    .filter(url => url);
   
   // Collect tags
   const tags = (els.fTags?.value || "")
@@ -566,26 +585,39 @@ function buildProductJson(els) {
     .map(t => t.trim())
     .filter(Boolean);
   
+  // Weight in grams, also provide oz for compatibility
+  const weightG = els.fWeight?.value ? parseInt(els.fWeight.value, 10) : null;
+  const weightOz = weightG ? parseFloat((weightG / 28.35).toFixed(2)) : null;
+  
   return {
-    product: {
-      code: els.fCode?.value?.trim() || null,
-      slug: els.fSlug?.value?.trim() || null,
-      name: els.fName?.value?.trim() || "",
-      category_id: els.fCategory?.value || null,
-      category_name: categoryName,
-      price: parseFloat(els.fPrice?.value) || 0,
-      weight_g: els.fWeight?.value ? parseInt(els.fWeight.value, 10) : null,
-      unit_cost: els.fUnitCost?.value ? parseFloat(els.fUnitCost.value) : null,
-      shipping_status: els.fShipping?.value?.trim() || null,
-      amazon_url: els.fAmazonUrl?.value?.trim() || null,
-      supplier_url: els.fSupplierUrl?.value?.trim() || null,
-      catalog_image_url: els.fCatalogImg?.value?.trim() || null,
-      catalog_hover_url: els.fHoverImg?.value?.trim() || null,
-      primary_image_url: els.fPrimaryImg?.value?.trim() || null,
-      is_active: !!els.fActive?.checked,
-    },
-    variants,
-    gallery,
+    // Basic fields (compatible with applyJsonToForm)
+    name: els.fName?.value?.trim() || "",
+    product_id: els.fCode?.value?.trim() || null,
+    price: parseFloat(els.fPrice?.value) || 0,
+    weight_oz: weightOz,
+    weight_g: weightG,
+    category: categoryName,
     tags,
+    
+    // Images (compatible with applyJsonToForm)
+    catalogImage: els.fCatalogImg?.value?.trim() || null,
+    catalogImageHover: els.fHoverImg?.value?.trim() || null,
+    image: els.fPrimaryImg?.value?.trim() || null,
+    
+    // Variants (compatible with applyJsonToForm)
+    custom1Options: colorList.join(" | "),
+    variantStock,
+    variantImages,
+    
+    // Gallery (compatible with applyJsonToForm)
+    thumbnails,
+    
+    // Additional fields not in original format but useful
+    slug: els.fSlug?.value?.trim() || null,
+    unit_cost: els.fUnitCost?.value ? parseFloat(els.fUnitCost.value) : null,
+    shipping_status: els.fShipping?.value?.trim() || null,
+    amazon_url: els.fAmazonUrl?.value?.trim() || null,
+    supplier_url: els.fSupplierUrl?.value?.trim() || null,
+    is_active: !!els.fActive?.checked,
   };
 }
