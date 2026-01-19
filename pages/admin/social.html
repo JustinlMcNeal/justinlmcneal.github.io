@@ -855,6 +855,290 @@
             </div>
           </div>
 
+          <!-- ========================================== -->
+          <!-- 🧠 AI LEARNING INSIGHTS DASHBOARD -->
+          <!-- ========================================== -->
+          
+          <!-- Learning Header -->
+          <div class="bg-gradient-to-r from-emerald-600 to-teal-500 rounded-xl p-4 sm:p-6 text-white">
+            <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+              <div class="hidden sm:block p-3 bg-white/20 rounded-xl flex-shrink-0">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                </svg>
+              </div>
+              <div class="flex-1">
+                <h2 class="text-lg sm:text-xl font-black">🧠 AI Learning Insights</h2>
+                <p class="text-white/90 text-xs sm:text-sm">Your posts are being analyzed to learn what works best</p>
+              </div>
+              <button id="btnRefreshLearnings" class="w-full sm:w-auto px-4 py-2 bg-white/20 text-white font-bold rounded-lg text-xs sm:text-sm hover:bg-white/30 transition-colors flex items-center justify-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                Update Learnings
+              </button>
+            </div>
+          </div>
+
+          <!-- Smart Recommendations -->
+          <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+            <div class="p-3 sm:p-4 border-b flex items-center justify-between">
+              <h2 class="font-bold text-sm sm:text-base">🎯 Smart Recommendations</h2>
+              <span class="text-[10px] sm:text-xs text-gray-400">Based on post history</span>
+            </div>
+            <div id="learningRecommendations" class="divide-y">
+              <div class="p-4 sm:p-6 text-center text-gray-400 text-sm">
+                <div class="w-10 sm:w-12 h-10 sm:h-12 mx-auto mb-2 sm:mb-3 rounded-full bg-gray-100 flex items-center justify-center">
+                  <svg class="w-5 sm:w-6 h-5 sm:h-6 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                  </svg>
+                </div>
+                <p class="font-medium text-gray-600 mb-1 text-xs sm:text-sm">No recommendations yet</p>
+                <p class="text-[10px] sm:text-xs">Post more content to generate personalized recommendations</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Best Practices Grid -->
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+            <!-- Best Posting Time -->
+            <div class="bg-white rounded-xl shadow-sm border p-3 sm:p-4">
+              <div class="flex items-center gap-1.5 sm:gap-2 mb-2 sm:mb-3">
+                <span class="text-base sm:text-xl">⏰</span>
+                <h3 class="font-bold text-xs sm:text-sm">Best Time</h3>
+              </div>
+              <div id="learningBestTime" class="text-lg sm:text-2xl font-black text-emerald-600">5:00 AM</div>
+              <p class="text-[10px] sm:text-xs text-gray-500 mt-0.5 sm:mt-1">Based on engagement</p>
+            </div>
+            
+            <!-- Best Day -->
+            <div class="bg-white rounded-xl shadow-sm border p-3 sm:p-4">
+              <div class="flex items-center gap-1.5 sm:gap-2 mb-2 sm:mb-3">
+                <span class="text-base sm:text-xl">📅</span>
+                <h3 class="font-bold text-xs sm:text-sm">Best Day</h3>
+              </div>
+              <div id="learningBestDay" class="text-lg sm:text-2xl font-black text-blue-600">Monday</div>
+              <p class="text-[10px] sm:text-xs text-gray-500 mt-0.5 sm:mt-1">Highest engagement</p>
+            </div>
+            
+            <!-- Optimal Hashtag Count -->
+            <div class="bg-white rounded-xl shadow-sm border p-3 sm:p-4">
+              <div class="flex items-center gap-1.5 sm:gap-2 mb-2 sm:mb-3">
+                <span class="text-base sm:text-xl">#️⃣</span>
+                <h3 class="font-bold text-xs sm:text-sm">Hashtags</h3>
+              </div>
+              <div id="learningHashtagCount" class="text-lg sm:text-2xl font-black text-purple-600">3-5</div>
+              <p class="text-[10px] sm:text-xs text-gray-500 mt-0.5 sm:mt-1">Sweet spot for reach</p>
+            </div>
+            
+            <!-- Top Ranking Signal -->
+            <div class="bg-white rounded-xl shadow-sm border p-3 sm:p-4">
+              <div class="flex items-center gap-1.5 sm:gap-2 mb-2 sm:mb-3">
+                <span class="text-base sm:text-xl">🔥</span>
+                <h3 class="font-bold text-xs sm:text-sm">Top Signal</h3>
+              </div>
+              <div id="learningTopSignal" class="text-lg sm:text-2xl font-black text-orange-600">Shares</div>
+              <p class="text-[10px] sm:text-xs text-gray-500 mt-0.5 sm:mt-1">Instagram's priority</p>
+            </div>
+          </div>
+
+          <!-- Top Performing Hashtags (Learned) -->
+          <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+            <div class="p-3 sm:p-4 border-b flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+              <h2 class="font-bold text-sm sm:text-base">🏆 Your Top Hashtags</h2>
+              <span class="text-[10px] sm:text-xs text-gray-400">Based on engagement</span>
+            </div>
+            <div id="learningTopHashtags" class="p-3 sm:p-4">
+              <div class="text-center text-gray-400 text-xs sm:text-sm py-3 sm:py-4">
+                Sync insights and update learnings to see your top hashtags
+              </div>
+            </div>
+          </div>
+
+          <!-- Best Posting Times Heatmap -->
+          <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+            <div class="p-3 sm:p-4 border-b">
+              <h2 class="font-bold text-sm sm:text-base">📊 Optimal Posting Times</h2>
+            </div>
+            <div class="p-2 sm:p-4">
+              <div id="learningTimesHeatmap" class="overflow-x-auto -mx-2 sm:mx-0">
+                <table class="w-full text-[10px] sm:text-xs min-w-[400px]">
+                  <thead>
+                    <tr>
+                      <th class="p-1 sm:p-2 text-left font-medium text-gray-500">Hour</th>
+                      <th class="p-1 sm:p-2 text-center font-medium text-gray-500">Sun</th>
+                      <th class="p-1 sm:p-2 text-center font-medium text-gray-500">Mon</th>
+                      <th class="p-1 sm:p-2 text-center font-medium text-gray-500">Tue</th>
+                      <th class="p-1 sm:p-2 text-center font-medium text-gray-500">Wed</th>
+                      <th class="p-1 sm:p-2 text-center font-medium text-gray-500">Thu</th>
+                      <th class="p-1 sm:p-2 text-center font-medium text-gray-500">Fri</th>
+                      <th class="p-1 sm:p-2 text-center font-medium text-gray-500">Sat</th>
+                    </tr>
+                  </thead>
+                  <tbody id="learningTimesBody">
+                    <!-- Populated by JS -->
+                    <tr>
+                      <td colspan="8" class="p-4 text-center text-gray-400">Loading timing data...</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <p class="text-xs text-gray-400 mt-3 text-center">🟢 High engagement • 🟡 Medium • 🔴 Low</p>
+            </div>
+          </div>
+
+          <!-- Caption Best Practices -->
+          <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+            <div class="p-4 border-b">
+              <h2 class="font-bold">✍️ Caption Best Practices</h2>
+            </div>
+            <div class="p-4">
+              <div class="grid md:grid-cols-2 gap-4">
+                <div class="bg-green-50 rounded-xl p-4">
+                  <h3 class="font-bold text-green-800 mb-2 flex items-center gap-2">
+                    <span>✅</span> What Works
+                  </h3>
+                  <ul id="learningCaptionDos" class="text-sm text-green-700 space-y-2">
+                    <li class="flex items-start gap-2">
+                      <span>•</span>
+                      <span>Keep captions 100-200 characters for optimal engagement</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                      <span>•</span>
+                      <span>Include a clear call-to-action (Shop now, Link in bio)</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                      <span>•</span>
+                      <span>Ask questions to boost comment engagement</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                      <span>•</span>
+                      <span>Use 3-5 emojis to add personality</span>
+                    </li>
+                  </ul>
+                </div>
+                <div class="bg-red-50 rounded-xl p-4">
+                  <h3 class="font-bold text-red-800 mb-2 flex items-center gap-2">
+                    <span>❌</span> What to Avoid
+                  </h3>
+                  <ul id="learningCaptionDonts" class="text-sm text-red-700 space-y-2">
+                    <li class="flex items-start gap-2">
+                      <span>•</span>
+                      <span>Too many hashtags (more than 10 looks spammy)</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                      <span>•</span>
+                      <span>Very short captions with no context</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                      <span>•</span>
+                      <span>Generic hashtags like #love #instagood</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                      <span>•</span>
+                      <span>Posting on weekends (lower engagement)</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2026 Instagram Algorithm Tips -->
+          <div class="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl shadow-sm border overflow-hidden">
+            <div class="p-4 border-b border-purple-100">
+              <h2 class="font-bold flex items-center gap-2">
+                <span>📱</span> Instagram Algorithm Tips (2026)
+              </h2>
+            </div>
+            <div class="p-4">
+              <div class="grid md:grid-cols-3 gap-4">
+                <div class="bg-white rounded-lg p-4 shadow-sm">
+                  <div class="text-2xl mb-2">📤</div>
+                  <h3 class="font-bold text-sm mb-1">Shares are King</h3>
+                  <p class="text-xs text-gray-600">In 2026, shares are the top ranking signal. Create content people want to send to friends.</p>
+                </div>
+                <div class="bg-white rounded-lg p-4 shadow-sm">
+                  <div class="text-2xl mb-2">🔖</div>
+                  <h3 class="font-bold text-sm mb-1">Saves = Value</h3>
+                  <p class="text-xs text-gray-600">High saves signal valuable content. Create tips, tutorials, or info worth bookmarking.</p>
+                </div>
+                <div class="bg-white rounded-lg p-4 shadow-sm">
+                  <div class="text-2xl mb-2">⚡</div>
+                  <h3 class="font-bold text-sm mb-1">Hook in 3 Seconds</h3>
+                  <p class="text-xs text-gray-600">Capture attention immediately. Your first 3 seconds determine if people keep watching.</p>
+                </div>
+                <div class="bg-white rounded-lg p-4 shadow-sm">
+                  <div class="text-2xl mb-2">🎠</div>
+                  <h3 class="font-bold text-sm mb-1">Carousels Win</h3>
+                  <p class="text-xs text-gray-600">Carousel posts have ~2.4% engagement rate - highest of all formats.</p>
+                </div>
+                <div class="bg-white rounded-lg p-4 shadow-sm">
+                  <div class="text-2xl mb-2">💬</div>
+                  <h3 class="font-bold text-sm mb-1">Reply to Comments</h3>
+                  <p class="text-xs text-gray-600">Quick replies boost algorithm ranking and build community engagement.</p>
+                </div>
+                <div class="bg-white rounded-lg p-4 shadow-sm">
+                  <div class="text-2xl mb-2">🎥</div>
+                  <h3 class="font-bold text-sm mb-1">Reels Under 90s</h3>
+                  <p class="text-xs text-gray-600">Keep Reels under 90 seconds for best reach. Under 3 min for recommendations.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 🧠 AI Learning Dashboard - What AI Learned -->
+          <div class="bg-gradient-to-br from-violet-50 via-purple-50 to-fuchsia-50 rounded-xl shadow-sm border border-purple-200 overflow-hidden">
+            <div class="p-4 border-b border-purple-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <div class="flex items-center gap-2">
+                <span class="text-xl">🧠</span>
+                <h2 class="font-bold text-lg">What AI Learned</h2>
+                <span class="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-bold rounded-full">GPT-5</span>
+              </div>
+              <button id="btnResearchCategories" class="px-3 py-1.5 text-xs font-bold bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                </svg>
+                Research Categories
+              </button>
+            </div>
+            
+            <!-- Category Insights Grid -->
+            <div id="categoryInsightsGrid" class="p-4">
+              <div class="text-center py-8 text-gray-400">
+                <div class="w-16 h-16 mx-auto mb-3 rounded-full bg-purple-100 flex items-center justify-center">
+                  <span class="text-3xl">🔬</span>
+                </div>
+                <p class="font-medium text-gray-600 mb-1">No category insights yet</p>
+                <p class="text-xs text-gray-500 max-w-md mx-auto">
+                  AI will automatically research each product category when you have 3+ posted items. 
+                  Click "Research Categories" to trigger analysis now.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- AI Learnings Summary (Collapsible) -->
+          <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+            <details class="group">
+              <summary class="p-4 cursor-pointer flex items-center justify-between hover:bg-gray-50 transition-colors">
+                <div class="flex items-center gap-2">
+                  <span class="text-xl">📚</span>
+                  <h2 class="font-bold">All AI Learnings</h2>
+                  <span id="aiLearningsCount" class="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs font-bold rounded-full">0</span>
+                </div>
+                <svg class="w-5 h-5 text-gray-400 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+                </svg>
+              </summary>
+              <div id="allAILearningsList" class="p-4 border-t bg-gray-50">
+                <div class="text-center py-4 text-gray-400 text-sm">
+                  No learnings stored yet. Analyze posts to start learning!
+                </div>
+              </div>
+            </details>
+          </div>
+
         </div>
       </div>
 
@@ -1070,6 +1354,20 @@
             </div>
             <input type="hidden" id="productSelect" value="">
           </div>
+          
+          <!-- Product Images Section (shown when product is selected) -->
+          <div id="productImagesSection" class="hidden">
+            <label class="block text-sm font-medium mb-2 flex items-center gap-2">
+              <svg class="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+              </svg>
+              Use Product Image
+              <span class="text-xs text-gray-400 font-normal">(click to select)</span>
+            </label>
+            <div id="productImagesGrid" class="grid grid-cols-4 sm:grid-cols-5 gap-2 max-h-48 overflow-y-auto rounded-lg border bg-gray-50 p-2">
+              <!-- Populated by JS -->
+            </div>
+          </div>
         </div>
         
         <!-- Step 2: Select Variations -->
@@ -1077,22 +1375,67 @@
           <h3 class="font-bold text-center">Select Variations</h3>
           <p class="text-sm text-gray-500 text-center">Choose which crop variations to generate</p>
           
-          <div class="grid grid-cols-2 gap-4">
+          <!-- Image Analysis Banner -->
+          <div id="imageAnalysisBanner" class="hidden bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-lg p-3">
+            <div class="flex items-start gap-2">
+              <span class="text-lg">🎯</span>
+              <div class="flex-1">
+                <div class="font-medium text-sm text-purple-800">AI Recommendation</div>
+                <p id="imageAnalysisText" class="text-xs text-purple-600 mt-1">Based on your image dimensions, we recommend...</p>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Image dimension info -->
+          <div id="imageDimensionInfo" class="hidden text-center text-xs text-gray-500 bg-gray-50 rounded-lg py-2 px-3">
+            <span>📐 Source: <span id="sourceDimensions">0 × 0</span></span>
+          </div>
+          
+          <div class="grid grid-cols-2 gap-3 sm:gap-4">
             <!-- Instagram variations -->
             <div class="space-y-3">
-              <div class="text-xs font-medium text-instagram uppercase tracking-wide">Instagram</div>
-              <label class="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
-                <input type="checkbox" id="varSquare" checked class="w-4 h-4">
-                <div>
-                  <div class="font-medium text-sm">Square (1:1)</div>
-                  <div class="text-xs text-gray-400">Feed post</div>
+              <div class="flex items-center gap-2">
+                <div class="text-xs font-medium text-instagram uppercase tracking-wide">Instagram</div>
+                <span class="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">+ Facebook</span>
+              </div>
+              
+              <!-- Square Preview Card -->
+              <label id="varSquareCard" class="variation-card block border-2 rounded-lg cursor-pointer hover:border-pink-300 transition-all overflow-hidden">
+                <div class="aspect-square bg-gray-100 relative overflow-hidden">
+                  <canvas id="previewSquare" class="hidden w-full h-full object-cover"></canvas>
+                  <div class="absolute inset-0 flex items-center justify-center bg-gray-200" id="previewSquarePlaceholder">
+                    <span class="text-gray-400 text-2xl">1:1</span>
+                  </div>
+                </div>
+                <div class="p-2 flex items-center gap-2 bg-white">
+                  <input type="checkbox" id="varSquare" checked class="w-4 h-4 accent-pink-500">
+                  <div class="flex-1 min-w-0">
+                    <div class="font-medium text-xs sm:text-sm truncate">Square (1:1)</div>
+                    <div class="text-xs text-gray-400 truncate">Feed post</div>
+                  </div>
+                  <div id="squareBadge" class="hidden shrink-0">
+                    <span class="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">✓ Good fit</span>
+                  </div>
                 </div>
               </label>
-              <label class="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
-                <input type="checkbox" id="varPortrait" checked class="w-4 h-4">
-                <div>
-                  <div class="font-medium text-sm">Portrait (4:5)</div>
-                  <div class="text-xs text-gray-400">Maximum feed size</div>
+              
+              <!-- Portrait Preview Card -->
+              <label id="varPortraitCard" class="variation-card block border-2 rounded-lg cursor-pointer hover:border-pink-300 transition-all overflow-hidden">
+                <div class="aspect-[4/5] bg-gray-100 relative overflow-hidden">
+                  <canvas id="previewPortrait" class="hidden w-full h-full object-cover"></canvas>
+                  <div class="absolute inset-0 flex items-center justify-center bg-gray-200" id="previewPortraitPlaceholder">
+                    <span class="text-gray-400 text-2xl">4:5</span>
+                  </div>
+                </div>
+                <div class="p-2 flex items-center gap-2 bg-white">
+                  <input type="checkbox" id="varPortrait" checked class="w-4 h-4 accent-pink-500">
+                  <div class="flex-1 min-w-0">
+                    <div class="font-medium text-xs sm:text-sm truncate">Portrait (4:5)</div>
+                    <div class="text-xs text-gray-400 truncate">Max feed size</div>
+                  </div>
+                  <div id="portraitBadge" class="hidden shrink-0">
+                    <span class="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">🔥 Best</span>
+                  </div>
                 </div>
               </label>
             </div>
@@ -1100,20 +1443,66 @@
             <!-- Pinterest variations -->
             <div class="space-y-3">
               <div class="text-xs font-medium text-pinterest uppercase tracking-wide">Pinterest</div>
-              <label class="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
-                <input type="checkbox" id="varVertical" checked class="w-4 h-4">
-                <div>
-                  <div class="font-medium text-sm">Vertical (2:3)</div>
-                  <div class="text-xs text-gray-400">Standard pin</div>
+              
+              <!-- Vertical Preview Card -->
+              <label id="varVerticalCard" class="variation-card block border-2 rounded-lg cursor-pointer hover:border-red-300 transition-all overflow-hidden">
+                <div class="aspect-[2/3] bg-gray-100 relative overflow-hidden">
+                  <canvas id="previewVertical" class="hidden w-full h-full object-cover"></canvas>
+                  <div class="absolute inset-0 flex items-center justify-center bg-gray-200" id="previewVerticalPlaceholder">
+                    <span class="text-gray-400 text-2xl">2:3</span>
+                  </div>
+                </div>
+                <div class="p-2 flex items-center gap-2 bg-white">
+                  <input type="checkbox" id="varVertical" checked class="w-4 h-4 accent-red-500">
+                  <div class="flex-1 min-w-0">
+                    <div class="font-medium text-xs sm:text-sm truncate">Vertical (2:3)</div>
+                    <div class="text-xs text-gray-400 truncate">Standard pin</div>
+                  </div>
+                  <div id="verticalBadge" class="hidden shrink-0">
+                    <span class="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">✓ Good fit</span>
+                  </div>
                 </div>
               </label>
-              <label class="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
-                <input type="checkbox" id="varTall" class="w-4 h-4">
-                <div>
-                  <div class="font-medium text-sm">Tall (1:2.1)</div>
-                  <div class="text-xs text-gray-400">Idea pin</div>
+              
+              <!-- Tall Preview Card -->
+              <label id="varTallCard" class="variation-card block border-2 rounded-lg cursor-pointer hover:border-red-300 transition-all overflow-hidden">
+                <div class="aspect-[1/2] bg-gray-100 relative overflow-hidden">
+                  <canvas id="previewTall" class="hidden w-full h-full object-cover"></canvas>
+                  <div class="absolute inset-0 flex items-center justify-center bg-gray-200" id="previewTallPlaceholder">
+                    <span class="text-gray-400 text-2xl">1:2</span>
+                  </div>
+                </div>
+                <div class="p-2 flex items-center gap-2 bg-white">
+                  <input type="checkbox" id="varTall" class="w-4 h-4 accent-red-500">
+                  <div class="flex-1 min-w-0">
+                    <div class="font-medium text-xs sm:text-sm truncate">Tall (1:2.1)</div>
+                    <div class="text-xs text-gray-400 truncate">Idea pin</div>
+                  </div>
+                  <div id="tallBadge" class="hidden shrink-0">
+                    <span class="text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full">⚠️ Crop</span>
+                  </div>
                 </div>
               </label>
+            </div>
+          </div>
+          
+          <!-- Learning insights for Step 2 -->
+          <div id="step2Insights" class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-3 border border-blue-100">
+            <div class="flex items-start gap-2">
+              <span class="text-lg">📊</span>
+              <div class="flex-1">
+                <div class="font-medium text-sm text-blue-800">Your Performance Stats</div>
+                <div id="step2InsightsContent" class="text-xs text-blue-600 mt-1 space-y-1">
+                  <div class="flex items-center gap-2">
+                    <span class="w-2 h-2 bg-pink-400 rounded-full"></span>
+                    <span>Portrait posts get <strong>23% more</strong> engagement on average</span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <span class="w-2 h-2 bg-red-400 rounded-full"></span>
+                    <span>Vertical pins have <strong>2.4× higher</strong> click-through rate</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1124,8 +1513,9 @@
           
           <!-- Tone selector (8 styles) -->
           <div>
-            <label class="block text-sm font-medium mb-2">Caption Tone</label>
-            <div class="flex flex-wrap gap-2">
+            <label class="block text-sm font-medium mb-1">Caption Tone</label>
+            <p id="toneRecommendation" class="text-xs text-purple-600 mb-2 hidden">🧠 AI recommends: <span id="recommendedTone" class="font-medium"></span></p>
+            <div id="toneButtonsContainer" class="flex flex-wrap gap-2">
               <button data-tone="casual" class="caption-tone-btn py-2 px-3 border rounded-lg text-sm font-medium hover:bg-gray-50">😊 Casual</button>
               <button data-tone="professional" class="caption-tone-btn py-2 px-3 border rounded-lg text-sm font-medium hover:bg-gray-50">💼 Pro</button>
               <button data-tone="urgency" class="caption-tone-btn py-2 px-3 border rounded-lg text-sm font-medium hover:bg-gray-50">🔥 Urgent</button>
@@ -1144,6 +1534,35 @@
               <button id="btnRegenerateCaption" class="text-xs text-gray-500 hover:text-black">🔄 Regenerate</button>
             </div>
             <textarea id="captionText" rows="3" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Your caption will appear here..."></textarea>
+            
+            <!-- AI Learning Tips -->
+            <div id="aiCaptionTips" class="mt-3 p-3 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-100">
+              <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2">
+                  <span class="text-sm">�</span>
+                  <span class="text-xs font-bold text-purple-700">GPT-5 AI Generation</span>
+                </div>
+                <span id="aiStatusBadge" class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Powered by AI</span>
+              </div>
+              <div id="aiCaptionTipsContent" class="space-y-1 text-xs text-purple-800">
+                <div class="flex items-start gap-1">
+                  <span>✨</span>
+                  <span><strong>Caption:</strong> 100% unique, generated by GPT-5-mini</span>
+                </div>
+                <div class="flex items-start gap-1">
+                  <span>🏷️</span>
+                  <span><strong>Hashtags:</strong> AI-curated for max reach (3-5 optimal)</span>
+                </div>
+                <div class="flex items-start gap-1">
+                  <span>📊</span>
+                  <span><strong>Learning:</strong> Trained on your top-performing posts</span>
+                </div>
+                <div class="flex items-start gap-1">
+                  <span>⏰</span>
+                  <span id="aiTipBestTime">Best posting time: 5 AM</span>
+                </div>
+              </div>
+            </div>
           </div>
           
           <!-- Hashtags -->
@@ -1204,10 +1623,10 @@
   </div>
 
   <!-- Settings Modal -->
-  <div id="settingsModal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4">
-    <div class="bg-white rounded-2xl w-full max-w-md">
-      <div class="flex items-center justify-between p-4 border-b">
-        <h2 class="text-lg font-bold">Settings</h2>
+  <div id="settingsModal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-2 sm:p-4">
+    <div class="bg-white rounded-2xl w-full max-w-md max-h-[95vh] sm:max-h-[90vh] flex flex-col">
+      <div class="flex items-center justify-between p-3 sm:p-4 border-b flex-shrink-0">
+        <h2 class="text-base sm:text-lg font-bold">Settings</h2>
         <button id="btnCloseSettings" class="p-2 hover:bg-gray-100 rounded-lg">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
@@ -1215,20 +1634,20 @@
         </button>
       </div>
       
-      <div class="p-4 space-y-4">
+      <div class="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4">
         <!-- Auto approve toggle -->
-        <label class="flex items-center justify-between">
+        <label class="flex items-center justify-between gap-3">
           <div>
-            <div class="font-medium text-sm">Auto-approve posts</div>
-            <div class="text-xs text-gray-400">Posts will be scheduled without manual approval</div>
+            <div class="font-medium text-xs sm:text-sm">Auto-approve posts</div>
+            <div class="text-[10px] sm:text-xs text-gray-400">Posts will be scheduled without manual approval</div>
           </div>
-          <input type="checkbox" id="settingAutoApprove" checked class="w-5 h-5">
+          <input type="checkbox" id="settingAutoApprove" checked class="w-5 h-5 flex-shrink-0">
         </label>
         
         <!-- Default tone (8 styles) -->
         <div>
-          <label class="block text-sm font-medium mb-2">Default Caption Tone</label>
-          <select id="settingDefaultTone" class="w-full border rounded-lg px-3 py-2">
+          <label class="block text-xs sm:text-sm font-medium mb-1.5 sm:mb-2">Default Caption Tone</label>
+          <select id="settingDefaultTone" class="w-full border rounded-lg px-3 py-2 text-sm">
             <option value="casual">😊 Casual</option>
             <option value="professional">💼 Professional</option>
             <option value="urgency">🔥 Urgency</option>
@@ -1241,43 +1660,44 @@
         </div>
         
         <!-- Instagram settings -->
-        <div class="border-t pt-4">
-          <div class="text-xs font-medium text-instagram uppercase tracking-wide mb-3">Instagram</div>
-          <div class="flex items-center justify-between mb-3">
-            <span class="text-sm">Enabled</span>
+        <div class="border-t pt-3 sm:pt-4">
+          <div class="text-[10px] sm:text-xs font-medium text-instagram uppercase tracking-wide mb-2 sm:mb-3">Instagram</div>
+          <div class="flex items-center justify-between mb-2 sm:mb-3">
+            <span class="text-xs sm:text-sm">Enabled</span>
             <input type="checkbox" id="settingInstagramEnabled" checked class="w-5 h-5">
           </div>
-          <div class="flex items-center gap-3">
-            <span class="text-sm">Post time</span>
-            <input type="time" id="settingInstagramTime" value="12:00" class="border rounded-lg px-3 py-2 text-sm">
+          <div class="flex items-center gap-2 sm:gap-3">
+            <span class="text-xs sm:text-sm">Post time</span>
+            <input type="time" id="settingInstagramTime" value="12:00" class="border rounded-lg px-3 py-2 text-sm flex-1 sm:flex-none">
           </div>
         </div>
         
         <!-- Pinterest settings -->
-        <div class="border-t pt-4">
-          <div class="text-xs font-medium text-pinterest uppercase tracking-wide mb-3">Pinterest</div>
-          <div class="flex items-center justify-between mb-3">
-            <span class="text-sm">Enabled</span>
+        <div class="border-t pt-3 sm:pt-4">
+          <div class="text-[10px] sm:text-xs font-medium text-pinterest uppercase tracking-wide mb-2 sm:mb-3">Pinterest</div>
+          <div class="flex items-center justify-between mb-2 sm:mb-3">
+            <span class="text-xs sm:text-sm">Enabled</span>
             <input type="checkbox" id="settingPinterestEnabled" checked class="w-5 h-5">
           </div>
-          <div class="flex items-center gap-3">
-            <span class="text-sm">Post time</span>
-            <input type="time" id="settingPinterestTime" value="12:00" class="border rounded-lg px-3 py-2 text-sm">
+          <div class="flex items-center gap-2 sm:gap-3">
+            <span class="text-xs sm:text-sm">Post time</span>
+            <input type="time" id="settingPinterestTime" value="12:00" class="border rounded-lg px-3 py-2 text-sm flex-1 sm:flex-none">
           </div>
         </div>
       </div>
       
-      <div class="p-4 border-t">
-        <button id="btnSaveSettings" class="w-full py-2 text-sm font-bold bg-black text-white rounded-lg hover:bg-black/80">Save Settings</button>
+      <div class="p-3 sm:p-4 border-t flex-shrink-0">
+        <button id="btnSaveSettings" class="w-full py-2 text-xs sm:text-sm font-bold bg-black text-white rounded-lg hover:bg-black/80">Save Settings</button>
       </div>
     </div>
   </div>
 
   <!-- Post Detail Modal (for viewing/editing scheduled posts) -->
-  <div id="postDetailModal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4">
-    <div class="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-      <div class="flex items-center justify-between p-4 border-b sticky top-0 bg-white">
-        <h2 class="text-lg font-bold">Post Details</h2>
+  <div id="postDetailModal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-2 sm:p-4">
+    <div class="bg-white rounded-2xl w-full max-w-lg max-h-[95vh] sm:max-h-[90vh] flex flex-col">
+      <!-- Fixed Header -->
+      <div class="flex items-center justify-between p-3 sm:p-4 border-b bg-white rounded-t-2xl flex-shrink-0">
+        <h2 class="text-base sm:text-lg font-bold">Post Details</h2>
         <button id="btnClosePostDetail" class="p-2 hover:bg-gray-100 rounded-lg">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
@@ -1285,33 +1705,34 @@
         </button>
       </div>
       
-      <div class="p-4 space-y-4">
+      <!-- Scrollable Content -->
+      <div class="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4">
         <!-- Image preview -->
         <div class="aspect-square bg-gray-100 rounded-lg overflow-hidden">
           <img id="postDetailImage" class="w-full h-full object-cover">
         </div>
         
         <!-- Platform badge -->
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-2">
           <span id="postDetailPlatform" class="px-3 py-1 rounded-full text-xs font-bold"></span>
           <span id="postDetailStatus" class="px-3 py-1 rounded-full text-xs font-bold"></span>
         </div>
         
         <!-- Caption -->
         <div>
-          <label class="block text-sm font-medium mb-2">Caption</label>
+          <label class="block text-xs sm:text-sm font-medium mb-1.5 sm:mb-2">Caption</label>
           <textarea id="postDetailCaption" rows="3" class="w-full border rounded-lg px-3 py-2 text-sm"></textarea>
         </div>
         
         <!-- Hashtags -->
         <div>
-          <label class="block text-sm font-medium mb-2">Hashtags</label>
+          <label class="block text-xs sm:text-sm font-medium mb-1.5 sm:mb-2">Hashtags</label>
           <textarea id="postDetailHashtags" rows="2" class="w-full border rounded-lg px-3 py-2 text-sm"></textarea>
         </div>
         
         <!-- Pinterest Board (only shown for Pinterest posts) -->
         <div id="postDetailBoardSection" class="hidden">
-          <label class="block text-sm font-medium mb-2">Pinterest Board</label>
+          <label class="block text-xs sm:text-sm font-medium mb-1.5 sm:mb-2">Pinterest Board</label>
           <select id="postDetailBoard" class="w-full border rounded-lg px-3 py-2 text-sm">
             <option value="">Select a board...</option>
           </select>
@@ -1319,10 +1740,10 @@
         
         <!-- Schedule -->
         <div>
-          <label class="block text-sm font-medium mb-2">Scheduled For</label>
-          <div class="grid grid-cols-2 gap-3">
-            <input type="date" id="postDetailDate" class="border rounded-lg px-3 py-2">
-            <input type="time" id="postDetailTime" class="border rounded-lg px-3 py-2">
+          <label class="block text-xs sm:text-sm font-medium mb-1.5 sm:mb-2">Scheduled For</label>
+          <div class="grid grid-cols-2 gap-2 sm:gap-3">
+            <input type="date" id="postDetailDate" class="border rounded-lg px-3 py-2 text-sm">
+            <input type="time" id="postDetailTime" class="border rounded-lg px-3 py-2 text-sm">
           </div>
         </div>
         
@@ -1330,23 +1751,25 @@
         <div id="postDetailEngagement" class="hidden"></div>
       </div>
       
-      <div class="flex items-center justify-between p-4 border-t sticky bottom-0 bg-white">
-        <button id="btnDeletePost" class="px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg">Delete</button>
-        <div class="flex gap-3">
-          <a id="btnViewOnPlatform" href="#" target="_blank" class="hidden px-4 py-2 text-sm font-medium bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:opacity-90">📸 View on Instagram</a>
-          <button id="btnPostNow" class="px-4 py-2 text-sm font-medium border rounded-lg hover:bg-gray-50">Post Now</button>
-          <button id="btnSavePost" class="px-6 py-2 text-sm font-bold bg-black text-white rounded-lg hover:bg-black/80">Save Changes</button>
+      <!-- Fixed Footer -->
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0 p-3 sm:p-4 border-t bg-white rounded-b-2xl flex-shrink-0">
+        <button id="btnDeletePost" class="order-last sm:order-first px-4 py-2 text-xs sm:text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg w-full sm:w-auto text-center">Delete</button>
+        <div class="flex flex-wrap gap-2 sm:gap-3 justify-end">
+          <a id="btnViewOnPlatform" href="#" target="_blank" class="hidden flex-1 sm:flex-none px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:opacity-90 text-center">📸 View</a>
+          <button id="btnPostNow" class="flex-1 sm:flex-none px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium border rounded-lg hover:bg-gray-50">Post Now</button>
+          <button id="btnSavePost" class="flex-1 sm:flex-none px-4 sm:px-6 py-2 text-xs sm:text-sm font-bold bg-black text-white rounded-lg hover:bg-black/80">Save</button>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Post Analytics Modal -->
-  <div id="postAnalyticsModal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4 overflow-y-auto">
-    <div class="bg-white rounded-2xl w-full max-w-2xl my-8">
-      <div class="flex items-center justify-between p-4 border-b sticky top-0 bg-white rounded-t-2xl z-10">
-        <h2 class="text-lg font-bold flex items-center gap-2">
-          📊 Post Analytics
+  <!-- Post Analytics Modal (Enhanced with Deep Analysis) -->
+  <div id="postAnalyticsModal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-2 sm:p-4">
+    <div class="bg-white rounded-2xl w-full max-w-3xl max-h-[95vh] sm:max-h-[90vh] flex flex-col">
+      <!-- Fixed Header -->
+      <div class="flex items-center justify-between p-3 sm:p-4 border-b bg-white rounded-t-2xl flex-shrink-0">
+        <h2 class="text-base sm:text-lg font-bold flex items-center gap-2">
+          🔬 Deep Post Analysis
         </h2>
         <button id="btnClosePostAnalytics" class="p-2 hover:bg-gray-100 rounded-lg">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -1355,89 +1778,209 @@
         </button>
       </div>
       
-      <div class="p-4 space-y-6">
+      <!-- Scrollable Content -->
+      <div class="flex-1 overflow-y-auto p-3 sm:p-4 space-y-4 sm:space-y-6">
         <!-- Post Preview -->
-        <div class="flex gap-4">
-          <div id="postAnalyticsImage" class="w-32 h-32 bg-gray-100 rounded-xl overflow-hidden flex-shrink-0">
+        <div class="flex flex-col sm:flex-row gap-3 sm:gap-4">
+          <div id="postAnalyticsImage" class="w-full sm:w-32 h-48 sm:h-32 bg-gray-100 rounded-xl overflow-hidden flex-shrink-0">
             <img src="" alt="Post" class="w-full h-full object-cover">
           </div>
           <div class="flex-1">
-            <div class="flex items-center gap-2 mb-2">
+            <div class="flex flex-wrap items-center gap-2 mb-2">
               <span id="postAnalyticsPlatform" class="px-2 py-0.5 rounded-full text-xs font-bold"></span>
               <span id="postAnalyticsDate" class="text-xs text-gray-400"></span>
             </div>
-            <p id="postAnalyticsCaption" class="text-sm text-gray-700 line-clamp-4"></p>
+            <p id="postAnalyticsCaption" class="text-sm text-gray-700 line-clamp-3 sm:line-clamp-4"></p>
             <a id="postAnalyticsPermalink" href="#" target="_blank" class="text-xs text-blue-500 hover:underline mt-2 inline-block hidden">View on Instagram →</a>
           </div>
         </div>
         
-        <!-- Key Metrics Grid -->
-        <div class="grid grid-cols-3 sm:grid-cols-6 gap-3">
-          <div class="bg-pink-50 rounded-xl p-3 text-center">
-            <div class="text-2xl mb-1">❤️</div>
-            <div id="postAnalyticsLikes" class="text-xl font-black text-pink-600">0</div>
-            <div class="text-xs text-gray-500">Likes</div>
-          </div>
-          <div class="bg-blue-50 rounded-xl p-3 text-center">
-            <div class="text-2xl mb-1">💬</div>
-            <div id="postAnalyticsComments" class="text-xl font-black text-blue-600">0</div>
-            <div class="text-xs text-gray-500">Comments</div>
-          </div>
-          <div class="bg-yellow-50 rounded-xl p-3 text-center">
-            <div class="text-2xl mb-1">🔖</div>
-            <div id="postAnalyticsSaves" class="text-xl font-black text-yellow-600">0</div>
-            <div class="text-xs text-gray-500">Saves</div>
-          </div>
-          <div class="bg-green-50 rounded-xl p-3 text-center">
-            <div class="text-2xl mb-1">🔄</div>
-            <div id="postAnalyticsShares" class="text-xl font-black text-green-600">0</div>
-            <div class="text-xs text-gray-500">Shares</div>
-          </div>
-          <div class="bg-purple-50 rounded-xl p-3 text-center">
-            <div class="text-2xl mb-1">👥</div>
-            <div id="postAnalyticsReach" class="text-xl font-black text-purple-600">0</div>
-            <div class="text-xs text-gray-500">Reach</div>
-          </div>
-          <div class="bg-orange-50 rounded-xl p-3 text-center">
-            <div class="text-2xl mb-1">📊</div>
-            <div id="postAnalyticsEngRate" class="text-xl font-black text-orange-600">0%</div>
-            <div class="text-xs text-gray-500">Eng. Rate</div>
+        <!-- Performance Score -->
+        <div id="postAnalyticsScoreSection" class="bg-gradient-to-r from-emerald-500 to-teal-500 rounded-xl p-3 sm:p-4 text-white">
+          <div class="flex flex-col sm:flex-row sm:items-center gap-4 sm:justify-between">
+            <div class="text-center sm:text-left">
+              <h3 class="text-xs sm:text-sm font-medium text-white/80">Overall Performance Score</h3>
+              <div id="postAnalyticsScore" class="text-3xl sm:text-4xl font-black">--</div>
+            </div>
+            <div class="grid grid-cols-4 gap-2 sm:gap-3 text-center">
+              <div>
+                <div id="postAnalyticsTimingScore" class="text-base sm:text-lg font-bold">--</div>
+                <div class="text-[10px] sm:text-xs text-white/70">Timing</div>
+              </div>
+              <div>
+                <div id="postAnalyticsCaptionScore" class="text-base sm:text-lg font-bold">--</div>
+                <div class="text-[10px] sm:text-xs text-white/70">Caption</div>
+              </div>
+              <div>
+                <div id="postAnalyticsHashtagScore" class="text-base sm:text-lg font-bold">--</div>
+                <div class="text-[10px] sm:text-xs text-white/70">Hashtags</div>
+              </div>
+              <div>
+                <div id="postAnalyticsVisualScore" class="text-base sm:text-lg font-bold">--</div>
+                <div class="text-[10px] sm:text-xs text-white/70">Visual</div>
+              </div>
+            </div>
           </div>
         </div>
         
-        <!-- Performance Analysis -->
-        <div class="bg-gray-50 rounded-xl p-4">
-          <h3 class="font-bold text-sm mb-3">📈 Performance Analysis</h3>
-          <div id="postAnalyticsInsights" class="space-y-2 text-sm">
+        <!-- Key Metrics Grid -->
+        <div class="grid grid-cols-3 gap-2 sm:grid-cols-6 sm:gap-3">
+          <div class="bg-pink-50 rounded-xl p-2 sm:p-3 text-center">
+            <div class="text-lg sm:text-2xl mb-0.5 sm:mb-1">❤️</div>
+            <div id="postAnalyticsLikes" class="text-base sm:text-xl font-black text-pink-600">0</div>
+            <div class="text-[10px] sm:text-xs text-gray-500">Likes</div>
+          </div>
+          <div class="bg-blue-50 rounded-xl p-2 sm:p-3 text-center">
+            <div class="text-lg sm:text-2xl mb-0.5 sm:mb-1">💬</div>
+            <div id="postAnalyticsComments" class="text-base sm:text-xl font-black text-blue-600">0</div>
+            <div class="text-[10px] sm:text-xs text-gray-500">Comments</div>
+          </div>
+          <div class="bg-yellow-50 rounded-xl p-2 sm:p-3 text-center">
+            <div class="text-lg sm:text-2xl mb-0.5 sm:mb-1">🔖</div>
+            <div id="postAnalyticsSaves" class="text-base sm:text-xl font-black text-yellow-600">0</div>
+            <div class="text-[10px] sm:text-xs text-gray-500">Saves</div>
+          </div>
+          <div class="bg-green-50 rounded-xl p-2 sm:p-3 text-center">
+            <div class="text-lg sm:text-2xl mb-0.5 sm:mb-1">🔄</div>
+            <div id="postAnalyticsShares" class="text-base sm:text-xl font-black text-green-600">0</div>
+            <div class="text-[10px] sm:text-xs text-gray-500">Shares</div>
+          </div>
+          <div class="bg-purple-50 rounded-xl p-2 sm:p-3 text-center">
+            <div class="text-lg sm:text-2xl mb-0.5 sm:mb-1">👥</div>
+            <div id="postAnalyticsReach" class="text-base sm:text-xl font-black text-purple-600">0</div>
+            <div class="text-[10px] sm:text-xs text-gray-500">Reach</div>
+          </div>
+          <div class="bg-orange-50 rounded-xl p-2 sm:p-3 text-center">
+            <div class="text-lg sm:text-2xl mb-0.5 sm:mb-1">📊</div>
+            <div id="postAnalyticsEngRate" class="text-base sm:text-xl font-black text-orange-600">0%</div>
+            <div class="text-[10px] sm:text-xs text-gray-500">Eng. Rate</div>
+          </div>
+        </div>
+        
+        <!-- Comparison to Average -->
+        <div id="postAnalyticsComparison" class="bg-gray-50 rounded-xl p-3 sm:p-4">
+          <h3 class="font-bold text-xs sm:text-sm mb-3 flex items-center gap-2">
+            <span>📈</span> vs Your Average Performance
+          </h3>
+          <div class="grid grid-cols-4 gap-2 sm:gap-3 text-sm">
+            <div class="text-center">
+              <div id="postAnalyticsVsAvgEng" class="text-sm sm:text-lg font-bold text-gray-600">--</div>
+              <div class="text-[10px] sm:text-xs text-gray-500">Engagement</div>
+            </div>
+            <div class="text-center">
+              <div id="postAnalyticsVsAvgLikes" class="text-sm sm:text-lg font-bold text-gray-600">--</div>
+              <div class="text-[10px] sm:text-xs text-gray-500">Likes</div>
+            </div>
+            <div class="text-center">
+              <div id="postAnalyticsVsAvgComments" class="text-sm sm:text-lg font-bold text-gray-600">--</div>
+              <div class="text-[10px] sm:text-xs text-gray-500">Comments</div>
+            </div>
+            <div class="text-center">
+              <div id="postAnalyticsVsAvgSaves" class="text-sm sm:text-lg font-bold text-gray-600">--</div>
+              <div class="text-[10px] sm:text-xs text-gray-500">Saves</div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Strengths -->
+        <div id="postAnalyticsStrengthsSection" class="bg-green-50 rounded-xl p-3 sm:p-4">
+          <h3 class="font-bold text-xs sm:text-sm mb-2 sm:mb-3 text-green-800 flex items-center gap-2">
+            <span>💪</span> Strengths
+          </h3>
+          <div id="postAnalyticsStrengths" class="space-y-1.5 sm:space-y-2 text-xs sm:text-sm text-green-700">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+        
+        <!-- Weaknesses -->
+        <div id="postAnalyticsWeaknessesSection" class="bg-red-50 rounded-xl p-3 sm:p-4">
+          <h3 class="font-bold text-xs sm:text-sm mb-2 sm:mb-3 text-red-800 flex items-center gap-2">
+            <span>⚠️</span> Areas for Improvement
+          </h3>
+          <div id="postAnalyticsWeaknesses" class="space-y-1.5 sm:space-y-2 text-xs sm:text-sm text-red-700">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+        
+        <!-- Recommendations -->
+        <div id="postAnalyticsRecsSection" class="bg-blue-50 rounded-xl p-3 sm:p-4">
+          <h3 class="font-bold text-xs sm:text-sm mb-2 sm:mb-3 text-blue-800 flex items-center gap-2">
+            <span>💡</span> Recommendations for Future Posts
+          </h3>
+          <div id="postAnalyticsRecs" class="space-y-1.5 sm:space-y-2 text-xs sm:text-sm text-blue-700">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+        
+        <!-- AI Deep Analysis Section -->
+        <div id="postAnalyticsAISection" class="hidden bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-3 sm:p-4 border border-purple-200">
+          <h3 class="font-bold text-xs sm:text-sm mb-2 sm:mb-3 text-purple-800 flex items-center gap-2">
+            <span>🧠</span> AI Deep Analysis
+          </h3>
+          <div id="postAnalyticsAIScore" class="text-purple-700 mb-3">
+            <!-- AI score populated by JS -->
+          </div>
+          <div class="space-y-3">
+            <div>
+              <h4 class="text-xs font-medium text-purple-700 mb-1">🤖 AI Recommendations</h4>
+              <div id="postAnalyticsAIRecs" class="space-y-1.5 text-purple-600">
+                <!-- AI recommendations populated by JS -->
+              </div>
+            </div>
+            <div>
+              <h4 class="text-xs font-medium text-purple-700 mb-1">📚 Learnings Saved</h4>
+              <div id="postAnalyticsAILearnings" class="space-y-2">
+                <!-- AI learnings populated by JS -->
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Performance Analysis (Legacy) -->
+        <div class="bg-gray-50 rounded-xl p-3 sm:p-4">
+          <h3 class="font-bold text-xs sm:text-sm mb-2 sm:mb-3">📈 Performance Analysis</h3>
+          <div id="postAnalyticsInsights" class="space-y-1.5 sm:space-y-2 text-xs sm:text-sm">
             <!-- Populated by JS -->
           </div>
         </div>
         
         <!-- Hashtags Used -->
         <div id="postAnalyticsHashtagsSection" class="hidden">
-          <h3 class="font-bold text-sm mb-3">#️⃣ Hashtags Used</h3>
-          <div id="postAnalyticsHashtags" class="flex flex-wrap gap-2">
+          <h3 class="font-bold text-xs sm:text-sm mb-2 sm:mb-3">#️⃣ Hashtags Used</h3>
+          <div id="postAnalyticsHashtags" class="flex flex-wrap gap-1.5 sm:gap-2">
             <!-- Populated by JS -->
+          </div>
+          <div id="postAnalyticsHashtagAdvice" class="mt-2 sm:mt-3 text-[10px] sm:text-xs text-gray-500 bg-gray-50 rounded-lg p-2 sm:p-3">
+            <!-- Hashtag-specific advice populated by JS -->
           </div>
         </div>
         
         <!-- Post Timeline -->
-        <div class="border-t pt-4">
-          <h3 class="font-bold text-sm mb-3">📅 Timeline</h3>
-          <div id="postAnalyticsTimeline" class="space-y-2 text-sm">
+        <div class="border-t pt-3 sm:pt-4">
+          <h3 class="font-bold text-xs sm:text-sm mb-2 sm:mb-3">📅 Timeline</h3>
+          <div id="postAnalyticsTimeline" class="space-y-1.5 sm:space-y-2 text-xs sm:text-sm">
             <!-- Populated by JS -->
           </div>
         </div>
       </div>
       
-      <div class="flex items-center justify-end p-4 border-t sticky bottom-0 bg-white rounded-b-2xl">
-        <button id="btnRefreshPostAnalytics" class="px-4 py-2 text-sm font-medium border rounded-lg hover:bg-gray-50 mr-2 flex items-center gap-1">
+      <!-- Fixed Footer -->
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0 p-3 sm:p-4 border-t bg-white rounded-b-2xl flex-shrink-0">
+        <button id="btnRunDeepAnalysis" class="w-full sm:w-auto px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-200 flex items-center justify-center sm:justify-start gap-2">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
           </svg>
-          Refresh
+          Run Deep Analysis
         </button>
-        <a id="btnViewPostOnPlatform" href="#" target="_blank" class="px-4 py-2 text-sm font-bold bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:opacity-90">View on Instagram</a>
+        <div class="flex items-center gap-2">
+          <button id="btnRefreshPostAnalytics" class="flex-1 sm:flex-none px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium border rounded-lg hover:bg-gray-50 flex items-center justify-center gap-1">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+            <span class="hidden sm:inline">Refresh</span>
+          </button>
+          <a id="btnViewPostOnPlatform" href="#" target="_blank" class="flex-1 sm:flex-none px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:opacity-90 text-center">View on Instagram</a>
+        </div>
       </div>
     </div>
   </div>

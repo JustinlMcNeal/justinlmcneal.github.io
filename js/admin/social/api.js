@@ -16,9 +16,23 @@ const sb = () => {
 export async function fetchProducts() {
   const { data, error } = await sb()
     .from("products")
-    .select("id, name, slug, category_id, catalog_image_url")
+    .select("id, name, slug, category_id, catalog_image_url, price")
     .eq("is_active", true)
     .order("name");
+  
+  if (error) throw error;
+  return data || [];
+}
+
+// Fetch gallery images for a specific product
+export async function fetchProductGalleryImages(productId) {
+  if (!productId) return [];
+  
+  const { data, error } = await sb()
+    .from("product_gallery_images")
+    .select("id, url, position")
+    .eq("product_id", productId)
+    .order("position", { ascending: true });
   
   if (error) throw error;
   return data || [];

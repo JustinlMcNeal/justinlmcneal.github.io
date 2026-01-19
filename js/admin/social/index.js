@@ -5,6 +5,7 @@ import { getSupabaseClient } from "../../shared/supabaseClient.js";
 import { initAdminNav } from "../../shared/adminNav.js";
 import {
   fetchProducts,
+  fetchProductGalleryImages,
   fetchCategories,
   fetchAssets,
   fetchPosts,
@@ -49,6 +50,22 @@ import {
   getAssetPath,
   getVariationPath
 } from "./imageProcessor.js";
+import {
+  BEST_PRACTICES,
+  analyzePost,
+  updateHashtagPerformance,
+  updateTimingPerformance,
+  updateCaptionPerformance,
+  generateRecommendations,
+  getTopHashtags,
+  getBestPostingTimes,
+  getActiveRecommendations,
+  getLearnedPatterns,
+  getPostCreationTips,
+  checkAndResearchCategories,
+  getAllCategoryInsights,
+  getCategoryInsights
+} from "./postLearning.js";
 
 // ============================================
 // State
@@ -89,6 +106,38 @@ const state = {
     scheduleTime: "12:00"
   }
 };
+
+// ============================================
+// Toast Notification
+// ============================================
+
+function showToast(message, type = 'info') {
+  // Remove any existing toast
+  const existingToast = document.querySelector('.kk-toast');
+  if (existingToast) existingToast.remove();
+  
+  const toast = document.createElement('div');
+  toast.className = 'kk-toast fixed bottom-4 left-1/2 transform -translate-x-1/2 z-[100] px-4 py-3 rounded-lg shadow-lg text-sm font-medium flex items-center gap-2 animate-fade-in';
+  
+  if (type === 'success') {
+    toast.classList.add('bg-green-600', 'text-white');
+    toast.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>${message}`;
+  } else if (type === 'error') {
+    toast.classList.add('bg-red-600', 'text-white');
+    toast.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>${message}`;
+  } else {
+    toast.classList.add('bg-gray-800', 'text-white');
+    toast.innerHTML = message;
+  }
+  
+  document.body.appendChild(toast);
+  
+  // Auto-remove after 3 seconds
+  setTimeout(() => {
+    toast.classList.add('opacity-0', 'transition-opacity', 'duration-300');
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
+}
 
 // ============================================
 // DOM Elements
@@ -441,6 +490,30 @@ const els = {
   varPortrait: $("varPortrait"),
   varVertical: $("varVertical"),
   varTall: $("varTall"),
+  
+  // Step 2 - preview canvases and badges
+  previewSquare: $("previewSquare"),
+  previewPortrait: $("previewPortrait"),
+  previewVertical: $("previewVertical"),
+  previewTall: $("previewTall"),
+  previewSquarePlaceholder: $("previewSquarePlaceholder"),
+  previewPortraitPlaceholder: $("previewPortraitPlaceholder"),
+  previewVerticalPlaceholder: $("previewVerticalPlaceholder"),
+  previewTallPlaceholder: $("previewTallPlaceholder"),
+  squareBadge: $("squareBadge"),
+  portraitBadge: $("portraitBadge"),
+  verticalBadge: $("verticalBadge"),
+  tallBadge: $("tallBadge"),
+  varSquareCard: $("varSquareCard"),
+  varPortraitCard: $("varPortraitCard"),
+  varVerticalCard: $("varVerticalCard"),
+  varTallCard: $("varTallCard"),
+  imageAnalysisBanner: $("imageAnalysisBanner"),
+  imageAnalysisText: $("imageAnalysisText"),
+  imageDimensionInfo: $("imageDimensionInfo"),
+  sourceDimensions: $("sourceDimensions"),
+  step2Insights: $("step2Insights"),
+  step2InsightsContent: $("step2InsightsContent"),
   
   // Step 3 - caption
   captionText: $("captionText"),
@@ -1277,6 +1350,15 @@ function resetUploadState() {
     els.productDropdown.classList.add("hidden");
   }
   
+  // Hide product images section
+  const productImagesSection = document.getElementById('productImagesSection');
+  if (productImagesSection) {
+    productImagesSection.classList.add('hidden');
+  }
+  
+  // Reset crop previews
+  resetCropPreviews();
+  
   document.querySelectorAll(".caption-tone-btn").forEach(b => b.classList.remove("active"));
   document.querySelector('.caption-tone-btn[data-tone="casual"]')?.classList.add("active");
   
@@ -1350,11 +1432,12 @@ function filterProducts(query) {
   } else {
     const placeholderImg = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><rect fill="#f3f4f6" width="40" height="40"/><rect x="12" y="12" width="16" height="16" rx="2" fill="#d1d5db"/></svg>');
     els.productDropdown.innerHTML = filtered.map(p => {
-      const imageUrl = p.images?.[0] || placeholderImg;
+      // Use catalog_image_url from the products table
+      const imageUrl = p.catalog_image_url || placeholderImg;
       const price = p.price ? `$${parseFloat(p.price).toFixed(2)}` : '';
       return `
         <div class="product-option flex items-center gap-3 p-2 hover:bg-gray-50 cursor-pointer border-b last:border-b-0 transition-colors" data-id="${p.id}">
-          <img src="${imageUrl}" alt="${p.name}" class="w-10 h-10 rounded-lg object-cover bg-gray-100 flex-shrink-0">
+          <img src="${imageUrl}" alt="${p.name}" class="w-10 h-10 rounded-lg object-cover bg-gray-100 flex-shrink-0" onerror="this.src='${placeholderImg}'">
           <div class="flex-1 min-w-0">
             <div class="font-medium text-sm truncate">${p.name}</div>
             <div class="flex items-center gap-2 text-xs text-gray-400">
@@ -1384,18 +1467,18 @@ function filterProducts(query) {
   els.productDropdown.classList.remove("hidden");
 }
 
-function selectProduct(product) {
+async function selectProduct(product) {
   state.uploadData.productId = product.id;
   els.productSelect.value = product.id;
   
   // Update selected product display with image
   const placeholderImg = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><rect fill="#f3f4f6" width="40" height="40"/><rect x="12" y="12" width="16" height="16" rx="2" fill="#d1d5db"/></svg>');
-  const imageUrl = product.images?.[0] || placeholderImg;
+  const imageUrl = product.catalog_image_url || placeholderImg;
   const price = product.price ? `$${parseFloat(product.price).toFixed(2)}` : '';
   
   els.selectedProduct.innerHTML = `
     <div class="flex items-center gap-3 flex-1">
-      <img src="${imageUrl}" alt="${product.name}" class="w-10 h-10 rounded-lg object-cover bg-gray-100">
+      <img src="${imageUrl}" alt="${product.name}" class="w-10 h-10 rounded-lg object-cover bg-gray-100" onerror="this.src='${placeholderImg}'">
       <div class="flex-1 min-w-0">
         <div class="font-medium text-sm truncate">${product.name}</div>
         ${price ? `<div class="text-xs text-green-600">${price}</div>` : ''}
@@ -1410,16 +1493,432 @@ function selectProduct(product) {
   
   // Re-attach clear button handler
   els.selectedProduct.querySelector('#btnClearProduct')?.addEventListener('click', () => {
-    state.uploadData.productId = null;
-    els.productSelect.value = '';
-    els.selectedProduct.classList.add('hidden');
-    els.productSearch.value = '';
-    els.productSearch.classList.remove('hidden');
+    clearProductSelection();
   });
   
   els.selectedProduct.classList.remove("hidden");
   els.productSearch.classList.add("hidden");
   els.productDropdown.classList.add("hidden");
+  
+  // Fetch and display product images
+  await loadProductImages(product);
+}
+
+// Clear product selection and hide product images
+function clearProductSelection() {
+  state.uploadData.productId = null;
+  els.productSelect.value = '';
+  els.selectedProduct.classList.add('hidden');
+  els.productSearch.value = '';
+  els.productSearch.classList.remove('hidden');
+  
+  // Hide product images section
+  const productImagesSection = document.getElementById('productImagesSection');
+  if (productImagesSection) {
+    productImagesSection.classList.add('hidden');
+  }
+}
+
+// Load and display product images for selection
+async function loadProductImages(product) {
+  const productImagesSection = document.getElementById('productImagesSection');
+  const productImagesGrid = document.getElementById('productImagesGrid');
+  
+  if (!productImagesSection || !productImagesGrid) return;
+  
+  // Show loading state
+  productImagesSection.classList.remove('hidden');
+  productImagesGrid.innerHTML = `
+    <div class="col-span-full text-center py-4 text-gray-400 text-sm">
+      <svg class="w-5 h-5 animate-spin mx-auto mb-2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10" stroke-opacity="0.25"></circle>
+        <path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"></path>
+      </svg>
+      Loading product images...
+    </div>
+  `;
+  
+  try {
+    // Build list of all product images
+    const allImages = [];
+    
+    // Add catalog image first if it exists
+    if (product.catalog_image_url) {
+      allImages.push({
+        url: product.catalog_image_url,
+        label: 'Catalog Image',
+        isPrimary: true
+      });
+    }
+    
+    // Fetch gallery images
+    const galleryImages = await fetchProductGalleryImages(product.id);
+    galleryImages.forEach((img, idx) => {
+      allImages.push({
+        url: img.url,
+        label: `Gallery ${idx + 1}`,
+        isPrimary: false
+      });
+    });
+    
+    if (allImages.length === 0) {
+      productImagesGrid.innerHTML = `
+        <div class="col-span-full text-center py-4 text-gray-400 text-sm">
+          <svg class="w-8 h-8 mx-auto mb-2 text-gray-300" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/>
+          </svg>
+          No images found for this product
+        </div>
+      `;
+      return;
+    }
+    
+    // Render image grid
+    productImagesGrid.innerHTML = allImages.map((img, idx) => `
+      <div class="product-image-option relative group cursor-pointer rounded-lg overflow-hidden border-2 border-transparent hover:border-black transition-all" data-url="${img.url}">
+        <img src="${img.url}" alt="${img.label}" class="w-full aspect-square object-cover bg-gray-100">
+        <div class="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+          <div class="opacity-0 group-hover:opacity-100 transition-opacity bg-white rounded-full p-1.5 shadow-lg">
+            <svg class="w-4 h-4 text-black" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+            </svg>
+          </div>
+        </div>
+        ${img.isPrimary ? '<div class="absolute top-1 left-1 bg-black text-white text-[9px] font-bold px-1.5 py-0.5 rounded">MAIN</div>' : ''}
+      </div>
+    `).join('');
+    
+    // Add click handlers
+    productImagesGrid.querySelectorAll('.product-image-option').forEach(option => {
+      option.addEventListener('click', async () => {
+        const imageUrl = option.dataset.url;
+        await useProductImage(imageUrl);
+      });
+    });
+    
+  } catch (error) {
+    console.error('Error loading product images:', error);
+    productImagesGrid.innerHTML = `
+      <div class="col-span-full text-center py-4 text-red-400 text-sm">
+        Failed to load images
+      </div>
+    `;
+  }
+}
+
+// Use a product image as the post image
+async function useProductImage(imageUrl) {
+  try {
+    // Fetch the image as a blob
+    const response = await fetch(imageUrl);
+    const blob = await response.blob();
+    
+    // Create a File object from the blob
+    const fileName = imageUrl.split('/').pop() || 'product-image.jpg';
+    const file = new File([blob], fileName, { type: blob.type || 'image/jpeg' });
+    
+    // Update state and preview
+    state.uploadData.file = file;
+    
+    // Revoke old preview URL if exists
+    if (state.uploadData.previewUrl) {
+      revokePreviewUrl(state.uploadData.previewUrl);
+    }
+    
+    // Create new preview URL
+    state.uploadData.previewUrl = getFilePreviewUrl(file);
+    
+    // Update UI
+    els.previewImg.src = state.uploadData.previewUrl;
+    els.imagePreview.classList.remove('hidden');
+    els.dropZone.classList.add('hidden');
+    
+    // Show success feedback
+    showToast('Product image selected! Click "Next" to continue.', 'success');
+    
+  } catch (error) {
+    console.error('Error using product image:', error);
+    showToast('Failed to load image. Please try again.', 'error');
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Step 2: Crop Preview & Analysis
+// ─────────────────────────────────────────────────────────────
+
+const CROP_RATIOS = {
+  square: { width: 1, height: 1, name: 'Square', platform: 'Instagram' },
+  portrait: { width: 4, height: 5, name: 'Portrait', platform: 'Instagram' },
+  vertical: { width: 2, height: 3, name: 'Vertical', platform: 'Pinterest' },
+  tall: { width: 1, height: 2.1, name: 'Tall', platform: 'Pinterest' }
+};
+
+/**
+ * Generate crop previews for all formats when entering Step 2
+ */
+async function generateCropPreviews() {
+  const previewUrl = state.uploadData.previewUrl;
+  if (!previewUrl) return;
+  
+  try {
+    // Load the source image
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = reject;
+      img.src = previewUrl;
+    });
+    
+    const srcWidth = img.naturalWidth;
+    const srcHeight = img.naturalHeight;
+    const srcRatio = srcWidth / srcHeight;
+    
+    // Show dimension info
+    if (els.imageDimensionInfo) {
+      els.imageDimensionInfo.classList.remove('hidden');
+      els.sourceDimensions.textContent = `${srcWidth} × ${srcHeight}`;
+    }
+    
+    // Generate each preview
+    await Promise.all([
+      generateSinglePreview(img, 'square', srcRatio),
+      generateSinglePreview(img, 'portrait', srcRatio),
+      generateSinglePreview(img, 'vertical', srcRatio),
+      generateSinglePreview(img, 'tall', srcRatio)
+    ]);
+    
+    // Analyze and show recommendations
+    analyzeImageForCrops(srcWidth, srcHeight, srcRatio);
+    
+    // Load performance insights
+    await loadStep2Insights();
+    
+  } catch (error) {
+    console.error('Error generating crop previews:', error);
+  }
+}
+
+/**
+ * Generate a single crop preview on its canvas
+ */
+function generateSinglePreview(img, cropType, srcRatio) {
+  const ratio = CROP_RATIOS[cropType];
+  const targetRatio = ratio.width / ratio.height;
+  
+  const canvasId = `preview${cropType.charAt(0).toUpperCase() + cropType.slice(1)}`;
+  const placeholderId = `preview${cropType.charAt(0).toUpperCase() + cropType.slice(1)}Placeholder`;
+  
+  const canvas = els[canvasId];
+  const placeholder = els[placeholderId];
+  
+  if (!canvas) return;
+  
+  const ctx = canvas.getContext('2d');
+  const displaySize = 200; // Preview size
+  
+  // Set canvas dimensions based on aspect ratio
+  if (targetRatio >= 1) {
+    canvas.width = displaySize;
+    canvas.height = displaySize / targetRatio;
+  } else {
+    canvas.height = displaySize;
+    canvas.width = displaySize * targetRatio;
+  }
+  
+  // Calculate crop area (center crop)
+  let sx, sy, sWidth, sHeight;
+  
+  if (srcRatio > targetRatio) {
+    // Source is wider - crop sides
+    sHeight = img.naturalHeight;
+    sWidth = sHeight * targetRatio;
+    sx = (img.naturalWidth - sWidth) / 2;
+    sy = 0;
+  } else {
+    // Source is taller - crop top/bottom
+    sWidth = img.naturalWidth;
+    sHeight = sWidth / targetRatio;
+    sx = 0;
+    sy = (img.naturalHeight - sHeight) / 2;
+  }
+  
+  // Draw cropped preview
+  ctx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, canvas.width, canvas.height);
+  
+  // Hide placeholder, show canvas
+  if (placeholder) placeholder.classList.add('hidden');
+  canvas.classList.remove('hidden');
+}
+
+/**
+ * Analyze image dimensions and provide recommendations
+ */
+function analyzeImageForCrops(srcWidth, srcHeight, srcRatio) {
+  const recommendations = [];
+  const badges = {
+    square: { show: false, type: 'good', text: '✓ Good fit' },
+    portrait: { show: false, type: 'best', text: '🔥 Best' },
+    vertical: { show: false, type: 'good', text: '✓ Good fit' },
+    tall: { show: false, type: 'warn', text: '⚠️ Crop' }
+  };
+  
+  // Analyze each crop
+  const squareRatio = 1;
+  const portraitRatio = 4/5;
+  const verticalRatio = 2/3;
+  const tallRatio = 1/2.1;
+  
+  // Determine best fit based on source ratio
+  if (srcRatio >= 0.9 && srcRatio <= 1.1) {
+    // Square-ish source
+    recommendations.push('Your image is square - great for Instagram feed posts!');
+    badges.square = { show: true, type: 'best', text: '🔥 Perfect' };
+    badges.portrait = { show: true, type: 'good', text: '✓ Good fit' };
+  } else if (srcRatio >= 0.7 && srcRatio < 0.9) {
+    // Portrait-ish source
+    recommendations.push('Your image is portrait-oriented - ideal for Instagram portrait posts!');
+    badges.portrait = { show: true, type: 'best', text: '🔥 Perfect' };
+    badges.vertical = { show: true, type: 'good', text: '✓ Good fit' };
+  } else if (srcRatio >= 0.5 && srcRatio < 0.7) {
+    // Vertical-ish source
+    recommendations.push('Your vertical image is perfect for Pinterest pins!');
+    badges.vertical = { show: true, type: 'best', text: '🔥 Perfect' };
+    badges.portrait = { show: true, type: 'good', text: '✓ Good fit' };
+  } else if (srcRatio < 0.5) {
+    // Very tall source
+    recommendations.push('Your tall image is ideal for Pinterest Idea pins!');
+    badges.tall = { show: true, type: 'best', text: '🔥 Perfect' };
+    badges.vertical = { show: true, type: 'good', text: '✓ Good fit' };
+  } else if (srcRatio > 1.1) {
+    // Landscape source
+    recommendations.push('Landscape image detected - square crop will work best. Some content will be cropped for vertical formats.');
+    badges.square = { show: true, type: 'good', text: '✓ Best fit' };
+    badges.tall = { show: true, type: 'warn', text: '⚠️ Heavy crop' };
+  }
+  
+  // Resolution warnings
+  if (srcWidth < 1080 || srcHeight < 1080) {
+    recommendations.push('Consider using a higher resolution image (1080px min) for best quality.');
+  }
+  
+  // Show analysis banner
+  if (recommendations.length > 0 && els.imageAnalysisBanner) {
+    els.imageAnalysisBanner.classList.remove('hidden');
+    els.imageAnalysisText.textContent = recommendations[0];
+  }
+  
+  // Show badges
+  Object.entries(badges).forEach(([crop, badge]) => {
+    const badgeEl = els[`${crop}Badge`];
+    const cardEl = els[`var${crop.charAt(0).toUpperCase() + crop.slice(1)}Card`];
+    
+    if (badgeEl) {
+      if (badge.show) {
+        badgeEl.classList.remove('hidden');
+        const span = badgeEl.querySelector('span');
+        if (span) {
+          span.textContent = badge.text;
+          // Update badge colors
+          span.className = 'text-xs px-1.5 py-0.5 rounded-full ';
+          if (badge.type === 'best') {
+            span.className += 'bg-amber-100 text-amber-700';
+          } else if (badge.type === 'good') {
+            span.className += 'bg-green-100 text-green-700';
+          } else if (badge.type === 'warn') {
+            span.className += 'bg-yellow-100 text-yellow-700';
+          }
+        }
+      } else {
+        badgeEl.classList.add('hidden');
+      }
+    }
+    
+    // Highlight best cards
+    if (cardEl && badge.show && badge.type === 'best') {
+      cardEl.classList.add('border-amber-300', 'bg-amber-50/30');
+    }
+  });
+}
+
+/**
+ * Load performance insights for Step 2 from learning data
+ */
+async function loadStep2Insights() {
+  try {
+    // Fetch format performance from learning patterns
+    const { data: patterns } = await supabase
+      .from('post_learning_patterns')
+      .select('*')
+      .in('pattern_key', ['best_format', 'portrait_performance', 'vertical_performance', 'carousel_engagement']);
+    
+    // Fetch actual post stats by format if available
+    const { data: formatStats } = await supabase
+      .from('social_posts')
+      .select('variation_type, platform')
+      .not('metrics', 'is', null);
+    
+    // Calculate format insights
+    let insights = [];
+    
+    // Add carousel insight from patterns
+    const carouselPattern = patterns?.find(p => p.pattern_key === 'carousel_engagement');
+    if (carouselPattern) {
+      insights.push({
+        color: 'purple',
+        text: `Carousel posts have <strong>${carouselPattern.pattern_value.engagement_boost || '2.4%'}</strong> higher engagement`
+      });
+    }
+    
+    // Add format-specific insights
+    insights.push({
+      color: 'pink',
+      text: 'Portrait (4:5) posts take up <strong>more screen space</strong> in feeds'
+    });
+    
+    insights.push({
+      color: 'red',
+      text: 'Pinterest vertical pins get <strong>60% more saves</strong> than square'
+    });
+    
+    // Render insights
+    if (els.step2InsightsContent && insights.length > 0) {
+      els.step2InsightsContent.innerHTML = insights.map(insight => `
+        <div class="flex items-center gap-2">
+          <span class="w-2 h-2 bg-${insight.color}-400 rounded-full shrink-0"></span>
+          <span>${insight.text}</span>
+        </div>
+      `).join('');
+    }
+    
+  } catch (error) {
+    console.error('Error loading step 2 insights:', error);
+  }
+}
+
+/**
+ * Reset crop previews when modal closes
+ */
+function resetCropPreviews() {
+  ['Square', 'Portrait', 'Vertical', 'Tall'].forEach(name => {
+    const canvas = els[`preview${name}`];
+    const placeholder = els[`preview${name}Placeholder`];
+    const badge = els[`${name.toLowerCase()}Badge`];
+    const card = els[`var${name}Card`];
+    
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      canvas.classList.add('hidden');
+    }
+    if (placeholder) placeholder.classList.remove('hidden');
+    if (badge) badge.classList.add('hidden');
+    if (card) card.classList.remove('border-amber-300', 'bg-amber-50/30');
+  });
+  
+  if (els.imageAnalysisBanner) els.imageAnalysisBanner.classList.add('hidden');
+  if (els.imageDimensionInfo) els.imageDimensionInfo.classList.add('hidden');
 }
 
 function updateStepUI() {
@@ -1465,6 +1964,9 @@ async function nextStep() {
     state.uploadStep = 2;
     updateStepUI();
     
+    // Generate crop previews for Step 2
+    await generateCropPreviews();
+    
   } else if (state.uploadStep === 2) {
     // Collect selected variants
     state.uploadData.selectedVariants = [];
@@ -1483,6 +1985,9 @@ async function nextStep() {
     
     // Generate caption
     await regenerateCaption();
+    
+    // Load AI tips for caption
+    loadAICaptionTips();
     
     // Show Pinterest board selector if Pinterest is selected
     els.pinterestBoardSelect.classList.toggle("hidden", !els.postPinterest.checked);
@@ -1508,6 +2013,169 @@ async function regenerateCaption() {
   const hashtagStr = formatHashtags(ensureKarryKrazeTag(hashtags));
   els.hashtagText.value = hashtagStr;
   state.uploadData.hashtags = parseHashtags(hashtagStr);
+}
+
+/**
+ * Load AI tips based on learned patterns for the caption step
+ */
+async function loadAICaptionTips() {
+  try {
+    const tips = await getPostCreationTips();
+    
+    // Update best time tip
+    const bestTimeEl = document.getElementById("aiTipBestTime");
+    if (bestTimeEl) {
+      bestTimeEl.textContent = `Best time: ${tips.bestDay} at ${tips.bestTime}`;
+    }
+    
+    // Update best hashtags tip
+    const hashtagsEl = document.getElementById("aiTipBestHashtags");
+    if (hashtagsEl && tips.topHashtags.length > 0) {
+      const hashtagList = tips.topHashtags.slice(0, 3).map(h => `#${h}`).join(" ");
+      hashtagsEl.textContent = `Top hashtags: ${hashtagList}`;
+    }
+    
+    // Load recommended tone based on category insights
+    await loadRecommendedTone();
+    
+    // Update the tips content dynamically based on current caption
+    const captionInput = document.getElementById("captionText");
+    if (captionInput) {
+      captionInput.addEventListener("input", () => {
+        updateCaptionAnalysis(captionInput.value);
+      });
+    }
+    
+  } catch (err) {
+    console.error("Failed to load AI tips:", err);
+  }
+}
+
+/**
+ * Load and display recommended tone based on category insights
+ */
+async function loadRecommendedTone() {
+  try {
+    // Get selected product's category
+    const product = state.products.find(p => p.id === state.uploadData.productId);
+    const category = product ? state.categories.find(c => c.id === product.category_id) : null;
+    const categoryName = category?.name || null;
+    
+    if (!categoryName) return;
+    
+    // Get category insights
+    const insights = await getCategoryInsights(categoryName);
+    
+    if (insights?.caption_strategy?.tone_that_works) {
+      const recommendedTone = insights.caption_strategy.tone_that_works.toLowerCase();
+      
+      // Map AI tone to our tone options
+      const toneMap = {
+        "playful": "playful",
+        "fun": "playful",
+        "casual": "casual",
+        "friendly": "casual",
+        "urgent": "urgency",
+        "urgency": "urgency",
+        "professional": "professional",
+        "minimal": "minimalist",
+        "minimalist": "minimalist",
+        "value": "value",
+        "deal": "value",
+        "trending": "trending",
+        "inspirational": "inspirational",
+        "inspiring": "inspirational"
+      };
+      
+      const mappedTone = toneMap[recommendedTone] || null;
+      
+      if (mappedTone) {
+        // Show recommendation message
+        const recEl = document.getElementById("toneRecommendation");
+        const recToneEl = document.getElementById("recommendedTone");
+        if (recEl && recToneEl) {
+          recToneEl.textContent = `${recommendedTone} tone works best for ${categoryName}`;
+          recEl.classList.remove("hidden");
+        }
+        
+        // Highlight the recommended button
+        document.querySelectorAll(".caption-tone-btn").forEach(btn => {
+          if (btn.dataset.tone === mappedTone) {
+            btn.classList.add("ring-2", "ring-purple-500", "ring-offset-1", "bg-purple-50");
+            // Add a small "AI" badge
+            if (!btn.querySelector(".ai-rec-badge")) {
+              btn.insertAdjacentHTML("beforeend", `<span class="ai-rec-badge ml-1 text-[10px] bg-purple-500 text-white px-1 rounded">AI</span>`);
+            }
+          } else {
+            btn.classList.remove("ring-2", "ring-purple-500", "ring-offset-1", "bg-purple-50");
+            btn.querySelector(".ai-rec-badge")?.remove();
+          }
+        });
+        
+        console.log(`[Tone] AI recommends "${mappedTone}" for ${categoryName} category`);
+      }
+    }
+  } catch (err) {
+    console.warn("Failed to load recommended tone:", err);
+  }
+}
+
+/**
+ * Analyze caption in real-time and provide feedback
+ */
+function updateCaptionAnalysis(caption) {
+  const tipsContent = document.getElementById("aiCaptionTipsContent");
+  if (!tipsContent) return;
+  
+  const length = caption.length;
+  const hasEmoji = /[\u{1F300}-\u{1F9FF}]/u.test(caption);
+  const hasCTA = /shop|link|tap|click|buy|get yours|order/i.test(caption);
+  const hasQuestion = caption.includes("?");
+  
+  const tips = [];
+  
+  // Length feedback
+  if (length === 0) {
+    tips.push({ icon: "📝", text: "Start typing your caption...", status: "neutral" });
+  } else if (length < 50) {
+    tips.push({ icon: "📝", text: `Caption is short (${length} chars) - consider adding more details`, status: "warning" });
+  } else if (length > 200) {
+    tips.push({ icon: "📝", text: `Caption is long (${length} chars) - shorter posts often perform better`, status: "warning" });
+  } else {
+    tips.push({ icon: "✅", text: `Great length! (${length} chars)`, status: "good" });
+  }
+  
+  // CTA feedback
+  if (hasCTA) {
+    tips.push({ icon: "✅", text: "Nice! Has a call-to-action", status: "good" });
+  } else {
+    tips.push({ icon: "💡", text: "Add a CTA like 'Shop now' or 'Link in bio'", status: "suggestion" });
+  }
+  
+  // Emoji feedback
+  if (hasEmoji) {
+    tips.push({ icon: "✅", text: "Good use of emojis!", status: "good" });
+  } else {
+    tips.push({ icon: "💡", text: "Consider adding emojis to boost engagement", status: "suggestion" });
+  }
+  
+  // Question feedback
+  if (hasQuestion) {
+    tips.push({ icon: "✅", text: "Great! Questions boost comments", status: "good" });
+  }
+  
+  // Render tips
+  tipsContent.innerHTML = tips.map(t => {
+    const color = t.status === "good" ? "text-green-700" : 
+                  t.status === "warning" ? "text-orange-700" : 
+                  "text-purple-800";
+    return `
+      <div class="flex items-start gap-1">
+        <span>${t.icon}</span>
+        <span class="${color}">${t.text}</span>
+      </div>
+    `;
+  }).join("");
 }
 
 async function schedulePost() {
@@ -3433,17 +4101,16 @@ async function loadEngagementMetrics() {
     const { data: hashtagData } = await client
       .from("hashtag_performance")
       .select("*")
-      .eq("platform", "instagram")
-      .order("avg_effectiveness", { ascending: false })
+      .order("avg_engagement_rate", { ascending: false })
       .limit(15);
     
     const hashtagsContainer = document.getElementById("analyticsHashtags");
     if (hashtagsContainer && hashtagData && hashtagData.length > 0) {
-      const maxEff = Math.max(...hashtagData.map(h => h.avg_effectiveness || 0)) || 1;
+      const maxEff = Math.max(...hashtagData.map(h => h.avg_engagement_rate || 0)) || 1;
       hashtagsContainer.innerHTML = `
         <div class="flex flex-wrap gap-2">
           ${hashtagData.map(h => {
-            const eff = h.avg_effectiveness || 0;
+            const eff = h.avg_engagement_rate || 0;
             const size = Math.max(0.8, Math.min(1.4, eff / maxEff + 0.8));
             const colors = eff > 3 ? "bg-green-100 text-green-700 border-green-200" 
                          : eff > 1.5 ? "bg-blue-100 text-blue-700 border-blue-200"
@@ -3847,6 +4514,421 @@ async function openPostAnalytics(postId) {
   }
 }
 
+// ============================================
+// Deep Post Analysis
+// ============================================
+
+async function runDeepPostAnalysis(postId) {
+  const modal = document.getElementById("postAnalyticsModal");
+  if (!modal) return;
+  
+  const btn = document.getElementById("btnRunDeepAnalysis");
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Analyzing...`;
+  }
+  
+  try {
+    const analysis = await analyzePost(postId);
+    
+    if (!analysis) {
+      console.warn("No analysis returned for post");
+      return;
+    }
+    
+    // Update score section
+    const scoreSection = document.getElementById("postAnalyticsScoreSection");
+    if (scoreSection) {
+      const overallScore = Math.round(analysis.overall_score || 50);
+      const scoreEl = document.getElementById("postAnalyticsScore");
+      if (scoreEl) scoreEl.textContent = overallScore + "/100";
+      
+      // Update sub-scores
+      const setScore = (id, score) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = Math.round(score || 0) + "/100";
+      };
+      
+      setScore("postAnalyticsTimingScore", analysis.timing_score);
+      setScore("postAnalyticsCaptionScore", analysis.caption_score);
+      setScore("postAnalyticsHashtagScore", analysis.hashtag_score);
+      setScore("postAnalyticsVisualScore", analysis.visual_score || 70);
+      
+      // Color the score section based on performance
+      if (overallScore >= 70) {
+        scoreSection.className = "bg-gradient-to-r from-emerald-500 to-teal-500 rounded-xl p-4 text-white";
+      } else if (overallScore >= 50) {
+        scoreSection.className = "bg-gradient-to-r from-yellow-500 to-orange-500 rounded-xl p-4 text-white";
+      } else {
+        scoreSection.className = "bg-gradient-to-r from-red-500 to-pink-500 rounded-xl p-4 text-white";
+      }
+    }
+    
+    // Update comparison section
+    const formatComparison = (value) => {
+      const numVal = parseFloat(value) || 0;
+      if (numVal > 0) return `<span class="text-green-600">+${numVal.toFixed(0)}%</span>`;
+      if (numVal < 0) return `<span class="text-red-600">${numVal.toFixed(0)}%</span>`;
+      return `<span class="text-gray-600">0%</span>`;
+    };
+    
+    const setComp = (id, val) => {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = formatComparison(val);
+    };
+    
+    setComp("postAnalyticsVsAvgEng", analysis.vs_avg_engagement_rate);
+    setComp("postAnalyticsVsAvgLikes", analysis.vs_avg_likes);
+    setComp("postAnalyticsVsAvgComments", analysis.vs_avg_comments);
+    setComp("postAnalyticsVsAvgSaves", analysis.vs_avg_saves);
+    
+    // Update strengths
+    const strengthsEl = document.getElementById("postAnalyticsStrengths");
+    const strengthsSection = document.getElementById("postAnalyticsStrengthsSection");
+    if (strengthsEl && analysis.strengths?.length > 0) {
+      strengthsSection.classList.remove("hidden");
+      strengthsEl.innerHTML = analysis.strengths.map(s => `
+        <div class="flex items-start gap-2">
+          <span>✅</span>
+          <span>${s}</span>
+        </div>
+      `).join("");
+    } else if (strengthsSection) {
+      strengthsSection.classList.add("hidden");
+    }
+    
+    // Update weaknesses
+    const weaknessesEl = document.getElementById("postAnalyticsWeaknesses");
+    const weaknessesSection = document.getElementById("postAnalyticsWeaknessesSection");
+    if (weaknessesEl && analysis.weaknesses?.length > 0) {
+      weaknessesSection.classList.remove("hidden");
+      weaknessesEl.innerHTML = analysis.weaknesses.map(w => `
+        <div class="flex items-start gap-2">
+          <span>❌</span>
+          <span>${w}</span>
+        </div>
+      `).join("");
+    } else if (weaknessesSection) {
+      weaknessesSection.classList.add("hidden");
+    }
+    
+    // Update recommendations
+    const recsEl = document.getElementById("postAnalyticsRecs");
+    const recsSection = document.getElementById("postAnalyticsRecsSection");
+    if (recsEl && analysis.recommendations?.length > 0) {
+      recsSection.classList.remove("hidden");
+      recsEl.innerHTML = analysis.recommendations.map(r => `
+        <div class="flex items-start gap-2">
+          <span>💡</span>
+          <span>${r}</span>
+        </div>
+      `).join("");
+    } else if (recsSection) {
+      recsSection.classList.add("hidden");
+    }
+    
+    // Update hashtag advice
+    const hashtagAdviceEl = document.getElementById("postAnalyticsHashtagAdvice");
+    if (hashtagAdviceEl && analysis.hashtagAdvice) {
+      hashtagAdviceEl.innerHTML = `<strong>📌 Tip:</strong> ${analysis.hashtagAdvice}`;
+    }
+    
+    // Update AI Analysis section (if available)
+    const aiSection = document.getElementById("postAnalyticsAISection");
+    if (aiSection) {
+      if (analysis.ai_analysis || analysis.ai_recommendations?.length > 0 || analysis.ai_learnings?.length > 0) {
+        aiSection.classList.remove("hidden");
+        
+        // AI Score
+        const aiScoreEl = document.getElementById("postAnalyticsAIScore");
+        if (aiScoreEl && analysis.ai_overall_score) {
+          aiScoreEl.innerHTML = `<span class="text-2xl font-bold">${analysis.ai_overall_score}</span>/100 <span class="text-sm">(${analysis.ai_performance_tier || 'analyzed'})</span>`;
+        }
+        
+        // AI Recommendations
+        const aiRecsEl = document.getElementById("postAnalyticsAIRecs");
+        if (aiRecsEl && analysis.ai_recommendations?.length > 0) {
+          aiRecsEl.innerHTML = analysis.ai_recommendations.map(r => `
+            <div class="flex items-start gap-2 text-sm">
+              <span>🤖</span>
+              <span>${r}</span>
+            </div>
+          `).join("");
+        }
+        
+        // AI Learnings
+        const aiLearningsEl = document.getElementById("postAnalyticsAILearnings");
+        if (aiLearningsEl && analysis.ai_learnings?.length > 0) {
+          aiLearningsEl.innerHTML = analysis.ai_learnings.map(l => `
+            <div class="bg-purple-50 rounded-lg p-2 text-sm">
+              <div class="font-medium text-purple-800">📚 ${l.pattern}</div>
+              ${l.apply_to_future ? `<div class="text-purple-600 text-xs mt-1">→ ${l.apply_to_future}</div>` : ''}
+            </div>
+          `).join("");
+          
+          showToast(`🧠 AI learned ${analysis.ai_learnings.length} pattern(s) for future posts!`, "success");
+        }
+      } else {
+        aiSection.classList.add("hidden");
+      }
+    }
+    
+  } catch (err) {
+    console.error("Error running deep analysis:", err);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg> Run Deep Analysis`;
+    }
+  }
+}
+
+// ============================================
+// Learning Insights Dashboard
+// ============================================
+
+async function loadLearningInsights() {
+  const client = getClient();
+  
+  try {
+    // Load best posting times
+    const times = await getBestPostingTimes(client);
+    const bestTimeEl = document.getElementById("learningBestTime");
+    const bestDayEl = document.getElementById("learningBestDay");
+    
+    if (times && times.length > 0) {
+      const bestTime = times[0];
+      if (bestTimeEl) bestTimeEl.textContent = formatHour(bestTime.hour_of_day);
+      
+      // Find best day
+      const bestDay = times.reduce((best, t) => {
+        const tRate = parseFloat(t.avg_engagement_rate) || 0;
+        const bRate = best ? (parseFloat(best.avg_engagement_rate) || 0) : 0;
+        if (!best || tRate > bRate) return t;
+        return best;
+      }, null);
+      if (bestDayEl && bestDay) {
+        const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        bestDayEl.textContent = days[bestDay.day_of_week] || "Any";
+      }
+    }
+    
+    // Load timing heatmap
+    await loadTimingHeatmap(client);
+    
+    // Load top hashtags
+    const hashtags = await getTopHashtags(client, 10);
+    const hashtagsEl = document.getElementById("learningTopHashtags");
+    if (hashtagsEl && hashtags && hashtags.length > 0) {
+      hashtagsEl.innerHTML = hashtags.map((h, i) => {
+        const engRate = parseFloat(h.avg_engagement_rate) || 0;
+        const timesUsed = h.times_used || 0;
+        return `
+        <div class="flex items-center justify-between py-2 ${i < hashtags.length - 1 ? 'border-b' : ''}">
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-medium text-gray-700">#${h.hashtag}</span>
+          </div>
+          <div class="flex items-center gap-3 text-xs">
+            <span class="text-gray-500">${timesUsed} uses</span>
+            <span class="${engRate >= 3 ? 'text-green-600' : engRate >= 1 ? 'text-blue-600' : 'text-gray-500'} font-bold">
+              ${engRate.toFixed(1)}% eng
+            </span>
+          </div>
+        </div>
+      `;
+      }).join("");
+    } else if (hashtagsEl) {
+      hashtagsEl.innerHTML = `
+        <div class="text-sm text-gray-500 py-4 text-center">
+          <p>No hashtag data yet</p>
+          <p class="text-xs">Post more to see which hashtags perform best</p>
+        </div>
+      `;
+    }
+    
+    // Load recommendations
+    const recs = await getActiveRecommendations(client);
+    const recsEl = document.getElementById("learningRecommendations");
+    if (recsEl && recs && recs.length > 0) {
+      recsEl.innerHTML = recs.map(r => {
+        const confidence = parseFloat(r.confidence) || 0;
+        return `
+        <div class="flex items-start gap-3 p-3 bg-gradient-to-r ${getPriorityColors(r.priority)} rounded-lg">
+          <span class="text-lg">${getCategoryIcon(r.category)}</span>
+          <div class="flex-1">
+            <div class="text-sm font-medium">${r.title || r.description}</div>
+            <div class="text-xs opacity-70 mt-1">Confidence: ${Math.round(confidence * 100)}%</div>
+          </div>
+        </div>
+      `;
+      }).join("");
+    } else if (recsEl) {
+      recsEl.innerHTML = `
+        <div class="text-center py-6 text-gray-500">
+          <p class="text-sm">No recommendations yet</p>
+          <p class="text-xs mt-1">Post more content to receive personalized suggestions</p>
+        </div>
+      `;
+    }
+    
+    // Load optimal hashtag count from patterns
+    const patterns = await getLearnedPatterns(client);
+    const hashtagCountEl = document.getElementById("learningHashtagCount");
+    if (hashtagCountEl && patterns) {
+      const hashtagPattern = patterns.find(p => p.pattern_type === "hashtag_count");
+      if (hashtagPattern) {
+        hashtagCountEl.textContent = `${hashtagPattern.optimal_value}-${Math.min(parseInt(hashtagPattern.optimal_value) + 2, 5)}`;
+      }
+    }
+    
+  } catch (err) {
+    console.error("Error loading learning insights:", err);
+  }
+}
+
+async function loadTimingHeatmap(client) {
+  const tbody = document.getElementById("learningTimesBody");
+  if (!tbody) return;
+  
+  try {
+    const times = await getBestPostingTimes(client);
+    
+    // Create heatmap data structure: { day: { hour: engagement } }
+    const heatmap = {};
+    for (let d = 0; d < 7; d++) {
+      heatmap[d] = {};
+    }
+    
+    if (times) {
+      times.forEach(t => {
+        heatmap[t.day_of_week] = heatmap[t.day_of_week] || {};
+        heatmap[t.day_of_week][t.hour_of_day] = parseFloat(t.avg_engagement_rate) || 0;
+      });
+    }
+    
+    // Find max engagement for color scaling
+    let maxEng = 0;
+    Object.values(heatmap).forEach(hours => {
+      Object.values(hours).forEach(eng => {
+        if (eng > maxEng) maxEng = eng;
+      });
+    });
+    
+    const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const hours = [6, 9, 12, 15, 18, 21]; // 6am, 9am, 12pm, 3pm, 6pm, 9pm
+    
+    tbody.innerHTML = days.map((day, dayIdx) => {
+      const cells = hours.map(hour => {
+        const eng = heatmap[dayIdx]?.[hour] || 0;
+        const intensity = maxEng > 0 ? eng / maxEng : 0;
+        const bgColor = getHeatmapColor(intensity);
+        return `<td class="p-2 text-center text-xs ${bgColor}">${eng > 0 ? eng.toFixed(1) + '%' : '-'}</td>`;
+      }).join("");
+      
+      return `<tr><td class="p-2 text-xs font-medium text-gray-600">${day}</td>${cells}</tr>`;
+    }).join("");
+    
+  } catch (err) {
+    console.error("Error loading timing heatmap:", err);
+  }
+}
+
+function getHeatmapColor(intensity) {
+  if (intensity >= 0.8) return "bg-emerald-500 text-white";
+  if (intensity >= 0.6) return "bg-emerald-400 text-white";
+  if (intensity >= 0.4) return "bg-emerald-300";
+  if (intensity >= 0.2) return "bg-emerald-200";
+  if (intensity > 0) return "bg-emerald-100";
+  return "bg-gray-50";
+}
+
+function formatHour(hour) {
+  if (hour === 0) return "12 AM";
+  if (hour === 12) return "12 PM";
+  if (hour < 12) return `${hour} AM`;
+  return `${hour - 12} PM`;
+}
+
+function getPriorityColors(priority) {
+  switch (priority) {
+    case "high": return "from-red-50 to-pink-50 text-red-700";
+    case "medium": return "from-yellow-50 to-orange-50 text-yellow-700";
+    default: return "from-blue-50 to-indigo-50 text-blue-700";
+  }
+}
+
+function getCategoryIcon(category) {
+  switch (category) {
+    case "hashtags": return "#️⃣";
+    case "timing": return "⏰";
+    case "caption": return "✍️";
+    case "content": return "📸";
+    case "engagement": return "💬";
+    default: return "💡";
+  }
+}
+
+// ============================================
+// Process All Posts for Learning
+// ============================================
+
+async function processAllPostsForLearning() {
+  const client = getClient();
+  
+  try {
+    // Get all posted content
+    const { data: posts, error } = await client
+      .from("social_posts")
+      .select("*")
+      .eq("status", "posted")
+      .order("posted_at", { ascending: false })
+      .limit(100);
+    
+    if (error) throw error;
+    
+    let processed = 0;
+    for (const post of posts) {
+      try {
+        // Update hashtag performance
+        if (post.hashtags && post.hashtags.length > 0) {
+          await updateHashtagPerformance(post.hashtags, post.engagement_rate || 0, post.reach || 0, client);
+        }
+        
+        // Update timing performance
+        if (post.posted_at) {
+          const postedDate = new Date(post.posted_at);
+          await updateTimingPerformance(
+            postedDate.getDay(),
+            postedDate.getHours(),
+            post.engagement_rate || 0,
+            post.reach || 0,
+            client
+          );
+        }
+        
+        // Update caption performance
+        if (post.caption) {
+          await updateCaptionPerformance(post.caption, post.engagement_rate || 0, post.reach || 0, client);
+        }
+        
+        processed++;
+      } catch (err) {
+        console.warn(`Error processing post ${post.id}:`, err);
+      }
+    }
+    
+    // Generate new recommendations based on all data
+    await generateRecommendations(client);
+    
+    console.log(`Processed ${processed} posts for learning`);
+    return processed;
+    
+  } catch (err) {
+    console.error("Error processing posts for learning:", err);
+    throw err;
+  }
+}
+
 function closePostAnalytics() {
   const modal = document.getElementById("postAnalyticsModal");
   if (modal) {
@@ -3893,6 +4975,307 @@ function initPostAnalyticsModal() {
       }
     });
   }
+  
+  // Deep Analysis button
+  const deepAnalysisBtn = document.getElementById("btnRunDeepAnalysis");
+  if (deepAnalysisBtn) {
+    deepAnalysisBtn.addEventListener("click", async () => {
+      const postId = modal?.dataset.postId;
+      if (postId) {
+        await runDeepPostAnalysis(postId);
+      }
+    });
+  }
+}
+
+// Initialize Learning Insights Dashboard
+function initLearningInsights() {
+  // Load insights when analytics tab is shown
+  const analyticsTab = document.querySelector('[data-tab="analytics"]');
+  if (analyticsTab) {
+    analyticsTab.addEventListener("click", () => {
+      // Delay to ensure tab is switched
+      setTimeout(() => {
+        loadLearningInsights();
+        loadCategoryInsightsUI();
+      }, 100);
+    });
+  }
+  
+  // Refresh learning insights button
+  const refreshBtn = document.getElementById("btnRefreshLearnings");
+  if (refreshBtn) {
+    refreshBtn.addEventListener("click", async () => {
+      refreshBtn.disabled = true;
+      refreshBtn.innerHTML = `<svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Processing...`;
+      
+      try {
+        await processAllPostsForLearning();
+        await loadLearningInsights();
+        await loadCategoryInsightsUI();
+      } catch (err) {
+        console.error("Failed to refresh learnings:", err);
+      }
+      
+      refreshBtn.disabled = false;
+      refreshBtn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Refresh Learnings`;
+    });
+  }
+  
+  // Research Categories button
+  const researchBtn = document.getElementById("btnResearchCategories");
+  if (researchBtn) {
+    // Progress listener
+    const progressHandler = (e) => {
+      const { current, total, category } = e.detail;
+      researchBtn.innerHTML = `
+        <span class="animate-pulse">🧠</span> 
+        Researching ${category}... (${current}/${total})`;
+    };
+    
+    researchBtn.addEventListener("click", async () => {
+      researchBtn.classList.add("loading");
+      researchBtn.disabled = true;
+      researchBtn.innerHTML = `<span class="animate-spin inline-block">⏳</span> Scanning categories...`;
+      
+      // Listen for progress updates
+      window.addEventListener("categoryResearchProgress", progressHandler);
+      
+      try {
+        const researched = await checkAndResearchCategories();
+        if (researched.length > 0) {
+          showToast(`🧠 AI researched ${researched.length} categories!`, "success");
+        } else {
+          showToast("No new categories to research (need 3+ posts per category)", "info");
+        }
+        await loadCategoryInsightsUI();
+      } catch (err) {
+        console.error("Category research failed:", err);
+        showToast("Research failed. Check console for details.", "error");
+      }
+      
+      // Cleanup
+      window.removeEventListener("categoryResearchProgress", progressHandler);
+      researchBtn.classList.remove("loading");
+      researchBtn.disabled = false;
+      researchBtn.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg> Research Categories`;
+    });
+  }
+  
+  // Load initial insights if on analytics tab
+  const analyticsContent = document.getElementById("content-analytics");
+  if (analyticsContent && !analyticsContent.classList.contains("hidden")) {
+    loadLearningInsights();
+    loadCategoryInsightsUI();
+  }
+}
+
+// ============================================
+// Category Insights UI
+// ============================================
+
+async function loadCategoryInsightsUI() {
+  const grid = document.getElementById("categoryInsightsGrid");
+  const countEl = document.getElementById("aiLearningsCount");
+  const listEl = document.getElementById("allAILearningsList");
+  
+  if (!grid) return;
+  
+  try {
+    const insights = await getAllCategoryInsights();
+    
+    if (!insights || insights.length === 0) {
+      grid.innerHTML = `
+        <div class="text-center py-8 text-gray-400">
+          <div class="w-16 h-16 mx-auto mb-3 rounded-full bg-purple-100 flex items-center justify-center">
+            <span class="text-3xl">🔬</span>
+          </div>
+          <p class="font-medium text-gray-600 mb-1">No category insights yet</p>
+          <p class="text-xs text-gray-500 max-w-md mx-auto">
+            AI will automatically research each product category when you have 3+ posted items. 
+            Click "Research Categories" to trigger analysis now.
+          </p>
+        </div>
+      `;
+      return;
+    }
+    
+    // Render category cards
+    grid.innerHTML = `
+      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        ${insights.map(cat => renderCategoryInsightCard(cat)).join("")}
+      </div>
+    `;
+    
+    // Update learnings count
+    if (countEl) {
+      countEl.textContent = insights.length;
+    }
+    
+    // Render all learnings list
+    if (listEl) {
+      const allLearnings = [];
+      insights.forEach(cat => {
+        if (cat.key_insights) {
+          cat.key_insights.forEach(insight => {
+            allLearnings.push({
+              type: "category",
+              category: cat.category,
+              insight: insight.insight,
+              apply: insight.apply_how,
+              impact: insight.impact
+            });
+          });
+        }
+      });
+      
+      if (allLearnings.length > 0) {
+        listEl.innerHTML = allLearnings.map(l => `
+          <div class="ai-learning-item">
+            <div class="flex-shrink-0">
+              <span class="ai-learning-type ${l.type}">${l.type}</span>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="text-sm font-medium text-gray-800">${l.insight}</div>
+              <div class="text-xs text-gray-500 mt-1">${l.apply || ""}</div>
+              <div class="text-xs text-purple-600 mt-1">📁 ${l.category}</div>
+            </div>
+            ${l.impact ? `<span class="insight-tag ${l.impact === 'high' ? 'high-impact' : ''}">${l.impact}</span>` : ''}
+          </div>
+        `).join("");
+      } else {
+        listEl.innerHTML = `<div class="text-center py-4 text-gray-400 text-sm">No learnings stored yet.</div>`;
+      }
+    }
+    
+    // Add click handlers for expanding cards
+    document.querySelectorAll(".category-insight-card").forEach(card => {
+      card.addEventListener("click", () => {
+        const details = card.querySelector(".category-details");
+        if (details) {
+          details.classList.toggle("hidden");
+          card.classList.toggle("expanded");
+        }
+      });
+    });
+    
+  } catch (err) {
+    console.error("Error loading category insights:", err);
+    grid.innerHTML = `<div class="text-center py-4 text-red-500">Failed to load insights</div>`;
+  }
+}
+
+function renderCategoryInsightCard(cat) {
+  const categoryIcons = {
+    "bags": "👜",
+    "headwear": "🎩",
+    "beanies": "🧢",
+    "jewelry": "💍",
+    "plushies": "🧸",
+    "accessories": "👛",
+    "default": "📦"
+  };
+  
+  const icon = categoryIcons[cat.category?.toLowerCase()] || categoryIcons.default;
+  const confidence = cat.confidence || 0;
+  const confidenceLevel = confidence >= 0.8 ? "high" : confidence >= 0.5 ? "medium" : "low";
+  
+  return `
+    <div class="category-insight-card">
+      <div class="flex items-start gap-3 mb-3">
+        <div class="category-icon bg-purple-100">${icon}</div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <h3 class="font-bold text-gray-800 capitalize">${cat.category || "Unknown"}</h3>
+            <span class="confidence-badge ${confidenceLevel}">
+              ${Math.round(confidence * 100)}% confident
+            </span>
+          </div>
+          <p class="text-xs text-gray-500 mt-1">${cat.sample_size || 0} posts analyzed</p>
+        </div>
+      </div>
+      
+      <p class="text-sm text-gray-600 mb-3">${cat.summary || "No summary available"}</p>
+      
+      <!-- Quick Tags -->
+      <div class="flex flex-wrap gap-1.5 mb-3">
+        ${cat.caption_strategy?.tone_that_works ? `<span class="insight-tag caption">${cat.caption_strategy.tone_that_works} tone</span>` : ''}
+        ${cat.caption_strategy?.emoji_usage ? `<span class="insight-tag caption">${cat.caption_strategy.emoji_usage} emojis</span>` : ''}
+        ${cat.hashtag_strategy?.ideal_count ? `<span class="insight-tag hashtag">${cat.hashtag_strategy.ideal_count} hashtags</span>` : ''}
+        ${cat.timing_insights?.best_days?.[0] ? `<span class="insight-tag timing">${cat.timing_insights.best_days[0]}</span>` : ''}
+      </div>
+      
+      <!-- Expandable Details -->
+      <div class="category-details hidden mt-4 pt-4 border-t">
+        ${cat.caption_strategy ? `
+          <div class="mb-4">
+            <h4 class="text-xs font-bold text-gray-500 uppercase mb-2">Caption Strategy</h4>
+            <div class="strategy-grid">
+              <div class="strategy-item">
+                <div class="strategy-value">${cat.caption_strategy.ideal_length || '?'}</div>
+                <div class="strategy-label">Ideal Length</div>
+              </div>
+              <div class="strategy-item">
+                <div class="strategy-value">${cat.caption_strategy.tone_that_works || 'Any'}</div>
+                <div class="strategy-label">Best Tone</div>
+              </div>
+              <div class="strategy-item">
+                <div class="strategy-value">${cat.caption_strategy.emoji_usage || 'Moderate'}</div>
+                <div class="strategy-label">Emoji Style</div>
+              </div>
+            </div>
+            ${cat.caption_strategy.example_hooks?.length ? `
+              <div class="mt-3">
+                <div class="text-xs font-medium text-gray-500 mb-1">Proven Hooks:</div>
+                <div class="text-sm text-gray-700 italic">"${cat.caption_strategy.example_hooks.slice(0, 2).join('", "')}"</div>
+              </div>
+            ` : ''}
+          </div>
+        ` : ''}
+        
+        ${cat.hashtag_strategy?.top_performers?.length ? `
+          <div class="mb-4">
+            <h4 class="text-xs font-bold text-gray-500 uppercase mb-2">Top Hashtags</h4>
+            <div class="flex flex-wrap gap-1">
+              ${cat.hashtag_strategy.top_performers.slice(0, 5).map(h => `
+                <span class="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded-full">${h}</span>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+        
+        ${cat.key_insights?.length ? `
+          <div class="mb-4">
+            <h4 class="text-xs font-bold text-gray-500 uppercase mb-2">Key Insights</h4>
+            ${cat.key_insights.slice(0, 3).map(i => `
+              <div class="key-insight-item">
+                <div class="key-insight-icon ${i.impact || 'medium'}">
+                  ${i.impact === 'high' ? '🔥' : i.impact === 'medium' ? '💡' : '📌'}
+                </div>
+                <div>
+                  <div class="text-sm font-medium">${i.insight}</div>
+                  <div class="text-xs text-gray-500 mt-0.5">${i.apply_how || ''}</div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
+        
+        ${cat.improvement_opportunities?.length ? `
+          <div>
+            <h4 class="text-xs font-bold text-gray-500 uppercase mb-2">Opportunities</h4>
+            <ul class="text-sm text-gray-600 space-y-1">
+              ${cat.improvement_opportunities.slice(0, 3).map(o => `<li class="flex items-start gap-2"><span class="text-purple-500">→</span> ${o}</li>`).join('')}
+            </ul>
+          </div>
+        ` : ''}
+      </div>
+      
+      <div class="text-center mt-2">
+        <span class="text-xs text-gray-400">Click to ${cat.expanded ? 'collapse' : 'expand'}</span>
+      </div>
+    </div>
+  `;
 }
 
 // ============================================
@@ -3902,4 +5285,5 @@ function initPostAnalyticsModal() {
 document.addEventListener("DOMContentLoaded", () => {
   init();
   initPostAnalyticsModal();
+  initLearningInsights();
 });

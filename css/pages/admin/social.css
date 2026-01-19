@@ -1,5 +1,87 @@
 /* /css/pages/admin/social.css */
 
+/* Spinner animation */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Pulse animation for loading states */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* AI recommended badge */
+.ai-rec-badge {
+  font-size: 9px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  vertical-align: super;
+}
+
+/* Recommended tone button glow */
+.caption-tone-btn.ring-purple-500 {
+  animation: glow 2s ease-in-out infinite alternate;
+}
+
+@keyframes glow {
+  from { box-shadow: 0 0 3px rgba(168, 85, 247, 0.4); }
+  to { box-shadow: 0 0 8px rgba(168, 85, 247, 0.6); }
+}
+
+/* Toast animation */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translate(-50%, 10px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s ease-out;
+}
+
+/* Variation card styles */
+.variation-card {
+  transition: all 0.2s ease;
+  border-color: #e5e7eb;
+}
+
+.variation-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.variation-card:has(input:checked) {
+  border-color: #000;
+  box-shadow: 0 0 0 1px #000;
+}
+
+.variation-card canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Variation card platform colors */
+.variation-card:has(input:checked).hover\\:border-pink-300 {
+  border-color: #ec4899;
+  box-shadow: 0 0 0 1px #ec4899;
+}
+
+.variation-card:has(input:checked).hover\\:border-red-300 {
+  border-color: #ef4444;
+  box-shadow: 0 0 0 1px #ef4444;
+}
+
 /* Hide scrollbar for tabs on mobile */
 .scrollbar-hide {
   -ms-overflow-style: none;  /* IE and Edge */
@@ -23,7 +105,7 @@
 
 /* Calendar day cells */
 .cal-day {
-  min-height: 60px;
+  min-height: 50px;
   padding: 4px;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
@@ -348,7 +430,8 @@
 
 #uploadModal > div,
 #settingsModal > div,
-#postDetailModal > div {
+#postDetailModal > div,
+#postAnalyticsModal > div {
   animation: slideUp 0.2s ease-out;
 }
 
@@ -382,12 +465,12 @@
 /* Mobile adjustments */
 @media (max-width: 640px) {
   .cal-day {
-    min-height: 60px;
+    min-height: 50px;
   }
   
   .cal-post {
-    font-size: 8px;
-    padding: 2px 4px;
+    font-size: 7px;
+    padding: 1px 3px;
   }
   
   .queue-item {
@@ -400,4 +483,248 @@
     height: auto;
     aspect-ratio: 16/9;
   }
+  
+  /* Modal backdrop - ensure fullscreen on mobile */
+  #postAnalyticsModal.flex,
+  #postDetailModal.flex,
+  #settingsModal.flex {
+    padding: 8px;
+  }
+  
+  /* Smaller touch targets on mobile */
+  .cal-day-number {
+    font-size: 9px;
+  }
+}
+
+/* Extra small screens */
+@media (max-width: 380px) {
+  .cal-day {
+    min-height: 45px;
+    padding: 2px;
+  }
+  
+  .cal-post {
+    font-size: 6px;
+    padding: 1px 2px;
+  }
+}
+
+/* ============================================
+   AI Learning Dashboard Styles
+   ============================================ */
+
+/* Category Insight Card */
+.category-insight-card {
+  background: white;
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.category-insight-card:hover {
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.15);
+  border-color: #a78bfa;
+  transform: translateY(-2px);
+}
+
+.category-insight-card.expanded {
+  border-color: #8b5cf6;
+  box-shadow: 0 8px 24px rgba(139, 92, 246, 0.2);
+}
+
+/* Category Icon */
+.category-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+}
+
+/* Insight Tags */
+.insight-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.insight-tag.caption {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.insight-tag.hashtag {
+  background: #e0e7ff;
+  color: #4338ca;
+}
+
+.insight-tag.timing {
+  background: #d1fae5;
+  color: #047857;
+}
+
+.insight-tag.high-impact {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+/* Key Insight Item */
+.key-insight-item {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  background: #f9fafb;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.key-insight-item:last-child {
+  margin-bottom: 0;
+}
+
+.key-insight-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.key-insight-icon.high {
+  background: #dcfce7;
+}
+
+.key-insight-icon.medium {
+  background: #fef9c3;
+}
+
+.key-insight-icon.low {
+  background: #f1f5f9;
+}
+
+/* Strategy Grid */
+.strategy-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.strategy-item {
+  background: #f9fafb;
+  border-radius: 8px;
+  padding: 12px;
+  text-align: center;
+}
+
+.strategy-value {
+  font-size: 18px;
+  font-weight: 800;
+  color: #8b5cf6;
+}
+
+.strategy-label {
+  font-size: 10px;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 4px;
+}
+
+/* Confidence Badge */
+.confidence-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.confidence-badge.high {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.confidence-badge.medium {
+  background: #fef9c3;
+  color: #a16207;
+}
+
+.confidence-badge.low {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+/* AI Learning Item */
+.ai-learning-item {
+  display: flex;
+  gap: 12px;
+  padding: 12px 16px;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  margin-bottom: 8px;
+}
+
+.ai-learning-item:hover {
+  border-color: #c4b5fd;
+  background: #faf5ff;
+}
+
+.ai-learning-type {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ai-learning-type.category {
+  background: #ddd6fe;
+  color: #5b21b6;
+}
+
+.ai-learning-type.post {
+  background: #bbf7d0;
+  color: #166534;
+}
+
+.ai-learning-type.general {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+/* Research button loading state */
+#btnResearchCategories.loading {
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+#btnResearchCategories.loading::after {
+  content: '';
+  width: 12px;
+  height: 12px;
+  border: 2px solid #fff;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  margin-left: 8px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
