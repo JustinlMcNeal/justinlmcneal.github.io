@@ -566,8 +566,8 @@ async function init() {
         // Instagram Graph API via Facebook Login (for Business/Creator accounts)
         const appId = "2162145877936737";
         const redirectUri = encodeURIComponent("https://karrykraze.com/pages/admin/social.html");
-        // Instagram API with Facebook login permissions (including pages_manage_posts for Facebook posting)
-        const scope = "instagram_basic,instagram_content_publish,pages_read_engagement,pages_manage_posts,business_management,pages_show_list";
+        // Instagram API with Facebook login permissions
+        const scope = "instagram_basic,instagram_content_publish,instagram_manage_insights,pages_read_engagement,business_management,pages_show_list";
         const state = "instagram";
         // Force re-authorization to show page selection
         const oauthUrl = `https://www.facebook.com/v18.0/dialog/oauth?client_id=${appId}&redirect_uri=${redirectUri}&scope=${scope}&response_type=code&state=${state}`;
