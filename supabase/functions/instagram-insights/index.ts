@@ -34,6 +34,7 @@ interface MediaBasicResponse {
   like_count?: number;
   comments_count?: number;
   permalink?: string;
+  media_type?: string; // IMAGE, VIDEO, CAROUSEL_ALBUM, REELS
   id: string;
   error?: { message: string; code: number };
 }
@@ -142,9 +143,9 @@ serve(async (req) => {
         const mediaId = post.external_id;
         
         // Fetch basic metrics (likes, comments) AND permalink if we don't have it
-        const basicFields = "like_count,comments_count,permalink";
+        const basicFields = "like_count,comments_count,permalink,media_type";
         const basicResp = await fetch(
-          `https://graph.facebook.com/v18.0/${mediaId}?fields=${basicFields}&access_token=${accessToken}`
+          `https://graph.facebook.com/v22.0/${mediaId}?fields=${basicFields}&access_token=${accessToken}`
         );
         const basicData: MediaBasicResponse = await basicResp.json();
 
@@ -200,12 +201,14 @@ serve(async (req) => {
           continue;
         }
 
-        // Fetch insights metrics (impressions, reach, saved)
-        // Note: Insights are only available for Business/Creator accounts
-        // Note: Reels use different metrics (plays instead of impressions)
-        const insightsMetrics = "impressions,reach,saved";
+        // Fetch insights metrics
+        // Note: As of v22.0, 'impressions' is deprecated - use 'reach' and media-specific metrics
+        // For IMAGE/VIDEO: reach, saved, likes, comments, shares, total_interactions
+        // For REEL: reach, plays, saved, likes, comments, shares, total_interactions
+        // We'll try the new metrics first, then fall back to plays for reels
+        const insightsMetrics = "reach,saved,shares,total_interactions";
         const insightsResp = await fetch(
-          `https://graph.facebook.com/v18.0/${mediaId}/insights?metric=${insightsMetrics}&access_token=${accessToken}`
+          `https://graph.facebook.com/v22.0/${mediaId}/insights?metric=${insightsMetrics}&access_token=${accessToken}`
         );
         const insightsData: MediaInsightsResponse = await insightsResp.json();
         
@@ -220,13 +223,13 @@ serve(async (req) => {
           if (errorCode === 10 || errorMsg.includes("does not have permission")) {
             console.warn(`No insights permission for ${mediaId}: ${errorMsg}`);
             hasInsightsPermission = false;
-            // We can still save likes/comments from basic API, just skip impressions/reach/saves
+            // We can still save likes/comments from basic API, just skip reach/saves
           } else {
             console.warn(`Insights API error for ${mediaId}:`, errorMsg);
-            // Try fetching Reels metrics if standard insights fail
+            // Try fetching Reels-specific metrics (plays) if standard insights fail
             const reelsMetrics = "plays,reach,saved,shares";
             const reelsResp = await fetch(
-              `https://graph.facebook.com/v18.0/${mediaId}/insights?metric=${reelsMetrics}&access_token=${accessToken}`
+              `https://graph.facebook.com/v22.0/${mediaId}/insights?metric=${reelsMetrics}&access_token=${accessToken}`
             );
             const reelsData: MediaInsightsResponse = await reelsResp.json();
             if (!reelsData.error && reelsData.data) {
@@ -242,20 +245,18 @@ serve(async (req) => {
         // Parse metrics
         const likes = basicData.like_count || 0;
         const comments = basicData.comments_count || 0;
+        const mediaType = basicData.media_type || "IMAGE";
         
-        let impressions = 0;
         let reach = 0;
         let saves = 0;
         let shares = 0;
         let plays = 0;
+        let totalInteractions = 0;
 
         if (insightsData.data) {
           for (const metric of insightsData.data) {
             const value = metric.values?.[0]?.value || 0;
             switch (metric.name) {
-              case "impressions":
-                impressions = value;
-                break;
               case "reach":
                 reach = value;
                 break;
@@ -266,15 +267,20 @@ serve(async (req) => {
                 shares = value;
                 break;
               case "plays":
-                // For Reels, "plays" is similar to impressions
+                // For Reels, "plays" represents video views
                 plays = value;
-                if (impressions === 0) impressions = value;
+                break;
+              case "total_interactions":
+                totalInteractions = value;
                 break;
             }
           }
         }
         
-        console.log(`Metrics for ${mediaId}: likes=${likes}, comments=${comments}, saves=${saves}, impressions=${impressions}, reach=${reach}, plays=${plays}`);
+        // Use plays as impressions proxy for video content
+        const impressions = plays > 0 ? plays : reach;
+        
+        console.log(`Metrics for ${mediaId} (${mediaType}): likes=${likes}, comments=${comments}, saves=${saves}, reach=${reach}, plays=${plays}, shares=${shares}`);
 
         // Calculate engagement rate
         // Formula: (likes + comments + saves) / reach * 100
