@@ -3302,7 +3302,7 @@ async function loadEngagementMetrics() {
     // Fetch Instagram posts with engagement data (exclude deleted posts)
     const { data: posts, error } = await client
       .from("social_posts")
-      .select("id, likes, comments, saves, impressions, reach, engagement_rate, engagement_updated_at, caption, hashtags, posted_at, status")
+      .select("id, likes, comments, saves, impressions, reach, engagement_rate, engagement_updated_at, caption, hashtags, posted_at, status, image_url, permalink")
       .eq("platform", "instagram")
       .eq("status", "posted")
       .neq("status", "deleted")
