@@ -3,10 +3,17 @@
 -- This migration handles the conflict between old view and new table
 -- ============================================
 
--- Step 1: Drop any existing view (from old migration)
-DROP VIEW IF EXISTS hashtag_performance CASCADE;
+-- Step 1: Drop VIEW if it exists (ignore error if it's actually a table)
+DO $$ 
+BEGIN
+  -- Try to drop as view first
+  EXECUTE 'DROP VIEW IF EXISTS hashtag_performance CASCADE';
+EXCEPTION WHEN others THEN
+  -- If it fails, it's probably a table - that's fine
+  NULL;
+END $$;
 
--- Step 2: Create or update the table
+-- Step 2: Create table if not exists (will do nothing if table already exists)
 CREATE TABLE IF NOT EXISTS hashtag_performance (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   hashtag TEXT NOT NULL UNIQUE,
