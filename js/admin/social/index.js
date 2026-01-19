@@ -97,6 +97,15 @@ const state = {
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl4ZHp2enNjdWZrdmV3ZWN2YWdxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU3MzQ5NDAsImV4cCI6MjA4MTMxMDk0MH0.cuCteItNo6yFCYcot0Vx7kUOUtV0r-iCwJ_ACAiKGso";
 const SUPABASE_FUNCTIONS_URL = "https://yxdzvzscufkvewecvagq.supabase.co/functions/v1";
 
+// Module-level supabase client for use in modal functions
+let supabaseClient = null;
+function getClient() {
+  if (!supabaseClient) {
+    supabaseClient = getSupabaseClient();
+  }
+  return supabaseClient;
+}
+
 // Handle Pinterest OAuth redirect
 function handlePinterestOAuth() {
   const params = new URLSearchParams(window.location.search);
@@ -3670,7 +3679,7 @@ async function openPostAnalytics(postId) {
   
   try {
     // Fetch post data
-    const { data: post, error } = await client
+    const { data: post, error } = await getClient()
       .from("social_posts")
       .select("*")
       .eq("id", postId)
