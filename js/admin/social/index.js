@@ -3368,7 +3368,7 @@ async function loadEngagementMetrics() {
       lastSync.textContent = `Last updated: ${lastUpdate.toLocaleDateString()} ${lastUpdate.toLocaleTimeString()}`;
     }
     
-    // Top performing posts
+    // Top performing posts - make clickable
     const topPosts = allPosts.slice(0, 5);
     const topPostsContainer = document.getElementById("analyticsTopPosts");
     if (topPostsContainer && topPosts.length > 0) {
@@ -3376,17 +3376,44 @@ async function loadEngagementMetrics() {
         const date = new Date(p.posted_at);
         const dateStr = date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
         return `
-          <div class="p-3 flex items-center gap-3 hover:bg-gray-50">
+          <div class="p-3 flex items-center gap-3 hover:bg-gray-50 cursor-pointer transition-colors" data-post-id="${p.id}" onclick="window.openPostAnalytics && window.openPostAnalytics('${p.id}')">
             <span class="text-lg font-black text-gray-300">#${idx + 1}</span>
+            ${p.image_url ? `<img src="${p.image_url}" class="w-10 h-10 rounded object-cover flex-shrink-0">` : ''}
             <div class="flex-1 min-w-0">
-              <div class="text-sm truncate">${p.caption?.substring(0, 60) || "No caption"}...</div>
+              <div class="text-sm truncate">${p.caption?.substring(0, 50) || "No caption"}...</div>
               <div class="text-xs text-gray-400">${dateStr}</div>
             </div>
-            <div class="flex items-center gap-3 text-xs">
+            <div class="flex items-center gap-2 sm:gap-3 text-xs">
               <span class="text-pink-500">❤️ ${p.likes || 0}</span>
-              <span class="text-blue-500">💬 ${p.comments || 0}</span>
-              <span class="text-yellow-500">🔖 ${p.saves || 0}</span>
+              <span class="text-blue-500 hidden sm:inline">💬 ${p.comments || 0}</span>
+              <span class="text-yellow-500 hidden sm:inline">🔖 ${p.saves || 0}</span>
               <span class="px-2 py-1 bg-orange-100 text-orange-700 font-bold rounded">${p.engagement_rate || 0}%</span>
+              <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+              </svg>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+    
+    // All posts grid (thumbnail browser)
+    const allPostsGrid = document.getElementById("analyticsAllPosts");
+    if (allPostsGrid && allPosts.length > 0) {
+      allPostsGrid.innerHTML = allPosts.map(p => {
+        const engColor = (p.engagement_rate || 0) >= 5 ? "border-green-500" 
+                       : (p.engagement_rate || 0) >= 2 ? "border-blue-500" 
+                       : "border-gray-200";
+        return `
+          <div class="aspect-square relative group cursor-pointer rounded overflow-hidden border-2 ${engColor}" 
+               onclick="window.openPostAnalytics && window.openPostAnalytics('${p.id}')">
+            ${p.image_url 
+              ? `<img src="${p.image_url}" class="w-full h-full object-cover" loading="lazy">` 
+              : `<div class="w-full h-full bg-gray-100 flex items-center justify-center text-gray-400 text-xs">No img</div>`
+            }
+            <div class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-xs">
+              <span>❤️ ${p.likes || 0}</span>
+              <span>${p.engagement_rate || 0}%</span>
             </div>
           </div>
         `;
@@ -3631,7 +3658,239 @@ async function loadAnalytics() {
 }
 
 // ============================================
+// Post Analytics Modal
+// ============================================
+
+async function openPostAnalytics(postId) {
+  const modal = document.getElementById("postAnalyticsModal");
+  if (!modal) return;
+  
+  modal.classList.remove("hidden");
+  modal.classList.add("flex");
+  
+  try {
+    // Fetch post data
+    const { data: post, error } = await client
+      .from("social_posts")
+      .select("*")
+      .eq("id", postId)
+      .single();
+    
+    if (error || !post) {
+      console.error("Failed to load post:", error);
+      return;
+    }
+    
+    // Populate modal
+    const img = modal.querySelector("#postAnalyticsImage img");
+    if (img) img.src = post.image_url || "";
+    
+    const platform = document.getElementById("postAnalyticsPlatform");
+    if (platform) {
+      platform.textContent = post.platform?.charAt(0).toUpperCase() + post.platform?.slice(1) || "Unknown";
+      platform.className = post.platform === "instagram" 
+        ? "px-2 py-0.5 rounded-full text-xs font-bold bg-gradient-to-r from-purple-500 to-pink-500 text-white"
+        : "px-2 py-0.5 rounded-full text-xs font-bold bg-red-500 text-white";
+    }
+    
+    const dateEl = document.getElementById("postAnalyticsDate");
+    if (dateEl && post.posted_at) {
+      const d = new Date(post.posted_at);
+      dateEl.textContent = d.toLocaleDateString("en-US", { 
+        weekday: "short", month: "short", day: "numeric", year: "numeric", 
+        hour: "numeric", minute: "2-digit" 
+      });
+    }
+    
+    const caption = document.getElementById("postAnalyticsCaption");
+    if (caption) caption.textContent = post.caption || "No caption";
+    
+    const permalink = document.getElementById("postAnalyticsPermalink");
+    if (permalink && post.permalink) {
+      permalink.href = post.permalink;
+      permalink.classList.remove("hidden");
+    } else if (permalink) {
+      permalink.classList.add("hidden");
+    }
+    
+    // Metrics
+    const setVal = (id, val) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = val;
+    };
+    
+    setVal("postAnalyticsLikes", post.likes || 0);
+    setVal("postAnalyticsComments", post.comments || 0);
+    setVal("postAnalyticsSaves", post.saves || 0);
+    setVal("postAnalyticsShares", post.shares || 0);
+    setVal("postAnalyticsReach", post.reach || 0);
+    setVal("postAnalyticsEngRate", (post.engagement_rate || 0) + "%");
+    
+    // Performance insights
+    const insightsEl = document.getElementById("postAnalyticsInsights");
+    if (insightsEl) {
+      const insights = [];
+      const likes = post.likes || 0;
+      const comments = post.comments || 0;
+      const saves = post.saves || 0;
+      const reach = post.reach || 0;
+      const engRate = post.engagement_rate || 0;
+      
+      // Engagement analysis
+      if (engRate >= 5) {
+        insights.push({ icon: "🔥", text: "Excellent engagement rate! This post is performing above average.", color: "text-green-600" });
+      } else if (engRate >= 2) {
+        insights.push({ icon: "✅", text: "Good engagement rate. Your audience is responding well.", color: "text-blue-600" });
+      } else if (engRate > 0) {
+        insights.push({ icon: "💡", text: "Average engagement. Consider testing different content types.", color: "text-yellow-600" });
+      }
+      
+      // Saves insight
+      if (saves > 0 && saves >= likes * 0.1) {
+        insights.push({ icon: "🔖", text: `High save rate! ${saves} saves means people want to revisit this content.`, color: "text-purple-600" });
+      }
+      
+      // Comments insight
+      if (comments > 0 && comments >= likes * 0.05) {
+        insights.push({ icon: "💬", text: `Strong comment activity! This content sparked conversations.`, color: "text-blue-600" });
+      }
+      
+      // Reach insight
+      if (reach > 0) {
+        const reachRatio = reach > 100 ? "significant" : "growing";
+        insights.push({ icon: "👥", text: `Reached ${reach} accounts - ${reachRatio} visibility.`, color: "text-gray-600" });
+      }
+      
+      if (insights.length === 0) {
+        insights.push({ icon: "⏳", text: "Insights will appear once the post gets more engagement.", color: "text-gray-500" });
+      }
+      
+      insightsEl.innerHTML = insights.map(i => `
+        <div class="flex items-start gap-2">
+          <span>${i.icon}</span>
+          <span class="${i.color}">${i.text}</span>
+        </div>
+      `).join("");
+    }
+    
+    // Hashtags
+    const hashtagsSection = document.getElementById("postAnalyticsHashtagsSection");
+    const hashtagsEl = document.getElementById("postAnalyticsHashtags");
+    if (hashtagsSection && hashtagsEl) {
+      const hashtags = post.hashtags || [];
+      if (hashtags.length > 0) {
+        hashtagsSection.classList.remove("hidden");
+        hashtagsEl.innerHTML = hashtags.map(h => `
+          <span class="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full">#${h.replace(/^#/, "")}</span>
+        `).join("");
+      } else {
+        hashtagsSection.classList.add("hidden");
+      }
+    }
+    
+    // Timeline
+    const timelineEl = document.getElementById("postAnalyticsTimeline");
+    if (timelineEl) {
+      const events = [];
+      
+      if (post.created_at) {
+        const d = new Date(post.created_at);
+        events.push({ date: d, label: "Created", icon: "📝" });
+      }
+      if (post.scheduled_for) {
+        const d = new Date(post.scheduled_for);
+        events.push({ date: d, label: "Scheduled", icon: "📅" });
+      }
+      if (post.posted_at) {
+        const d = new Date(post.posted_at);
+        events.push({ date: d, label: "Posted", icon: "✅" });
+      }
+      if (post.engagement_updated_at) {
+        const d = new Date(post.engagement_updated_at);
+        events.push({ date: d, label: "Last insights sync", icon: "📊" });
+      }
+      
+      events.sort((a, b) => a.date - b.date);
+      
+      timelineEl.innerHTML = events.map(e => `
+        <div class="flex items-center gap-3 text-gray-600">
+          <span>${e.icon}</span>
+          <span class="flex-1">${e.label}</span>
+          <span class="text-xs text-gray-400">${e.date.toLocaleDateString()} ${e.date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+        </div>
+      `).join("");
+    }
+    
+    // View on platform button
+    const viewBtn = document.getElementById("btnViewPostOnPlatform");
+    if (viewBtn && post.permalink) {
+      viewBtn.href = post.permalink;
+      viewBtn.classList.remove("hidden");
+    } else if (viewBtn) {
+      viewBtn.classList.add("hidden");
+    }
+    
+    // Store current post ID for refresh
+    modal.dataset.postId = postId;
+    
+  } catch (err) {
+    console.error("Error opening post analytics:", err);
+  }
+}
+
+function closePostAnalytics() {
+  const modal = document.getElementById("postAnalyticsModal");
+  if (modal) {
+    modal.classList.add("hidden");
+    modal.classList.remove("flex");
+  }
+}
+
+// Expose globally
+window.openPostAnalytics = openPostAnalytics;
+
+// Initialize modal event listeners
+function initPostAnalyticsModal() {
+  const closeBtn = document.getElementById("btnClosePostAnalytics");
+  if (closeBtn) {
+    closeBtn.addEventListener("click", closePostAnalytics);
+  }
+  
+  const modal = document.getElementById("postAnalyticsModal");
+  if (modal) {
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) closePostAnalytics();
+    });
+  }
+  
+  const refreshBtn = document.getElementById("btnRefreshPostAnalytics");
+  if (refreshBtn) {
+    refreshBtn.addEventListener("click", async () => {
+      const postId = modal?.dataset.postId;
+      if (postId) {
+        // Sync insights for this specific post
+        refreshBtn.disabled = true;
+        refreshBtn.innerHTML = `<svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Syncing...`;
+        
+        try {
+          await syncInstagramInsights(postId);
+          await openPostAnalytics(postId);
+        } catch (err) {
+          console.error("Failed to refresh:", err);
+        }
+        
+        refreshBtn.disabled = false;
+        refreshBtn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Refresh`;
+      }
+    });
+  }
+}
+
+// ============================================
 // Start
 // ============================================
 
-document.addEventListener("DOMContentLoaded", init);
+document.addEventListener("DOMContentLoaded", () => {
+  init();
+  initPostAnalyticsModal();
+});

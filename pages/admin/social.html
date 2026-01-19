@@ -695,11 +695,28 @@
 
           <!-- Top Performing Posts -->
           <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
-            <div class="p-4 border-b">
+            <div class="p-4 border-b flex items-center justify-between">
               <h2 class="font-bold">🏆 Top Performing Posts</h2>
+              <span class="text-xs text-gray-400">Click to analyze</span>
             </div>
             <div id="analyticsTopPosts" class="divide-y max-h-80 overflow-y-auto">
               <div class="p-4 text-center text-gray-400 text-sm">Sync insights to see top posts</div>
+            </div>
+          </div>
+
+          <!-- All Posts Browser -->
+          <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+            <div class="p-4 border-b flex items-center justify-between">
+              <h2 class="font-bold">📋 Browse All Posts</h2>
+              <select id="analyticsPostFilter" class="text-xs border rounded-lg px-2 py-1">
+                <option value="all">All Time</option>
+                <option value="week">This Week</option>
+                <option value="month" selected>This Month</option>
+                <option value="3months">Last 3 Months</option>
+              </select>
+            </div>
+            <div id="analyticsAllPosts" class="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-1 p-2 max-h-64 overflow-y-auto">
+              <div class="col-span-full p-4 text-center text-gray-400 text-sm">Sync insights to browse posts</div>
             </div>
           </div>
 
@@ -1320,6 +1337,107 @@
           <button id="btnPostNow" class="px-4 py-2 text-sm font-medium border rounded-lg hover:bg-gray-50">Post Now</button>
           <button id="btnSavePost" class="px-6 py-2 text-sm font-bold bg-black text-white rounded-lg hover:bg-black/80">Save Changes</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Post Analytics Modal -->
+  <div id="postAnalyticsModal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl w-full max-w-2xl my-8">
+      <div class="flex items-center justify-between p-4 border-b sticky top-0 bg-white rounded-t-2xl z-10">
+        <h2 class="text-lg font-bold flex items-center gap-2">
+          📊 Post Analytics
+        </h2>
+        <button id="btnClosePostAnalytics" class="p-2 hover:bg-gray-100 rounded-lg">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      
+      <div class="p-4 space-y-6">
+        <!-- Post Preview -->
+        <div class="flex gap-4">
+          <div id="postAnalyticsImage" class="w-32 h-32 bg-gray-100 rounded-xl overflow-hidden flex-shrink-0">
+            <img src="" alt="Post" class="w-full h-full object-cover">
+          </div>
+          <div class="flex-1">
+            <div class="flex items-center gap-2 mb-2">
+              <span id="postAnalyticsPlatform" class="px-2 py-0.5 rounded-full text-xs font-bold"></span>
+              <span id="postAnalyticsDate" class="text-xs text-gray-400"></span>
+            </div>
+            <p id="postAnalyticsCaption" class="text-sm text-gray-700 line-clamp-4"></p>
+            <a id="postAnalyticsPermalink" href="#" target="_blank" class="text-xs text-blue-500 hover:underline mt-2 inline-block hidden">View on Instagram →</a>
+          </div>
+        </div>
+        
+        <!-- Key Metrics Grid -->
+        <div class="grid grid-cols-3 sm:grid-cols-6 gap-3">
+          <div class="bg-pink-50 rounded-xl p-3 text-center">
+            <div class="text-2xl mb-1">❤️</div>
+            <div id="postAnalyticsLikes" class="text-xl font-black text-pink-600">0</div>
+            <div class="text-xs text-gray-500">Likes</div>
+          </div>
+          <div class="bg-blue-50 rounded-xl p-3 text-center">
+            <div class="text-2xl mb-1">💬</div>
+            <div id="postAnalyticsComments" class="text-xl font-black text-blue-600">0</div>
+            <div class="text-xs text-gray-500">Comments</div>
+          </div>
+          <div class="bg-yellow-50 rounded-xl p-3 text-center">
+            <div class="text-2xl mb-1">🔖</div>
+            <div id="postAnalyticsSaves" class="text-xl font-black text-yellow-600">0</div>
+            <div class="text-xs text-gray-500">Saves</div>
+          </div>
+          <div class="bg-green-50 rounded-xl p-3 text-center">
+            <div class="text-2xl mb-1">🔄</div>
+            <div id="postAnalyticsShares" class="text-xl font-black text-green-600">0</div>
+            <div class="text-xs text-gray-500">Shares</div>
+          </div>
+          <div class="bg-purple-50 rounded-xl p-3 text-center">
+            <div class="text-2xl mb-1">👥</div>
+            <div id="postAnalyticsReach" class="text-xl font-black text-purple-600">0</div>
+            <div class="text-xs text-gray-500">Reach</div>
+          </div>
+          <div class="bg-orange-50 rounded-xl p-3 text-center">
+            <div class="text-2xl mb-1">📊</div>
+            <div id="postAnalyticsEngRate" class="text-xl font-black text-orange-600">0%</div>
+            <div class="text-xs text-gray-500">Eng. Rate</div>
+          </div>
+        </div>
+        
+        <!-- Performance Analysis -->
+        <div class="bg-gray-50 rounded-xl p-4">
+          <h3 class="font-bold text-sm mb-3">📈 Performance Analysis</h3>
+          <div id="postAnalyticsInsights" class="space-y-2 text-sm">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+        
+        <!-- Hashtags Used -->
+        <div id="postAnalyticsHashtagsSection" class="hidden">
+          <h3 class="font-bold text-sm mb-3">#️⃣ Hashtags Used</h3>
+          <div id="postAnalyticsHashtags" class="flex flex-wrap gap-2">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+        
+        <!-- Post Timeline -->
+        <div class="border-t pt-4">
+          <h3 class="font-bold text-sm mb-3">📅 Timeline</h3>
+          <div id="postAnalyticsTimeline" class="space-y-2 text-sm">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+      </div>
+      
+      <div class="flex items-center justify-end p-4 border-t sticky bottom-0 bg-white rounded-b-2xl">
+        <button id="btnRefreshPostAnalytics" class="px-4 py-2 text-sm font-medium border rounded-lg hover:bg-gray-50 mr-2 flex items-center gap-1">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+          </svg>
+          Refresh
+        </button>
+        <a id="btnViewPostOnPlatform" href="#" target="_blank" class="px-4 py-2 text-sm font-bold bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:opacity-90">View on Instagram</a>
       </div>
     </div>
   </div>
