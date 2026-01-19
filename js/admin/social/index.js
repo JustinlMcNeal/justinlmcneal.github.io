@@ -3420,6 +3420,8 @@ function setupCarouselBuilder() {
   
   // Setup other carousel handlers
   setupCarouselProductClear();
+  setupCarouselPreviewModal();
+  setupCarouselCounters();
 }
 
 function showCarouselProductDropdown(searchQuery = "") {
@@ -3769,22 +3771,55 @@ function updateCarouselUI() {
     previewGrid?.classList.remove("hidden");
     
     imagesContainer.innerHTML = state.carousel.images.map((img, idx) => `
-      <div class="relative group aspect-square" data-carousel-idx="${idx}">
-        <img src="${img.previewUrl}" class="w-full h-full object-cover rounded-lg border-2 border-transparent hover:border-purple-500 transition-colors">
-        <div class="absolute top-1 left-1 w-5 h-5 bg-black/70 text-white text-xs rounded-full flex items-center justify-center font-bold">${idx + 1}</div>
-        <button class="carousel-remove-btn absolute top-1 right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity" data-idx="${idx}">✕</button>
+      <div class="carousel-slide relative group aspect-square rounded-lg overflow-hidden border-2 border-gray-200 hover:border-purple-500 transition-all" 
+           data-carousel-idx="${idx}" 
+           draggable="true">
+        ${idx === 0 ? '<div class="cover-badge">📸 COVER</div>' : ''}
+        <img src="${img.previewUrl}" class="w-full h-full object-cover cursor-pointer carousel-preview-trigger" data-idx="${idx}">
+        <div class="absolute top-1 left-1 w-6 h-6 bg-black/70 text-white text-xs rounded-full flex items-center justify-center font-bold">${idx + 1}</div>
+        <button class="carousel-remove-btn absolute top-1 right-1 w-6 h-6 bg-red-500 text-white text-xs rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600" data-idx="${idx}">✕</button>
+        <div class="move-buttons">
+          <button class="move-btn move-left" data-idx="${idx}" ${idx === 0 ? 'disabled' : ''}>◀</button>
+          <button class="move-btn move-right" data-idx="${idx}" ${idx === count - 1 ? 'disabled' : ''}>▶</button>
+        </div>
       </div>
     `).join("");
+    
+    // Setup drag and drop
+    setupCarouselDragAndDrop();
     
     // Add remove handlers
     document.querySelectorAll(".carousel-remove-btn").forEach(btn => {
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
         const idx = parseInt(btn.dataset.idx);
-        const img = state.carousel.images[idx];
-        if (img?.previewUrl) URL.revokeObjectURL(img.previewUrl);
-        state.carousel.images.splice(idx, 1);
-        updateCarouselUI();
+        removeCarouselImage(idx);
+      });
+    });
+    
+    // Add move handlers
+    document.querySelectorAll(".move-left").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const idx = parseInt(btn.dataset.idx);
+        if (idx > 0) moveCarouselImage(idx, idx - 1);
+      });
+    });
+    
+    document.querySelectorAll(".move-right").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const idx = parseInt(btn.dataset.idx);
+        if (idx < state.carousel.images.length - 1) moveCarouselImage(idx, idx + 1);
+      });
+    });
+    
+    // Add preview handlers
+    document.querySelectorAll(".carousel-preview-trigger").forEach(img => {
+      img.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const idx = parseInt(img.dataset.idx);
+        openCarouselImagePreview(idx);
       });
     });
     
@@ -3812,6 +3847,232 @@ function updateCarouselUI() {
   
   if (btnPreview) btnPreview.disabled = !isValid;
   if (btnSchedule) btnSchedule.disabled = !isValid;
+  
+  // Also update product images selection state if visible
+  if (state.carousel.productGalleryImages?.length > 0) {
+    renderCarouselProductImages(state.carousel.productGalleryImages);
+  }
+}
+
+// Setup drag and drop for carousel images
+function setupCarouselDragAndDrop() {
+  const slides = document.querySelectorAll(".carousel-slide");
+  
+  slides.forEach(slide => {
+    slide.addEventListener("dragstart", handleCarouselDragStart);
+    slide.addEventListener("dragend", handleCarouselDragEnd);
+    slide.addEventListener("dragover", handleCarouselDragOver);
+    slide.addEventListener("dragenter", handleCarouselDragEnter);
+    slide.addEventListener("dragleave", handleCarouselDragLeave);
+    slide.addEventListener("drop", handleCarouselDrop);
+  });
+}
+
+let carouselDraggedIdx = null;
+
+function handleCarouselDragStart(e) {
+  carouselDraggedIdx = parseInt(this.dataset.carouselIdx);
+  this.classList.add("dragging");
+  e.dataTransfer.effectAllowed = "move";
+  e.dataTransfer.setData("text/plain", carouselDraggedIdx);
+}
+
+function handleCarouselDragEnd(e) {
+  this.classList.remove("dragging");
+  document.querySelectorAll(".carousel-slide").forEach(s => s.classList.remove("drag-over"));
+}
+
+function handleCarouselDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = "move";
+}
+
+function handleCarouselDragEnter(e) {
+  e.preventDefault();
+  if (parseInt(this.dataset.carouselIdx) !== carouselDraggedIdx) {
+    this.classList.add("drag-over");
+  }
+}
+
+function handleCarouselDragLeave(e) {
+  this.classList.remove("drag-over");
+}
+
+function handleCarouselDrop(e) {
+  e.preventDefault();
+  this.classList.remove("drag-over");
+  
+  const fromIdx = carouselDraggedIdx;
+  const toIdx = parseInt(this.dataset.carouselIdx);
+  
+  if (fromIdx !== toIdx && fromIdx !== null) {
+    moveCarouselImage(fromIdx, toIdx);
+  }
+  
+  carouselDraggedIdx = null;
+}
+
+// Move image from one position to another
+function moveCarouselImage(fromIdx, toIdx) {
+  const images = state.carousel.images;
+  const [moved] = images.splice(fromIdx, 1);
+  images.splice(toIdx, 0, moved);
+  updateCarouselUI();
+}
+
+// Remove image from carousel
+function removeCarouselImage(idx) {
+  const img = state.carousel.images[idx];
+  if (img?.previewUrl && !img.productGalleryUrl) {
+    URL.revokeObjectURL(img.previewUrl);
+  }
+  state.carousel.images.splice(idx, 1);
+  updateCarouselUI();
+}
+
+// Image preview modal
+let previewCurrentIdx = 0;
+
+function openCarouselImagePreview(idx) {
+  previewCurrentIdx = idx;
+  const modal = document.getElementById("carouselImagePreviewModal");
+  const img = document.getElementById("carouselPreviewImage");
+  const indexEl = document.getElementById("carouselPreviewIndex");
+  const totalEl = document.getElementById("carouselPreviewTotal");
+  
+  if (!modal || !img) return;
+  
+  img.src = state.carousel.images[idx].previewUrl;
+  indexEl.textContent = idx + 1;
+  totalEl.textContent = state.carousel.images.length;
+  
+  modal.classList.remove("hidden");
+  modal.classList.add("flex");
+}
+
+function closeCarouselImagePreview() {
+  const modal = document.getElementById("carouselImagePreviewModal");
+  modal?.classList.add("hidden");
+  modal?.classList.remove("flex");
+}
+
+function navigateCarouselPreview(direction) {
+  const newIdx = previewCurrentIdx + direction;
+  if (newIdx >= 0 && newIdx < state.carousel.images.length) {
+    openCarouselImagePreview(newIdx);
+  }
+}
+
+// Setup preview modal handlers
+function setupCarouselPreviewModal() {
+  document.getElementById("btnCloseImagePreview")?.addEventListener("click", closeCarouselImagePreview);
+  document.getElementById("btnPrevImagePreview")?.addEventListener("click", () => navigateCarouselPreview(-1));
+  document.getElementById("btnNextImagePreview")?.addEventListener("click", () => navigateCarouselPreview(1));
+  
+  // Close on background click
+  document.getElementById("carouselImagePreviewModal")?.addEventListener("click", (e) => {
+    if (e.target.id === "carouselImagePreviewModal") {
+      closeCarouselImagePreview();
+    }
+  });
+  
+  // Keyboard navigation
+  document.addEventListener("keydown", (e) => {
+    const modal = document.getElementById("carouselImagePreviewModal");
+    if (modal?.classList.contains("hidden")) return;
+    
+    if (e.key === "Escape") closeCarouselImagePreview();
+    if (e.key === "ArrowLeft") navigateCarouselPreview(-1);
+    if (e.key === "ArrowRight") navigateCarouselPreview(1);
+  });
+}
+
+// Caption and hashtag count updates
+function setupCarouselCounters() {
+  const captionEl = document.getElementById("carouselCaption");
+  const hashtagsEl = document.getElementById("carouselHashtags");
+  const captionCountEl = document.getElementById("carouselCaptionCount");
+  const hashtagCountEl = document.getElementById("carouselHashtagCount");
+  
+  captionEl?.addEventListener("input", () => {
+    const len = captionEl.value.length;
+    if (captionCountEl) {
+      captionCountEl.textContent = `${len}/2200`;
+      captionCountEl.classList.remove("count-warning", "count-error");
+      if (len > 2000) captionCountEl.classList.add("count-warning");
+      if (len > 2200) captionCountEl.classList.add("count-error");
+    }
+  });
+  
+  hashtagsEl?.addEventListener("input", () => {
+    const hashtags = hashtagsEl.value.match(/#\w+/g) || [];
+    const count = hashtags.length;
+    if (hashtagCountEl) {
+      hashtagCountEl.textContent = `${count}/30 tags`;
+      hashtagCountEl.classList.remove("count-warning", "count-error");
+      if (count > 25) hashtagCountEl.classList.add("count-warning");
+      if (count > 30) hashtagCountEl.classList.add("count-error");
+    }
+  });
+  
+  // AI generate hashtags button
+  document.getElementById("btnGenerateCarouselHashtags")?.addEventListener("click", generateCarouselHashtags);
+}
+
+// Generate hashtags using AI
+async function generateCarouselHashtags() {
+  const btn = document.getElementById("btnGenerateCarouselHashtags");
+  const hashtagsEl = document.getElementById("carouselHashtags");
+  
+  if (!btn || !hashtagsEl) return;
+  
+  const originalText = btn.textContent;
+  btn.textContent = "⏳ Generating...";
+  btn.disabled = true;
+  
+  try {
+    // Get product context if selected
+    const product = state.carousel.productId 
+      ? state.products.find(p => p.id === state.carousel.productId)
+      : null;
+    
+    const category = product?.category_id
+      ? state.categories.find(c => c.id === product.category_id)
+      : null;
+    
+    const productInfo = product ? {
+      name: product.name,
+      category: category?.name || "accessories"
+    } : { name: "fashion item", category: "accessories" };
+    
+    const response = await fetch(`${window.ENV?.SUPABASE_URL}/functions/v1/ai-generate`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${window.ENV?.SUPABASE_ANON_KEY}`
+      },
+      body: JSON.stringify({
+        type: "hashtags",
+        productName: productInfo.name,
+        productCategory: productInfo.category,
+        platform: "instagram"
+      })
+    });
+    
+    const data = await response.json();
+    
+    if (data.hashtags) {
+      hashtagsEl.value = data.hashtags;
+      hashtagsEl.dispatchEvent(new Event("input"));
+      state.carousel.hashtags = data.hashtags;
+    }
+    
+  } catch (err) {
+    console.error("[Carousel] Failed to generate hashtags:", err);
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }
 }
 
 function resetCarouselBuilder() {
