@@ -2364,6 +2364,9 @@ function setupSettingsModal() {
   document.getElementById("btnLoadPageInfo")?.addEventListener("click", loadFacebookPageInfo);
   document.getElementById("btnSavePageInfo")?.addEventListener("click", saveFacebookPageInfo);
   
+  // Make profile pic upload function global
+  window.handleFbProfilePicUpload = handleFbProfilePicUpload;
+  
   // Instagram Profile Settings
   document.getElementById("btnLoadInstagramInfo")?.addEventListener("click", loadInstagramProfileInfo);
 }
@@ -2527,6 +2530,86 @@ async function saveFacebookPageInfo() {
     btn.innerHTML = '<svg class="w-3.5 h-3.5 inline mr-1" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg> Update Facebook Page';
     btn.disabled = false;
   }
+}
+
+async function handleFbProfilePicUpload(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  
+  // Validate file
+  if (!file.type.startsWith('image/')) {
+    alert('Please select an image file');
+    return;
+  }
+  
+  if (file.size > 10 * 1024 * 1024) { // 10MB limit
+    alert('Image must be less than 10MB');
+    return;
+  }
+  
+  const progressEl = document.getElementById("fbProfilePicProgress");
+  const progressText = document.getElementById("fbProfilePicProgressText");
+  const avatarImg = document.getElementById("settingFbAvatar");
+  const initialsEl = document.getElementById("settingFbInitials");
+  
+  try {
+    progressEl.classList.remove("hidden");
+    progressText.textContent = "Uploading to Facebook...";
+    
+    // Get page token
+    const pageTokenSetting = state.settings.facebook_page_token;
+    const pageIdSetting = state.settings.facebook_page_id;
+    
+    if (!pageTokenSetting?.token || !pageIdSetting?.page_id) {
+      throw new Error("Facebook Page not connected");
+    }
+    
+    const pageId = pageIdSetting.page_id;
+    const token = pageTokenSetting.token;
+    
+    // Create FormData for upload
+    const formData = new FormData();
+    formData.append('source', file);
+    formData.append('access_token', token);
+    
+    // Upload to Facebook
+    const resp = await fetch(`https://graph.facebook.com/v21.0/${pageId}/picture`, {
+      method: 'POST',
+      body: formData
+    });
+    
+    const result = await resp.json();
+    
+    if (result.error) {
+      throw new Error(result.error.message);
+    }
+    
+    // Show preview immediately
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      avatarImg.src = e.target.result;
+      avatarImg.classList.remove("hidden");
+      initialsEl.classList.add("hidden");
+    };
+    reader.readAsDataURL(file);
+    
+    progressText.textContent = "✓ Profile picture updated!";
+    setTimeout(() => {
+      progressEl.classList.add("hidden");
+    }, 2000);
+    
+    console.log("Facebook profile picture updated:", result);
+    
+  } catch (err) {
+    console.error("Profile pic upload error:", err);
+    progressText.textContent = "❌ " + err.message;
+    setTimeout(() => {
+      progressEl.classList.add("hidden");
+    }, 3000);
+  }
+  
+  // Clear the input so same file can be selected again
+  event.target.value = '';
 }
 
 // ============================================
