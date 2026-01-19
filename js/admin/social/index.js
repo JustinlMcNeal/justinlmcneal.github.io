@@ -2019,6 +2019,9 @@ async function regenerateCaption() {
   const hashtagStr = formatHashtags(ensureKarryKrazeTag(hashtags));
   els.hashtagText.value = hashtagStr;
   state.uploadData.hashtags = parseHashtags(hashtagStr);
+  
+  // Update counters and engagement score
+  updatePostCountersAndScore();
 }
 
 /**
@@ -4250,6 +4253,33 @@ async function generateCarouselHashtags() {
   }
 }
 
+// Helper to trigger input event on an element
+function triggerInputEvent(element) {
+  if (element) {
+    element.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+}
+
+// Update all post counters and score (call this after setting values programmatically)
+function updatePostCountersAndScore() {
+  const captionEl = document.getElementById("captionText");
+  const hashtagsEl = document.getElementById("hashtagText");
+  triggerInputEvent(captionEl);
+  triggerInputEvent(hashtagsEl);
+  // Immediate score calculation
+  setTimeout(() => calculatePostEngagementScore(), 100);
+}
+
+// Update all carousel counters and score
+function updateCarouselCountersAndScore() {
+  const captionEl = document.getElementById("carouselCaption");
+  const hashtagsEl = document.getElementById("carouselHashtags");
+  triggerInputEvent(captionEl);
+  triggerInputEvent(hashtagsEl);
+  // Immediate score calculation
+  setTimeout(() => calculateCarouselEngagementScore(), 100);
+}
+
 // Setup counters and engagement score for regular post creation
 function setupPostCounters() {
   const captionEl = document.getElementById("captionText");
@@ -4457,6 +4487,7 @@ async function regenerateCarouselCaption() {
     console.log("[Carousel] No product selected, using default caption");
     document.getElementById("carouselCaption").value = "Check out our latest carousel! 📸✨ Swipe through to see more!\n\nShop now at karrykraze.com";
     document.getElementById("carouselHashtags").value = "#karrykraze #carousel #fashion #shopping";
+    updateCarouselCountersAndScore();
     return;
   }
   
@@ -4482,10 +4513,14 @@ async function regenerateCarouselCaption() {
     state.carousel.caption = document.getElementById("carouselCaption").value;
     state.carousel.hashtags = document.getElementById("carouselHashtags").value;
     
+    // Update counters and engagement score
+    updateCarouselCountersAndScore();
+    
     console.log("[Carousel] Caption generated:", caption.substring(0, 50) + "...");
   } catch (err) {
     console.error("[Carousel] Failed to generate caption:", err);
     document.getElementById("carouselCaption").value = "📸 Swipe to see more! ➡️\n\nCheck out " + (product.name || "this amazing product") + "!\n\nShop now at karrykraze.com";
+    updateCarouselCountersAndScore();
   }
 }
 
