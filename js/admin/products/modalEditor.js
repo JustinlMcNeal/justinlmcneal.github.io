@@ -65,6 +65,12 @@ export function bindModal(els, refreshTable, sectionApi = {}) {
     els.galleryList.innerHTML = "";
   }
 
+  function showCopyJsonBtn(visible) {
+    if (els.btnCopyJson) {
+      els.btnCopyJson.classList.toggle("hidden", !visible);
+    }
+  }
+
   function fillCategorySelect(selectedId) {
     els.fCategory.innerHTML = (state.categories || [])
       .map(
@@ -118,6 +124,7 @@ export function bindModal(els, refreshTable, sectionApi = {}) {
     setMsg(els.modalMsg, "Loading product…", false);
     show(els.modal, true);
     els.modal.classList.add("is-open");
+    showCopyJsonBtn(true); // Show copy button when editing
 
     const full = await fetchProductFull(productId);
     state.editing = full;
@@ -183,6 +190,7 @@ export function bindModal(els, refreshTable, sectionApi = {}) {
 
   function openNew() {
     const firstCat = state.categories?.[0]?.id || null;
+    showCopyJsonBtn(false); // Hide copy button when creating new
 
     state.editing = {
       product: {
@@ -333,6 +341,26 @@ export function bindModal(els, refreshTable, sectionApi = {}) {
 
   els.btnDelete?.addEventListener("click", disableProduct);
   els.btnHardDelete?.addEventListener("click", hardDelete);
+
+  // Copy JSON button
+  els.btnCopyJson?.addEventListener("click", () => {
+    const json = buildProductJson(els);
+    navigator.clipboard.writeText(JSON.stringify(json, null, 2))
+      .then(() => {
+        const btn = els.btnCopyJson;
+        const original = btn.textContent;
+        btn.textContent = "✓ Copied!";
+        btn.classList.add("bg-emerald-500", "border-emerald-500", "text-white");
+        setTimeout(() => {
+          btn.textContent = original;
+          btn.classList.remove("bg-emerald-500", "border-emerald-500", "text-white");
+        }, 2000);
+      })
+      .catch(err => {
+        console.error("Copy failed:", err);
+        setMsg(els.modalMsg, "Failed to copy to clipboard", true);
+      });
+  });
 
   els.btnAddVariant.addEventListener("click", () => addVariantRow(els.variantList));
   
@@ -502,4 +530,62 @@ function updatePreviewEl(previewEl, url) {
   } else {
     previewEl.innerHTML = `<span class="text-[10px] uppercase tracking-wider text-gray-400">No image</span>`;
   }
+}
+
+/**
+ * Builds a JSON object from the current form state for copying/exporting
+ */
+function buildProductJson(els) {
+  // Get category name from select
+  const categoryName = els.fCategory?.selectedOptions?.[0]?.textContent || null;
+  
+  // Collect variants from the list
+  const variantRows = els.variantList?.querySelectorAll('[data-row="variant"]') || [];
+  const variants = Array.from(variantRows).map((row, idx) => {
+    const optionValue = row.querySelector('[data-v="value"]')?.value?.trim() || "";
+    const stock = parseInt(row.querySelector('[data-v="stock"]')?.value || "0", 10);
+    const previewUrl = row.querySelector('[data-v="img"]')?.value?.trim() || null;
+    return {
+      option_value: optionValue,
+      stock: stock,
+      preview_image_url: previewUrl,
+      sort_order: idx,
+    };
+  }).filter(v => v.option_value);
+  
+  // Collect gallery from the list
+  const galleryRows = els.galleryList?.querySelectorAll('[data-row="gallery"]') || [];
+  const gallery = Array.from(galleryRows).map((row, idx) => {
+    const url = row.querySelector('[data-g="url"]')?.value?.trim() || "";
+    return { url, position: idx + 1 };
+  }).filter(g => g.url);
+  
+  // Collect tags
+  const tags = (els.fTags?.value || "")
+    .split(",")
+    .map(t => t.trim())
+    .filter(Boolean);
+  
+  return {
+    product: {
+      code: els.fCode?.value?.trim() || null,
+      slug: els.fSlug?.value?.trim() || null,
+      name: els.fName?.value?.trim() || "",
+      category_id: els.fCategory?.value || null,
+      category_name: categoryName,
+      price: parseFloat(els.fPrice?.value) || 0,
+      weight_g: els.fWeight?.value ? parseInt(els.fWeight.value, 10) : null,
+      unit_cost: els.fUnitCost?.value ? parseFloat(els.fUnitCost.value) : null,
+      shipping_status: els.fShipping?.value?.trim() || null,
+      amazon_url: els.fAmazonUrl?.value?.trim() || null,
+      supplier_url: els.fSupplierUrl?.value?.trim() || null,
+      catalog_image_url: els.fCatalogImg?.value?.trim() || null,
+      catalog_hover_url: els.fHoverImg?.value?.trim() || null,
+      primary_image_url: els.fPrimaryImg?.value?.trim() || null,
+      is_active: !!els.fActive?.checked,
+    },
+    variants,
+    gallery,
+    tags,
+  };
 }

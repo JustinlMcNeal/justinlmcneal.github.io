@@ -250,15 +250,26 @@
             </h3>
           </div>
 
-          <button
-            id="btnClose"
-            type="button"
-            class="border-4 border-black bg-white w-10 h-10 sm:w-10 sm:h-10 flex items-center justify-center font-black text-lg
-                   hover:bg-black hover:text-white transition-colors flex-shrink-0"
-            aria-label="Close"
-          >
-            ✕
-          </button>
+          <div class="flex items-center gap-2">
+            <button
+              id="btnCopyJson"
+              type="button"
+              class="border-4 border-black bg-white px-3 py-1.5 font-black uppercase tracking-[.1em] text-[9px]
+                     hover:bg-black hover:text-white transition-colors flex-shrink-0 hidden"
+              title="Copy product as JSON"
+            >
+              📋 Copy JSON
+            </button>
+            <button
+              id="btnClose"
+              type="button"
+              class="border-4 border-black bg-white w-10 h-10 sm:w-10 sm:h-10 flex items-center justify-center font-black text-lg
+                     hover:bg-black hover:text-white transition-colors flex-shrink-0"
+              aria-label="Close"
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
         <!-- Body -->

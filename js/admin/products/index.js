@@ -56,6 +56,7 @@ async function boot() {
     modal: $("modal"),
     modalTitle: $("modalTitle"),
     btnClose: $("btnClose"),
+    btnCopyJson: $("btnCopyJson"),
     btnSave: $("btnSave"),
     btnDelete: $("btnDelete"),
     btnHardDelete: $("btnHardDelete"),
