@@ -239,10 +239,12 @@ async function getTopPerformingCaptions(category, limit = 5) {
       .from('social_posts')
       .select(`
         caption,
-        metrics,
+        likes,
+        comments,
+        saves,
         product:products(category_id, categories(name))
       `)
-      .not('metrics', 'is', null)
+      .not('likes', 'is', null)
       .not('caption', 'is', null)
       .order('created_at', { ascending: false })
       .limit(50);
@@ -252,10 +254,10 @@ async function getTopPerformingCaptions(category, limit = 5) {
     
     // Filter and sort by engagement
     const withEngagement = (data || [])
-      .filter(p => p.caption && p.metrics)
+      .filter(p => p.caption && (p.likes !== null || p.comments !== null))
       .map(p => ({
         caption: p.caption,
-        engagement: (p.metrics.likes || 0) + (p.metrics.comments || 0) * 3 + (p.metrics.saves || 0) * 5,
+        engagement: (p.likes || 0) + (p.comments || 0) * 3 + (p.saves || 0) * 5,
         category: p.product?.categories?.name
       }))
       .sort((a, b) => b.engagement - a.engagement);

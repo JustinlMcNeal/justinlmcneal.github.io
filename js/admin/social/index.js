@@ -1847,17 +1847,19 @@ function analyzeImageForCrops(srcWidth, srcHeight, srcRatio) {
  */
 async function loadStep2Insights() {
   try {
+    const client = getClient();
+    
     // Fetch format performance from learning patterns
-    const { data: patterns } = await supabase
+    const { data: patterns } = await client
       .from('post_learning_patterns')
       .select('*')
       .in('pattern_key', ['best_format', 'portrait_performance', 'vertical_performance', 'carousel_engagement']);
     
     // Fetch actual post stats by format if available
-    const { data: formatStats } = await supabase
+    const { data: formatStats } = await client
       .from('social_posts')
-      .select('variation_type, platform')
-      .not('metrics', 'is', null);
+      .select('variation_type, platform, likes, comments, saves')
+      .not('likes', 'is', null);
     
     // Calculate format insights
     let insights = [];
@@ -3642,6 +3644,11 @@ async function regenerateCarouselCaption() {
   console.log("[Carousel] Regenerating caption, tone:", state.carousel.tone, "productId:", state.carousel.productId);
   const product = state.products.find(p => p.id === state.carousel.productId);
   
+  // Load recommended tone based on category
+  if (product) {
+    await loadCarouselRecommendedTone(product);
+  }
+  
   if (!product) {
     console.log("[Carousel] No product selected, using default caption");
     document.getElementById("carouselCaption").value = "Check out our latest carousel! 📸✨ Swipe through to see more!\n\nShop now at karrykraze.com";
@@ -3675,6 +3682,70 @@ async function regenerateCarouselCaption() {
   } catch (err) {
     console.error("[Carousel] Failed to generate caption:", err);
     document.getElementById("carouselCaption").value = "📸 Swipe to see more! ➡️\n\nCheck out " + (product.name || "this amazing product") + "!\n\nShop now at karrykraze.com";
+  }
+}
+
+/**
+ * Load and display recommended tone for carousel based on category insights
+ */
+async function loadCarouselRecommendedTone(product) {
+  try {
+    const category = product.category?.name || state.categories.find(c => c.id === product.category_id)?.name;
+    
+    if (!category) return;
+    
+    const insights = await getCategoryInsights(category);
+    
+    if (insights?.caption_strategy?.tone_that_works) {
+      const recommendedTone = insights.caption_strategy.tone_that_works.toLowerCase();
+      
+      // Map AI tone to our tone options
+      const toneMap = {
+        "playful": "playful",
+        "fun": "playful",
+        "casual": "casual",
+        "friendly": "casual",
+        "urgent": "urgency",
+        "urgency": "urgency",
+        "professional": "professional",
+        "minimal": "minimalist",
+        "minimalist": "minimalist",
+        "value": "value",
+        "deal": "value",
+        "trending": "trending",
+        "inspirational": "inspirational",
+        "inspiring": "inspirational"
+      };
+      
+      const mappedTone = toneMap[recommendedTone] || null;
+      
+      if (mappedTone) {
+        // Show recommendation message
+        const recEl = document.getElementById("carouselToneRecommendation");
+        const recToneEl = document.getElementById("carouselRecommendedTone");
+        if (recEl && recToneEl) {
+          recToneEl.textContent = `${recommendedTone} tone works best for ${category}`;
+          recEl.classList.remove("hidden");
+        }
+        
+        // Highlight the recommended button
+        document.querySelectorAll(".carousel-tone-btn").forEach(btn => {
+          if (btn.dataset.carouselTone === mappedTone) {
+            btn.classList.add("ring-2", "ring-purple-500", "ring-offset-1");
+            if (!btn.querySelector(".carousel-ai-badge")) {
+              btn.insertAdjacentHTML("beforeend", `<span class="carousel-ai-badge ml-1 text-[10px] bg-purple-500 text-white px-1 rounded">AI</span>`);
+            }
+          } else {
+            btn.classList.remove("ring-2", "ring-purple-500", "ring-offset-1");
+            btn.querySelector(".carousel-ai-badge")?.remove();
+          }
+        });
+        
+        console.log(`[Carousel] AI recommends "${mappedTone}" for ${category} category`);
+      }
+    }
+  } catch (err) {
+    console.warn("[Carousel] Failed to load recommended tone:", err);
   }
 }
 
