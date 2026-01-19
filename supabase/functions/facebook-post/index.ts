@@ -84,13 +84,9 @@ Deno.serve(async (req) => {
       access_token: pageToken
     };
 
-    // Build caption with optional link
-    let fullCaption = caption || "";
-    if (linkUrl) {
-      fullCaption += `\n\n🛒 Shop now: ${linkUrl}`;
-    }
-    if (fullCaption) {
-      postBody.caption = fullCaption;
+    // Caption WITHOUT link (link goes in first comment for better reach)
+    if (caption) {
+      postBody.caption = caption;
     }
 
     const postResp = await fetch(postUrl, {
@@ -124,6 +120,29 @@ Deno.serve(async (req) => {
 
     console.log("Facebook post created:", postResult);
 
+    // Add link as first comment (better for algorithm)
+    let commentId = null;
+    if (linkUrl && postResult.post_id) {
+      try {
+        const commentUrl = `https://graph.facebook.com/v18.0/${postResult.post_id}/comments`;
+        const commentResp = await fetch(commentUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: `🛒 Shop now: ${linkUrl}`,
+            access_token: pageToken
+          })
+        });
+        const commentResult = await commentResp.json();
+        if (commentResult.id) {
+          commentId = commentResult.id;
+          console.log("Added shop link as first comment:", commentId);
+        }
+      } catch (commentError) {
+        console.log("Could not add comment (non-fatal):", commentError);
+      }
+    }
+
     // Update post status to posted
     if (postId) {
       await supabase
@@ -141,7 +160,8 @@ Deno.serve(async (req) => {
       JSON.stringify({
         success: true,
         post_id: postResult.post_id || postResult.id,
-        photo_id: postResult.id
+        photo_id: postResult.id,
+        comment_id: commentId
       }),
       { headers: corsHeaders }
     );

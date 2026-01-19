@@ -1763,6 +1763,31 @@
             <input type="time" id="settingPinterestTime" value="12:00" class="border rounded-lg px-3 py-2 text-sm flex-1 sm:flex-none">
           </div>
         </div>
+
+        <!-- Facebook Page Settings -->
+        <div class="border-t pt-3 sm:pt-4">
+          <div class="flex items-center justify-between mb-2 sm:mb-3">
+            <div class="text-[10px] sm:text-xs font-medium text-blue-600 uppercase tracking-wide">Facebook Page</div>
+            <button id="btnLoadPageInfo" class="text-[10px] text-blue-500 hover:underline">Load Current</button>
+          </div>
+          <div class="space-y-2">
+            <div>
+              <label class="block text-[10px] text-gray-500 mb-1">Page Name</label>
+              <input type="text" id="settingPageName" placeholder="KarryKraze" class="w-full border rounded-lg px-3 py-2 text-sm bg-gray-50" readonly>
+            </div>
+            <div>
+              <label class="block text-[10px] text-gray-500 mb-1">About (shows under cover photo)</label>
+              <textarea id="settingPageAbout" rows="2" placeholder="✨ Unique Bags & Accessories..." class="w-full border rounded-lg px-3 py-2 text-sm"></textarea>
+            </div>
+            <div>
+              <label class="block text-[10px] text-gray-500 mb-1">Description (longer bio)</label>
+              <textarea id="settingPageDescription" rows="3" placeholder="Your full page description..." class="w-full border rounded-lg px-3 py-2 text-sm"></textarea>
+            </div>
+            <button id="btnSavePageInfo" class="w-full py-2 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+              Update Facebook Page
+            </button>
+          </div>
+        </div>
       </div>
       
       <div class="p-3 sm:p-4 border-t flex-shrink-0">

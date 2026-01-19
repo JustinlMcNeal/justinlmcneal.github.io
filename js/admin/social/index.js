@@ -2359,6 +2359,10 @@ function setupSettingsModal() {
     if (e.target === els.settingsModal) closeSettingsModal();
   });
   els.btnSaveSettings?.addEventListener("click", saveSettings);
+  
+  // Facebook Page Settings
+  document.getElementById("btnLoadPageInfo")?.addEventListener("click", loadFacebookPageInfo);
+  document.getElementById("btnSavePageInfo")?.addEventListener("click", saveFacebookPageInfo);
 }
 
 function openSettingsModal() {
@@ -2408,6 +2412,106 @@ async function saveSettings() {
   } catch (err) {
     console.error("Save settings error:", err);
     alert("Failed to save settings");
+  }
+}
+
+// ============================================
+// Facebook Page Settings
+// ============================================
+
+async function loadFacebookPageInfo() {
+  try {
+    const btn = document.getElementById("btnLoadPageInfo");
+    btn.textContent = "Loading...";
+    
+    // Get page token
+    const pageTokenSetting = state.settings.facebook_page_token;
+    const pageIdSetting = state.settings.facebook_page_id;
+    
+    if (!pageTokenSetting?.token || !pageIdSetting?.page_id) {
+      alert("Facebook Page not connected. Please connect Facebook first.");
+      btn.textContent = "Load Current";
+      return;
+    }
+    
+    const pageId = pageIdSetting.page_id;
+    const token = pageTokenSetting.token;
+    
+    // Fetch page info from Facebook
+    const resp = await fetch(`https://graph.facebook.com/v21.0/${pageId}?fields=name,about,description,category&access_token=${token}`);
+    const data = await resp.json();
+    
+    if (data.error) {
+      throw new Error(data.error.message);
+    }
+    
+    // Populate fields
+    document.getElementById("settingPageName").value = data.name || "";
+    document.getElementById("settingPageAbout").value = data.about || "";
+    document.getElementById("settingPageDescription").value = data.description || "";
+    
+    btn.textContent = "Load Current";
+    console.log("Loaded Facebook page info:", data);
+  } catch (err) {
+    console.error("Load page info error:", err);
+    alert("Failed to load: " + err.message);
+    document.getElementById("btnLoadPageInfo").textContent = "Load Current";
+  }
+}
+
+async function saveFacebookPageInfo() {
+  try {
+    const btn = document.getElementById("btnSavePageInfo");
+    btn.textContent = "Saving...";
+    btn.disabled = true;
+    
+    // Get page token
+    const pageTokenSetting = state.settings.facebook_page_token;
+    const pageIdSetting = state.settings.facebook_page_id;
+    
+    if (!pageTokenSetting?.token || !pageIdSetting?.page_id) {
+      alert("Facebook Page not connected.");
+      btn.textContent = "Update Facebook Page";
+      btn.disabled = false;
+      return;
+    }
+    
+    const pageId = pageIdSetting.page_id;
+    const token = pageTokenSetting.token;
+    
+    const about = document.getElementById("settingPageAbout").value.trim();
+    const description = document.getElementById("settingPageDescription").value.trim();
+    
+    // Update page info via Graph API
+    const params = new URLSearchParams();
+    params.append("access_token", token);
+    if (about) params.append("about", about);
+    if (description) params.append("description", description);
+    
+    const resp = await fetch(`https://graph.facebook.com/v21.0/${pageId}`, {
+      method: "POST",
+      body: params
+    });
+    
+    const result = await resp.json();
+    
+    if (result.error) {
+      throw new Error(result.error.message);
+    }
+    
+    btn.textContent = "✓ Updated!";
+    setTimeout(() => {
+      btn.textContent = "Update Facebook Page";
+      btn.disabled = false;
+    }, 2000);
+    
+    console.log("Updated Facebook page info:", result);
+  } catch (err) {
+    console.error("Save page info error:", err);
+    alert("Failed to update: " + err.message);
+    const btn = document.getElementById("btnSavePageInfo");
+    btn.textContent = "Update Facebook Page";
+    btn.disabled = false;
   }
 }
 
