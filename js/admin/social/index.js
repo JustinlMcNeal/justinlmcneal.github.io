@@ -2425,7 +2425,7 @@ async function saveSettings() {
 async function loadFacebookPageInfo() {
   try {
     const btn = document.getElementById("btnLoadPageInfo");
-    btn.textContent = "Loading...";
+    btn.innerHTML = '<svg class="w-3 h-3 animate-spin" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Loading...';
     
     // Get page token
     const pageTokenSetting = state.settings.facebook_page_token;
@@ -2433,7 +2433,7 @@ async function loadFacebookPageInfo() {
     
     if (!pageTokenSetting?.token || !pageIdSetting?.page_id) {
       alert("Facebook Page not connected. Please connect Facebook first.");
-      btn.textContent = "Load Current";
+      btn.innerHTML = '<svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Refresh';
       return;
     }
     
@@ -2448,24 +2448,30 @@ async function loadFacebookPageInfo() {
       throw new Error(data.error.message);
     }
     
-    // Populate fields
-    document.getElementById("settingPageName").value = data.name || "";
+    // Populate preview fields
+    const pageName = data.name || "Your Page";
+    document.getElementById("settingPageName").textContent = pageName;
+    document.getElementById("settingFbCategory").textContent = data.category || "Business";
+    document.getElementById("settingFbInitials").textContent = pageName.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
+    
+    // Populate editable fields
     document.getElementById("settingPageAbout").value = data.about || "";
     document.getElementById("settingPageDescription").value = data.description || "";
     
-    btn.textContent = "Load Current";
+    btn.innerHTML = '<svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Refresh';
     console.log("Loaded Facebook page info:", data);
   } catch (err) {
     console.error("Load page info error:", err);
     alert("Failed to load: " + err.message);
-    document.getElementById("btnLoadPageInfo").textContent = "Load Current";
+    document.getElementById("btnLoadPageInfo").innerHTML = '<svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Refresh';
   }
 }
 
 async function saveFacebookPageInfo() {
   try {
     const btn = document.getElementById("btnSavePageInfo");
-    btn.textContent = "Saving...";
+    const originalHTML = btn.innerHTML;
+    btn.innerHTML = '<svg class="w-3.5 h-3.5 animate-spin inline mr-1" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Saving...';
     btn.disabled = true;
     
     // Get page token
@@ -2474,7 +2480,7 @@ async function saveFacebookPageInfo() {
     
     if (!pageTokenSetting?.token || !pageIdSetting?.page_id) {
       alert("Facebook Page not connected.");
-      btn.textContent = "Update Facebook Page";
+      btn.innerHTML = originalHTML;
       btn.disabled = false;
       return;
     }
@@ -2502,9 +2508,14 @@ async function saveFacebookPageInfo() {
       throw new Error(result.error.message);
     }
     
-    btn.textContent = "✓ Updated!";
+    btn.innerHTML = '<svg class="w-3.5 h-3.5 inline mr-1" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg> Updated!';
+    btn.classList.remove("bg-blue-600", "hover:bg-blue-700");
+    btn.classList.add("bg-green-600");
+    
     setTimeout(() => {
-      btn.textContent = "Update Facebook Page";
+      btn.innerHTML = originalHTML;
+      btn.classList.remove("bg-green-600");
+      btn.classList.add("bg-blue-600", "hover:bg-blue-700");
       btn.disabled = false;
     }, 2000);
     
@@ -2513,7 +2524,7 @@ async function saveFacebookPageInfo() {
     console.error("Save page info error:", err);
     alert("Failed to update: " + err.message);
     const btn = document.getElementById("btnSavePageInfo");
-    btn.textContent = "Update Facebook Page";
+    btn.innerHTML = '<svg class="w-3.5 h-3.5 inline mr-1" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg> Update Facebook Page';
     btn.disabled = false;
   }
 }
@@ -2525,7 +2536,7 @@ async function saveFacebookPageInfo() {
 async function loadInstagramProfileInfo() {
   try {
     const btn = document.getElementById("btnLoadInstagramInfo");
-    btn.textContent = "Loading...";
+    btn.innerHTML = '<svg class="w-3 h-3 animate-spin" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Loading...';
     
     // Get Instagram user ID and token
     const igUserIdSetting = state.settings.instagram_user_id;
@@ -2533,7 +2544,7 @@ async function loadInstagramProfileInfo() {
     
     if (!igUserIdSetting?.user_id || !igTokenSetting?.token) {
       alert("Instagram not connected. Please connect Instagram first.");
-      btn.textContent = "Load Profile";
+      btn.innerHTML = '<svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Refresh';
       return;
     }
     
@@ -2548,26 +2559,29 @@ async function loadInstagramProfileInfo() {
       throw new Error(data.error.message);
     }
     
-    // Populate fields
+    // Populate avatar
     const avatar = document.getElementById("settingIgAvatar");
+    const placeholder = document.getElementById("settingIgAvatarPlaceholder");
     if (data.profile_picture_url) {
       avatar.src = data.profile_picture_url;
       avatar.classList.remove("hidden");
+      if (placeholder) placeholder.classList.add("hidden");
     }
     
-    document.getElementById("settingIgName").textContent = data.name || "-";
-    document.getElementById("settingIgUsername").textContent = data.username ? `@${data.username}` : "@-";
+    // Populate fields
+    document.getElementById("settingIgUsername").textContent = data.username ? `@${data.username}` : "@username";
+    document.getElementById("settingIgName").textContent = data.name || "Name";
     document.getElementById("settingIgBio").textContent = data.biography || "(No bio set)";
+    document.getElementById("settingIgPosts").textContent = data.media_count?.toLocaleString() || "-";
     document.getElementById("settingIgFollowers").textContent = data.followers_count?.toLocaleString() || "-";
     document.getElementById("settingIgFollowing").textContent = data.follows_count?.toLocaleString() || "-";
-    document.getElementById("settingIgPosts").textContent = data.media_count?.toLocaleString() || "-";
     
-    btn.textContent = "Load Profile";
+    btn.innerHTML = '<svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Refresh';
     console.log("Loaded Instagram profile info:", data);
   } catch (err) {
     console.error("Load Instagram info error:", err);
     alert("Failed to load: " + err.message);
-    document.getElementById("btnLoadInstagramInfo").textContent = "Load Profile";
+    document.getElementById("btnLoadInstagramInfo").innerHTML = '<svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Refresh';
   }
 }
 
