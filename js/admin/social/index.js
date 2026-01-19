@@ -1283,6 +1283,9 @@ function setupUploadModal() {
   // Regenerate caption
   els.btnRegenerateCaption?.addEventListener("click", regenerateCaption);
   
+  // Setup post counters and engagement score
+  setupPostCounters();
+  
   // Pinterest toggle
   els.postPinterest?.addEventListener("change", () => {
     els.pinterestBoardSelect.classList.toggle("hidden", !els.postPinterest.checked);
@@ -3994,18 +3997,21 @@ function setupCarouselCounters() {
   const captionCountEl = document.getElementById("carouselCaptionCount");
   const hashtagCountEl = document.getElementById("carouselHashtagCount");
   
-  captionEl?.addEventListener("input", () => {
-    const len = captionEl.value.length;
+  // Update counts function
+  const updateCaptionCount = () => {
+    const len = captionEl?.value?.length || 0;
     if (captionCountEl) {
       captionCountEl.textContent = `${len}/2200`;
       captionCountEl.classList.remove("count-warning", "count-error");
       if (len > 2000) captionCountEl.classList.add("count-warning");
       if (len > 2200) captionCountEl.classList.add("count-error");
     }
-  });
+    // Debounce engagement score update
+    debounceCarouselScore();
+  };
   
-  hashtagsEl?.addEventListener("input", () => {
-    const hashtags = hashtagsEl.value.match(/#\w+/g) || [];
+  const updateHashtagCount = () => {
+    const hashtags = hashtagsEl?.value?.match(/#\w+/g) || [];
     const count = hashtags.length;
     if (hashtagCountEl) {
       hashtagCountEl.textContent = `${count}/30 tags`;
@@ -4013,10 +4019,179 @@ function setupCarouselCounters() {
       if (count > 25) hashtagCountEl.classList.add("count-warning");
       if (count > 30) hashtagCountEl.classList.add("count-error");
     }
-  });
+    debounceCarouselScore();
+  };
+  
+  captionEl?.addEventListener("input", updateCaptionCount);
+  hashtagsEl?.addEventListener("input", updateHashtagCount);
+  
+  // Initial count update
+  setTimeout(() => {
+    updateCaptionCount();
+    updateHashtagCount();
+  }, 100);
   
   // AI generate hashtags button
   document.getElementById("btnGenerateCarouselHashtags")?.addEventListener("click", generateCarouselHashtags);
+  
+  // Refresh score button
+  document.getElementById("btnRefreshCarouselScore")?.addEventListener("click", calculateCarouselEngagementScore);
+}
+
+// Debounce for engagement score
+let carouselScoreTimeout = null;
+function debounceCarouselScore() {
+  clearTimeout(carouselScoreTimeout);
+  carouselScoreTimeout = setTimeout(() => {
+    calculateCarouselEngagementScore();
+  }, 1000);
+}
+
+// Calculate engagement prediction score for carousel
+async function calculateCarouselEngagementScore() {
+  const scoreEl = document.getElementById("carouselEngagementScore");
+  const scoreValue = document.getElementById("carouselScoreValue");
+  const scoreLabel = document.getElementById("carouselScoreLabel");
+  const scoreTip = document.getElementById("carouselScoreTip");
+  const scoreContainer = scoreEl?.querySelector(".engagement-score");
+  
+  if (!scoreEl) return;
+  
+  const caption = document.getElementById("carouselCaption")?.value || "";
+  const hashtags = document.getElementById("carouselHashtags")?.value || "";
+  const imageCount = state.carousel.images.length;
+  
+  // Only show if we have some content
+  if (!caption && imageCount === 0) {
+    scoreEl.classList.add("hidden");
+    return;
+  }
+  
+  scoreEl.classList.remove("hidden");
+  scoreValue.textContent = "...";
+  
+  try {
+    // Calculate score based on multiple factors
+    const score = await calculateEngagementScore({
+      caption,
+      hashtags,
+      imageCount,
+      isCarousel: true,
+      productId: state.carousel.productId,
+      scheduleTime: state.carousel.scheduleTime
+    });
+    
+    updateEngagementScoreUI(scoreContainer, scoreValue, scoreLabel, scoreTip, score);
+    
+  } catch (err) {
+    console.error("[Carousel] Score calculation error:", err);
+    scoreValue.textContent = "?";
+    scoreLabel.textContent = "Unable to calculate";
+    scoreTip.textContent = "Try refreshing";
+  }
+}
+
+// Universal engagement score calculation
+async function calculateEngagementScore({ caption, hashtags, imageCount = 1, isCarousel = false, productId, scheduleTime }) {
+  let score = 50; // Base score
+  const tips = [];
+  
+  // Caption length scoring (optimal: 125-150 chars for IG, up to 2200)
+  const captionLen = caption.length;
+  if (captionLen === 0) {
+    score -= 20;
+    tips.push("Add a caption for better engagement");
+  } else if (captionLen >= 100 && captionLen <= 300) {
+    score += 15;
+  } else if (captionLen > 300 && captionLen <= 500) {
+    score += 10;
+  } else if (captionLen > 1000) {
+    score -= 5;
+    tips.push("Long captions may reduce engagement");
+  }
+  
+  // Emoji check
+  const emojiCount = (caption.match(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]/gu) || []).length;
+  if (emojiCount >= 1 && emojiCount <= 5) {
+    score += 8;
+  } else if (emojiCount > 10) {
+    score -= 5;
+    tips.push("Too many emojis can reduce engagement");
+  } else if (emojiCount === 0) {
+    tips.push("Add 1-3 emojis for better visibility");
+  }
+  
+  // Hashtag scoring
+  const hashtagList = hashtags.match(/#\w+/g) || [];
+  const hashtagCount = hashtagList.length;
+  if (hashtagCount === 0) {
+    score -= 15;
+    tips.push("Add hashtags for discoverability");
+  } else if (hashtagCount >= 3 && hashtagCount <= 10) {
+    score += 15;
+  } else if (hashtagCount > 20) {
+    score -= 10;
+    tips.push("Too many hashtags looks spammy");
+  }
+  
+  // Carousel bonus
+  if (isCarousel && imageCount >= 2) {
+    score += 10;
+    if (imageCount >= 5) score += 5;
+  }
+  
+  // CTA check (call to action)
+  const ctaPatterns = /\b(shop|buy|get|grab|check out|link|tap|click|swipe|comment|tag|share|save)\b/i;
+  if (ctaPatterns.test(caption)) {
+    score += 10;
+  } else {
+    tips.push("Add a call-to-action (shop now, link in bio, etc.)");
+  }
+  
+  // Question check (increases comments)
+  if (caption.includes("?")) {
+    score += 5;
+  }
+  
+  // Time scoring (based on learning data if available)
+  if (scheduleTime) {
+    const hour = parseInt(scheduleTime.split(":")[0]);
+    // Peak hours: 5-9 AM, 12-2 PM, 7-9 PM
+    if ((hour >= 5 && hour <= 9) || (hour >= 12 && hour <= 14) || (hour >= 19 && hour <= 21)) {
+      score += 8;
+    }
+  }
+  
+  // Cap score
+  score = Math.max(10, Math.min(100, score));
+  
+  // Get best tip
+  const bestTip = tips.length > 0 ? tips[0] : "Looking good! Ready to post.";
+  
+  return { score, tips, bestTip };
+}
+
+// Update engagement score UI
+function updateEngagementScoreUI(container, valueEl, labelEl, tipEl, { score, bestTip }) {
+  if (!container || !valueEl) return;
+  
+  valueEl.textContent = score;
+  
+  // Remove old classes
+  container.classList.remove("score-low", "score-medium", "score-high");
+  
+  if (score >= 75) {
+    container.classList.add("score-high");
+    labelEl.textContent = "🔥 High Engagement Potential";
+  } else if (score >= 50) {
+    container.classList.add("score-medium");
+    labelEl.textContent = "📈 Good Engagement Potential";
+  } else {
+    container.classList.add("score-low");
+    labelEl.textContent = "⚠️ Low Engagement Potential";
+  }
+  
+  tipEl.textContent = bestTip;
 }
 
 // Generate hashtags using AI
@@ -4069,6 +4244,147 @@ async function generateCarouselHashtags() {
     
   } catch (err) {
     console.error("[Carousel] Failed to generate hashtags:", err);
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }
+}
+
+// Setup counters and engagement score for regular post creation
+function setupPostCounters() {
+  const captionEl = document.getElementById("captionText");
+  const hashtagsEl = document.getElementById("hashtagText");
+  const captionCountEl = document.getElementById("postCaptionCount");
+  const hashtagCountEl = document.getElementById("postHashtagCount");
+  
+  // Update counts function
+  const updateCaptionCount = () => {
+    const len = captionEl?.value?.length || 0;
+    if (captionCountEl) {
+      captionCountEl.textContent = `${len}/2200`;
+      captionCountEl.classList.remove("count-warning", "count-error");
+      if (len > 2000) captionCountEl.classList.add("count-warning");
+      if (len > 2200) captionCountEl.classList.add("count-error");
+    }
+    debouncePostScore();
+  };
+  
+  const updateHashtagCount = () => {
+    const hashtags = hashtagsEl?.value?.match(/#\w+/g) || [];
+    const count = hashtags.length;
+    if (hashtagCountEl) {
+      hashtagCountEl.textContent = `${count}/30 tags`;
+      hashtagCountEl.classList.remove("count-warning", "count-error");
+      if (count > 25) hashtagCountEl.classList.add("count-warning");
+      if (count > 30) hashtagCountEl.classList.add("count-error");
+    }
+    debouncePostScore();
+  };
+  
+  captionEl?.addEventListener("input", updateCaptionCount);
+  hashtagsEl?.addEventListener("input", updateHashtagCount);
+  
+  // AI generate hashtags button
+  document.getElementById("btnGeneratePostHashtags")?.addEventListener("click", generatePostHashtags);
+  
+  // Refresh score button
+  document.getElementById("btnRefreshPostScore")?.addEventListener("click", calculatePostEngagementScore);
+}
+
+// Debounce for post engagement score
+let postScoreTimeout = null;
+function debouncePostScore() {
+  clearTimeout(postScoreTimeout);
+  postScoreTimeout = setTimeout(() => {
+    calculatePostEngagementScore();
+  }, 1000);
+}
+
+// Calculate engagement prediction score for regular post
+async function calculatePostEngagementScore() {
+  const scoreEl = document.getElementById("postEngagementScore");
+  const scoreValue = document.getElementById("postScoreValue");
+  const scoreLabel = document.getElementById("postScoreLabel");
+  const scoreTip = document.getElementById("postScoreTip");
+  const scoreContainer = scoreEl?.querySelector(".engagement-score");
+  
+  if (!scoreEl) return;
+  
+  const caption = document.getElementById("captionText")?.value || "";
+  const hashtags = document.getElementById("hashtagText")?.value || "";
+  const scheduleTime = document.getElementById("scheduleTime")?.value || "12:00";
+  
+  scoreValue.textContent = "...";
+  
+  try {
+    const score = await calculateEngagementScore({
+      caption,
+      hashtags,
+      imageCount: 1,
+      isCarousel: false,
+      productId: state.uploadData?.productId,
+      scheduleTime
+    });
+    
+    updateEngagementScoreUI(scoreContainer, scoreValue, scoreLabel, scoreTip, score);
+    
+  } catch (err) {
+    console.error("[Post] Score calculation error:", err);
+    scoreValue.textContent = "?";
+    scoreLabel.textContent = "Unable to calculate";
+    scoreTip.textContent = "Try refreshing";
+  }
+}
+
+// Generate hashtags for regular post using AI
+async function generatePostHashtags() {
+  const btn = document.getElementById("btnGeneratePostHashtags");
+  const hashtagsEl = document.getElementById("hashtagText");
+  
+  if (!btn || !hashtagsEl) return;
+  
+  const originalText = btn.textContent;
+  btn.textContent = "⏳...";
+  btn.disabled = true;
+  
+  try {
+    const product = state.uploadData?.productId 
+      ? state.products.find(p => p.id === state.uploadData.productId)
+      : null;
+    
+    const category = product?.category_id
+      ? state.categories.find(c => c.id === product.category_id)
+      : null;
+    
+    const productInfo = product ? {
+      name: product.name,
+      category: category?.name || "accessories"
+    } : { name: "fashion item", category: "accessories" };
+    
+    const response = await fetch(`${window.ENV?.SUPABASE_URL}/functions/v1/ai-generate`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${window.ENV?.SUPABASE_ANON_KEY}`
+      },
+      body: JSON.stringify({
+        type: "hashtags",
+        productName: productInfo.name,
+        productCategory: productInfo.category,
+        platform: "instagram"
+      })
+    });
+    
+    const data = await response.json();
+    
+    if (data.hashtags) {
+      hashtagsEl.value = data.hashtags;
+      hashtagsEl.dispatchEvent(new Event("input"));
+      state.uploadData.hashtags = data.hashtags.split(" ");
+    }
+    
+  } catch (err) {
+    console.error("[Post] Failed to generate hashtags:", err);
   } finally {
     btn.textContent = originalText;
     btn.disabled = false;

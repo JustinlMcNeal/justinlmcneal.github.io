@@ -819,17 +819,19 @@
 
 .carousel-slide .cover-badge {
   position: absolute;
-  top: -8px;
+  top: 24px;
   left: 50%;
   transform: translateX(-50%);
   background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%);
   color: white;
-  font-size: 9px;
+  font-size: 8px;
   font-weight: bold;
-  padding: 2px 6px;
+  padding: 2px 5px;
   border-radius: 4px;
   white-space: nowrap;
   z-index: 10;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .carousel-slide .move-buttons {
@@ -877,4 +879,87 @@
 
 .count-error {
   color: #ef4444 !important;
+}
+
+/* Mobile responsive carousel */
+@media (max-width: 640px) {
+  #carouselImages {
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 8px !important;
+  }
+  
+  .carousel-slide .cover-badge {
+    font-size: 7px;
+    padding: 1px 4px;
+    top: 20px;
+  }
+  
+  .carousel-slide .move-buttons {
+    opacity: 1;
+  }
+  
+  .carousel-slide .move-btn {
+    width: 18px;
+    height: 18px;
+    font-size: 10px;
+  }
+  
+  #productImagesGrid {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+  
+  .carousel-tone-btn {
+    padding: 6px 8px !important;
+    font-size: 12px !important;
+  }
+}
+
+/* Engagement Score */
+.engagement-score {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%);
+  border: 1px solid #bbf7d0;
+}
+
+.engagement-score.score-low {
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+  border-color: #fecaca;
+}
+
+.engagement-score.score-medium {
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+  border-color: #fde68a;
+}
+
+.engagement-score.score-high {
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border-color: #86efac;
+}
+
+.engagement-score-circle {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 16px;
+  color: white;
+}
+
+.engagement-score.score-low .engagement-score-circle {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+}
+
+.engagement-score.score-medium .engagement-score-circle {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+}
+
+.engagement-score.score-high .engagement-score-circle {
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
 }
