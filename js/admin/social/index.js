@@ -2363,6 +2363,9 @@ function setupSettingsModal() {
   // Facebook Page Settings
   document.getElementById("btnLoadPageInfo")?.addEventListener("click", loadFacebookPageInfo);
   document.getElementById("btnSavePageInfo")?.addEventListener("click", saveFacebookPageInfo);
+  
+  // Instagram Profile Settings
+  document.getElementById("btnLoadInstagramInfo")?.addEventListener("click", loadInstagramProfileInfo);
 }
 
 function openSettingsModal() {
@@ -2512,6 +2515,59 @@ async function saveFacebookPageInfo() {
     const btn = document.getElementById("btnSavePageInfo");
     btn.textContent = "Update Facebook Page";
     btn.disabled = false;
+  }
+}
+
+// ============================================
+// Instagram Profile Settings
+// ============================================
+
+async function loadInstagramProfileInfo() {
+  try {
+    const btn = document.getElementById("btnLoadInstagramInfo");
+    btn.textContent = "Loading...";
+    
+    // Get Instagram user ID and token
+    const igUserIdSetting = state.settings.instagram_user_id;
+    const igTokenSetting = state.settings.instagram_access_token;
+    
+    if (!igUserIdSetting?.user_id || !igTokenSetting?.token) {
+      alert("Instagram not connected. Please connect Instagram first.");
+      btn.textContent = "Load Profile";
+      return;
+    }
+    
+    const userId = igUserIdSetting.user_id;
+    const token = igTokenSetting.token;
+    
+    // Fetch profile info from Instagram Graph API
+    const resp = await fetch(`https://graph.facebook.com/v21.0/${userId}?fields=username,name,biography,profile_picture_url,followers_count,follows_count,media_count&access_token=${token}`);
+    const data = await resp.json();
+    
+    if (data.error) {
+      throw new Error(data.error.message);
+    }
+    
+    // Populate fields
+    const avatar = document.getElementById("settingIgAvatar");
+    if (data.profile_picture_url) {
+      avatar.src = data.profile_picture_url;
+      avatar.classList.remove("hidden");
+    }
+    
+    document.getElementById("settingIgName").textContent = data.name || "-";
+    document.getElementById("settingIgUsername").textContent = data.username ? `@${data.username}` : "@-";
+    document.getElementById("settingIgBio").textContent = data.biography || "(No bio set)";
+    document.getElementById("settingIgFollowers").textContent = data.followers_count?.toLocaleString() || "-";
+    document.getElementById("settingIgFollowing").textContent = data.follows_count?.toLocaleString() || "-";
+    document.getElementById("settingIgPosts").textContent = data.media_count?.toLocaleString() || "-";
+    
+    btn.textContent = "Load Profile";
+    console.log("Loaded Instagram profile info:", data);
+  } catch (err) {
+    console.error("Load Instagram info error:", err);
+    alert("Failed to load: " + err.message);
+    document.getElementById("btnLoadInstagramInfo").textContent = "Load Profile";
   }
 }
 

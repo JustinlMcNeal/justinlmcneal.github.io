@@ -1745,9 +1745,33 @@
             <span class="text-xs sm:text-sm">Enabled</span>
             <input type="checkbox" id="settingInstagramEnabled" checked class="w-5 h-5">
           </div>
-          <div class="flex items-center gap-2 sm:gap-3">
+          <div class="flex items-center gap-2 sm:gap-3 mb-3">
             <span class="text-xs sm:text-sm">Post time</span>
             <input type="time" id="settingInstagramTime" value="12:00" class="border rounded-lg px-3 py-2 text-sm flex-1 sm:flex-none">
+          </div>
+          
+          <!-- Instagram Profile Info -->
+          <div class="bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg p-3 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-[10px] text-gray-500 uppercase">Profile Info</span>
+              <button id="btnLoadInstagramInfo" class="text-[10px] text-instagram hover:underline">Load Profile</button>
+            </div>
+            <div class="flex items-center gap-3">
+              <img id="settingIgAvatar" src="" class="w-10 h-10 rounded-full bg-gray-200 hidden">
+              <div class="flex-1">
+                <div id="settingIgName" class="text-sm font-bold text-gray-800">-</div>
+                <div id="settingIgUsername" class="text-xs text-gray-500">@-</div>
+              </div>
+            </div>
+            <div id="settingIgBio" class="text-xs text-gray-600 italic">-</div>
+            <div class="flex gap-4 text-[10px] text-gray-500">
+              <span><strong id="settingIgFollowers">-</strong> followers</span>
+              <span><strong id="settingIgFollowing">-</strong> following</span>
+              <span><strong id="settingIgPosts">-</strong> posts</span>
+            </div>
+            <a href="https://www.instagram.com/accounts/edit/" target="_blank" class="block text-center text-[10px] text-instagram hover:underline mt-2">
+              ✏️ Edit profile on Instagram →
+            </a>
           </div>
         </div>
         
