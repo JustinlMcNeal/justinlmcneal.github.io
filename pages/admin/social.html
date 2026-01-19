@@ -1213,6 +1213,30 @@
                   <button id="btnClearCarouselProduct" class="text-purple-500 hover:text-purple-700">✕</button>
                 </div>
                 <input type="hidden" id="carouselProductId" value="">
+                
+                <!-- Product Images Section (shows when product selected) -->
+                <div id="carouselProductImages" class="hidden mt-4 p-4 bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl border border-purple-100">
+                  <div class="flex items-center justify-between mb-3">
+                    <div>
+                      <label class="text-sm font-medium text-gray-700">📸 Product Images</label>
+                      <p class="text-xs text-gray-500">Click images to add to carousel</p>
+                    </div>
+                    <button id="btnAddAllProductImages" class="text-xs font-medium text-purple-600 hover:text-purple-800 px-2 py-1 bg-white rounded-lg border border-purple-200 hover:border-purple-300 transition-colors">
+                      Add All
+                    </button>
+                  </div>
+                  <div id="productImagesSuggestion" class="hidden mb-3 p-2 bg-white rounded-lg border border-purple-200">
+                    <p class="text-xs text-purple-700">🧠 <span id="productImagesSuggestionText"></span></p>
+                  </div>
+                  <div id="productImagesGrid" class="grid grid-cols-4 gap-2">
+                    <!-- Populated by JS -->
+                  </div>
+                  <p id="productImagesEmpty" class="hidden text-center text-sm text-gray-400 py-4">No product images found</p>
+                  <p id="productImagesLoading" class="hidden text-center text-sm text-gray-400 py-4">
+                    <span class="inline-block w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin mr-2"></span>
+                    Loading images...
+                  </p>
+                </div>
               </div>
 
               <!-- Caption Tone -->

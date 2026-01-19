@@ -97,8 +97,9 @@ const state = {
   autoQueuePreview: null,
   // Carousel state
   carousel: {
-    images: [],       // Array of { file, previewUrl, uploadedUrl }
+    images: [],       // Array of { file, previewUrl, uploadedUrl, productGalleryUrl }
     productId: null,
+    productGalleryImages: [], // Images from selected product for quick selection
     tone: "casual",
     caption: "",
     hashtags: "",
@@ -3468,6 +3469,8 @@ function showCarouselProductDropdown(searchQuery = "") {
       if (productSearch) productSearch.value = "";
       productDropdown?.classList.add("hidden");
       regenerateCarouselCaption();
+      // Load and display product images
+      loadCarouselProductImages(opt.dataset.id);
     });
   });
 }
@@ -3480,6 +3483,14 @@ function setupCarouselProductClear() {
     state.carousel.productId = null;
     document.getElementById("carouselProductId").value = "";
     document.getElementById("carouselSelectedProduct").classList.add("hidden");
+    // Hide product images section
+    document.getElementById("carouselProductImages")?.classList.add("hidden");
+    state.carousel.productGalleryImages = [];
+  });
+  
+  // Add all product images button
+  document.getElementById("btnAddAllProductImages")?.addEventListener("click", () => {
+    addAllProductImagesToCarousel();
   });
   
   // Caption input
@@ -3500,6 +3511,219 @@ function setupCarouselProductClear() {
   document.getElementById("carouselScheduleTime")?.addEventListener("change", (e) => {
     state.carousel.scheduleTime = e.target.value;
   });
+}
+
+// Load and display product images for carousel selection
+async function loadCarouselProductImages(productId) {
+  const container = document.getElementById("carouselProductImages");
+  const grid = document.getElementById("productImagesGrid");
+  const loading = document.getElementById("productImagesLoading");
+  const empty = document.getElementById("productImagesEmpty");
+  const suggestion = document.getElementById("productImagesSuggestion");
+  
+  if (!container || !grid) return;
+  
+  // Show container and loading
+  container.classList.remove("hidden");
+  loading?.classList.remove("hidden");
+  empty?.classList.add("hidden");
+  suggestion?.classList.add("hidden");
+  grid.innerHTML = "";
+  
+  try {
+    // Fetch product gallery images
+    const galleryImages = await fetchProductGalleryImages(productId);
+    
+    // Also get the product to get the main catalog image
+    const product = state.products.find(p => p.id === productId);
+    const allImages = [];
+    
+    // Add main catalog image first if it exists
+    if (product?.catalog_image_url) {
+      allImages.push({
+        id: 'main',
+        url: product.catalog_image_url,
+        position: 0,
+        isMain: true
+      });
+    }
+    
+    // Add gallery images
+    galleryImages.forEach(img => {
+      allImages.push({
+        id: img.id,
+        url: img.url,
+        position: img.position + 1,
+        isMain: false
+      });
+    });
+    
+    loading?.classList.add("hidden");
+    
+    if (allImages.length === 0) {
+      empty?.classList.remove("hidden");
+      return;
+    }
+    
+    // Store in state for reference
+    state.carousel.productGalleryImages = allImages;
+    
+    // Generate AI suggestion (simple heuristics, not vision API)
+    const suggestionText = generateImageSuggestion(allImages, state.carousel.images.length);
+    if (suggestionText) {
+      document.getElementById("productImagesSuggestionText").textContent = suggestionText;
+      suggestion?.classList.remove("hidden");
+    }
+    
+    // Render image grid
+    renderCarouselProductImages(allImages);
+    
+  } catch (err) {
+    console.error("[Carousel] Error loading product images:", err);
+    loading?.classList.add("hidden");
+    empty?.classList.remove("hidden");
+  }
+}
+
+// Generate a simple AI-like suggestion based on heuristics
+function generateImageSuggestion(images, currentCarouselCount) {
+  const remaining = 10 - currentCarouselCount;
+  
+  if (images.length === 0) return null;
+  
+  if (images.length <= 3) {
+    return `Use all ${images.length} images for a complete product showcase!`;
+  }
+  
+  if (remaining <= 0) {
+    return "Carousel is full! Remove some images to add more.";
+  }
+  
+  const suggested = Math.min(remaining, Math.min(5, images.length));
+  
+  // Different suggestions based on image count
+  if (images.length >= 6) {
+    return `Start with the main image + ${suggested - 1} variety shots for best engagement.`;
+  }
+  
+  return `Add the main image + ${Math.min(suggested - 1, images.length - 1)} angles for a complete look!`;
+}
+
+// Render product images in the selection grid
+function renderCarouselProductImages(images) {
+  const grid = document.getElementById("productImagesGrid");
+  if (!grid) return;
+  
+  // Check which URLs are already in carousel
+  const existingUrls = new Set(
+    state.carousel.images
+      .filter(img => img.productGalleryUrl)
+      .map(img => img.productGalleryUrl)
+  );
+  
+  grid.innerHTML = images.map((img, idx) => {
+    const isSelected = existingUrls.has(img.url);
+    const position = isSelected ? getCarouselPositionForUrl(img.url) : null;
+    
+    return `
+      <div class="carousel-product-img ${isSelected ? 'selected' : ''} ${idx === 0 ? 'ai-suggested' : ''}" 
+           data-url="${img.url}" 
+           data-id="${img.id}"
+           data-is-main="${img.isMain}">
+        <img src="${img.url}" alt="Product image ${idx + 1}" loading="lazy">
+        <div class="check-overlay">
+          <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+          </svg>
+        </div>
+        ${position !== null ? `<span class="position-badge">#${position + 1}</span>` : ''}
+        ${img.isMain ? '<span class="absolute top-1 left-1 text-xs bg-purple-600 text-white px-1 rounded">Main</span>' : ''}
+      </div>
+    `;
+  }).join("");
+  
+  // Add click handlers
+  grid.querySelectorAll(".carousel-product-img").forEach(el => {
+    el.addEventListener("click", () => toggleProductImageInCarousel(el));
+  });
+}
+
+// Get carousel position for a URL
+function getCarouselPositionForUrl(url) {
+  return state.carousel.images.findIndex(img => img.productGalleryUrl === url);
+}
+
+// Toggle product image in/out of carousel
+async function toggleProductImageInCarousel(element) {
+  const url = element.dataset.url;
+  const isSelected = element.classList.contains("selected");
+  
+  if (isSelected) {
+    // Remove from carousel
+    const idx = state.carousel.images.findIndex(img => img.productGalleryUrl === url);
+    if (idx !== -1) {
+      // Revoke object URL if exists
+      if (state.carousel.images[idx].previewUrl && !state.carousel.images[idx].productGalleryUrl) {
+        URL.revokeObjectURL(state.carousel.images[idx].previewUrl);
+      }
+      state.carousel.images.splice(idx, 1);
+    }
+  } else {
+    // Add to carousel
+    if (state.carousel.images.length >= 10) {
+      alert("Maximum 10 images allowed in a carousel");
+      return;
+    }
+    
+    state.carousel.images.push({
+      file: null,
+      previewUrl: url,
+      uploadedUrl: url, // Already uploaded
+      productGalleryUrl: url // Mark as from product gallery
+    });
+  }
+  
+  // Update both UIs
+  updateCarouselUI();
+  renderCarouselProductImages(state.carousel.productGalleryImages);
+}
+
+// Add all product images to carousel
+function addAllProductImagesToCarousel() {
+  const images = state.carousel.productGalleryImages || [];
+  const remaining = 10 - state.carousel.images.length;
+  
+  if (remaining <= 0) {
+    alert("Carousel is full (10 images max)");
+    return;
+  }
+  
+  // Get URLs already in carousel
+  const existingUrls = new Set(
+    state.carousel.images
+      .filter(img => img.productGalleryUrl)
+      .map(img => img.productGalleryUrl)
+  );
+  
+  // Add images not already in carousel
+  let added = 0;
+  for (const img of images) {
+    if (added >= remaining) break;
+    if (existingUrls.has(img.url)) continue;
+    
+    state.carousel.images.push({
+      file: null,
+      previewUrl: img.url,
+      uploadedUrl: img.url,
+      productGalleryUrl: img.url
+    });
+    added++;
+  }
+  
+  if (added > 0) {
+    updateCarouselUI();
+    renderCarouselProductImages(state.carousel.productGalleryImages);
+  }
 }
 
 async function handleCarouselFiles(files) {
@@ -3595,12 +3819,13 @@ function resetCarouselBuilder() {
   
   // Clear existing images
   state.carousel.images.forEach(img => {
-    if (img.previewUrl) URL.revokeObjectURL(img.previewUrl);
+    if (img.previewUrl && !img.productGalleryUrl) URL.revokeObjectURL(img.previewUrl);
   });
   
   state.carousel = {
     images: [],
     productId: null,
+    productGalleryImages: [],
     tone: "casual",
     caption: "",
     hashtags: "",
@@ -3619,6 +3844,7 @@ function resetCarouselBuilder() {
   const searchEl = document.getElementById("carouselProductSearch");
   const selectedEl = document.getElementById("carouselSelectedProduct");
   const fileEl = document.getElementById("carouselFileInput");
+  const productImagesEl = document.getElementById("carouselProductImages");
   
   if (schedDateEl) schedDateEl.value = tomorrow.toISOString().split("T")[0];
   if (schedTimeEl) schedTimeEl.value = "12:00";
@@ -3626,6 +3852,7 @@ function resetCarouselBuilder() {
   if (hashtagsEl) hashtagsEl.value = "#karrykraze #carousel #fashion";
   if (searchEl) searchEl.value = "";
   if (selectedEl) selectedEl.classList.add("hidden");
+  if (productImagesEl) productImagesEl.classList.add("hidden");
   if (fileEl) fileEl.value = "";
   
   // Reset tone buttons
