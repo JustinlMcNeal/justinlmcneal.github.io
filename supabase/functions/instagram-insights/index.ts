@@ -210,17 +210,32 @@ serve(async (req) => {
         const insightsData: MediaInsightsResponse = await insightsResp.json();
         
         // Log insights errors (but don't fail - some media types don't support all metrics)
+        // Note: Error code 10 means "Application does not have permission" - needs instagram_manage_insights
+        let hasInsightsPermission = true;
         if (insightsData.error) {
-          console.warn(`Insights API error for ${mediaId}:`, insightsData.error.message);
-          // Try fetching Reels metrics if standard insights fail
-          const reelsMetrics = "plays,reach,saved,shares";
-          const reelsResp = await fetch(
-            `https://graph.facebook.com/v18.0/${mediaId}/insights?metric=${reelsMetrics}&access_token=${accessToken}`
-          );
-          const reelsData: MediaInsightsResponse = await reelsResp.json();
-          if (!reelsData.error && reelsData.data) {
-            console.log(`Using Reels metrics for ${mediaId}`);
-            insightsData.data = reelsData.data;
+          const errorCode = insightsData.error.code;
+          const errorMsg = insightsData.error.message || "";
+          
+          // Check if this is a permission error (code 10 or permission message)
+          if (errorCode === 10 || errorMsg.includes("does not have permission")) {
+            console.warn(`No insights permission for ${mediaId}: ${errorMsg}`);
+            hasInsightsPermission = false;
+            // We can still save likes/comments from basic API, just skip impressions/reach/saves
+          } else {
+            console.warn(`Insights API error for ${mediaId}:`, errorMsg);
+            // Try fetching Reels metrics if standard insights fail
+            const reelsMetrics = "plays,reach,saved,shares";
+            const reelsResp = await fetch(
+              `https://graph.facebook.com/v18.0/${mediaId}/insights?metric=${reelsMetrics}&access_token=${accessToken}`
+            );
+            const reelsData: MediaInsightsResponse = await reelsResp.json();
+            if (!reelsData.error && reelsData.data) {
+              console.log(`Using Reels metrics for ${mediaId}`);
+              insightsData.data = reelsData.data;
+            } else if (reelsData.error?.code === 10) {
+              hasInsightsPermission = false;
+              console.warn(`No Reels insights permission for ${mediaId}`);
+            }
           }
         }
 
