@@ -10,6 +10,25 @@ export const els = {
   btnExportShipReady: document.getElementById("btnExportShipReady"),
   btnImportPirateShip: document.getElementById("btnImportPirateShip"),
 
+  // Amazon import elements
+  btnImportAmazon: document.getElementById("btnImportAmazon"),
+  amazonPreviewPanel: document.getElementById("amazonPreviewPanel"),
+  amzFileName: document.getElementById("amzFileName"),
+  amzTotalRows: document.getElementById("amzTotalRows"),
+  amzValidCount: document.getElementById("amzValidCount"),
+  amzCancelledWrap: document.getElementById("amzCancelledWrap"),
+  amzCancelledCount: document.getElementById("amzCancelledCount"),
+  amzConfirmBtn: document.getElementById("amzConfirmBtn"),
+  amzCancelBtn: document.getElementById("amzCancelBtn"),
+  amazonResultPanel: document.getElementById("amazonResultPanel"),
+  amzOrdersCount: document.getElementById("amzOrdersCount"),
+  amzLineItemsCount: document.getElementById("amzLineItemsCount"),
+  amzRevenue: document.getElementById("amzRevenue"),
+  amzSkippedCount: document.getElementById("amzSkippedCount"),
+  amzBreakdownWrap: document.getElementById("amzBreakdownWrap"),
+  amzUnmappedWrap: document.getElementById("amzUnmappedWrap"),
+  amzResultClose: document.getElementById("amzResultClose"),
+
   // import preview panel (confirm before import)
   importPreviewPanel: document.getElementById("importPreviewPanel"),
   importFileName: document.getElementById("importFileName"),
@@ -69,6 +88,19 @@ export function wireDomHelpers() {
   if (els.importResultClose) {
     els.importResultClose.addEventListener("click", () => {
       if (els.importResultPanel) els.importResultPanel.classList.add("hidden");
+    });
+  }
+
+  // Wire close/cancel for Amazon import panels
+  if (els.amzResultClose) {
+    els.amzResultClose.addEventListener("click", () => {
+      if (els.amazonResultPanel) els.amazonResultPanel.classList.add("hidden");
+    });
+  }
+  if (els.amzCancelBtn) {
+    els.amzCancelBtn.addEventListener("click", () => {
+      if (els.amazonPreviewPanel) els.amazonPreviewPanel.classList.add("hidden");
+      setStatus("Amazon import canceled.");
     });
   }
   

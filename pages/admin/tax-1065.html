@@ -1,0 +1,1150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Admin · 1065 Prep — Justice McNeal LLC</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>tailwind.config={theme:{extend:{colors:{kkpink:'#ff69b4'}}}}</script>
+<link rel="stylesheet" href="/css/theme/base.css"/>
+<link rel="stylesheet" href="/css/theme/components.css"/>
+<style>
+/* ── Screen Styles ─────────────────────────── */
+*{box-sizing:border-box}
+body{font-family:system-ui,-apple-system,sans-serif;background:#f9fafb}
+.pkt-section{background:#fff;border:1px solid #e5e7eb;border-radius:1rem;overflow:hidden;margin-bottom:1.5rem;box-shadow:0 2px 10px rgba(0,0,0,.04)}
+.pkt-head{padding:1rem 1.25rem;border-bottom:3px solid #000;background:#fafafa;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem}
+.pkt-head h2{font-weight:900;font-size:1.15rem;text-transform:uppercase;letter-spacing:.08em;margin:0}
+.pkt-head .sch-ref{font-size:.7rem;color:#9ca3af;font-weight:700;letter-spacing:.06em}
+.pkt-body{padding:1rem 1.25rem}
+.pkt-body p.help{font-size:.78rem;color:#6b7280;margin:0 0 1rem;line-height:1.5}
+.field{margin-bottom:.85rem}
+.field label{display:block;font-size:.68rem;font-weight:900;text-transform:uppercase;letter-spacing:.14em;color:#374151;margin-bottom:.3rem}
+.field input,.field select,.field textarea{width:100%;border:2px solid #d1d5db;border-radius:.375rem;padding:.45rem .6rem;font-size:.88rem;outline:none;transition:border .15s}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:#000}
+.field input[type=number]{-moz-appearance:textfield;appearance:textfield}
+.field input[type=number]::-webkit-inner-spin-button,.field input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none}
+.field .hint{font-size:.7rem;color:#9ca3af;margin-top:.15rem}
+.row-grid{display:grid;gap:.75rem}
+.row-grid.g2{grid-template-columns:1fr 1fr}
+.row-grid.g3{grid-template-columns:1fr 1fr 1fr}
+.row-grid.g4{grid-template-columns:1fr 1fr 1fr 1fr}
+@media(max-width:640px){.row-grid.g2,.row-grid.g3,.row-grid.g4{grid-template-columns:1fr}}
+.btn{border:2px solid #000;border-radius:.375rem;padding:.4rem .8rem;font-size:.75rem;font-weight:900;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;background:#fff;transition:all .15s}
+.btn:hover{background:#000;color:#fff}
+.btn-sm{padding:.25rem .5rem;font-size:.68rem}
+.btn-black{background:#000;color:#fff;border-color:#000}
+.btn-black:hover{background:#ff69b4;border-color:#ff69b4;color:#000}
+.btn-red{border-color:#ef4444;color:#ef4444}
+.btn-red:hover{background:#ef4444;color:#fff}
+.dyn-table{width:100%;border-collapse:collapse;font-size:.82rem}
+.dyn-table th{background:#000;color:#fff;text-transform:uppercase;font-size:.68rem;font-weight:900;letter-spacing:.1em;padding:.55rem .6rem;text-align:left;white-space:nowrap}
+.dyn-table td{padding:.45rem .6rem;border-bottom:1px solid #e5e7eb;vertical-align:top}
+.dyn-table td:last-child{width:40px;text-align:center;padding:.45rem .25rem;white-space:nowrap}
+.dyn-table td input,.dyn-table td select{border:1px solid #d1d5db;border-radius:.25rem;padding:.3rem .4rem;font-size:.82rem;width:100%;outline:none}
+.dyn-table td button{width:auto}
+.dyn-table td input:focus,.dyn-table td select:focus{border-color:#000}
+.dyn-table .num{text-align:right}
+.dyn-table tfoot td{font-weight:900;border-top:3px solid #000;background:#fafafa;padding:.55rem .6rem}
+.warn{background:#fef3c7;border:1px solid #f59e0b;border-radius:.375rem;padding:.5rem .75rem;font-size:.78rem;color:#92400e;margin:.75rem 0}
+.ok{background:#d1fae5;border:1px solid #10b981;border-radius:.375rem;padding:.5rem .75rem;font-size:.78rem;color:#065f46;margin:.75rem 0}
+.check-row{display:flex;align-items:center;gap:.5rem;padding:.3rem 0;font-size:.85rem}
+.check-row .dot{width:20px;height:20px;border-radius:50%;border:2px solid #d1d5db;display:flex;align-items:center;justify-content:center;font-size:.7rem;flex-shrink:0}
+.check-row .dot.pass{border-color:#10b981;background:#d1fae5;color:#065f46}
+.check-row .dot.fail{border-color:#ef4444;background:#fee2e2;color:#991b1b}
+.alloc-tbl{width:100%;border-collapse:collapse;font-size:.85rem;margin-top:.5rem}
+.alloc-tbl th{background:#f3f4f6;padding:.5rem .6rem;text-align:left;font-size:.7rem;font-weight:900;text-transform:uppercase;letter-spacing:.08em;border-bottom:2px solid #000}
+.alloc-tbl td{padding:.45rem .6rem;border-bottom:1px solid #e5e7eb}
+.alloc-tbl .num{text-align:right;font-variant-numeric:tabular-nums}
+.summary-kv{display:grid;grid-template-columns:1fr 1fr;gap:.15rem .75rem;font-size:.85rem}
+.summary-kv dt{color:#6b7280}
+.summary-kv dd{font-weight:700;text-align:right}
+.disclaimer{font-size:.7rem;color:#9ca3af;text-align:center;padding:1.5rem;line-height:1.5}
+.print-only{display:none !important}
+
+/* ── Print ──────────────────────────────────── */
+@media print{
+  .no-print,#kkAdminNavMount,#kkFooterMount,.btn,.help,.hint,.warn,.dyn-table td button,
+  #topBar,#checklistSection,#actionsBar,.field label .tt{display:none !important}
+  .print-only{display:block !important}
+  body{background:#fff !important;font-size:10pt;color:#000 !important}
+  main{max-width:100% !important;padding:0 !important;margin:0 !important}
+
+  /* Sections: let browser pack them together; avoid splitting mid-section when possible */
+  .pkt-section{
+    box-shadow:none !important;border:1px solid #999 !important;border-radius:0 !important;
+    break-inside:avoid;          /* try not to split a section across pages */
+    margin-bottom:.4rem !important;
+    page-break-inside:avoid;     /* webkit fallback */
+  }
+  /* If a section is too tall for a page, allow it to break — but only between rows */
+  .pkt-section.print-breakable{
+    break-inside:auto !important;
+    page-break-inside:auto !important;
+  }
+
+  .pkt-head{
+    background:#eee !important;border-bottom:2px solid #000 !important;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact;padding:.5rem .8rem;
+    break-after:avoid; page-break-after:avoid;   /* keep heading with body */
+  }
+  .pkt-body{padding:.5rem .8rem}
+
+  /* Inside tables: avoid breaking mid-row */
+  .dyn-table tr, .alloc-tbl tr{break-inside:avoid; page-break-inside:avoid}
+  .dyn-table thead, .alloc-tbl thead{break-after:avoid; page-break-after:avoid}
+  .dyn-table tfoot, .alloc-tbl tfoot{break-before:avoid; page-break-before:avoid}
+
+  /* Expense rows: keep label+input pairs together */
+  .exp-row{break-inside:avoid; page-break-inside:avoid}
+  .row-grid{break-inside:avoid; page-break-inside:avoid}
+
+  /* Only force new page for major boundaries: Section A header and the Summary */
+  #sectionA{break-before:auto}
+  #sectionH{break-before:page}
+
+  .field input,.field select,.field textarea,.dyn-table td input,.dyn-table td select{border:none !important;padding:0;background:transparent !important;font-weight:600}
+  .dyn-table th{background:#ddd !important;color:#000 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .dyn-table tfoot td{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .alloc-tbl th{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  select{-webkit-appearance:none;appearance:none}
+
+  /* Tighten spacing to fit more per page */
+  .pkt-head h2{font-size:11pt !important;margin:0 !important}
+  .pkt-body .field label{font-size:8pt}
+  .pkt-body .field input,.pkt-body .field select,.pkt-body .field textarea{font-size:9pt}
+  .dyn-table{font-size:9pt}
+  .dyn-table th,.dyn-table td{padding:.25rem .4rem !important}
+  .row-grid{gap:.4rem !important}
+  .row-grid.g2,.row-grid.g3{gap:.4rem !important}
+  h4{font-size:9pt !important;margin:.6rem 0 .3rem !important}
+}
+</style>
+</head>
+<body class="kk-page kk-admin min-h-screen">
+<div id="kkAdminNavMount"></div>
+
+<main class="max-w-4xl mx-auto px-2 sm:px-6 py-4 sm:py-8">
+
+<!-- ─── Top Bar ─── -->
+<div id="topBar" class="no-print bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-5 mb-5">
+  <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+    <div>
+      <div class="inline-block bg-black text-white px-2 py-1 text-[10px] font-black uppercase tracking-[.25em] mb-2">Admin Panel</div>
+      <h1 class="text-2xl sm:text-3xl font-black tracking-tight">Form 1065 Prep Packet</h1>
+      <p class="text-xs text-gray-500 mt-1">Justice McNeal LLC · Multi-member partnership return · EIN 39-3715858</p>
+    </div>
+    <div class="flex flex-wrap gap-2 self-start sm:self-auto">
+      <button id="autoFillBtn" class="btn" style="background:#059669;color:#fff;font-weight:700" onclick="autoFillFromDB()">🔄 Auto-fill</button>
+      <button class="btn btn-black" onclick="window.print()">🖨️ Print</button>
+      <button class="btn" onclick="exportJSON()">📤 Export</button>
+      <button class="btn" onclick="document.getElementById('jsonImport').click()">📥 Import</button>
+      <input type="file" id="jsonImport" accept=".json" style="display:none" onchange="importJSON(this)"/>
+      <button class="btn btn-red" onclick="resetAll()">🗑️ Reset</button>
+    </div>
+  </div>
+  <!-- Filing deadline callout -->
+  <div style="margin-top:1rem;padding:.75rem 1rem;background:#fef3c7;border:1px solid #f59e0b;border-radius:.5rem;display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
+    <span style="font-size:1.25rem">⏰</span>
+    <div>
+      <strong style="font-size:.85rem">Filing Deadline: March 15, 2026</strong>
+      <span style="font-size:.78rem;color:#92400e;margin-left:.5rem">(Form 1065 + Schedule K-1s for each member)</span>
+      <div style="font-size:.72rem;color:#92400e;margin-top:2px">IRS CP 575 B issued 08-12-2025 · Name control: JUST · Extension: Form 7004 (6 months → Sep 15, 2026)</div>
+    </div>
+  </div>
+</div>
+
+<!-- Print Header -->
+<div class="print-only" style="text-align:center;margin-bottom:1.5rem">
+  <h1 style="font-size:20pt;font-weight:900;margin:0" id="printBizName">Justice McNeal LLC — Form 1065 Prep Packet</h1>
+  <h2 style="font-size:12pt;font-weight:700;margin:4px 0">Tax Year: <span id="printTaxYear">____</span></h2>
+  <p style="font-size:9pt;color:#555">EIN: 39-3715858 · Prepared: <span id="printPrepDate"></span> · Filing deadline: March 15, 2026</p>
+  <hr style="margin-top:10px;border:none;border-top:2px solid #000"/>
+</div>
+
+<!-- ════════════════════════════════════════════════ -->
+<!-- A) Business Profile                              -->
+<!-- ════════════════════════════════════════════════ -->
+<section class="pkt-section" id="sectionA">
+  <div class="pkt-head"><h2>A. Business Profile</h2><span class="sch-ref">Form 1065 Header</span></div>
+  <div class="pkt-body">
+    <p class="help no-print">Basic information about the LLC as it appears on IRS records.</p>
+    <div class="row-grid g2">
+      <div class="field"><label>Legal Business Name</label><input id="bizName" data-key="bizName" oninput="save()"/></div>
+      <div class="field"><label>EIN</label><input id="bizEin" data-key="bizEin" placeholder="XX-XXXXXXX" oninput="save()"/></div>
+    </div>
+    <div class="row-grid g3">
+      <div class="field"><label>State of Formation</label><input data-key="bizState" oninput="save()"/></div>
+      <div class="field"><label>Formation Date</label><input type="date" data-key="bizFormDate" oninput="save()"/></div>
+      <div class="field"><label>Accounting Method</label>
+        <select data-key="bizAcctMethod" onchange="save()"><option value="Cash">Cash</option><option value="Accrual">Accrual</option><option value="Other">Other</option></select>
+      </div>
+    </div>
+    <div class="field"><label>Business Address</label><input data-key="bizAddress" placeholder="Street, City, State, ZIP" oninput="save()"/></div>
+    <div class="row-grid g2">
+      <div class="field"><label>Principal Business Activity</label>
+        <select data-key="bizActivity" onchange="save()">
+          <option value="">Select…</option>
+          <option>Online Retail / E-commerce</option>
+          <option>Retail Trade</option>
+          <option>Wholesale Trade</option>
+          <option>Arts, Entertainment & Recreation</option>
+          <option>Professional Services</option>
+          <option>Other</option>
+        </select>
+      </div>
+      <div class="field"><label>NAICS Code</label>
+        <select data-key="bizNaics" onchange="save()">
+          <option value="">Select…</option>
+          <option value="454110">454110 — Electronic Shopping</option>
+          <option value="448150">448150 — Clothing Accessories</option>
+          <option value="453220">453220 — Gift/Novelty/Souvenir</option>
+          <option value="448140">448140 — Family Clothing</option>
+          <option value="711510">711510 — Independent Artists</option>
+          <option value="999999">Other (specify)</option>
+        </select>
+      </div>
+    </div>
+    <div class="row-grid g3">
+      <div class="field"><label>Tax Year Start</label><input type="date" data-key="taxStart" oninput="save()"/></div>
+      <div class="field"><label>Tax Year End</label><input type="date" data-key="taxEnd" oninput="save()"/></div>
+      <div class="field"><label>Contact Phone (optional)</label><input data-key="bizPhone" oninput="save()"/></div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════ -->
+<!-- B) Members                                       -->
+<!-- ════════════════════════════════════════════════ -->
+<section class="pkt-section" id="sectionB">
+  <div class="pkt-head"><h2>B. Members / Partners</h2><span class="sch-ref">Schedule K-1 Info</span></div>
+  <div class="pkt-body">
+    <p class="help no-print">Add each LLC member. Ownership % must total 100%. Profit/loss % defaults to ownership % if left blank.
+      <span class="tt" style="display:inline-block;background:#fef3c7;padding:1px 6px;border-radius:4px;font-size:.72rem;color:#92400e;margin-left:4px">K-1 is generated from 1065 allocations.</span>
+    </p>
+    <div style="overflow-x:auto">
+    <table class="dyn-table" id="membersTable" style="min-width:700px">
+      <colgroup>
+        <col style="width:18%"/>
+        <col style="width:14%"/>
+        <col style="width:22%"/>
+        <col style="width:8%"/>
+        <col style="width:10%"/>
+        <col style="width:9%"/>
+        <col style="width:9%"/>
+        <col style="width:40px" class="no-print"/>
+      </colgroup>
+      <thead><tr>
+        <th>Name</th><th>SSN / EIN</th><th>Address</th><th class="num">Own %</th><th>Role</th><th class="num">Profit %</th><th class="num">Loss %</th><th class="no-print"></th>
+      </tr></thead>
+      <tbody id="membersBody"></tbody>
+      <tfoot><tr><td colspan="3"></td><td id="ownTotal" class="num">0%</td><td></td><td id="profitTotal" class="num">0%</td><td id="lossTotal" class="num">0%</td><td class="no-print"></td></tr></tfoot>
+    </table>
+    </div>
+    <button class="btn btn-sm no-print" style="margin-top:.75rem" onclick="addMember()">+ Add Member</button>
+    <div id="memberWarn"></div>
+
+    <h3 style="font-weight:900;margin:1.25rem 0 .5rem;font-size:.9rem">K-1 Allocation Preview</h3>
+    <table class="alloc-tbl" id="allocTable">
+      <thead><tr><th>Member</th><th>Own %</th><th class="num">Profit Share</th><th class="num">Loss Share</th></tr></thead>
+      <tbody id="allocBody"></tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════ -->
+<!-- C) Income                                        -->
+<!-- ════════════════════════════════════════════════ -->
+<section class="pkt-section" id="sectionC">
+  <div class="pkt-head"><h2>C. Income (Gross Receipts)</h2><span class="sch-ref">Line 1a</span></div>
+  <div class="pkt-body">
+    <p class="help no-print">Report gross sales <strong>before</strong> fees — platform/processing fees go under Expenses (section E).
+      If platforms like Etsy/Depop withheld fees, still report gross and deduct fees separately.</p>
+    <div class="no-print" style="margin-bottom:.75rem">
+      <label style="font-size:.82rem;display:inline-flex;align-items:center;gap:.4rem;cursor:pointer">
+        <input type="checkbox" id="noSalesTax" onchange="toggleSalesTax();save()"/> I do not collect sales tax
+      </label>
+    </div>
+    <div style="overflow-x:auto">
+    <table class="dyn-table" id="incomeTable" style="min-width:620px">
+      <colgroup>
+        <col style="width:12%"/>
+        <col style="width:16%"/>
+        <col style="width:12%"/>
+        <col style="width:14%"/>
+        <col class="stcol" style="width:14%"/>
+        <col/>
+        <col style="width:40px" class="no-print"/>
+      </colgroup>
+      <thead><tr>
+        <th>Source</th><th class="num">Gross Sales</th><th class="num">Refunds</th><th class="num">Shipping</th><th class="num stcol">Tax Collected</th><th>Notes</th><th class="no-print"></th>
+      </tr></thead>
+      <tbody id="incomeBody"></tbody>
+      <tfoot><tr>
+        <td>TOTALS</td><td class="num" id="incGross">$0</td><td class="num" id="incRefunds">$0</td><td class="num" id="incShipping">$0</td><td class="num stcol" id="incTax">$0</td><td></td><td class="no-print"></td>
+      </tr></tfoot>
+    </table>
+    </div>
+    <button class="btn btn-sm no-print" style="margin-top:.75rem" onclick="addIncome()">+ Add Source</button>
+    <div style="margin-top:1rem;padding:.75rem;background:#f9fafb;border-radius:.5rem;font-size:.85rem">
+      <strong>Net Receipts:</strong> <span id="incNet" style="font-weight:900">$0</span>
+      <span style="color:#9ca3af;font-size:.75rem;margin-left:.5rem">(Gross + Shipping − Refunds)</span>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════ -->
+<!-- D) Cost of Goods Sold                            -->
+<!-- ════════════════════════════════════════════════ -->
+<section class="pkt-section" id="sectionD">
+  <div class="pkt-head"><h2>D. Cost of Goods Sold</h2><span class="sch-ref">Schedule A</span></div>
+  <div class="pkt-body">
+    <p class="help no-print">If you sell physical products, COGS reduces your taxable income. Leave blank if N/A.</p>
+    <div class="row-grid g2">
+      <div class="field"><label>Beginning Inventory</label><input type="number" step="0.01" data-key="cogsStart" oninput="calcAll();save()" placeholder="0.00"/></div>
+      <div class="field"><label>Purchases</label><input type="number" step="0.01" data-key="cogsPurchases" oninput="calcAll();save()" placeholder="0.00"/></div>
+      <div class="field"><label>Cost of Labor</label><input type="number" step="0.01" data-key="cogsLabor" oninput="calcAll();save()" placeholder="0.00"/></div>
+      <div class="field"><label>Materials &amp; Supplies</label><input type="number" step="0.01" data-key="cogsMaterials" oninput="calcAll();save()" placeholder="0.00"/></div>
+      <div class="field"><label>Ending Inventory</label><input type="number" step="0.01" data-key="cogsEnd" oninput="calcAll();save()" placeholder="0.00"/></div>
+    </div>
+    <div style="padding:.75rem;background:#f9fafb;border-radius:.5rem;font-size:.85rem;margin-top:.5rem">
+      <strong>COGS Total:</strong> <span id="cogsTotal" style="font-weight:900">$0.00</span>
+      <span style="color:#9ca3af;font-size:.72rem;margin-left:.5rem">(Begin + Purchases + Labor + Materials − Ending)</span>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════ -->
+<!-- E) Expenses                                      -->
+<!-- ════════════════════════════════════════════════ -->
+<section class="pkt-section" id="sectionE">
+  <div class="pkt-head"><h2>E. Business Expenses</h2><span class="sch-ref">Lines 8–20</span></div>
+  <div class="pkt-body">
+    <p class="help no-print">Enter each expense category total. These are deducted from gross profit.</p>
+    <div id="expRows"></div>
+    <h4 style="font-weight:900;font-size:.82rem;margin:1.25rem 0 .5rem">Depreciation / Asset Purchases</h4>
+    <p class="help no-print">List business-use assets purchased this year. You may elect Section 179 or use standard depreciation.</p>
+    <div style="overflow-x:auto">
+    <table class="dyn-table" id="deprTable" style="min-width:580px">
+      <colgroup>
+        <col style="width:25%"/>
+        <col style="width:14%"/>
+        <col style="width:14%"/>
+        <col style="width:10%"/>
+        <col/>
+        <col style="width:40px" class="no-print"/>
+      </colgroup>
+      <thead><tr><th>Item</th><th class="num">Cost</th><th>Date</th><th class="num">Biz Use %</th><th>Notes</th><th class="no-print"></th></tr></thead>
+      <tbody id="deprBody"></tbody>
+    </table>
+    <button class="btn btn-sm no-print" style="margin-top:.75rem" onclick="addDepr()">+ Add Asset</button>
+    </div>
+    <div style="padding:.75rem;background:#f9fafb;border-radius:.5rem;font-size:.85rem;margin-top:1rem">
+      <strong>Total Expenses:</strong> <span id="expTotal" style="font-weight:900">$0.00</span>
+      <span style="margin-left:1rem"><strong>Depreciation:</strong> <span id="deprTotal" style="font-weight:900">$0.00</span></span>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════ -->
+<!-- F) Capital Contributions & Distributions         -->
+<!-- ════════════════════════════════════════════════ -->
+<section class="pkt-section" id="sectionF">
+  <div class="pkt-head"><h2>F. Capital Contributions &amp; Distributions</h2><span class="sch-ref">K-1 Part II</span></div>
+  <div class="pkt-body">
+    <p class="help no-print">Track each member's capital activity. Distributions ≠ profit; profit is allocated via ownership %. Capital accounts track the running balance.</p>
+    <div style="overflow-x:auto">
+    <table class="dyn-table" id="capitalTable">
+      <thead><tr><th>Member</th><th class="num">Begin Capital</th><th class="num">Contributions</th><th class="num">Distributions</th><th class="num">End Capital</th></tr></thead>
+      <tbody id="capitalBody"></tbody>
+      <tfoot><tr><td>TOTALS</td><td class="num" id="capBeginTot">$0</td><td class="num" id="capContribTot">$0</td><td class="num" id="capDistTot">$0</td><td class="num" id="capEndTot">$0</td></tr></tfoot>
+    </table>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════ -->
+<!-- G) Balance Sheet                                 -->
+<!-- ════════════════════════════════════════════════ -->
+<section class="pkt-section" id="sectionG">
+  <div class="pkt-head"><h2>G. Balance Sheet</h2><span class="sch-ref">Schedule L (Optional)</span></div>
+  <div class="pkt-body">
+    <label class="no-print" style="font-size:.82rem;display:inline-flex;align-items:center;gap:.4rem;cursor:pointer;margin-bottom:.75rem">
+      <input type="checkbox" id="skipBs" onchange="toggleBs();save()"/> Skip — balance sheet not available
+    </label>
+    <div id="bsContent">
+      <div style="overflow-x:auto">
+      <table class="dyn-table">
+        <thead><tr><th></th><th class="num">Beginning of Year</th><th class="num">End of Year</th></tr></thead>
+        <tbody>
+          <tr><td colspan="3" style="font-weight:900;background:#f3f4f6;padding:.5rem .6rem">ASSETS</td></tr>
+          <tr><td>Cash & bank accounts</td><td><input type="number" step="0.01" data-key="bsCashBeg" oninput="calcBs();save()"/></td><td><input type="number" step="0.01" data-key="bsCashEnd" oninput="calcBs();save()"/></td></tr>
+          <tr><td>Inventory</td><td><input type="number" step="0.01" data-key="bsInvBeg" oninput="calcBs();save()"/></td><td><input type="number" step="0.01" data-key="bsInvEnd" oninput="calcBs();save()"/></td></tr>
+          <tr><td>Equipment / other assets</td><td><input type="number" step="0.01" data-key="bsEquipBeg" oninput="calcBs();save()"/></td><td><input type="number" step="0.01" data-key="bsEquipEnd" oninput="calcBs();save()"/></td></tr>
+          <tr style="font-weight:900;background:#fafafa;border-top:2px solid #000"><td>Total Assets</td><td class="num" id="bsAssetBeg">$0</td><td class="num" id="bsAssetEnd">$0</td></tr>
+
+          <tr><td colspan="3" style="font-weight:900;background:#f3f4f6;padding:.5rem .6rem">LIABILITIES</td></tr>
+          <tr><td>Loans / credit cards</td><td><input type="number" step="0.01" data-key="bsLoanBeg" oninput="calcBs();save()"/></td><td><input type="number" step="0.01" data-key="bsLoanEnd" oninput="calcBs();save()"/></td></tr>
+          <tr><td>Other liabilities</td><td><input type="number" step="0.01" data-key="bsOtherBeg" oninput="calcBs();save()"/></td><td><input type="number" step="0.01" data-key="bsOtherEnd" oninput="calcBs();save()"/></td></tr>
+          <tr style="font-weight:900;background:#fafafa;border-top:2px solid #000"><td>Total Liabilities</td><td class="num" id="bsLiabBeg">$0</td><td class="num" id="bsLiabEnd">$0</td></tr>
+
+          <tr><td colspan="3" style="font-weight:900;background:#f3f4f6;padding:.5rem .6rem">EQUITY</td></tr>
+          <tr style="font-weight:900"><td>Partners' Capital</td><td class="num" id="bsEquityBeg">$0</td><td class="num" id="bsEquityEnd">$0</td></tr>
+        </tbody>
+      </table>
+      </div>
+    </div>
+    <div id="bsSkipMsg" class="print-only" style="text-align:center;padding:1rem;color:#6b7280;font-style:italic">Balance sheet not provided.</div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════ -->
+<!-- H) Final Summary                                 -->
+<!-- ════════════════════════════════════════════════ -->
+<section class="pkt-section" id="sectionH">
+  <div class="pkt-head"><h2>H. Form 1065 Summary</h2></div>
+  <div class="pkt-body" id="summaryContent">
+    <!-- Populated by JS -->
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════ -->
+<!-- IRS Reference Info                               -->
+<!-- ════════════════════════════════════════════════ -->
+<section class="pkt-section">
+  <div class="pkt-head"><h2>📋 IRS Reference &amp; Filing Info</h2></div>
+  <div class="pkt-body">
+    <div class="row-grid g2" style="gap:1.25rem">
+      <div>
+        <h4 style="font-weight:900;font-size:.82rem;margin:0 0 .5rem">CP 575 Notice Details</h4>
+        <dl class="summary-kv" style="font-size:.82rem">
+          <dt>EIN</dt><dd>39-3715858</dd>
+          <dt>Notice Date</dt><dd>08-12-2025</dd>
+          <dt>Form</dt><dd>SS-4</dd>
+          <dt>Notice #</dt><dd>CP 575 B</dd>
+          <dt>Name Control</dt><dd>JUST</dd>
+          <dt>Entity</dt><dd>Partnership (LLC)</dd>
+        </dl>
+      </div>
+      <div>
+        <h4 style="font-weight:900;font-size:.82rem;margin:0 0 .5rem">Filing Requirements</h4>
+        <dl class="summary-kv" style="font-size:.82rem">
+          <dt>Form</dt><dd>1065 (U.S. Return of Partnership Income)</dd>
+          <dt>Due Date</dt><dd style="color:#dc2626;font-weight:900">March 15, 2026</dd>
+          <dt>Extension</dt><dd>Form 7004 → Sep 15, 2026</dd>
+          <dt>K-1s</dt><dd>One per member (Schedule K-1)</dd>
+          <dt>SE Tax</dt><dd>Each member's Schedule SE with 1040</dd>
+          <dt>IRS Phone</dt><dd>1-800-829-4933</dd>
+        </dl>
+      </div>
+    </div>
+    <div style="margin-top:1rem;padding:.6rem .8rem;background:#f0fdf4;border:1px solid #10b981;border-radius:.375rem;font-size:.78rem;color:#065f46">
+      <strong>Reminder:</strong> Use EIN <strong>39-3715858</strong> and name <strong>JUSTICE MCNEAL LLC</strong> exactly on all federal tax forms.
+      Any variation may delay processing or result in duplicate EINs.
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════ -->
+<!-- Checklist                                        -->
+<!-- ════════════════════════════════════════════════ -->
+<section class="pkt-section no-print" id="checklistSection">
+  <div class="pkt-head"><h2>✅ Ready-to-File Checklist</h2></div>
+  <div class="pkt-body" id="checklist"></div>
+</section>
+
+<!-- ─── Disclaimer ─── -->
+<div class="disclaimer">
+  ⚠️ This packet is for <strong>organization purposes only</strong> — it is not tax advice.
+  Consult a licensed CPA or tax professional before filing. Generated data should be verified against source documents.
+</div>
+
+</main>
+<div id="kkFooterMount"></div>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- SCRIPT                                             -->
+<!-- ═══════════════════════════════════════════════════ -->
+<script type="module">
+import { initAdminNav }      from "/js/shared/adminNav.js";
+import { initFooter }        from "/js/shared/footer.js";
+import { fetchAndAggregate } from "/js/admin/tax1065/autofill.js";
+
+initAdminNav("1065 Prep Packet");
+initFooter();
+
+/* ── Auto-fill from Supabase ─────────────────── */
+window.autoFillFromDB = async function () {
+  const btn     = document.getElementById("autoFillBtn");
+  const taxStart = document.querySelector('[data-key="taxStart"]')?.value;
+  const taxEnd   = document.querySelector('[data-key="taxEnd"]')?.value;
+
+  if (!taxStart || !taxEnd) {
+    alert("Set the tax year start and end dates first (Section A).");
+    return;
+  }
+
+  if (!confirm(
+    `Pull data from database for ${taxStart} → ${taxEnd}?\n\n` +
+    `This will overwrite Income, COGS, Expenses, and Capital fields.`
+  )) return;
+
+  btn.disabled = true;
+  btn.textContent = "⏳ Loading…";
+
+  try {
+    const data = await fetchAndAggregate(taxStart, taxEnd);
+
+    /* ── Income rows ─────────────────────────── */
+    document.getElementById("incomeBody").innerHTML = "";
+    data.income.forEach(r => window.addIncome(r));
+
+    /* ── COGS (Section D) ────────────────────── */
+    const setField = (key, val) => {
+      const el = document.querySelector(`[data-key="${key}"]`);
+      if (el) el.value = val;
+    };
+    setField("cogsStart",     data.cogsStart);
+    setField("cogsPurchases", data.cogsPurchases);
+    setField("cogsLabor",     data.cogsLabor);
+    setField("cogsMaterials", data.cogsMaterials);
+    // cogsEnd left for user to fill (unsold inventory estimate)
+
+    /* ── Expenses ────────────────────────────── */
+    for (const [key, val] of Object.entries(data.expenses)) {
+      const el = document.getElementById("exp_" + key);
+      if (el) el.value = val;
+    }
+    for (const [key, val] of Object.entries(data.expNotes)) {
+      const el = document.getElementById("expn_" + key);
+      if (el) el.value = val;  // vendor / source hint
+    }
+
+    window.calcAll();
+
+    /* ── Capital (Section F) ─────────────────── */
+    // Justin funded everything; other member contributed $0
+    // End capital = begin ($0) + contributions + profit share − distributions ($0)
+    const members = window.readMembers();
+    const capBody = document.getElementById("capitalBody");
+    capBody.innerHTML = "";
+    members.forEach((m, idx) => {
+      const isJustin = idx === 0; // First member = Justin (the funder)
+      const contrib  = isJustin ? data.capital.totalContributions : 0;
+      const profitShare = data.capital.netProfit * ((m.profitPct || 0) / 100);
+      const endCap   = +(0 + contrib + profitShare - 0).toFixed(2);
+      window.addCapitalRow({
+        _name:    m.name,
+        beginCap: 0,
+        contrib:  +contrib.toFixed(2),
+        distrib:  0,
+        endCap,
+      });
+    });
+
+    window.save();
+
+    /* ── Feedback ─────────────────────────────── */
+    const m = data._meta;
+    alert(
+      `✅ Auto-filled from database!\n\n` +
+      `Orders:    ${m.orderCount}\n` +
+      `Expenses:  ${m.expenseCount}\n` +
+      `Shipments: ${m.shipmentCount}\n` +
+      `Label costs: $${m.labelCostTotal.toFixed(2)}\n` +
+      (m.estimatedStripeFees ? `Stripe fees (est.): $${m.estimatedStripeFees.toFixed(2)} (${m.stripeOrderCount} orders)\n` : "") +
+      `\nCapital: Justin contributed $${data.capital.totalContributions.toFixed(2)} | Net profit: $${data.capital.netProfit.toFixed(2)}\n` +
+      `\n⚠️ "Ending Inventory" in Section D is blank — enter your estimate of unsold product value.`
+    );
+  } catch (err) {
+    console.error("Auto-fill error:", err);
+    alert("Error fetching data: " + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "🔄 Auto-fill";
+  }
+};
+</script>
+<script>
+/* ══════════════════════════════════════════════════
+   STATE & STORAGE
+   ══════════════════════════════════════════════════ */
+const LS_KEY = "kk_1065_packet";
+
+const EXPENSE_CATS = [
+  { key:"advertising",   label:"Advertising / Marketing",     line:"8" },
+  { key:"platformFees",  label:"Platform / Processing Fees",  line:"—", hint:"Stripe, Amazon, Etsy fees" },
+  { key:"shipping",      label:"Shipping / Postage",          line:"—" },
+  { key:"software",      label:"Software / Subscriptions",    line:"—" },
+  { key:"website",       label:"Website / Domain / Hosting",  line:"—" },
+  { key:"office",        label:"Office Expenses",             line:"18" },
+  { key:"phoneInternet", label:"Phone / Internet (biz %)",    line:"25", hint:"Business portion only" },
+  { key:"travelMeals",   label:"Travel / Meals",              line:"24", hint:"Meals 50% deductible" },
+  { key:"professional",  label:"Professional Fees (Legal/CPA)",line:"17" },
+  { key:"bankFees",      label:"Bank / Merchant Fees",        line:"—" },
+  { key:"vehicle",       label:"Vehicle / Car Expenses",      line:"9" },
+  { key:"other",         label:"Other Expenses",              line:"27" },
+];
+
+let state = getDefault();
+function getDefault(){
+  return {
+    bizName:"Justice McNeal LLC",
+    bizEin:"39-3715858",
+    bizState:"GA",
+    bizFormDate:"2025-08-12",
+    bizAcctMethod:"Cash",
+    bizAddress:"1283 Lynx Ct, Hampton, GA 30228",
+    bizActivity:"Online Retail / E-commerce",
+    bizNaics:"454110",
+    taxStart:"2025-01-01",
+    taxEnd:"2025-12-31",
+    bizPhone:"",
+    members:[
+      {name:"Justin McNeal",ssn:"",address:"1283 Lynx Ct, Hampton, GA 30228",ownPct:50,role:"Managing",profitPct:50,lossPct:50},
+    ],
+    income:[
+      {source:"Stripe",gross:0,refunds:0,shipping:0,tax:0,notes:"karrykraze.com"},
+      {source:"Amazon",gross:0,refunds:0,shipping:0,tax:0,notes:"Amazon Seller Central"},
+    ],
+    noSalesTax:false,
+    cogsStart:0,cogsPurchases:0,cogsLabor:0,cogsMaterials:0,cogsEnd:0,
+    expenses:{},
+    expNotes:{},
+    depreciation:[],
+    capital:[
+      {_name:"Justin McNeal",beginCap:0,contrib:0,distrib:0,endCap:0},
+    ],
+    skipBs:false,
+    bsCashBeg:0,bsCashEnd:0,bsInvBeg:0,bsInvEnd:0,bsEquipBeg:0,bsEquipEnd:0,
+    bsLoanBeg:0,bsLoanEnd:0,bsOtherBeg:0,bsOtherEnd:0,
+  };
+}
+
+/* ── Persistence ────────────────────────────────── */
+function save(){
+  // Read scalar fields
+  document.querySelectorAll("[data-key]").forEach(el=>{
+    const k=el.dataset.key;
+    if(el.type==="number") state[k]=parseFloat(el.value)||0;
+    else if(el.type==="checkbox") state[k]=el.checked;
+    else state[k]=el.value;
+  });
+  // Read expense fields
+  EXPENSE_CATS.forEach(c=>{
+    const inp=document.getElementById("exp_"+c.key);
+    if(inp) state.expenses[c.key]=parseFloat(inp.value)||0;
+    const nInp=document.getElementById("expn_"+c.key);
+    if(nInp) state.expNotes[c.key]=nInp.value;
+  });
+  // Members
+  state.members=readMembers();
+  // Income
+  state.income=readIncome();
+  // Depreciation
+  state.depreciation=readDepr();
+  // Capital
+  state.capital=readCapital();
+  // noSalesTax
+  state.noSalesTax=document.getElementById("noSalesTax").checked;
+  state.skipBs=document.getElementById("skipBs").checked;
+
+  localStorage.setItem(LS_KEY,JSON.stringify(state));
+  calcAll();
+}
+
+function load(){
+  try{
+    const raw=localStorage.getItem(LS_KEY);
+    if(raw) state={...getDefault(),...JSON.parse(raw)};
+  }catch(e){console.warn(e)}
+  // Populate scalar fields
+  document.querySelectorAll("[data-key]").forEach(el=>{
+    const k=el.dataset.key;
+    if(el.type==="checkbox") el.checked=!!state[k];
+    else el.value=state[k]||"";
+  });
+  document.getElementById("noSalesTax").checked=state.noSalesTax;
+  document.getElementById("skipBs").checked=state.skipBs;
+  // Build dynamic rows
+  renderExpenseRows();
+  state.members.forEach(m=>addMemberRow(m));
+  if(!state.members.length) addMember();
+  state.income.forEach(r=>addIncomeRow(r));
+  if(!state.income.length) addIncome();
+  state.depreciation.forEach(r=>addDeprRow(r));
+  state.capital.forEach(r=>addCapitalRow(r));
+  toggleSalesTax();
+  toggleBs();
+  calcAll();
+}
+
+/* ── Smart Print Layout ─────────────────────────── */
+// Before printing, measure each section. If it's taller than ~9in (one page)
+// mark it "print-breakable" so the browser can split it across pages instead
+// of forcing it to a new page and leaving a huge gap.
+const PAGE_HEIGHT_PX = 9 * 96; // 9in usable height at 96dpi (letter minus margins)
+
+window.addEventListener("beforeprint", () => {
+  document.querySelectorAll(".pkt-section").forEach(sec => {
+    sec.classList.remove("print-breakable");
+    // Use scrollHeight as an approximation of printed height
+    if (sec.scrollHeight > PAGE_HEIGHT_PX) {
+      sec.classList.add("print-breakable");
+    }
+  });
+});
+window.addEventListener("afterprint", () => {
+  document.querySelectorAll(".print-breakable").forEach(sec => {
+    sec.classList.remove("print-breakable");
+  });
+});
+
+/* ── Export / Import / Reset ────────────────────── */
+window.exportJSON=function(){
+  save();
+  const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download=`1065-packet-${state.taxEnd||"draft"}.json`;
+  a.click();
+};
+window.importJSON=function(input){
+  const f=input.files[0];
+  if(!f) return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    try{
+      state={...getDefault(),...JSON.parse(reader.result)};
+      localStorage.setItem(LS_KEY,JSON.stringify(state));
+      location.reload();
+    }catch(e){alert("Invalid JSON file")}
+  };
+  reader.readAsText(f);
+  input.value="";
+};
+window.resetAll=function(){
+  if(!confirm("Reset all data? This cannot be undone.")) return;
+  localStorage.removeItem(LS_KEY);
+  location.reload();
+};
+
+/* ══════════════════════════════════════════════════
+   DYNAMIC ROWS — Members
+   ══════════════════════════════════════════════════ */
+let memberIdx=0;
+window.addMember=function(data){addMemberRow(data)};
+function addMemberRow(d={}){
+  memberIdx++;
+  const i=memberIdx;
+  const tr=document.createElement("tr");
+  tr.id="mem_"+i;
+  tr.innerHTML=`
+    <td><input data-m="${i}" data-f="name" value="${esc(d.name)}" oninput="save()"/></td>
+    <td><input data-m="${i}" data-f="ssn" value="${esc(d.ssn)}" placeholder="XXX-XX-XXXX" oninput="save()"/></td>
+    <td><input data-m="${i}" data-f="address" value="${esc(d.address)}" oninput="save()"/></td>
+    <td><input type="number" step="0.01" min="0" max="100" data-m="${i}" data-f="ownPct" value="${d.ownPct||""}" oninput="save()" class="num"/></td>
+    <td><select data-m="${i}" data-f="role" onchange="save()"><option value="Member" ${d.role==="Member"?"selected":""}>Member</option><option value="Managing" ${d.role==="Managing"?"selected":""}>Managing</option></select></td>
+    <td><input type="number" step="0.01" min="0" max="100" data-m="${i}" data-f="profitPct" value="${d.profitPct||""}" oninput="save()" class="num" placeholder="=own%"/></td>
+    <td><input type="number" step="0.01" min="0" max="100" data-m="${i}" data-f="lossPct" value="${d.lossPct||""}" oninput="save()" class="num" placeholder="=own%"/></td>
+    <td class="no-print"><button class="btn btn-sm btn-red" onclick="this.closest('tr').remove();save()">✕</button></td>`;
+  document.getElementById("membersBody").appendChild(tr);
+  syncCapitalMembers();
+}
+function readMembers(){
+  const rows=[];
+  document.querySelectorAll("#membersBody tr").forEach(tr=>{
+    const m={};
+    tr.querySelectorAll("[data-f]").forEach(el=>{
+      m[el.dataset.f]=el.type==="number"?(parseFloat(el.value)||0):el.value;
+    });
+    rows.push(m);
+  });
+  return rows;
+}
+
+/* ══════════════════════════════════════════════════
+   DYNAMIC ROWS — Income
+   ══════════════════════════════════════════════════ */
+let incIdx=0;
+window.addIncome=function(d){addIncomeRow(d)};
+function addIncomeRow(d={}){
+  incIdx++;
+  const i=incIdx;
+  const tr=document.createElement("tr");
+  tr.id="inc_"+i;
+  const sources=["Stripe","Amazon","eBay","Etsy","Depop","YouTube","Other"];
+  const opts=sources.map(s=>`<option ${d.source===s?"selected":""}>${s}</option>`).join("");
+  tr.innerHTML=`
+    <td><select data-i="${i}" data-f="source" onchange="save()">${opts}</select></td>
+    <td><input type="number" step="0.01" data-i="${i}" data-f="gross" value="${d.gross||""}" oninput="save()" class="num" placeholder="0.00"/></td>
+    <td><input type="number" step="0.01" data-i="${i}" data-f="refunds" value="${d.refunds||""}" oninput="save()" class="num" placeholder="0.00"/></td>
+    <td><input type="number" step="0.01" data-i="${i}" data-f="shipping" value="${d.shipping||""}" oninput="save()" class="num" placeholder="0.00"/></td>
+    <td class="stcol"><input type="number" step="0.01" data-i="${i}" data-f="tax" value="${d.tax||""}" oninput="save()" class="num" placeholder="0.00"/></td>
+    <td><input data-i="${i}" data-f="notes" value="${esc(d.notes)}" oninput="save()"/></td>
+    <td class="no-print"><button class="btn btn-sm btn-red" onclick="this.closest('tr').remove();save()">✕</button></td>`;
+  document.getElementById("incomeBody").appendChild(tr);
+}
+function readIncome(){
+  const rows=[];
+  document.querySelectorAll("#incomeBody tr").forEach(tr=>{
+    const r={};
+    tr.querySelectorAll("[data-f]").forEach(el=>{
+      r[el.dataset.f]=el.type==="number"?(parseFloat(el.value)||0):el.value;
+    });
+    rows.push(r);
+  });
+  return rows;
+}
+
+/* ══════════════════════════════════════════════════
+   DYNAMIC ROWS — Depreciation
+   ══════════════════════════════════════════════════ */
+let deprIdx=0;
+window.addDepr=function(d){addDeprRow(d)};
+function addDeprRow(d={}){
+  deprIdx++;
+  const i=deprIdx;
+  const tr=document.createElement("tr");
+  tr.id="dep_"+i;
+  tr.innerHTML=`
+    <td><input data-d="${i}" data-f="item" value="${esc(d.item)}" oninput="save()"/></td>
+    <td><input type="number" step="0.01" data-d="${i}" data-f="cost" value="${d.cost||""}" oninput="save()" class="num" placeholder="0.00"/></td>
+    <td><input type="date" data-d="${i}" data-f="date" value="${d.date||""}" oninput="save()"/></td>
+    <td><input type="number" step="1" min="0" max="100" data-d="${i}" data-f="bizPct" value="${d.bizPct||100}" oninput="save()" class="num"/></td>
+    <td><input data-d="${i}" data-f="notes" value="${esc(d.notes)}" oninput="save()"/></td>
+    <td class="no-print"><button class="btn btn-sm btn-red" onclick="this.closest('tr').remove();save()">✕</button></td>`;
+  document.getElementById("deprBody").appendChild(tr);
+}
+function readDepr(){
+  const rows=[];
+  document.querySelectorAll("#deprBody tr").forEach(tr=>{
+    const r={};
+    tr.querySelectorAll("[data-f]").forEach(el=>{
+      r[el.dataset.f]=el.type==="number"?(parseFloat(el.value)||0):el.value;
+    });
+    rows.push(r);
+  });
+  return rows;
+}
+
+/* ══════════════════════════════════════════════════
+   Capital rows (synced to members)
+   ══════════════════════════════════════════════════ */
+function syncCapitalMembers(){
+  const body=document.getElementById("capitalBody");
+  const members=readMembers();
+  const existing=readCapital();
+  body.innerHTML="";
+  state.capital=[];
+  members.forEach((m,idx)=>{
+    const prev=existing[idx]||state.capital[idx]||{};
+    addCapitalRowForMember(m.name||`Member ${idx+1}`, prev);
+  });
+}
+function addCapitalRowForMember(name,d={}){
+  const tr=document.createElement("tr");
+  tr.innerHTML=`
+    <td style="font-weight:600">${esc(name)}</td>
+    <td><input type="number" step="0.01" data-cf="beginCap" value="${d.beginCap||""}" oninput="save()" class="num" placeholder="0.00"/></td>
+    <td><input type="number" step="0.01" data-cf="contrib" value="${d.contrib||""}" oninput="save()" class="num" placeholder="0.00"/></td>
+    <td><input type="number" step="0.01" data-cf="distrib" value="${d.distrib||""}" oninput="save()" class="num" placeholder="0.00"/></td>
+    <td><input type="number" step="0.01" data-cf="endCap" value="${d.endCap||""}" oninput="save()" class="num" placeholder="0.00"/></td>`;
+  document.getElementById("capitalBody").appendChild(tr);
+}
+function addCapitalRow(d){addCapitalRowForMember(d._name||"Member",d)}
+function readCapital(){
+  const rows=[];
+  const members=readMembers();
+  document.querySelectorAll("#capitalBody tr").forEach((tr,idx)=>{
+    const r={_name:members[idx]?.name||""};
+    tr.querySelectorAll("[data-cf]").forEach(el=>{
+      r[el.dataset.cf]=parseFloat(el.value)||0;
+    });
+    rows.push(r);
+  });
+  return rows;
+}
+
+/* ══════════════════════════════════════════════════
+   Expense category rows (static)
+   ══════════════════════════════════════════════════ */
+function renderExpenseRows(){
+  const wrap=document.getElementById("expRows");
+  wrap.innerHTML=EXPENSE_CATS.map(c=>{
+    const v=state.expenses[c.key]||"";
+    const n=state.expNotes?.[c.key]||"";
+    return `<div class="row-grid exp-row" style="grid-template-columns:2fr .4fr 1.5fr;gap:.5rem;margin-bottom:.45rem;align-items:end">
+      <div class="field" style="margin:0"><label>${c.label} <span class="hint no-print" style="display:inline">${c.hint||""}</span></label></div>
+      <div class="field" style="margin:0"><input type="number" step="0.01" id="exp_${c.key}" value="${v}" oninput="save()" placeholder="0.00"/></div>
+      <div class="field" style="margin:0"><input id="expn_${c.key}" value="${esc(n)}" oninput="save()" placeholder="Notes…" style="font-size:.8rem;color:#6b7280"/></div>
+    </div>`;
+  }).join("");
+}
+
+/* ══════════════════════════════════════════════════
+   CALCULATIONS
+   ══════════════════════════════════════════════════ */
+window.calcAll=function(){calcIncome();calcCogs();calcExpenses();calcMembers();calcCapital();calcBs();toggleSalesTax();toggleBs();buildSummary();runChecklist()};
+
+function calcIncome(){
+  let gross=0,refunds=0,shipping=0,tax=0;
+  readIncome().forEach(r=>{gross+=r.gross||0;refunds+=r.refunds||0;shipping+=r.shipping||0;tax+=r.tax||0});
+  document.getElementById("incGross").textContent=fmt(gross);
+  document.getElementById("incRefunds").textContent=fmt(refunds);
+  document.getElementById("incShipping").textContent=fmt(shipping);
+  document.getElementById("incTax").textContent=fmt(tax);
+  document.getElementById("incNet").textContent=fmt(gross+shipping-refunds);
+}
+
+function calcCogs(){
+  const s=v("cogsStart"),p=v("cogsPurchases"),l=v("cogsLabor"),m=v("cogsMaterials"),e=v("cogsEnd");
+  const total=s+p+l+m-e;
+  document.getElementById("cogsTotal").textContent=fmt(Math.max(total,0));
+}
+
+function calcExpenses(){
+  let total=0;
+  EXPENSE_CATS.forEach(c=>{
+    const inp=document.getElementById("exp_"+c.key);
+    total+=parseFloat(inp?.value)||0;
+  });
+  document.getElementById("expTotal").textContent=fmt(total);
+  // Depreciation
+  let deprT=0;
+  readDepr().forEach(r=>{deprT+=(r.cost||0)*((r.bizPct||100)/100)});
+  document.getElementById("deprTotal").textContent=fmt(deprT);
+}
+
+function calcMembers(){
+  const members=readMembers();
+  let ownT=0,profT=0,lossT=0;
+  members.forEach(m=>{
+    ownT+=m.ownPct||0;
+    profT+=(m.profitPct||m.ownPct||0);
+    lossT+=(m.lossPct||m.ownPct||0);
+  });
+  document.getElementById("ownTotal").textContent=ownT.toFixed(1)+"%";
+  document.getElementById("profitTotal").textContent=profT.toFixed(1)+"%";
+  document.getElementById("lossTotal").textContent=lossT.toFixed(1)+"%";
+
+  const w=document.getElementById("memberWarn");
+  if(members.length&&Math.abs(ownT-100)>0.01){
+    w.innerHTML=`<div class="warn">⚠️ Ownership totals ${ownT.toFixed(1)}% — must equal 100%.</div>`;
+  } else w.innerHTML="";
+
+  // Allocation preview
+  const net=getNetProfit();
+  const body=document.getElementById("allocBody");
+  body.innerHTML=members.map(m=>{
+    const pp=m.profitPct||m.ownPct||0;
+    const lp=m.lossPct||m.ownPct||0;
+    const profShare=net>=0?net*(pp/100):0;
+    const lossShare=net<0?net*(lp/100):0;
+    return `<tr><td>${esc(m.name)||"—"}</td><td class="num">${(m.ownPct||0).toFixed(1)}%</td><td class="num">${fmt(profShare)}</td><td class="num">${fmt(lossShare)}</td></tr>`;
+  }).join("");
+}
+
+function calcCapital(){
+  let bT=0,cT=0,dT=0,eT=0;
+  readCapital().forEach(r=>{bT+=r.beginCap||0;cT+=r.contrib||0;dT+=r.distrib||0;eT+=r.endCap||0});
+  document.getElementById("capBeginTot").textContent=fmt(bT);
+  document.getElementById("capContribTot").textContent=fmt(cT);
+  document.getElementById("capDistTot").textContent=fmt(dT);
+  document.getElementById("capEndTot").textContent=fmt(eT);
+}
+
+function calcBs(){
+  const cb=v("bsCashBeg"),ce=v("bsCashEnd"),ib=v("bsInvBeg"),ie=v("bsInvEnd"),eb=v("bsEquipBeg"),ee=v("bsEquipEnd");
+  const lb=v("bsLoanBeg"),le=v("bsLoanEnd"),ob=v("bsOtherBeg"),oe=v("bsOtherEnd");
+  const abeg=cb+ib+eb,aend=ce+ie+ee;
+  const lbeg=lb+ob,lend=le+oe;
+  document.getElementById("bsAssetBeg").textContent=fmt(abeg);
+  document.getElementById("bsAssetEnd").textContent=fmt(aend);
+  document.getElementById("bsLiabBeg").textContent=fmt(lbeg);
+  document.getElementById("bsLiabEnd").textContent=fmt(lend);
+  document.getElementById("bsEquityBeg").textContent=fmt(abeg-lbeg);
+  document.getElementById("bsEquityEnd").textContent=fmt(aend-lend);
+}
+
+function getNetProfit(){
+  const inc=readIncome();
+  let gross=0,refunds=0,shipping=0;
+  inc.forEach(r=>{gross+=r.gross||0;refunds+=r.refunds||0;shipping+=r.shipping||0});
+  const netReceipts=gross+shipping-refunds;
+  const s=v("cogsStart"),p=v("cogsPurchases"),l=v("cogsLabor"),m=v("cogsMaterials"),e=v("cogsEnd");
+  const cogs=Math.max(s+p+l+m-e,0);
+  let expT=0;
+  EXPENSE_CATS.forEach(c=>{expT+=parseFloat(document.getElementById("exp_"+c.key)?.value)||0});
+  let deprT=0;
+  readDepr().forEach(r=>{deprT+=(r.cost||0)*((r.bizPct||100)/100)});
+  return netReceipts-cogs-expT-deprT;
+}
+
+/* ══════════════════════════════════════════════════
+   Sales Tax / Balance Sheet toggles
+   ══════════════════════════════════════════════════ */
+window.toggleSalesTax=function(){
+  const hide=document.getElementById("noSalesTax").checked;
+  document.querySelectorAll(".stcol").forEach(el=>el.style.display=hide?"none":"");
+  if(hide) document.querySelectorAll('[data-f="tax"]').forEach(el=>{el.value="0"});
+};
+window.toggleBs=function(){
+  const skip=document.getElementById("skipBs").checked;
+  document.getElementById("bsContent").style.display=skip?"none":"";
+  document.getElementById("bsSkipMsg").style.display=skip?"block":"none";
+};
+
+/* ══════════════════════════════════════════════════
+   SUMMARY (Section H)
+   ══════════════════════════════════════════════════ */
+function buildSummary(){
+  const members=readMembers();
+  const income=readIncome();
+  const capital=readCapital();
+  const net=getNetProfit();
+
+  // Income totals
+  let tGross=0,tRef=0,tShip=0,tTax=0;
+  income.forEach(r=>{tGross+=r.gross||0;tRef+=r.refunds||0;tShip+=r.shipping||0;tTax+=r.tax||0});
+  const netR=tGross+tShip-tRef;
+
+  // COGS
+  const s=v("cogsStart"),p=v("cogsPurchases"),l=v("cogsLabor"),m=v("cogsMaterials"),e=v("cogsEnd");
+  const cogs=Math.max(s+p+l+m-e,0);
+
+  // Expenses
+  let expT=0;
+  const expLines=[];
+  EXPENSE_CATS.forEach(c=>{
+    const a=parseFloat(document.getElementById("exp_"+c.key)?.value)||0;
+    if(a) expLines.push({label:c.label,amount:a,line:c.line});
+    expT+=a;
+  });
+  let deprT=0;
+  readDepr().forEach(r=>{deprT+=(r.cost||0)*((r.bizPct||100)/100)});
+
+  let html=`
+  <h3 style="font-weight:900;margin:0 0 .75rem;font-size:1.05rem">Business Profile</h3>
+  <dl class="summary-kv" style="margin-bottom:1.25rem">
+    <dt>Legal Name</dt><dd>${esc(state.bizName)||"—"}</dd>
+    <dt>EIN</dt><dd>${esc(state.bizEin)||"—"}</dd>
+    <dt>State</dt><dd>${esc(state.bizState)||"—"}</dd>
+    <dt>Tax Year</dt><dd>${state.taxStart||"?"} to ${state.taxEnd||"?"}</dd>
+    <dt>NAICS</dt><dd>${esc(state.bizNaics)||"—"}</dd>
+    <dt>Accounting</dt><dd>${esc(state.bizAcctMethod)||"Cash"}</dd>
+    <dt>Activity</dt><dd>${esc(state.bizActivity)||"—"}</dd>
+  </dl>
+
+  <h3 style="font-weight:900;margin:0 0 .5rem;font-size:1.05rem">Members</h3>
+  <table class="alloc-tbl" style="margin-bottom:1.25rem">
+    <thead><tr><th>Name</th><th>Role</th><th class="num">Own %</th><th class="num">Profit %</th></tr></thead>
+    <tbody>${members.map(m=>`<tr><td>${esc(m.name)}</td><td>${esc(m.role)}</td><td class="num">${(m.ownPct||0).toFixed(1)}%</td><td class="num">${(m.profitPct||m.ownPct||0).toFixed(1)}%</td></tr>`).join("")}</tbody>
+  </table>
+
+  <h3 style="font-weight:900;margin:0 0 .5rem;font-size:1.05rem">Income by Source</h3>
+  <table class="alloc-tbl" style="margin-bottom:1.25rem">
+    <thead><tr><th>Source</th><th class="num">Gross</th><th class="num">Refunds</th><th class="num">Shipping</th></tr></thead>
+    <tbody>${income.filter(r=>r.gross||r.shipping).map(r=>`<tr><td>${esc(r.source)}</td><td class="num">${fmt(r.gross)}</td><td class="num">${fmt(r.refunds)}</td><td class="num">${fmt(r.shipping)}</td></tr>`).join("")}
+    <tr style="font-weight:900;border-top:2px solid #000"><td>Total</td><td class="num">${fmt(tGross)}</td><td class="num">${fmt(tRef)}</td><td class="num">${fmt(tShip)}</td></tr>
+    </tbody>
+  </table>
+
+  <h3 style="font-weight:900;margin:0 0 .5rem;font-size:1.05rem">COGS</h3>
+  <dl class="summary-kv" style="margin-bottom:1.25rem">
+    <dt>COGS Total</dt><dd>${fmt(cogs)}</dd>
+  </dl>
+
+  <h3 style="font-weight:900;margin:0 0 .5rem;font-size:1.05rem">Expenses</h3>
+  <table class="alloc-tbl" style="margin-bottom:1.25rem">
+    <thead><tr><th>Category</th><th>Sch C Line</th><th class="num">Amount</th></tr></thead>
+    <tbody>${expLines.map(e=>`<tr><td>${esc(e.label)}</td><td>${e.line}</td><td class="num">${fmt(e.amount)}</td></tr>`).join("")}
+    ${deprT?`<tr><td>Depreciation</td><td>13</td><td class="num">${fmt(deprT)}</td></tr>`:""}
+    <tr style="font-weight:900;border-top:2px solid #000"><td>Total</td><td></td><td class="num">${fmt(expT+deprT)}</td></tr>
+    </tbody>
+  </table>
+
+  <h3 style="font-weight:900;margin:0 0 .5rem;font-size:1.05rem">Net Profit / (Loss)</h3>
+  <table class="alloc-tbl" style="margin-bottom:1.25rem">
+    <tbody>
+      <tr><td>Gross Receipts</td><td class="num">${fmt(netR)}</td></tr>
+      <tr><td>− COGS</td><td class="num">(${fmt(cogs)})</td></tr>
+      <tr><td>− Expenses</td><td class="num">(${fmt(expT+deprT)})</td></tr>
+      <tr style="font-weight:900;border-top:2px solid #000"><td>Net Ordinary Income / (Loss)</td><td class="num" style="${net<0?"color:#dc2626":""}">${fmt(net)}</td></tr>
+    </tbody>
+  </table>
+
+  <h3 style="font-weight:900;margin:0 0 .5rem;font-size:1.05rem">K-1 Allocation</h3>
+  <table class="alloc-tbl" style="margin-bottom:1.25rem">
+    <thead><tr><th>Member</th><th class="num">Share %</th><th class="num">Allocated Amount</th></tr></thead>
+    <tbody>${members.map(m=>{
+      const pct=m.profitPct||m.ownPct||0;
+      return `<tr><td>${esc(m.name)}</td><td class="num">${pct.toFixed(1)}%</td><td class="num">${fmt(net*(pct/100))}</td></tr>`;
+    }).join("")}</tbody>
+  </table>
+
+  <h3 style="font-weight:900;margin:0 0 .5rem;font-size:1.05rem">Capital Accounts</h3>
+  <table class="alloc-tbl">
+    <thead><tr><th>Member</th><th class="num">Begin</th><th class="num">Contrib</th><th class="num">Distrib</th><th class="num">End</th></tr></thead>
+    <tbody>${capital.map(r=>`<tr><td>${esc(r._name)}</td><td class="num">${fmt(r.beginCap)}</td><td class="num">${fmt(r.contrib)}</td><td class="num">${fmt(r.distrib)}</td><td class="num">${fmt(r.endCap)}</td></tr>`).join("")}</tbody>
+  </table>`;
+
+  document.getElementById("summaryContent").innerHTML=html;
+
+  // Print header
+  document.getElementById("printBizName").textContent=state.bizName||"Form 1065 Prep Packet";
+  document.getElementById("printTaxYear").textContent=state.taxStart&&state.taxEnd?`${state.taxStart} — ${state.taxEnd}`:"____";
+  document.getElementById("printPrepDate").textContent=new Date().toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"});
+}
+
+/* ══════════════════════════════════════════════════
+   CHECKLIST
+   ══════════════════════════════════════════════════ */
+function runChecklist(){
+  const members=readMembers();
+  let ownT=0;members.forEach(m=>ownT+=m.ownPct||0);
+  const income=readIncome();
+  let anyInc=income.some(r=>(r.gross||0)>0);
+
+  const checks=[
+    {label:"Business name filled",pass:!!state.bizName},
+    {label:"EIN provided",pass:!!state.bizEin},
+    {label:"Tax year dates set",pass:!!state.taxStart&&!!state.taxEnd},
+    {label:"At least 2 members",pass:members.length>=2},
+    {label:"Ownership totals 100%",pass:members.length>0&&Math.abs(ownT-100)<0.01},
+    {label:"At least one income source",pass:anyInc},
+    {label:"NAICS code selected",pass:!!state.bizNaics},
+    {label:"Accounting method set",pass:!!state.bizAcctMethod},
+  ];
+  const html=checks.map(c=>
+    `<div class="check-row"><div class="dot ${c.pass?"pass":"fail"}">${c.pass?"✓":"!"}</div><span style="${c.pass?"":"color:#991b1b"}">${c.label}</span></div>`
+  ).join("");
+  const allPass=checks.every(c=>c.pass);
+  document.getElementById("checklist").innerHTML=html+(allPass?`<div class="ok" style="margin-top:.75rem">✅ All checks passed — ready for your CPA!</div>`:`<div class="warn" style="margin-top:.75rem">Complete all items above before filing.</div>`);
+}
+
+/* ══════════════════════════════════════════════════
+   HELPERS
+   ══════════════════════════════════════════════════ */
+function fmt(n){
+  if(n==null||isNaN(n)) return "$0.00";
+  const neg=n<0;
+  const abs=Math.abs(n);
+  const s="$"+abs.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+  return neg?"("+s+")":s;
+}
+function v(key){
+  const el=document.querySelector(`[data-key="${key}"]`);
+  return parseFloat(el?.value)||0;
+}
+function esc(s){return(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
+
+/* ── Boot ──────────────────────────────────────── */
+document.addEventListener("DOMContentLoaded",load);
+// Expose for inline handlers
+window.save=save;window.toggleSalesTax=toggleSalesTax;window.toggleBs=toggleBs;
+window.addMember=addMember;window.addIncome=addIncome;window.addDepr=addDepr;
+window.calcAll=calcAll;
+</script>
+</body>
+</html>

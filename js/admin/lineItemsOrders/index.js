@@ -8,6 +8,7 @@ import { renderOrdersRows } from "./renderTable.js";
 import { downloadShipReadyCSV } from "./shipReadyCsv.js";
 import { bindEditModal } from "./modalEditor.js";
 import { wirePirateShipImport } from "./pirateShipImport.js";
+import { wireAmazonImport } from "./amazonImport.js";
 
 
 wireDomHelpers();
@@ -213,7 +214,7 @@ function renderOrderDetailsHtml(order, lineItems, shipment) {
       <div class="grid sm:grid-cols-3 gap-4">
         <div class="border-4 border-black p-4">
           <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">Product CPI</div>
-          <div class="font-black text-lg text-red-600">${money(order.order_cost_total_cents)}</div>
+          <div class="font-black text-lg text-red-600">${money(order.product_cpi_cents)}</div>
           <div class="text-[9px] text-black/50 mt-1">Unit + China Ship</div>
         </div>
         <div class="border-4 border-black p-4">
@@ -279,6 +280,74 @@ function wireEvents() {
       // Show import result panel
       showImportResult({ updated, skipped, batchId });
       // refresh list + KPIs after import
+      await reload({ hard: true });
+    },
+  });
+
+  // Import Amazon orders (TSV drop)
+  wireAmazonImport({
+    buttonEl: els.btnImportAmazon,
+    setStatus,
+    showPreview: ({ fileName, parsed, onConfirm }) => {
+      // populate preview panel
+      if (els.amzFileName) els.amzFileName.textContent = fileName;
+      if (els.amzTotalRows) els.amzTotalRows.textContent = parsed.total;
+      if (els.amzValidCount) els.amzValidCount.textContent = parsed.valid.length;
+      if (parsed.cancelled.length) {
+        if (els.amzCancelledWrap) els.amzCancelledWrap.classList.remove("hidden");
+        if (els.amzCancelledCount) els.amzCancelledCount.textContent = parsed.cancelled.length;
+      } else {
+        if (els.amzCancelledWrap) els.amzCancelledWrap.classList.add("hidden");
+      }
+      // hide result panel, show preview
+      if (els.amazonResultPanel) els.amazonResultPanel.classList.add("hidden");
+      if (els.amazonPreviewPanel) els.amazonPreviewPanel.classList.remove("hidden");
+
+      // wire confirm (replace to remove old listeners)
+      if (els.amzConfirmBtn) {
+        const btn = els.amzConfirmBtn.cloneNode(true);
+        els.amzConfirmBtn.parentNode.replaceChild(btn, els.amzConfirmBtn);
+        els.amzConfirmBtn = btn;
+        btn.addEventListener("click", () => {
+          els.amazonPreviewPanel?.classList.add("hidden");
+          onConfirm();
+        });
+      }
+    },
+    onImported: async (result) => {
+      // populate result panel
+      if (els.amzOrdersCount) els.amzOrdersCount.textContent = result.ordersInserted;
+      if (els.amzLineItemsCount) els.amzLineItemsCount.textContent = result.lineItemsInserted;
+      if (els.amzRevenue) els.amzRevenue.textContent = `$${(result.revenue / 100).toFixed(2)}`;
+      if (els.amzSkippedCount) els.amzSkippedCount.textContent = result.skippedDuplicates;
+
+      // breakdown
+      if (els.amzBreakdownWrap && result.breakdown) {
+        const lines = Object.entries(result.breakdown)
+          .sort((a, b) => b[1].cents - a[1].cents)
+          .map(([code, p]) => `<div>${code} — ${p.qty} units — $${(p.cents / 100).toFixed(2)}</div>`);
+        els.amzBreakdownWrap.innerHTML = lines.length
+          ? `<div class="font-bold mb-1">Product breakdown:</div>${lines.join("")}`
+          : "";
+      }
+
+      // unmapped SKUs warning
+      if (els.amzUnmappedWrap) {
+        if (result.unmappedSkus?.length) {
+          els.amzUnmappedWrap.classList.remove("hidden");
+          els.amzUnmappedWrap.innerHTML = `<div class="font-bold">⚠️ Unmapped SKUs:</div>` +
+            result.unmappedSkus.map(s => `<div class="ml-2">${s}</div>`).join("");
+        } else {
+          els.amzUnmappedWrap.classList.add("hidden");
+        }
+      }
+
+      if (els.amazonResultPanel) els.amazonResultPanel.classList.remove("hidden");
+
+      // auto-hide after 15s
+      setTimeout(() => els.amazonResultPanel?.classList.add("hidden"), 15000);
+
+      // refresh the orders table
       await reload({ hard: true });
     },
   });

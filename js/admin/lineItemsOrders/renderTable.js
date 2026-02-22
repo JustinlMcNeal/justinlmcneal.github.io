@@ -1,6 +1,13 @@
 // /js/admin/lineItemsOrders/renderTable.js
 import { esc, moneyFromCents, gramsToOz, formatOz, formatDateShort } from "./dom.js";
 
+/** Truncate long IDs for display; full value stays in title + data attr */
+function truncateId(id, max = 16) {
+  const s = String(id || "—");
+  if (s.length <= max) return esc(s);
+  return s.slice(0, max) + "…";
+}
+
 function isMobile() {
   return window.matchMedia("(max-width: 768px)").matches;
 }
@@ -60,8 +67,8 @@ function renderMobileCards(rows = []) {
                 <div class="min-w-0">
                   <div class="text-[11px] font-black uppercase tracking-[.18em] text-black/60">
                     ${esc(date)} · 
-                    <button type="button" data-view="${idx}" class="text-kkpink hover:underline cursor-pointer">
-                      ${esc(orderId)}
+                    <button type="button" data-view="${idx}" class="text-kkpink hover:underline cursor-pointer" title="${esc(orderId)}">
+                      ${truncateId(orderId)}
                     </button>
                   </div>
 
@@ -143,13 +150,13 @@ function renderDesktopRows(rows = []) {
             ${esc(date)}
           </td>
 
-          <td class="px-4 py-3 text-sm whitespace-nowrap">
+          <td class="px-4 py-3 text-sm whitespace-nowrap max-w-[160px]">
             <button
               type="button"
               data-view="${idx}"
               class="font-black text-kkpink hover:underline cursor-pointer"
-              title="Click to view details"
-            >${esc(r.kk_order_id || "—")}</button>
+              title="${esc(r.kk_order_id || '')} — Click to view details"
+            >${truncateId(r.kk_order_id)}</button>
           </td>
 
           <td class="px-4 py-3 text-sm">

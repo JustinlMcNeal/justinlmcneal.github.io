@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin · Item Stats</title>
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            kkpink: '#ff69b4',
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- KK base + components -->
+  <link rel="stylesheet" href="/css/theme/base.css">
+  <link rel="stylesheet" href="/css/theme/components.css">
+
+  <style>
+    .custom-scrollbar::-webkit-scrollbar { height: 8px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #000; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #333; }
+    .stat-row:hover { background: #fafafa; }
+    .stat-row:hover .row-actions { opacity: 1; }
+    .row-actions { opacity: 0.5; transition: opacity 0.15s; }
+    .bar-fill { transition: width 0.6s ease; }
+    @media (max-width: 640px) {
+      button, [role="button"] { min-height: 44px; }
+      input, select, textarea { font-size: 16px !important; }
+    }
+  </style>
+</head>
+
+<body class="kk-page kk-admin bg-gray-50 min-h-screen">
+  <div id="kkAdminNavMount"></div>
+
+  <main class="max-w-7xl mx-auto px-2 sm:px-6 py-4 sm:py-8">
+
+    <!-- Header -->
+    <header class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6">
+      <div class="flex flex-col gap-4">
+        <div>
+          <div class="inline-block bg-black text-white px-2 py-1 text-[10px] font-black uppercase tracking-[.25em] mb-2">
+            Admin Panel
+          </div>
+          <h1 class="text-2xl sm:text-4xl font-black tracking-tight">
+            Item Stats
+          </h1>
+          <p class="text-xs sm:text-sm text-gray-500 mt-1">
+            Product performance — sales, revenue, profit, and trends
+          </p>
+        </div>
+      </div>
+    </header>
+
+    <!-- KPI Cards -->
+    <section class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6">
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4">
+        <div class="text-[9px] sm:text-[10px] font-black uppercase tracking-[.18em] text-gray-500 mb-1">Total Revenue</div>
+        <div id="kpiRevenue" class="text-lg sm:text-2xl font-black">$0.00</div>
+      </div>
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4">
+        <div class="text-[9px] sm:text-[10px] font-black uppercase tracking-[.18em] text-gray-500 mb-1">Units Sold</div>
+        <div id="kpiUnitsSold" class="text-lg sm:text-2xl font-black">0</div>
+      </div>
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4">
+        <div class="text-[9px] sm:text-[10px] font-black uppercase tracking-[.18em] text-gray-500 mb-1">Top Seller</div>
+        <div id="kpiTopSeller" class="text-lg sm:text-2xl font-black truncate">—</div>
+      </div>
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4">
+        <div class="text-[9px] sm:text-[10px] font-black uppercase tracking-[.18em] text-gray-500 mb-1">Avg Order Value</div>
+        <div id="kpiAvgOrder" class="text-lg sm:text-2xl font-black">$0.00</div>
+      </div>
+    </section>
+
+    <!-- Search & Filters -->
+    <section class="bg-white rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4 mb-4 sm:mb-6">
+      <div class="flex flex-col sm:flex-row gap-3 sm:gap-4 items-stretch sm:items-end">
+        <!-- Search -->
+        <div class="flex-1">
+          <label for="searchItem"
+                 class="block text-[9px] sm:text-[10px] font-black uppercase tracking-[.18em] mb-1 sm:mb-2 text-gray-500">
+            Search
+          </label>
+          <div class="relative">
+            <input
+              id="searchItem"
+              type="search"
+              placeholder="Product name, code…"
+              class="w-full border-4 border-black px-3 sm:px-4 py-2 sm:py-3 text-sm outline-none pr-10 focus:border-kkpink transition-colors"
+            />
+            <svg class="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Time Range -->
+        <div class="w-full sm:w-44">
+          <label for="filterRange"
+                 class="block text-[9px] sm:text-[10px] font-black uppercase tracking-[.18em] mb-1 sm:mb-2 text-gray-500">
+            Time Range
+          </label>
+          <select id="filterRange" class="w-full border-4 border-black px-3 py-2 sm:py-3 text-sm outline-none bg-white focus:border-kkpink transition-colors">
+            <option value="all">All Time</option>
+            <option value="7d">Last 7 Days</option>
+            <option value="30d">Last 30 Days</option>
+            <option value="90d">Last 90 Days</option>
+            <option value="6m">Last 6 Months</option>
+            <option value="1y">Last Year</option>
+          </select>
+        </div>
+
+        <!-- Sort -->
+        <div class="w-full sm:w-44">
+          <label for="sortBy"
+                 class="block text-[9px] sm:text-[10px] font-black uppercase tracking-[.18em] mb-1 sm:mb-2 text-gray-500">
+            Sort By
+          </label>
+          <select id="sortBy" class="w-full border-4 border-black px-3 py-2 sm:py-3 text-sm outline-none bg-white focus:border-kkpink transition-colors">
+            <option value="revenue_desc">Revenue ↓</option>
+            <option value="revenue_asc">Revenue ↑</option>
+            <option value="units_desc">Units Sold ↓</option>
+            <option value="units_asc">Units Sold ↑</option>
+            <option value="profit_desc">Profit ↓</option>
+            <option value="profit_asc">Profit ↑</option>
+            <option value="orders_desc">Orders ↓</option>
+            <option value="margin_desc">Margin % ↓</option>
+            <option value="name_asc">Name A-Z</option>
+          </select>
+        </div>
+
+        <!-- Count -->
+        <div class="flex items-center justify-between sm:justify-end gap-3">
+          <div class="text-xs sm:text-sm font-bold uppercase tracking-wider text-gray-500" id="itemCount">
+            0 products
+          </div>
+        </div>
+      </div>
+      <div id="status" class="text-xs text-gray-400 mt-2"></div>
+    </section>
+
+    <!-- Table -->
+    <section id="tableWrap" class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+      <!-- Mobile Card View -->
+      <div id="mobileCards" class="sm:hidden"></div>
+
+      <!-- Desktop Table View -->
+      <div class="hidden sm:block overflow-x-auto custom-scrollbar">
+        <table class="w-full border-collapse text-sm" id="statsTable">
+          <thead class="bg-black text-white">
+            <tr class="text-left uppercase tracking-[.12em] text-[11px] font-black">
+              <th class="px-4 py-4 w-8">#</th>
+              <th class="px-4 py-4">Product</th>
+              <th class="px-4 py-4 text-center">Units</th>
+              <th class="px-4 py-4 text-center">Orders</th>
+              <th class="px-4 py-4 text-right">Revenue</th>
+              <th class="px-4 py-4 text-right">CPI</th>
+              <th class="px-4 py-4 text-right">Profit</th>
+              <th class="px-4 py-4 text-right">Margin</th>
+              <th class="px-4 py-4" style="min-width:120px">Revenue Share</th>
+            </tr>
+          </thead>
+          <tbody id="statsRows" class="divide-y divide-gray-200"></tbody>
+        </table>
+      </div>
+
+      <!-- Empty State -->
+      <div id="emptyState" class="hidden p-8 text-center">
+        <div class="text-4xl mb-3">📊</div>
+        <div class="text-gray-500 text-sm">No product stats found</div>
+      </div>
+    </section>
+
+    <!-- Variant Breakdown (shown when clicking a product) -->
+    <section id="variantSection" class="hidden mt-4 sm:mt-6">
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+        <div class="p-4 sm:p-5 border-b border-gray-200">
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="inline-block bg-kkpink text-black px-2 py-0.5 text-[8px] sm:text-[9px] font-black uppercase tracking-[.2em] mb-1">
+                Variant Breakdown
+              </div>
+              <h3 id="variantTitle" class="text-lg sm:text-xl font-black tracking-tight">—</h3>
+            </div>
+            <button id="btnCloseVariant" type="button"
+              class="border-4 border-black bg-white w-10 h-10 flex items-center justify-center font-black text-lg
+                     hover:bg-black hover:text-white transition-colors flex-shrink-0">
+              ✕
+            </button>
+          </div>
+        </div>
+        <div class="overflow-x-auto custom-scrollbar">
+          <table class="w-full border-collapse text-sm">
+            <thead class="bg-gray-100">
+              <tr class="text-left uppercase tracking-[.1em] text-[10px] font-black text-gray-600">
+                <th class="px-4 py-3">Variant</th>
+                <th class="px-4 py-3 text-center">Units</th>
+                <th class="px-4 py-3 text-right">Revenue</th>
+                <th class="px-4 py-3" style="min-width:100px">Share</th>
+              </tr>
+            </thead>
+            <tbody id="variantRows" class="divide-y divide-gray-200"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <div id="kkFooterMount"></div>
+
+  <script type="module" src="/js/admin/itemStats/index.js"></script>
+</body>
+</html>

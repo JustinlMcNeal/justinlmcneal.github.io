@@ -1,7 +1,7 @@
 // /js/admin/lineItemsOrders/api.js
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "/js/config/env.js";
-import { getSupplierShippingDetails, calculateCustomerShipping } from "/js/admin/pStorage/profitCalc.js";
+import { getSupplierShippingDetails } from "/js/admin/pStorage/profitCalc.js";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -33,7 +33,8 @@ export async function fetchOrderDetails(stripe_checkout_session_id) {
 
   if (liErr) throw liErr;
 
-  // Get product codes from line items (product_id in line_items is actually the product code like "KK-0016")
+  // Get product codes from line items (product_id is the product code like "KK-0016")
+  // Legacy items have been remapped to new codes so they can pull images correctly.
   const productCodes = [...new Set((lineItems || []).map(li => li.product_id).filter(Boolean))];
   let productsMap = new Map();
   let variantsMap = new Map(); // key: "productCode|variantName" -> variant
@@ -105,14 +106,19 @@ export async function fetchOrderDetails(stripe_checkout_session_id) {
     .eq("stripe_checkout_session_id", stripe_checkout_session_id)
     .single();
 
-  // Calculate costs - always use our calculated value for accuracy
+  // Cost & profit for the modal.
+  // Use JS-calculated CPI (sum of per-item costs) so section 5 matches the
+  // per-item CPI display. Fall back to view values for orders where products
+  // aren't in the table (unmatched legacy items).
+  const viewCpiCents = Number(orderData.product_cost_total_cents || 0)
+    + Number(orderData.supplier_ship_total_cents || 0);
+  const productCpiCents = calculatedCostCents > 0 ? calculatedCostCents : viewCpiCents;
   const labelCostCents = shipment?.label_cost_cents || 0;
-  const totalPaidCents = orderData.total_paid_cents || 0;
-  const profitCents = totalPaidCents - calculatedCostCents - labelCostCents;
+  const profitCents = Number(orderData.total_paid_cents || 0) - productCpiCents - labelCostCents;
 
   const orderWithCost = {
     ...orderData,
-    order_cost_total_cents: calculatedCostCents,
+    product_cpi_cents: productCpiCents,
     profit_cents: profitCents,
   };
 
@@ -229,106 +235,18 @@ export async function fetchOrderSummaryPage({
   const sessionIds = rows.map((r) => r.stripe_checkout_session_id).filter(Boolean);
 
   const shipMap = await getShipmentsMap(sessionIds);
-  
-  // Recalculate profit from line items and product costs
-  const profitMap = await calculateProfitsForOrders(sessionIds);
 
+  // Cost & profit come from the v_order_summary_plus view (via v_order_financials).
+  // The view already handles legacy stored cost vs dynamic CPI correctly.
   const merged = rows.map((r) => {
     const shipment = shipMap.get(r.stripe_checkout_session_id) || null;
-    const calcProfit = profitMap.get(r.stripe_checkout_session_id);
-    
-    return {
-      ...r,
-      shipment,
-      // Use calculated profit if available, recalculating based on actual product costs
-      order_cost_total_cents: calcProfit?.costCents ?? r.order_cost_total_cents ?? 0,
-      profit_cents: calcProfit?.profitCents ?? r.profit_cents ?? 0,
-    };
+    return { ...r, shipment };
   });
 
   const totalCount = Number(count ?? 0);
   const hasMore = O + merged.length < totalCount;
 
   return { rows: merged, totalCount, hasMore };
-}
-
-/**
- * Calculate actual profits for orders based on product CPI
- * CPI = unit_cost + supplier_ship_per_unit (calculated from weight)
- */
-async function calculateProfitsForOrders(sessionIds) {
-  const profitMap = new Map();
-  if (!sessionIds?.length) return profitMap;
-
-  // Run all queries in parallel for speed
-  const [lineItemsRes, shipmentsRes, ordersRes] = await Promise.all([
-    supabase
-      .from("line_items_raw")
-      .select("stripe_checkout_session_id, product_id, quantity")
-      .in("stripe_checkout_session_id", sessionIds),
-    supabase
-      .from(SHIP)
-      .select("stripe_checkout_session_id, label_cost_cents")
-      .in("stripe_checkout_session_id", sessionIds),
-    supabase
-      .from(SUMMARY)
-      .select("stripe_checkout_session_id, total_paid_cents")
-      .in("stripe_checkout_session_id", sessionIds),
-  ]);
-
-  const lineItems = lineItemsRes.data || [];
-  if (!lineItems.length) return profitMap;
-
-  // Get unique product codes and fetch products
-  const productCodes = [...new Set(lineItems.map(li => li.product_id).filter(Boolean))];
-  
-  const { data: products } = await supabase
-    .from("products")
-    .select("code, unit_cost, weight_g")
-    .in("code", productCodes);
-
-  // CPI = unit_cost + supplier_ship_per_unit (calculated from weight)
-  const productCostMap = new Map();
-  for (const p of products || []) {
-    const unitCost = Number(p.unit_cost ?? 0);
-    const weightG = Number(p.weight_g ?? 0);
-    const shipDetails = getSupplierShippingDetails(weightG, 30);
-    const supplierShip = shipDetails.perUnitUSD || 0;
-    productCostMap.set(p.code, unitCost + supplierShip);
-  }
-
-  const labelCostMap = new Map();
-  for (const s of shipmentsRes.data || []) {
-    labelCostMap.set(s.stripe_checkout_session_id, s.label_cost_cents || 0);
-  }
-
-  const orderTotalMap = new Map();
-  for (const o of ordersRes.data || []) {
-    orderTotalMap.set(o.stripe_checkout_session_id, o.total_paid_cents || 0);
-  }
-
-  // Calculate cost per order (using TRUE CPI)
-  const orderCostMap = new Map();
-  for (const li of lineItems) {
-    const sid = li.stripe_checkout_session_id;
-    const qty = Number(li.quantity ?? 1);
-    const trueCpi = productCostMap.get(li.product_id) || 0;
-    const lineCostCents = Math.round(trueCpi * 100 * qty);
-    
-    orderCostMap.set(sid, (orderCostMap.get(sid) || 0) + lineCostCents);
-  }
-
-  // Build final profit map
-  for (const sid of sessionIds) {
-    const costCents = orderCostMap.get(sid) || 0;
-    const labelCents = labelCostMap.get(sid) || 0;
-    const totalPaid = orderTotalMap.get(sid) || 0;
-    const profitCents = totalPaid - costCents - labelCents;
-    
-    profitMap.set(sid, { costCents, profitCents });
-  }
-
-  return profitMap;
 }
 
 export async function fetchOrderSummaryAllForExport(filters = {}) {
@@ -405,51 +323,39 @@ export async function fetchOrderKpis({ q = "", status = "", dateFrom = "", dateT
   const row = Array.isArray(data) ? data[0] : data;
   const baseKpis = row || { orders_count: 0, revenue_cents: 0, profit_cents: 0, unfulfilled_count: 0 };
 
-  // Recalculate profit using the proper CPI formula (unit_cost + supplier_ship from weight)
-  // Limit to 500 orders max for performance
-  let ordersQ = supabase
+  // Profit comes from v_order_summary_plus (via v_order_financials) which already
+  // handles legacy stored cost vs dynamic CPI. Sum it for the filtered orders.
+  let profitQ = supabase
     .from(SUMMARY)
-    .select("stripe_checkout_session_id")
+    .select("profit_cents")
     .order("order_date", { ascending: false })
     .limit(500);
-  
+
   const Q = (q || "").trim();
   if (Q) {
     const or = buildSearchOr(Q);
-    ordersQ = ordersQ.or(or);
+    profitQ = profitQ.or(or);
   }
-  
-  ordersQ = applyDateRange(ordersQ, dateFrom, dateTo);
-  
+
+  profitQ = applyDateRange(profitQ, dateFrom, dateTo);
+
   if (status) {
     const statusSessionIds = await getSessionIdsByStatus(status);
     if (statusSessionIds && statusSessionIds.length > 0) {
-      ordersQ = ordersQ.in("stripe_checkout_session_id", statusSessionIds);
+      profitQ = profitQ.in("stripe_checkout_session_id", statusSessionIds);
     } else if (status) {
       return { ...baseKpis, profit_cents: 0 };
     }
   }
-  
-  const { data: orders, error: ordersErr } = await ordersQ;
-  if (ordersErr) throw ordersErr;
-  
-  if (!orders || orders.length === 0) {
-    return { ...baseKpis, profit_cents: 0 };
-  }
-  
-  const sessionIds = orders.map(o => o.stripe_checkout_session_id).filter(Boolean);
-  
-  // Calculate proper profit using CPI formula
-  const profitMap = await calculateProfitsForOrders(sessionIds);
-  
+
+  const { data: profitRows, error: profitErr } = await profitQ;
+  if (profitErr) throw profitErr;
+
   let totalProfit = 0;
-  for (const sid of sessionIds) {
-    const calc = profitMap.get(sid);
-    if (calc) {
-      totalProfit += calc.profitCents;
-    }
+  for (const r of profitRows || []) {
+    totalProfit += Number(r.profit_cents || 0);
   }
-  
+
   return {
     ...baseKpis,
     profit_cents: totalProfit,

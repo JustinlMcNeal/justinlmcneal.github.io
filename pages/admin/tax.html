@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin · Tax Summary</title>
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: { kkpink: '#ff69b4' }
+        }
+      }
+    }
+  </script>
+
+  <!-- KK base + components -->
+  <link rel="stylesheet" href="/css/theme/base.css" />
+  <link rel="stylesheet" href="/css/theme/components.css" />
+
+  <style>
+    /* ── Screen ─────────────────────────── */
+    .tax-section {
+      background: white;
+      border-radius: 1rem;
+      box-shadow: 0 2px 12px rgba(0,0,0,.06);
+      border: 1px solid #e5e7eb;
+      overflow: hidden;
+    }
+    .tax-section-head {
+      padding: 1rem 1.25rem;
+      border-bottom: 3px solid #000;
+      background: #fafafa;
+    }
+    .pl-row { display: flex; justify-content: space-between; padding: .5rem 1.25rem; }
+    .pl-row.total { border-top: 3px solid #000; font-weight: 900; font-size: 1.1rem; background: #fafafa; }
+    .pl-row.subtotal { border-top: 1px dashed #d1d5db; font-weight: 700; }
+
+    .print-only { display: none; }
+
+    .checklist-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: .75rem; }
+    .check-item { display: flex; align-items: flex-start; gap: .5rem; }
+    .check-item input { margin-top: 3px; width: 18px; height: 18px; accent-color: #000; }
+
+    @media (max-width: 640px) {
+      .responsive-table { font-size: 13px; }
+      .responsive-table th, .responsive-table td { padding: .5rem .6rem; }
+    }
+
+    /* ── Print ──────────────────────────── */
+    @media print {
+      /* Hide UI chrome */
+      #kkAdminNavMount, #kkFooterMount, .no-print { display: none !important; }
+
+      /* Show print header */
+      .print-only { display: block !important; }
+
+      /* Reset layout */
+      body { background: white !important; font-size: 11pt; color: #000 !important; }
+      main { max-width: 100% !important; padding: 0 !important; margin: 0 !important; }
+
+      /* Cards become simple bordered boxes */
+      .tax-section {
+        box-shadow: none !important;
+        border: 1px solid #999 !important;
+        border-radius: 0 !important;
+        break-inside: avoid;
+        margin-bottom: .75rem !important;
+      }
+      .tax-section-head {
+        background: #f0f0f0 !important;
+        border-bottom: 2px solid #000 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+
+      /* KPI cards */
+      .kpi-grid .kpi-card {
+        border: 1px solid #999 !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+
+      /* Tables */
+      table { border-collapse: collapse; width: 100%; }
+      th { background: #eee !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      th, td { border-bottom: 1px solid #ccc; padding: 5px 10px; }
+
+      /* P&L */
+      .pl-row.total, .pl-row.subtotal {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+
+      /* Checklist — always show empty checkbox */
+      .check-item input[type="checkbox"] {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 14px; height: 14px;
+        border: 2px solid #000;
+        border-radius: 2px;
+        background: white;
+      }
+
+      /* Page break before P&L */
+      #plSection { break-before: page; }
+    }
+  </style>
+</head>
+
+<body class="kk-page kk-admin bg-gray-50 min-h-screen">
+  <!-- Admin Nav -->
+  <div id="kkAdminNavMount"></div>
+
+  <main class="max-w-5xl mx-auto px-2 sm:px-6 py-4 sm:py-8">
+
+    <!-- ─── Header ─── -->
+    <header class="no-print bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6">
+      <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+        <div>
+          <div class="inline-block bg-black text-white px-2 py-1 text-[10px] font-black uppercase tracking-[.25em] mb-2">
+            Admin Panel
+          </div>
+          <h1 class="text-2xl sm:text-4xl font-black tracking-tight">Tax Summary</h1>
+          <p class="text-xs sm:text-sm text-gray-500 mt-1">
+            LLC income, expenses &amp; deductions for tax filing (Schedule C)
+          </p>
+        </div>
+        <div class="flex items-center gap-3 self-start sm:self-auto">
+          <select id="yearSelect"
+            class="border-4 border-black px-3 py-2 text-sm font-black outline-none bg-white focus:border-kkpink transition-colors">
+          </select>
+          <button id="btnPrint" type="button"
+            class="border-4 border-black bg-black text-white px-5 py-2 font-black uppercase tracking-[.12em] text-xs
+                   hover:bg-kkpink hover:border-kkpink hover:text-black transition-all flex items-center gap-2">
+            🖨️ Print
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- ─── Print-only Header ─── -->
+    <div class="print-only" style="text-align:center; margin-bottom:1.5rem;">
+      <h1 style="font-size:22pt; font-weight:900; margin:0;">KARRY KRAZE LLC</h1>
+      <h2 style="font-size:14pt; font-weight:700; margin:4px 0;">Tax Summary — <span id="printYear"></span></h2>
+      <p style="font-size:10pt; color:#555;">Prepared: <span id="printDate"></span></p>
+      <hr style="margin-top:12px; border:none; border-top:2px solid #000;" />
+    </div>
+
+    <!-- ─── Loading ─── -->
+    <div id="taxLoading" class="text-center py-12 text-sm text-gray-500 font-bold uppercase tracking-widest">
+      Loading tax data…
+    </div>
+
+    <!-- ─── Content (hidden until loaded) ─── -->
+    <div id="taxContent" class="hidden space-y-4 sm:space-y-6">
+
+      <!-- KPI Cards -->
+      <section class="kpi-grid grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div class="kpi-card bg-white rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4">
+          <div class="text-[9px] sm:text-[10px] font-black uppercase tracking-[.18em] text-gray-500 mb-1">Gross Revenue</div>
+          <div id="kpiRevenue" class="text-lg sm:text-2xl font-black">$0.00</div>
+        </div>
+        <div class="kpi-card bg-white rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4">
+          <div class="text-[9px] sm:text-[10px] font-black uppercase tracking-[.18em] text-gray-500 mb-1">COGS</div>
+          <div id="kpiCogs" class="text-lg sm:text-2xl font-black">$0.00</div>
+        </div>
+        <div class="kpi-card bg-white rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4">
+          <div class="text-[9px] sm:text-[10px] font-black uppercase tracking-[.18em] text-gray-500 mb-1">Expenses</div>
+          <div id="kpiExpenses" class="text-lg sm:text-2xl font-black">$0.00</div>
+        </div>
+        <div class="kpi-card bg-white rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4">
+          <div class="text-[9px] sm:text-[10px] font-black uppercase tracking-[.18em] text-gray-500 mb-1">Net Profit</div>
+          <div id="kpiNet" class="text-lg sm:text-2xl font-black">$0.00</div>
+        </div>
+      </section>
+
+      <!-- ═══ INCOME ═══ -->
+      <section class="tax-section">
+        <div class="tax-section-head flex items-center justify-between">
+          <h2 class="font-black text-lg uppercase tracking-wider">Income</h2>
+          <span class="text-xs text-gray-400">Schedule C · Line 1</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm responsive-table">
+            <thead class="bg-black text-white text-[11px] uppercase tracking-[.12em] font-black text-left">
+              <tr>
+                <th class="px-4 py-3">Source</th>
+                <th class="px-4 py-3 text-right">Orders</th>
+                <th class="px-4 py-3 text-right">Product Sales</th>
+                <th class="px-4 py-3 text-right">Shipping Charged</th>
+              </tr>
+            </thead>
+            <tbody id="incomeBody"></tbody>
+          </table>
+        </div>
+        <div class="px-4 py-3 bg-gray-50 flex flex-wrap gap-4 text-sm border-t border-gray-200">
+          <div><span class="text-gray-500">Gross Revenue (Sales + Shipping):</span>
+            <span id="incomeTotal" class="font-black ml-1">$0.00</span></div>
+          <div><span class="text-gray-500">Sales Tax Collected:</span>
+            <span id="taxCollected" class="font-black ml-1">$0.00</span>
+            <span class="text-xs text-gray-400 ml-1">(pass-through, not income)</span></div>
+        </div>
+      </section>
+
+      <!-- ═══ COGS ═══ -->
+      <section class="tax-section">
+        <div class="tax-section-head flex items-center justify-between">
+          <h2 class="font-black text-lg uppercase tracking-wider">Cost of Goods Sold</h2>
+          <span class="text-xs text-gray-400">Schedule C · Line 4</span>
+        </div>
+        <div class="divide-y divide-gray-100 text-sm">
+          <div class="flex justify-between px-4 py-3">
+            <span>Purchases <span class="text-xs text-gray-400">(Inventory expenses)</span></span>
+            <span id="cogsPurchases" class="font-bold">$0.00</span>
+          </div>
+          <div id="cogsMaterialsRow" class="flex justify-between px-4 py-3">
+            <span>Materials &amp; Supplies <span class="text-xs text-gray-400">(Packaging, shipping tools)</span></span>
+            <span id="cogsMaterials" class="font-bold">$0.00</span>
+          </div>
+          <div class="flex justify-between px-4 py-3 bg-gray-50 font-black border-t-2 border-black">
+            <span>Total COGS</span>
+            <span id="cogsTotal">$0.00</span>
+          </div>
+        </div>
+        <div class="px-4 py-2 text-xs text-gray-400 border-t border-gray-100">
+          ℹ️ Purchases = products bought for resale. Materials = packaging supplies used to ship them.
+        </div>
+      </section>
+
+      <!-- ═══ EXPENSES ═══ -->
+      <section class="tax-section">
+        <div class="tax-section-head flex items-center justify-between">
+          <h2 class="font-black text-lg uppercase tracking-wider">Business Expenses</h2>
+          <span class="text-xs text-gray-400">Schedule C · Lines 8–27</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm responsive-table">
+            <thead class="bg-black text-white text-[11px] uppercase tracking-[.12em] font-black text-left">
+              <tr>
+                <th class="px-4 py-3 w-12">Line</th>
+                <th class="px-4 py-3">Schedule C Category</th>
+                <th class="px-4 py-3">Your Categories</th>
+                <th class="px-4 py-3 text-right">Amount</th>
+              </tr>
+            </thead>
+            <tbody id="expenseBody"></tbody>
+          </table>
+        </div>
+        <div class="px-4 py-2 text-xs text-gray-400 border-t border-gray-100">
+          💡 Meals are only 50% deductible. Label costs from Pirate Ship / USPS are included under Shipping &amp; Postage.
+        </div>
+      </section>
+
+      <!-- ═══ PROFIT & LOSS SUMMARY ═══ -->
+      <section id="plSection" class="tax-section">
+        <div class="tax-section-head">
+          <h2 class="font-black text-lg uppercase tracking-wider">Profit &amp; Loss Summary</h2>
+        </div>
+        <div class="text-sm">
+          <div class="pl-row">
+            <span>Gross Revenue</span>
+            <span id="plRevenue" class="font-bold">$0.00</span>
+          </div>
+          <div class="pl-row text-gray-500">
+            <span>− Cost of Goods Sold</span>
+            <span id="plCogs">$0.00</span>
+          </div>
+          <div class="pl-row subtotal">
+            <span>Gross Profit</span>
+            <span id="plGross" class="font-bold">$0.00</span>
+          </div>
+          <div class="pl-row text-gray-500">
+            <span>− Business Expenses</span>
+            <span id="plExpenses">$0.00</span>
+          </div>
+          <div class="pl-row total" id="plNetRow">
+            <span>Net Profit / (Loss)</span>
+            <span id="plNet">$0.00</span>
+          </div>
+          <div class="pl-row text-gray-400 text-xs">
+            <span>Estimated Self-Employment Tax (15.3% of 92.35% net)</span>
+            <span id="plSETax">$0.00</span>
+          </div>
+        </div>
+        <div class="px-4 py-2 text-xs text-gray-400 border-t border-gray-100">
+          SE tax only applies if net profit &gt; $0. This is an estimate — consult a CPA for exact figures.
+        </div>
+      </section>
+
+      <!-- ═══ DOCUMENT CHECKLIST ═══ -->
+      <section class="tax-section">
+        <div class="tax-section-head">
+          <h2 class="font-black text-lg uppercase tracking-wider">📋 Tax Filing Checklist</h2>
+        </div>
+        <div class="p-4 sm:p-6 space-y-5">
+
+          <!-- Income Documents -->
+          <div>
+            <h3 class="text-xs font-black uppercase tracking-[.18em] text-gray-500 mb-3">Income Documents</h3>
+            <div class="checklist-grid">
+              <label class="check-item"><input type="checkbox" /><span class="text-sm">1099-K from Stripe <span class="text-gray-400">(if gross &gt; $600)</span></span></label>
+              <label class="check-item"><input type="checkbox" /><span class="text-sm">1099-K from Amazon <span class="text-gray-400">(if gross &gt; $600)</span></span></label>
+              <label class="check-item"><input type="checkbox" /><span class="text-sm">Own income records <span class="text-gray-400">(Stripe dashboard, bank deposits)</span></span></label>
+              <label class="check-item"><input type="checkbox" /><span class="text-sm">PayPal / Venmo 1099-K <span class="text-gray-400">(if applicable)</span></span></label>
+            </div>
+          </div>
+
+          <!-- Expense Records -->
+          <div>
+            <h3 class="text-xs font-black uppercase tracking-[.18em] text-gray-500 mb-3">Expense Records</h3>
+            <div class="checklist-grid">
+              <label class="check-item"><input type="checkbox" /><span class="text-sm">Supplies receipts</span></label>
+              <label class="check-item"><input type="checkbox" /><span class="text-sm">Software / subscriptions <span class="text-gray-400">(Supabase, domain, hosting)</span></span></label>
+              <label class="check-item"><input type="checkbox" /><span class="text-sm">Advertising / marketing spend</span></label>
+              <label class="check-item"><input type="checkbox" /><span class="text-sm">Website costs <span class="text-gray-400">(domain, hosting, SSL)</span></span></label>
+              <label class="check-item"><input type="checkbox" /><span class="text-sm">Business phone / internet <span class="text-gray-400">(business portion only)</span></span></label>
+              <label class="check-item"><input type="checkbox" /><span class="text-sm">Mileage log <span class="text-gray-400">(if applicable)</span></span></label>
+              <label class="check-item"><input type="checkbox" /><span class="text-sm">Equipment <span class="text-gray-400">(laptop, camera — business portion)</span></span></label>
+              <label class="check-item"><input type="checkbox" /><span class="text-sm">Shipping label receipts <span class="text-gray-400">(Pirate Ship, USPS)</span></span></label>
+              <label class="check-item"><input type="checkbox" /><span class="text-sm">Inventory purchase invoices</span></label>
+            </div>
+          </div>
+
+          <!-- Banking -->
+          <div>
+            <h3 class="text-xs font-black uppercase tracking-[.18em] text-gray-500 mb-3">Banking &amp; Records</h3>
+            <div class="checklist-grid">
+              <label class="check-item"><input type="checkbox" /><span class="text-sm">LLC bank account statements <span class="tax-year-label"></span></span></label>
+              <label class="check-item"><input type="checkbox" /><span class="text-sm">Credit card statements <span class="text-gray-400">(business purchases)</span></span></label>
+              <label class="check-item"><input type="checkbox" /><span class="text-sm">EIN confirmation letter <span class="text-gray-400">(IRS CP 575)</span></span></label>
+              <label class="check-item"><input type="checkbox" /><span class="text-sm">LLC operating agreement</span></label>
+              <label class="check-item"><input type="checkbox" /><span class="text-sm">State LLC annual report <span class="text-gray-400">(if required)</span></span></label>
+            </div>
+          </div>
+
+          <!-- Important Dates -->
+          <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <h3 class="text-xs font-black uppercase tracking-[.18em] text-yellow-700 mb-2">⏰ Important Deadlines</h3>
+            <ul class="text-sm text-yellow-800 space-y-1">
+              <li><strong>April 15:</strong> Schedule C due with personal 1040 (or extension)</li>
+              <li><strong>Quarterly Estimated Taxes:</strong> Apr 15, Jun 15, Sep 15, Jan 15</li>
+              <li><strong>Self-Employment Tax:</strong> Schedule SE, filed with 1040</li>
+            </ul>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ═══ NOTES ═══ -->
+      <section class="tax-section">
+        <div class="tax-section-head">
+          <h2 class="font-black text-lg uppercase tracking-wider">📌 Notes</h2>
+        </div>
+        <div class="p-4 sm:p-6 text-sm text-gray-600 space-y-2">
+          <p>• <strong>Single-member LLC</strong> files Schedule C with Form 1040. No separate business return needed.</p>
+          <p>• <strong>Even if net profit ≈ $0</strong>, you must file to report business activity and protect against overpaying SE tax.</p>
+          <p>• <strong>Sales tax collected</strong> is a pass-through liability — not taxable income. Remit to your state separately.</p>
+          <p>• <strong>Home office deduction</strong> may apply if you use a dedicated space. Use Form 8829 or simplified method ($5/sq ft, max 300 sq ft).</p>
+          <p>• <strong>Product costs (COGS)</strong> shown here are estimated from supplier unit costs and shipping. Cross-reference with actual invoices.</p>
+        </div>
+      </section>
+
+    </div><!-- /taxContent -->
+  </main>
+
+  <!-- Footer -->
+  <div id="kkFooterMount"></div>
+
+  <script type="module" src="/js/admin/tax/index.js"></script>
+</body>
+</html>

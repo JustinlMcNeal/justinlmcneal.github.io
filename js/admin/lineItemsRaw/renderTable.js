@@ -2,6 +2,14 @@
 import { esc, formatDateShort, money, centsToDollars } from "./dom.js";
 import { state } from "./state.js";
 
+/** Truncate long IDs for display; full value stays in title + data attr */
+function truncateId(id, max = 16) {
+  const s = String(id || "—");
+  if (s.length <= max) return esc(s);
+  const short = s.slice(0, max) + "…";
+  return `<span class="order-id-cell cursor-pointer" title="${esc(s)}" data-copy="${esc(s)}">${esc(short)}</span>`;
+}
+
 function editButton(id) {
   return `
     <button
@@ -73,8 +81,8 @@ export function renderTable({ tbodyEl, countLabelEl, onEdit } = {}) {
             ${esc(formatDateShort(r.order_date))}
           </td>
 
-          <td class="px-3 py-3 text-sm whitespace-nowrap" title="${esc(r.kk_order_id || "")}">
-            <span class="font-black">${esc(r.kk_order_id || "—")}</span>
+          <td class="px-3 py-3 text-sm whitespace-nowrap max-w-[160px]" title="${esc(r.kk_order_id || "")}">
+            <span class="font-black">${truncateId(r.kk_order_id)}</span>
           </td>
 
           <td class="px-3 py-3 text-sm" title="${esc(prod)}">
@@ -108,6 +116,19 @@ export function renderTable({ tbodyEl, countLabelEl, onEdit } = {}) {
       `;
     })
     .join("");
+
+  // Click-to-copy for truncated order IDs
+  tbodyEl.querySelectorAll("[data-copy]").forEach((el) => {
+    el.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const text = el.getAttribute("data-copy");
+      navigator.clipboard.writeText(text).then(() => {
+        const orig = el.textContent;
+        el.textContent = "Copied!";
+        setTimeout(() => (el.textContent = orig), 1200);
+      });
+    });
+  });
 
   tbodyEl.querySelectorAll("[data-edit]").forEach((btn) => {
     btn.addEventListener("click", () => {
