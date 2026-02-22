@@ -99,6 +99,12 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f9fafb}
   .exp-row{break-inside:avoid; page-break-inside:avoid}
   .row-grid{break-inside:avoid; page-break-inside:avoid}
 
+  /* Keep sub-groups (e.g. depreciation area in Section E) together */
+  .keep-group{break-inside:avoid; page-break-inside:avoid}
+
+  /* Prevent a header from being orphaned at page bottom */
+  .pkt-section.push-next-page{break-before:page !important; page-break-before:always !important}
+
   /* Only force new page for major boundaries: Section A header and the Summary */
   #sectionA{break-before:auto}
   #sectionH{break-before:page}
@@ -322,6 +328,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f9fafb}
   <div class="pkt-body">
     <p class="help no-print">Enter each expense category total. These are deducted from gross profit.</p>
     <div id="expRows"></div>
+    <div class="keep-group">
     <h4 style="font-weight:900;font-size:.82rem;margin:1.25rem 0 .5rem">Depreciation / Asset Purchases</h4>
     <p class="help no-print">List business-use assets purchased this year. You may elect Section 179 or use standard depreciation.</p>
     <div style="overflow-x:auto">
@@ -343,6 +350,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f9fafb}
       <strong>Total Expenses:</strong> <span id="expTotal" style="font-weight:900">$0.00</span>
       <span style="margin-left:1rem"><strong>Depreciation:</strong> <span id="deprTotal" style="font-weight:900">$0.00</span></span>
     </div>
+    </div><!-- /.keep-group -->
   </div>
 </section>
 
@@ -686,17 +694,34 @@ function load(){
 const PAGE_HEIGHT_PX = 9 * 96; // 9in usable height at 96dpi (letter minus margins)
 
 window.addEventListener("beforeprint", () => {
-  document.querySelectorAll(".pkt-section").forEach(sec => {
-    sec.classList.remove("print-breakable");
-    // Use scrollHeight as an approximation of printed height
+  const sections = document.querySelectorAll(".pkt-section");
+  // Pass 1: mark tall sections as breakable
+  sections.forEach(sec => {
+    sec.classList.remove("print-breakable", "push-next-page");
     if (sec.scrollHeight > PAGE_HEIGHT_PX) {
       sec.classList.add("print-breakable");
     }
   });
+  // Pass 2: prevent orphaned headers
+  // Accumulate heights and push a section to the next page if it would
+  // start in the bottom 15% of a page (≈ only header visible).
+  const ORPHAN_ZONE = PAGE_HEIGHT_PX * 0.15; // ~1.35 in
+  let cumHeight = 0;
+  sections.forEach(sec => {
+    if (sec.id === "sectionH") return; // already has break-before:page
+    const posOnPage = cumHeight % PAGE_HEIGHT_PX;
+    const remaining = PAGE_HEIGHT_PX - posOnPage;
+    // If it would start in the orphan zone and section won't fit in remaining space
+    if (remaining < ORPHAN_ZONE && sec.scrollHeight > remaining) {
+      sec.classList.add("push-next-page");
+      cumHeight += remaining; // skip to next page
+    }
+    cumHeight += sec.scrollHeight;
+  });
 });
 window.addEventListener("afterprint", () => {
-  document.querySelectorAll(".print-breakable").forEach(sec => {
-    sec.classList.remove("print-breakable");
+  document.querySelectorAll(".print-breakable, .push-next-page").forEach(sec => {
+    sec.classList.remove("print-breakable", "push-next-page");
   });
 });
 
