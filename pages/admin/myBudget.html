@@ -246,13 +246,15 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f9fafb}
 <script type="module">
 import { initAdminNav } from "/js/shared/adminNav.js";
 import { initFooter }   from "/js/shared/footer.js";
-import { seedIfEmpty }  from "/js/admin/myBudget/seed2025.js";
+import { createClient }  from "https://esm.sh/@supabase/supabase-js@2";
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from "/js/config/env.js";
+
 initAdminNav("My Budget");
 initFooter();
-// Pre-populate 2025 data on first visit
-if (seedIfEmpty()) {
-  console.log("[Budget] Seeded 2025 personal expenses from bank statements.");
-}
+
+// Expose supabase client globally for the non-module script below
+window.__supa = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+window.dispatchEvent(new Event("supa-ready"));
 </script>
 <script>
 /* ══════════════════════════════════════════════════
@@ -278,27 +280,71 @@ const CAT_MAP = Object.fromEntries(CATEGORIES.map(c => [c.key, c]));
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 /* ══════════════════════════════════════════════════
-   STATE
+   STATE  (backed by Supabase personal_expenses table)
    ══════════════════════════════════════════════════ */
-const LS_KEY = "kk_personal_budget";
-let state = loadState();
+let state = { transactions: [] };
 let sortField = "date";
 let sortDir = -1; // -1 = newest first
+let supabase = null; // set once module script fires supa-ready
 
-function getDefault() {
-  return { transactions: [], budgets: {} };
+/** Map a DB row → in-memory transaction shape */
+function rowToTxn(r) {
+  return {
+    id:          r.id,
+    date:        r.expense_date,
+    description: r.description,
+    category:    r.category,
+    amount:      (r.amount_cents || 0) / 100,
+    source:      r.source || "Checking",
+    notes:       r.notes || "",
+  };
 }
 
-function loadState() {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (raw) return { ...getDefault(), ...JSON.parse(raw) };
-  } catch (e) { console.warn(e); }
-  return getDefault();
+/** Load all rows from Supabase */
+async function loadFromDB() {
+  if (!supabase) return;
+  const { data, error } = await supabase
+    .from("personal_expenses")
+    .select("*")
+    .order("expense_date", { ascending: true });
+  if (error) { console.error("[Budget] load error:", error); return; }
+  state.transactions = (data || []).map(rowToTxn);
 }
 
-function save() {
-  localStorage.setItem(LS_KEY, JSON.stringify(state));
+/** Upsert one row to Supabase, returns the new/updated row */
+async function upsertToDB(txn) {
+  const row = {
+    expense_date:  txn.date,
+    description:   txn.description,
+    category:      txn.category,
+    amount_cents:  Math.round((txn.amount || 0) * 100),
+    source:        txn.source || "Checking",
+    notes:         txn.notes || null,
+  };
+  if (txn.id) row.id = txn.id;
+  const { data, error } = await supabase
+    .from("personal_expenses")
+    .upsert(row, { onConflict: "id" })
+    .select()
+    .single();
+  if (error) { console.error("[Budget] upsert error:", error); alert("Save failed: " + error.message); return null; }
+  return data;
+}
+
+/** Delete one row */
+async function deleteFromDB(id) {
+  const { error } = await supabase.from("personal_expenses").delete().eq("id", id);
+  if (error) { console.error("[Budget] delete error:", error); alert("Delete failed: " + error.message); }
+}
+
+/** Bulk insert rows */
+async function bulkInsertDB(rows) {
+  const { data, error } = await supabase
+    .from("personal_expenses")
+    .insert(rows)
+    .select();
+  if (error) { console.error("[Budget] bulk insert error:", error); alert("Import failed: " + error.message); return []; }
+  return data || [];
 }
 
 /* ══════════════════════════════════════════════════
@@ -687,7 +733,7 @@ window.closeModal = function () {
   document.getElementById("txnModal").style.display = "none";
 };
 
-window.saveTxn = function () {
+window.saveTxn = async function () {
   const date = document.getElementById("mDate").value;
   const desc = document.getElementById("mDesc").value.trim();
   const cat  = document.getElementById("mCat").value;
@@ -698,27 +744,28 @@ window.saveTxn = function () {
 
   if (!date || !desc || !amt) { alert("Date, description, and amount are required."); return; }
 
+  const txn = { date, description: desc, category: cat, amount: amt, source: src, notes };
+  if (editId) txn.id = editId;
+
+  const saved = await upsertToDB(txn);
+  if (!saved) return;
+
+  const mapped = rowToTxn(saved);
   if (editId) {
     const idx = state.transactions.findIndex(t => t.id === editId);
-    if (idx >= 0) {
-      state.transactions[idx] = { ...state.transactions[idx], date, description: desc, category: cat, amount: amt, source: src, notes };
-    }
+    if (idx >= 0) state.transactions[idx] = mapped;
   } else {
-    state.transactions.push({
-      id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).substring(2),
-      date, description: desc, category: cat, amount: amt, source: src, notes
-    });
+    state.transactions.push(mapped);
   }
 
-  save();
   closeModal();
   render();
 };
 
-window.deleteTxn = function (id) {
+window.deleteTxn = async function (id) {
   if (!confirm("Delete this transaction?")) return;
+  await deleteFromDB(id);
   state.transactions = state.transactions.filter(t => t.id !== id);
-  save();
   render();
 };
 
@@ -726,10 +773,9 @@ window.deleteTxn = function (id) {
    EXPORT / IMPORT / RESET
    ══════════════════════════════════════════════════ */
 window.exportBudgetJSON = function () {
-  save();
   const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
+  a.href = window.URL.createObjectURL(blob);
   a.download = `personal-budget-${getSelectedYear()}.json`;
   a.click();
 };
@@ -738,35 +784,37 @@ window.importBudgetJSON = function (input) {
   const f = input.files[0];
   if (!f) return;
   const reader = new FileReader();
-  reader.onload = () => {
+  reader.onload = async () => {
     try {
       const imported = JSON.parse(reader.result);
-      if (imported.transactions) {
-        // Merge — skip duplicates by id
-        const existingIds = new Set(state.transactions.map(t => t.id));
-        let added = 0;
-        imported.transactions.forEach(t => {
-          if (!existingIds.has(t.id)) {
-            state.transactions.push(t);
-            added++;
-          }
-        });
-        save();
+      const txns = imported.transactions || [];
+      if (!txns.length) { alert("No transactions found in file."); return; }
+      // Convert to DB rows
+      const rows = txns.map(t => ({
+        expense_date: t.date,
+        description:  t.description,
+        category:     t.category,
+        amount_cents: Math.round((t.amount || 0) * 100),
+        source:       t.source || "Checking",
+        notes:        t.notes || null,
+      }));
+      const inserted = await bulkInsertDB(rows);
+      if (inserted.length) {
+        inserted.forEach(r => state.transactions.push(rowToTxn(r)));
         render();
-        alert(`Imported ${added} new transactions (${imported.transactions.length - added} duplicates skipped).`);
-      } else {
-        alert("No transactions found in file.");
+        alert(`Imported ${inserted.length} transactions into the database.`);
       }
-    } catch (e) { alert("Invalid JSON file"); }
+    } catch (e) { alert("Invalid JSON file: " + e.message); }
   };
   reader.readAsText(f);
   input.value = "";
 };
 
-window.resetBudget = function () {
+window.resetBudget = async function () {
   if (!confirm("Delete ALL personal budget data? This cannot be undone.")) return;
-  localStorage.removeItem(LS_KEY);
-  state = getDefault();
+  const { error } = await supabase.from("personal_expenses").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+  if (error) { alert("Reset failed: " + error.message); return; }
+  state.transactions = [];
   render();
 };
 
@@ -787,7 +835,19 @@ function esc(s) { return (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").
 /* ══════════════════════════════════════════════════
    BOOT
    ══════════════════════════════════════════════════ */
-document.addEventListener("DOMContentLoaded", () => {
+// Wait for supabase client from the module script
+function bootWhenReady() {
+  if (window.__supa) {
+    supabase = window.__supa;
+    boot();
+  } else {
+    window.addEventListener("supa-ready", () => { supabase = window.__supa; boot(); }, { once: true });
+  }
+}
+
+async function boot() {
+  await loadFromDB();
+
   // Populate year select
   const yearSel = document.getElementById("yearSelect");
   getYears().forEach(y => {
@@ -803,7 +863,9 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   render();
-});
+}
+
+document.addEventListener("DOMContentLoaded", bootWhenReady);
 </script>
 </body>
 </html>
