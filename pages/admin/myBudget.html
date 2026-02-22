@@ -248,10 +248,12 @@ import { initAdminNav }     from "/js/shared/adminNav.js";
 import { initFooter }       from "/js/shared/footer.js";
 import { getSupabaseClient } from "/js/shared/supabaseClient.js";
 
+console.log("[Budget] module script executing");
 initAdminNav("My Budget");
 initFooter();
 
 const supabase = getSupabaseClient();
+console.log("[Budget] supabase client:", supabase ? "OK" : "NULL");
 /* ══════════════════════════════════════════════════
    CATEGORIES
    ══════════════════════════════════════════════════ */
@@ -296,13 +298,20 @@ function rowToTxn(r) {
 
 /** Load all rows from Supabase */
 async function loadFromDB() {
-  if (!supabase) return;
-  const { data, error } = await supabase
-    .from("personal_expenses")
-    .select("*")
-    .order("expense_date", { ascending: true });
-  if (error) { console.error("[Budget] load error:", error); return; }
-  state.transactions = (data || []).map(rowToTxn);
+  console.log("[Budget] loadFromDB called, supabase:", supabase ? "OK" : "NULL");
+  if (!supabase) { console.error("[Budget] supabase is null, aborting load"); return; }
+  try {
+    const { data, error } = await supabase
+      .from("personal_expenses")
+      .select("*")
+      .order("expense_date", { ascending: true });
+    console.log("[Budget] query result — error:", error, "rows:", data?.length);
+    if (error) { console.error("[Budget] load error:", error); return; }
+    state.transactions = (data || []).map(rowToTxn);
+    console.log("[Budget] loaded", state.transactions.length, "transactions, first:", state.transactions[0]);
+  } catch (e) {
+    console.error("[Budget] loadFromDB exception:", e);
+  }
 }
 
 /** Upsert one row to Supabase, returns the new/updated row */
@@ -362,6 +371,7 @@ function txnsForYear(year) {
 function render() {
   const year = getSelectedYear();
   const txns = txnsForYear(year);
+  console.log("[Budget] render() — year:", year, "txns:", txns.length, "total state:", state.transactions.length);
 
   // Stat cards
   const total = txns.reduce((s, t) => s + (t.amount || 0), 0);
@@ -835,25 +845,35 @@ function esc(s) { return (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").
    BOOT
    ══════════════════════════════════════════════════ */
 async function boot() {
-  await loadFromDB();
+  console.log("[Budget] boot() starting");
+  try {
+    await loadFromDB();
+    console.log("[Budget] after loadFromDB, transactions:", state.transactions.length);
 
-  // Populate year select
-  const yearSel = document.getElementById("yearSelect");
-  getYears().forEach(y => {
-    const opt = document.createElement("option");
-    opt.value = y; opt.textContent = y;
-    yearSel.appendChild(opt);
-  });
-  yearSel.value = "2025";
+    // Populate year select
+    const yearSel = document.getElementById("yearSelect");
+    const years = getYears();
+    console.log("[Budget] years detected:", years);
+    years.forEach(y => {
+      const opt = document.createElement("option");
+      opt.value = y; opt.textContent = y;
+      yearSel.appendChild(opt);
+    });
+    yearSel.value = "2025";
 
-  // Close modal on overlay click
-  document.getElementById("txnModal").addEventListener("click", e => {
-    if (e.target === e.currentTarget) closeModal();
-  });
+    // Close modal on overlay click
+    document.getElementById("txnModal").addEventListener("click", e => {
+      if (e.target === e.currentTarget) closeModal();
+    });
 
-  render();
+    render();
+    console.log("[Budget] boot() complete");
+  } catch (e) {
+    console.error("[Budget] boot() EXCEPTION:", e);
+  }
 }
 
+console.log("[Budget] calling boot()");
 boot();
 </script>
 </body>
