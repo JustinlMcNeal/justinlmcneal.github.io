@@ -244,19 +244,14 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f9fafb}
 <!-- SCRIPT                                         -->
 <!-- ═══════════════════════════════════════════════ -->
 <script type="module">
-import { initAdminNav } from "/js/shared/adminNav.js";
-import { initFooter }   from "/js/shared/footer.js";
-import { createClient }  from "https://esm.sh/@supabase/supabase-js@2";
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from "/js/config/env.js";
+import { initAdminNav }     from "/js/shared/adminNav.js";
+import { initFooter }       from "/js/shared/footer.js";
+import { getSupabaseClient } from "/js/shared/supabaseClient.js";
 
 initAdminNav("My Budget");
 initFooter();
 
-// Expose supabase client globally for the non-module script below
-window.__supa = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-window.dispatchEvent(new Event("supa-ready"));
-</script>
-<script>
+const supabase = getSupabaseClient();
 /* ══════════════════════════════════════════════════
    CATEGORIES
    ══════════════════════════════════════════════════ */
@@ -285,7 +280,6 @@ const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov
 let state = { transactions: [] };
 let sortField = "date";
 let sortDir = -1; // -1 = newest first
-let supabase = null; // set once module script fires supa-ready
 
 /** Map a DB row → in-memory transaction shape */
 function rowToTxn(r) {
@@ -835,16 +829,6 @@ function esc(s) { return (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").
 /* ══════════════════════════════════════════════════
    BOOT
    ══════════════════════════════════════════════════ */
-// Wait for supabase client from the module script
-function bootWhenReady() {
-  if (window.__supa) {
-    supabase = window.__supa;
-    boot();
-  } else {
-    window.addEventListener("supa-ready", () => { supabase = window.__supa; boot(); }, { once: true });
-  }
-}
-
 async function boot() {
   await loadFromDB();
 
@@ -865,7 +849,7 @@ async function boot() {
   render();
 }
 
-document.addEventListener("DOMContentLoaded", bootWhenReady);
+boot();
 </script>
 </body>
 </html>
