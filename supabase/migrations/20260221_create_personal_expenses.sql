@@ -38,3 +38,23 @@ CREATE POLICY "personal_expenses_anon_update"
 CREATE POLICY "personal_expenses_anon_delete"
   ON personal_expenses FOR DELETE
   TO anon USING (true);
+
+-- Policy: authenticated can read
+CREATE POLICY "personal_expenses_auth_read"
+  ON personal_expenses FOR SELECT
+  TO authenticated USING (true);
+
+-- Policy: authenticated can insert
+CREATE POLICY "personal_expenses_auth_insert"
+  ON personal_expenses FOR INSERT
+  TO authenticated WITH CHECK (true);
+
+-- Policy: authenticated can update
+CREATE POLICY "personal_expenses_auth_update"
+  ON personal_expenses FOR UPDATE
+  TO authenticated USING (true) WITH CHECK (true);
+
+-- Policy: authenticated can delete
+CREATE POLICY "personal_expenses_auth_delete"
+  ON personal_expenses FOR DELETE
+  TO authenticated USING (true);
