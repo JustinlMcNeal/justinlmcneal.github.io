@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Admin · My Budget Tracker</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>tailwind.config={theme:{extend:{colors:{kkpink:'#ff69b4'}}}}</script>
+<link rel="stylesheet" href="/css/theme/base.css"/>
+<link rel="stylesheet" href="/css/theme/components.css"/>
+<style>
+*{box-sizing:border-box}
+body{font-family:system-ui,-apple-system,sans-serif;background:#f9fafb}
+
+/* ── Sections ───────────────────────────────── */
+.bud-section{background:#fff;border:1px solid #e5e7eb;border-radius:1rem;overflow:hidden;margin-bottom:1.5rem;box-shadow:0 2px 10px rgba(0,0,0,.04)}
+.bud-head{padding:1rem 1.25rem;border-bottom:3px solid #000;background:#fafafa;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem}
+.bud-head h2{font-weight:900;font-size:1.15rem;text-transform:uppercase;letter-spacing:.08em;margin:0}
+.bud-head .tag{font-size:.7rem;color:#9ca3af;font-weight:700;letter-spacing:.06em}
+.bud-body{padding:1rem 1.25rem}
+
+/* ── Buttons ────────────────────────────────── */
+.btn{border:2px solid #000;border-radius:.375rem;padding:.4rem .8rem;font-size:.75rem;font-weight:900;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;background:#fff;transition:all .15s}
+.btn:hover{background:#000;color:#fff}
+.btn-sm{padding:.25rem .5rem;font-size:.68rem}
+.btn-black{background:#000;color:#fff;border-color:#000}
+.btn-black:hover{background:#ff69b4;border-color:#ff69b4;color:#000}
+.btn-red{border-color:#ef4444;color:#ef4444}
+.btn-red:hover{background:#ef4444;color:#fff}
+.btn-green{border-color:#10b981;color:#065f46}
+.btn-green:hover{background:#10b981;color:#fff}
+
+/* ── Stat Cards ─────────────────────────────── */
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:.75rem;margin-bottom:1rem}
+.stat-card{background:#fff;border:2px solid #e5e7eb;border-radius:.75rem;padding:1rem;text-align:center;transition:border-color .15s}
+.stat-card:hover{border-color:#000}
+.stat-card .label{font-size:.65rem;font-weight:900;text-transform:uppercase;letter-spacing:.14em;color:#9ca3af}
+.stat-card .value{font-size:1.5rem;font-weight:900;margin:.25rem 0}
+.stat-card .sub{font-size:.72rem;color:#6b7280}
+
+/* ── Chart ──────────────────────────────────── */
+.bar-chart{display:flex;align-items:flex-end;gap:4px;height:180px;padding:0 .25rem;border-bottom:2px solid #e5e7eb;margin-bottom:.5rem}
+.bar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0}
+.bar-col .bar{width:100%;min-height:2px;border-radius:4px 4px 0 0;background:#000;transition:height .4s ease}
+.bar-col .bar.over{background:#ef4444}
+.bar-col .bar.under{background:#10b981}
+.bar-col .bar-lbl{font-size:.6rem;font-weight:900;color:#374151;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.bar-col .bar-val{font-size:.6rem;color:#6b7280}
+
+/* ── Category Bars ──────────────────────────── */
+.cat-row{display:flex;align-items:center;gap:.75rem;padding:.5rem 0;border-bottom:1px solid #f3f4f6}
+.cat-row:last-child{border:none}
+.cat-name{width:130px;font-size:.78rem;font-weight:700;flex-shrink:0}
+.cat-bar-wrap{flex:1;background:#f3f4f6;border-radius:9999px;height:22px;overflow:hidden;position:relative}
+.cat-bar-fill{height:100%;border-radius:9999px;transition:width .5s ease;display:flex;align-items:center;padding:0 8px;min-width:fit-content}
+.cat-bar-fill span{font-size:.65rem;font-weight:900;color:#fff;white-space:nowrap}
+.cat-amt{width:80px;text-align:right;font-size:.82rem;font-weight:900;flex-shrink:0}
+.cat-pct{width:40px;text-align:right;font-size:.72rem;color:#9ca3af;flex-shrink:0}
+
+/* ── Table ──────────────────────────────────── */
+.txn-table{width:100%;border-collapse:collapse;font-size:.82rem}
+.txn-table th{background:#000;color:#fff;text-transform:uppercase;font-size:.68rem;font-weight:900;letter-spacing:.1em;padding:.55rem .6rem;text-align:left;white-space:nowrap;position:sticky;top:0;z-index:2}
+.txn-table td{padding:.45rem .6rem;border-bottom:1px solid #e5e7eb;vertical-align:middle}
+.txn-table tbody tr:hover{background:#f9fafb}
+.txn-table .num{text-align:right}
+.txn-table input,.txn-table select{border:1px solid #d1d5db;border-radius:.25rem;padding:.3rem .4rem;font-size:.82rem;width:100%;outline:none}
+.txn-table input:focus,.txn-table select:focus{border-color:#000}
+.txn-table tfoot td{font-weight:900;border-top:3px solid #000;background:#fafafa;padding:.55rem .6rem}
+
+/* ── Category pills ─────────────────────────── */
+.cat-pill{display:inline-block;padding:2px 8px;border-radius:9999px;font-size:.68rem;font-weight:800;letter-spacing:.04em}
+
+/* ── Filter bar ─────────────────────────────── */
+.filter-bar{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin-bottom:1rem}
+.filter-bar select,.filter-bar input{border:2px solid #d1d5db;border-radius:.375rem;padding:.35rem .5rem;font-size:.82rem;outline:none}
+.filter-bar select:focus,.filter-bar input:focus{border-color:#000}
+
+/* ── Responsive ─────────────────────────────── */
+@media(max-width:640px){
+  .stat-grid{grid-template-columns:1fr 1fr}
+  .cat-name{width:90px;font-size:.7rem}
+  .cat-amt{width:60px;font-size:.75rem}
+  .bar-chart{height:140px}
+  .txn-table td,.txn-table th{padding:.35rem .4rem;font-size:.75rem}
+}
+
+/* ── Print ──────────────────────────────────── */
+@media print{
+  .no-print{display:none !important}
+  body{background:#fff}
+  .bud-section{box-shadow:none;border:1px solid #ccc;break-inside:avoid}
+}
+
+/* ── Modal ──────────────────────────────────── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:flex;align-items:center;justify-content:center;padding:1rem}
+.modal-box{background:#fff;border-radius:1rem;border:3px solid #000;max-width:440px;width:100%;max-height:90vh;overflow-y:auto;padding:1.5rem}
+.modal-box h3{font-weight:900;font-size:1rem;text-transform:uppercase;letter-spacing:.08em;margin:0 0 1rem}
+.modal-box .field{margin-bottom:.75rem}
+.modal-box .field label{display:block;font-size:.68rem;font-weight:900;text-transform:uppercase;letter-spacing:.14em;color:#374151;margin-bottom:.25rem}
+.modal-box .field input,.modal-box .field select{width:100%;border:2px solid #d1d5db;border-radius:.375rem;padding:.45rem .6rem;font-size:.88rem;outline:none}
+.modal-box .field input:focus,.modal-box .field select:focus{border-color:#000}
+.modal-actions{display:flex;gap:.5rem;justify-content:flex-end;margin-top:1rem}
+</style>
+</head>
+<body>
+<div id="kkAdminNavMount"></div>
+
+<main class="max-w-5xl mx-auto px-4 py-6">
+
+<!-- ── Header ─────────────────────────────────── -->
+<div class="flex items-center justify-between flex-wrap gap-3 mb-4">
+  <div>
+    <h1 style="font-weight:900;font-size:1.5rem;letter-spacing:.04em">Personal Budget Tracker</h1>
+    <p style="font-size:.78rem;color:#6b7280;margin-top:.2rem">Track personal spending · Identify patterns · Optimize your finances</p>
+  </div>
+  <div class="flex gap-2 no-print">
+    <button class="btn btn-sm" onclick="exportBudgetJSON()">Export</button>
+    <label class="btn btn-sm" style="cursor:pointer">Import <input type="file" accept=".json" style="display:none" onchange="importBudgetJSON(this)"/></label>
+    <button class="btn btn-sm btn-red" onclick="resetBudget()">Reset</button>
+  </div>
+</div>
+
+<!-- ── Month Selector ─────────────────────────── -->
+<section class="bud-section" id="sectionOverview">
+  <div class="bud-head">
+    <h2>Overview</h2>
+    <div class="flex items-center gap-2 no-print">
+      <select id="yearSelect" onchange="render()" style="border:2px solid #d1d5db;border-radius:.375rem;padding:.3rem .5rem;font-size:.82rem;font-weight:700"></select>
+    </div>
+  </div>
+  <div class="bud-body">
+    <div class="stat-grid" id="statCards"></div>
+    <h3 style="font-weight:900;font-size:.85rem;margin:1rem 0 .5rem">Monthly Spending</h3>
+    <div class="bar-chart" id="monthlyChart"></div>
+    <div style="display:flex;justify-content:space-between;padding:0 .25rem">
+      <span style="font-size:.6rem;color:#9ca3af">Jan</span>
+      <span style="font-size:.6rem;color:#9ca3af">Feb</span>
+      <span style="font-size:.6rem;color:#9ca3af">Mar</span>
+      <span style="font-size:.6rem;color:#9ca3af">Apr</span>
+      <span style="font-size:.6rem;color:#9ca3af">May</span>
+      <span style="font-size:.6rem;color:#9ca3af">Jun</span>
+      <span style="font-size:.6rem;color:#9ca3af">Jul</span>
+      <span style="font-size:.6rem;color:#9ca3af">Aug</span>
+      <span style="font-size:.6rem;color:#9ca3af">Sep</span>
+      <span style="font-size:.6rem;color:#9ca3af">Oct</span>
+      <span style="font-size:.6rem;color:#9ca3af">Nov</span>
+      <span style="font-size:.6rem;color:#9ca3af">Dec</span>
+    </div>
+  </div>
+</section>
+
+<!-- ── Category Breakdown ─────────────────────── -->
+<section class="bud-section" id="sectionCategories">
+  <div class="bud-head">
+    <h2>Spending by Category</h2>
+    <span class="tag" id="catPeriodLabel">2025</span>
+  </div>
+  <div class="bud-body" id="catBreakdown"></div>
+</section>
+
+<!-- ── Monthly Detail ─────────────────────────── -->
+<section class="bud-section" id="sectionMonthly">
+  <div class="bud-head">
+    <h2>Month-by-Month</h2>
+    <span class="tag">Click to expand</span>
+  </div>
+  <div class="bud-body" id="monthlyDetail"></div>
+</section>
+
+<!-- ── All Transactions ───────────────────────── -->
+<section class="bud-section" id="sectionTransactions">
+  <div class="bud-head">
+    <h2>Transactions</h2>
+    <button class="btn btn-sm btn-green no-print" onclick="openAddModal()">+ Add</button>
+  </div>
+  <div class="bud-body">
+    <div class="filter-bar no-print">
+      <select id="filterMonth" onchange="renderTxnTable()">
+        <option value="">All Months</option>
+      </select>
+      <select id="filterCat" onchange="renderTxnTable()">
+        <option value="">All Categories</option>
+      </select>
+      <input type="text" id="filterSearch" placeholder="Search…" oninput="renderTxnTable()" style="flex:1;min-width:120px"/>
+    </div>
+    <div style="overflow-x:auto;max-height:500px;overflow-y:auto">
+      <table class="txn-table" id="txnTable">
+        <thead><tr>
+          <th style="cursor:pointer" onclick="sortTxns('date')">Date ↕</th>
+          <th>Description</th>
+          <th>Category</th>
+          <th>Source</th>
+          <th class="num" style="cursor:pointer" onclick="sortTxns('amount')">Amount ↕</th>
+          <th class="no-print" style="width:70px"></th>
+        </tr></thead>
+        <tbody id="txnBody"></tbody>
+        <tfoot><tr>
+          <td colspan="4">Showing <span id="txnCount">0</span> transactions</td>
+          <td class="num" id="txnTotal">$0.00</td>
+          <td class="no-print"></td>
+        </tr></tfoot>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ── Insights ───────────────────────────────── -->
+<section class="bud-section" id="sectionInsights">
+  <div class="bud-head">
+    <h2>Insights & Tips</h2>
+    <span class="tag">Min-Max Analysis</span>
+  </div>
+  <div class="bud-body" id="insightsBody"></div>
+</section>
+
+</main>
+<div id="kkFooterMount"></div>
+
+<!-- ── Add/Edit Modal ─────────────────────────── -->
+<div id="txnModal" class="modal-overlay" style="display:none">
+  <div class="modal-box">
+    <h3 id="modalTitle">Add Transaction</h3>
+    <div class="field"><label>Date</label><input type="date" id="mDate"/></div>
+    <div class="field"><label>Description</label><input type="text" id="mDesc" placeholder="e.g. Chick-fil-A"/></div>
+    <div class="field"><label>Category</label><select id="mCat"></select></div>
+    <div class="field"><label>Amount ($)</label><input type="number" step="0.01" id="mAmt" placeholder="0.00"/></div>
+    <div class="field"><label>Source</label><select id="mSrc">
+      <option value="Checking">Checking</option>
+      <option value="Credit Card">Credit Card</option>
+      <option value="Cash">Cash</option>
+      <option value="Venmo">Venmo</option>
+      <option value="Other">Other</option>
+    </select></div>
+    <div class="field"><label>Notes (optional)</label><input type="text" id="mNotes" placeholder=""/></div>
+    <input type="hidden" id="mEditId"/>
+    <div class="modal-actions">
+      <button class="btn btn-sm" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-sm btn-black" onclick="saveTxn()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- SCRIPT                                         -->
+<!-- ═══════════════════════════════════════════════ -->
+<script type="module">
+import { initAdminNav } from "/js/shared/adminNav.js";
+import { initFooter }   from "/js/shared/footer.js";
+import { seedIfEmpty }  from "/js/admin/myBudget/seed2025.js";
+initAdminNav("My Budget");
+initFooter();
+// Pre-populate 2025 data on first visit
+if (seedIfEmpty()) {
+  console.log("[Budget] Seeded 2025 personal expenses from bank statements.");
+}
+</script>
+<script>
+/* ══════════════════════════════════════════════════
+   CATEGORIES
+   ══════════════════════════════════════════════════ */
+const CATEGORIES = [
+  { key: "housing",        label: "Housing / Rent",       color: "#6366f1", icon: "🏠" },
+  { key: "food",           label: "Food / Dining",        color: "#f59e0b", icon: "🍔" },
+  { key: "groceries",      label: "Groceries",            color: "#84cc16", icon: "🛒" },
+  { key: "transport",      label: "Transportation",       color: "#3b82f6", icon: "🚗" },
+  { key: "subscriptions",  label: "Subscriptions",        color: "#8b5cf6", icon: "📱" },
+  { key: "entertainment",  label: "Entertainment",        color: "#ec4899", icon: "🎬" },
+  { key: "shopping",       label: "Shopping",             color: "#f97316", icon: "🛍️" },
+  { key: "education",      label: "Education",            color: "#14b8a6", icon: "📚" },
+  { key: "health",         label: "Health / Medical",     color: "#ef4444", icon: "🏥" },
+  { key: "personal",       label: "Personal Care",        color: "#d946ef", icon: "💅" },
+  { key: "transfers",      label: "Transfers / Payments", color: "#64748b", icon: "💸" },
+  { key: "fees",           label: "Bank Fees",            color: "#78716c", icon: "🏦" },
+  { key: "other",          label: "Other",                color: "#9ca3af", icon: "📎" },
+];
+const CAT_MAP = Object.fromEntries(CATEGORIES.map(c => [c.key, c]));
+
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+/* ══════════════════════════════════════════════════
+   STATE
+   ══════════════════════════════════════════════════ */
+const LS_KEY = "kk_personal_budget";
+let state = loadState();
+let sortField = "date";
+let sortDir = -1; // -1 = newest first
+
+function getDefault() {
+  return { transactions: [], budgets: {} };
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (raw) return { ...getDefault(), ...JSON.parse(raw) };
+  } catch (e) { console.warn(e); }
+  return getDefault();
+}
+
+function save() {
+  localStorage.setItem(LS_KEY, JSON.stringify(state));
+}
+
+/* ══════════════════════════════════════════════════
+   RENDER — OVERVIEW
+   ══════════════════════════════════════════════════ */
+function getYears() {
+  const years = new Set();
+  state.transactions.forEach(t => years.add(t.date?.substring(0, 4)));
+  if (!years.size) years.add(String(new Date().getFullYear()));
+  return [...years].sort().reverse();
+}
+
+function getSelectedYear() {
+  return document.getElementById("yearSelect")?.value || "2025";
+}
+
+function txnsForYear(year) {
+  return state.transactions.filter(t => t.date?.startsWith(year));
+}
+
+function render() {
+  const year = getSelectedYear();
+  const txns = txnsForYear(year);
+
+  // Stat cards
+  const total = txns.reduce((s, t) => s + (t.amount || 0), 0);
+  const months = new Set(txns.map(t => t.date?.substring(5, 7)));
+  const avg = months.size ? total / months.size : 0;
+  const maxMonth = getMaxMonth(txns);
+  const minMonth = getMinMonth(txns);
+  const topCat = getTopCategory(txns);
+
+  document.getElementById("statCards").innerHTML = `
+    <div class="stat-card"><div class="label">Total Spent</div><div class="value">${fmt(total)}</div><div class="sub">${txns.length} transactions</div></div>
+    <div class="stat-card"><div class="label">Monthly Avg</div><div class="value">${fmt(avg)}</div><div class="sub">${months.size} active months</div></div>
+    <div class="stat-card"><div class="label">Highest Month</div><div class="value">${maxMonth.label}</div><div class="sub">${fmt(maxMonth.amount)}</div></div>
+    <div class="stat-card"><div class="label">Lowest Month</div><div class="value">${minMonth.label}</div><div class="sub">${fmt(minMonth.amount)}</div></div>
+    <div class="stat-card"><div class="label">Top Category</div><div class="value" style="font-size:1.1rem">${topCat.icon} ${topCat.label}</div><div class="sub">${fmt(topCat.amount)} (${topCat.pct}%)</div></div>
+  `;
+
+  // Monthly bar chart
+  renderMonthlyChart(txns, year);
+  // Category breakdown
+  renderCatBreakdown(txns, year);
+  // Monthly detail
+  renderMonthlyDetail(txns, year);
+  // Transactions table
+  renderTxnTable();
+  // Insights
+  renderInsights(txns, year);
+  // Update filter dropdowns
+  updateFilters(year);
+  // Category period label
+  document.getElementById("catPeriodLabel").textContent = year;
+}
+
+function getMonthlyTotals(txns) {
+  const totals = Array(12).fill(0);
+  txns.forEach(t => {
+    const m = parseInt(t.date?.substring(5, 7), 10) - 1;
+    if (m >= 0 && m < 12) totals[m] += (t.amount || 0);
+  });
+  return totals;
+}
+
+function getMaxMonth(txns) {
+  const totals = getMonthlyTotals(txns);
+  let maxI = 0;
+  totals.forEach((v, i) => { if (v > totals[maxI]) maxI = i; });
+  return { label: MONTHS[maxI], amount: totals[maxI] };
+}
+
+function getMinMonth(txns) {
+  const totals = getMonthlyTotals(txns);
+  // Only consider months with spending
+  let minI = -1;
+  totals.forEach((v, i) => { if (v > 0 && (minI < 0 || v < totals[minI])) minI = i; });
+  if (minI < 0) return { label: "—", amount: 0 };
+  return { label: MONTHS[minI], amount: totals[minI] };
+}
+
+function getTopCategory(txns) {
+  const cats = {};
+  txns.forEach(t => { cats[t.category] = (cats[t.category] || 0) + (t.amount || 0); });
+  let topK = "other", topV = 0;
+  for (const [k, v] of Object.entries(cats)) { if (v > topV) { topK = k; topV = v; } }
+  const total = txns.reduce((s, t) => s + (t.amount || 0), 0);
+  const c = CAT_MAP[topK] || CAT_MAP.other;
+  return { icon: c.icon, label: c.label, amount: topV, pct: total ? Math.round(topV / total * 100) : 0 };
+}
+
+function renderMonthlyChart(txns, year) {
+  const totals = getMonthlyTotals(txns);
+  const max = Math.max(...totals, 1);
+  const avg = totals.reduce((s, v) => s + v, 0) / 12;
+
+  document.getElementById("monthlyChart").innerHTML = totals.map((v, i) => {
+    const pct = Math.max(v / max * 100, v > 0 ? 2 : 0);
+    const cls = v > avg * 1.3 ? "over" : v > 0 && v < avg * 0.7 ? "under" : "";
+    return `<div class="bar-col">
+      <div class="bar-val">${v > 0 ? "$" + Math.round(v) : ""}</div>
+      <div class="bar ${cls}" style="height:${pct}%" title="${MONTHS[i]}: ${fmt(v)}"></div>
+    </div>`;
+  }).join("");
+}
+
+function renderCatBreakdown(txns, year) {
+  const cats = {};
+  txns.forEach(t => { cats[t.category] = (cats[t.category] || 0) + (t.amount || 0); });
+  const total = Object.values(cats).reduce((s, v) => s + v, 0) || 1;
+  const sorted = Object.entries(cats).sort((a, b) => b[1] - a[1]);
+  const maxCat = sorted.length ? sorted[0][1] : 1;
+
+  document.getElementById("catBreakdown").innerHTML = sorted.map(([key, amt]) => {
+    const c = CAT_MAP[key] || CAT_MAP.other;
+    const pct = Math.round(amt / total * 100);
+    const barW = Math.max(amt / maxCat * 100, 3);
+    return `<div class="cat-row">
+      <div class="cat-name">${c.icon} ${c.label}</div>
+      <div class="cat-bar-wrap"><div class="cat-bar-fill" style="width:${barW}%;background:${c.color}"><span>${pct}%</span></div></div>
+      <div class="cat-amt">${fmt(amt)}</div>
+      <div class="cat-pct">${pct}%</div>
+    </div>`;
+  }).join("") || '<p style="color:#9ca3af;font-size:.85rem">No transactions yet.</p>';
+}
+
+function renderMonthlyDetail(txns, year) {
+  const byMonth = Array.from({ length: 12 }, () => []);
+  txns.forEach(t => {
+    const m = parseInt(t.date?.substring(5, 7), 10) - 1;
+    if (m >= 0 && m < 12) byMonth[m].push(t);
+  });
+
+  document.getElementById("monthlyDetail").innerHTML = byMonth.map((mTxns, i) => {
+    if (!mTxns.length) return "";
+    const total = mTxns.reduce((s, t) => s + (t.amount || 0), 0);
+    // Top 3 categories for this month
+    const cats = {};
+    mTxns.forEach(t => { cats[t.category] = (cats[t.category] || 0) + (t.amount || 0); });
+    const topCats = Object.entries(cats).sort((a, b) => b[1] - a[1]).slice(0, 3);
+
+    return `<details style="margin-bottom:.5rem;border:1px solid #e5e7eb;border-radius:.5rem;overflow:hidden">
+      <summary style="padding:.6rem .8rem;cursor:pointer;font-weight:900;font-size:.88rem;display:flex;justify-content:space-between;align-items:center;background:#fafafa">
+        <span>${MONTHS[i]} ${year}</span>
+        <span style="display:flex;align-items:center;gap:.75rem">
+          <span style="font-size:.72rem;color:#6b7280">${mTxns.length} txns</span>
+          <span>${fmt(total)}</span>
+        </span>
+      </summary>
+      <div style="padding:.6rem .8rem">
+        <div style="display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:.5rem">
+          ${topCats.map(([k, v]) => {
+            const c = CAT_MAP[k] || CAT_MAP.other;
+            return `<span class="cat-pill" style="background:${c.color}20;color:${c.color};border:1px solid ${c.color}40">${c.icon} ${c.label}: ${fmt(v)}</span>`;
+          }).join("")}
+        </div>
+        <div style="font-size:.78rem;color:#6b7280">
+          ${mTxns.sort((a, b) => b.amount - a.amount).slice(0, 5).map(t => {
+            const c = CAT_MAP[t.category] || CAT_MAP.other;
+            return `<div style="display:flex;justify-content:space-between;padding:2px 0"><span>${t.description}</span><span style="font-weight:700">${fmt(t.amount)}</span></div>`;
+          }).join("")}
+          ${mTxns.length > 5 ? `<div style="color:#9ca3af;font-size:.7rem;margin-top:2px">+ ${mTxns.length - 5} more</div>` : ""}
+        </div>
+      </div>
+    </details>`;
+  }).join("") || '<p style="color:#9ca3af;font-size:.85rem">No transactions found for this year.</p>';
+}
+
+/* ══════════════════════════════════════════════════
+   RENDER — TRANSACTIONS TABLE
+   ══════════════════════════════════════════════════ */
+function renderTxnTable() {
+  const year = getSelectedYear();
+  let txns = txnsForYear(year);
+
+  // Filters
+  const fMonth = document.getElementById("filterMonth")?.value;
+  const fCat   = document.getElementById("filterCat")?.value;
+  const fSearch = (document.getElementById("filterSearch")?.value || "").toLowerCase();
+
+  if (fMonth) txns = txns.filter(t => t.date?.substring(5, 7) === fMonth);
+  if (fCat)   txns = txns.filter(t => t.category === fCat);
+  if (fSearch) txns = txns.filter(t =>
+    (t.description || "").toLowerCase().includes(fSearch) ||
+    (t.notes || "").toLowerCase().includes(fSearch) ||
+    (t.source || "").toLowerCase().includes(fSearch)
+  );
+
+  // Sort
+  txns.sort((a, b) => {
+    if (sortField === "amount") return (a.amount - b.amount) * sortDir;
+    return (a.date || "").localeCompare(b.date || "") * sortDir;
+  });
+
+  const total = txns.reduce((s, t) => s + (t.amount || 0), 0);
+
+  document.getElementById("txnBody").innerHTML = txns.map(t => {
+    const c = CAT_MAP[t.category] || CAT_MAP.other;
+    return `<tr>
+      <td style="white-space:nowrap">${formatDate(t.date)}</td>
+      <td>${esc(t.description)}${t.notes ? `<div style="font-size:.68rem;color:#9ca3af">${esc(t.notes)}</div>` : ""}</td>
+      <td><span class="cat-pill" style="background:${c.color}20;color:${c.color};border:1px solid ${c.color}40">${c.icon} ${c.label}</span></td>
+      <td style="font-size:.75rem;color:#6b7280">${esc(t.source || "")}</td>
+      <td class="num" style="font-weight:700">${fmt(t.amount)}</td>
+      <td class="no-print" style="white-space:nowrap">
+        <button class="btn btn-sm" onclick="editTxn('${t.id}')" style="margin-right:2px">✎</button>
+        <button class="btn btn-sm btn-red" onclick="deleteTxn('${t.id}')">✕</button>
+      </td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="6" style="text-align:center;color:#9ca3af;padding:2rem">No transactions. Click "+ Add" to start tracking.</td></tr>`;
+
+  document.getElementById("txnCount").textContent = txns.length;
+  document.getElementById("txnTotal").textContent = fmt(total);
+}
+
+function sortTxns(field) {
+  if (sortField === field) sortDir *= -1;
+  else { sortField = field; sortDir = field === "date" ? -1 : -1; }
+  renderTxnTable();
+}
+
+function updateFilters(year) {
+  const fMonth = document.getElementById("filterMonth");
+  const fCat = document.getElementById("filterCat");
+  const curM = fMonth?.value || "";
+  const curC = fCat?.value || "";
+
+  fMonth.innerHTML = '<option value="">All Months</option>' +
+    MONTHS.map((m, i) => `<option value="${String(i + 1).padStart(2, "0")}" ${curM === String(i + 1).padStart(2, "0") ? "selected" : ""}>${m}</option>`).join("");
+
+  fCat.innerHTML = '<option value="">All Categories</option>' +
+    CATEGORIES.map(c => `<option value="${c.key}" ${curC === c.key ? "selected" : ""}>${c.icon} ${c.label}</option>`).join("");
+}
+
+/* ══════════════════════════════════════════════════
+   RENDER — INSIGHTS
+   ══════════════════════════════════════════════════ */
+function renderInsights(txns, year) {
+  if (!txns.length) {
+    document.getElementById("insightsBody").innerHTML = '<p style="color:#9ca3af;font-size:.85rem">Add transactions to see insights.</p>';
+    return;
+  }
+
+  const total = txns.reduce((s, t) => s + (t.amount || 0), 0);
+  const monthlyTotals = getMonthlyTotals(txns);
+  const activeMonths = monthlyTotals.filter(v => v > 0);
+  const avg = activeMonths.length ? activeMonths.reduce((s, v) => s + v, 0) / activeMonths.length : 0;
+
+  // Category analysis
+  const cats = {};
+  txns.forEach(t => { cats[t.category] = (cats[t.category] || 0) + (t.amount || 0); });
+  const sorted = Object.entries(cats).sort((a, b) => b[1] - a[1]);
+
+  // Recurring detection (same description multiple months)
+  const descByMonth = {};
+  txns.forEach(t => {
+    const k = (t.description || "").toLowerCase().trim();
+    const m = t.date?.substring(0, 7);
+    if (!descByMonth[k]) descByMonth[k] = new Set();
+    descByMonth[k].add(m);
+  });
+  const recurring = Object.entries(descByMonth)
+    .filter(([_, months]) => months.size >= 3)
+    .map(([desc, months]) => {
+      const matching = txns.filter(t => (t.description || "").toLowerCase().trim() === desc);
+      const monthlyAvg = matching.reduce((s, t) => s + (t.amount || 0), 0) / months.size;
+      return { desc, count: months.size, monthlyAvg, yearTotal: monthlyAvg * months.size };
+    })
+    .sort((a, b) => b.yearTotal - a.yearTotal);
+
+  // Find biggest single transactions
+  const biggestTxns = [...txns].sort((a, b) => b.amount - a.amount).slice(0, 5);
+
+  // Spending spikes
+  const spikes = monthlyTotals
+    .map((v, i) => ({ month: MONTHS[i], amount: v, diff: v - avg }))
+    .filter(m => m.amount > 0 && m.diff > avg * 0.3)
+    .sort((a, b) => b.diff - a.diff);
+
+  let html = "";
+
+  // Recurring subscriptions
+  if (recurring.length) {
+    html += `<div style="margin-bottom:1.25rem">
+      <h4 style="font-weight:900;font-size:.85rem;margin:0 0 .5rem">🔄 Recurring / Subscriptions Detected</h4>
+      <p style="font-size:.75rem;color:#6b7280;margin-bottom:.5rem">Items appearing in 3+ months — review if you still need all of these.</p>
+      <div style="display:grid;gap:.4rem">
+        ${recurring.map(r => `<div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem .6rem;background:#f9fafb;border-radius:.375rem;font-size:.82rem">
+          <span style="font-weight:700">${esc(r.desc)}</span>
+          <span style="display:flex;gap:1rem;align-items:center">
+            <span style="font-size:.72rem;color:#6b7280">~${fmt(r.monthlyAvg)}/mo × ${r.count} months</span>
+            <span style="font-weight:900">${fmt(r.yearTotal)}/yr</span>
+          </span>
+        </div>`).join("")}
+        <div style="font-size:.78rem;font-weight:700;text-align:right;margin-top:.25rem;color:#991b1b">
+          Total recurring: ${fmt(recurring.reduce((s, r) => s + r.yearTotal, 0))}/yr
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // Spending spikes
+  if (spikes.length) {
+    html += `<div style="margin-bottom:1.25rem">
+      <h4 style="font-weight:900;font-size:.85rem;margin:0 0 .5rem">📈 High-Spend Months</h4>
+      <p style="font-size:.75rem;color:#6b7280;margin-bottom:.5rem">These months were significantly above your ${fmt(avg)} average.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:.5rem">
+        ${spikes.map(s => `<div style="padding:.4rem .75rem;background:#fef2f2;border:1px solid #fca5a5;border-radius:.375rem;font-size:.82rem">
+          <strong>${s.month}</strong>: ${fmt(s.amount)} <span style="color:#991b1b;font-size:.72rem">(+${fmt(s.diff)} above avg)</span>
+        </div>`).join("")}
+      </div>
+    </div>`;
+  }
+
+  // Biggest single expenses
+  html += `<div style="margin-bottom:1.25rem">
+    <h4 style="font-weight:900;font-size:.85rem;margin:0 0 .5rem">💰 Top 5 Single Expenses</h4>
+    <div style="display:grid;gap:.3rem">
+      ${biggestTxns.map(t => {
+        const c = CAT_MAP[t.category] || CAT_MAP.other;
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:.35rem .6rem;background:#f9fafb;border-radius:.375rem;font-size:.82rem">
+          <span>${formatDate(t.date)} — ${esc(t.description)}</span>
+          <span style="font-weight:900">${fmt(t.amount)}</span>
+        </div>`;
+      }).join("")}
+    </div>
+  </div>`;
+
+  // Quick tips based on data
+  const tips = [];
+  const foodSpend = (cats.food || 0) + (cats.groceries || 0);
+  if (foodSpend > total * 0.35) tips.push("🍽️ Food/dining + groceries is over 35% of spending. Meal prepping could save hundreds.");
+  if (cats.subscriptions > total * 0.15) tips.push("📱 Subscriptions are over 15% of your spend. Audit which ones you actually use.");
+  if (cats.entertainment > 200 * activeMonths.length / 12) tips.push("🎬 Entertainment averaging $200+/mo. Look for free alternatives for some activities.");
+  if (recurring.length > 5) tips.push("🔄 You have " + recurring.length + " recurring expenses. Cancel any you haven't used in 30 days.");
+  if (cats.transfers > total * 0.2) tips.push("💸 Transfers are 20%+ of spending. Check if these are going somewhere productive.");
+  if (spikes.length > 3) tips.push("📊 Multiple spending spikes — try setting a monthly budget cap to stay consistent.");
+  if (!tips.length) tips.push("💪 Your spending looks balanced! Keep tracking monthly to stay on top of it.");
+
+  html += `<div style="margin-top:.75rem;padding:.75rem;background:#f0fdf4;border:1px solid #10b981;border-radius:.5rem">
+    <h4 style="font-weight:900;font-size:.82rem;margin:0 0 .4rem">💡 Quick Tips</h4>
+    ${tips.map(t => `<div style="font-size:.82rem;padding:.2rem 0">${t}</div>`).join("")}
+  </div>`;
+
+  document.getElementById("insightsBody").innerHTML = html;
+}
+
+/* ══════════════════════════════════════════════════
+   MODAL — ADD / EDIT
+   ══════════════════════════════════════════════════ */
+function populateCatSelect() {
+  document.getElementById("mCat").innerHTML = CATEGORIES.map(c =>
+    `<option value="${c.key}">${c.icon} ${c.label}</option>`
+  ).join("");
+}
+
+window.openAddModal = function () {
+  document.getElementById("modalTitle").textContent = "Add Transaction";
+  document.getElementById("mDate").value = new Date().toISOString().substring(0, 10);
+  document.getElementById("mDesc").value = "";
+  populateCatSelect();
+  document.getElementById("mCat").value = "other";
+  document.getElementById("mAmt").value = "";
+  document.getElementById("mSrc").value = "Checking";
+  document.getElementById("mNotes").value = "";
+  document.getElementById("mEditId").value = "";
+  document.getElementById("txnModal").style.display = "flex";
+};
+
+window.editTxn = function (id) {
+  const t = state.transactions.find(x => x.id === id);
+  if (!t) return;
+  document.getElementById("modalTitle").textContent = "Edit Transaction";
+  document.getElementById("mDate").value = t.date || "";
+  document.getElementById("mDesc").value = t.description || "";
+  populateCatSelect();
+  document.getElementById("mCat").value = t.category || "other";
+  document.getElementById("mAmt").value = t.amount || "";
+  document.getElementById("mSrc").value = t.source || "Checking";
+  document.getElementById("mNotes").value = t.notes || "";
+  document.getElementById("mEditId").value = id;
+  document.getElementById("txnModal").style.display = "flex";
+};
+
+window.closeModal = function () {
+  document.getElementById("txnModal").style.display = "none";
+};
+
+window.saveTxn = function () {
+  const date = document.getElementById("mDate").value;
+  const desc = document.getElementById("mDesc").value.trim();
+  const cat  = document.getElementById("mCat").value;
+  const amt  = parseFloat(document.getElementById("mAmt").value) || 0;
+  const src  = document.getElementById("mSrc").value;
+  const notes = document.getElementById("mNotes").value.trim();
+  const editId = document.getElementById("mEditId").value;
+
+  if (!date || !desc || !amt) { alert("Date, description, and amount are required."); return; }
+
+  if (editId) {
+    const idx = state.transactions.findIndex(t => t.id === editId);
+    if (idx >= 0) {
+      state.transactions[idx] = { ...state.transactions[idx], date, description: desc, category: cat, amount: amt, source: src, notes };
+    }
+  } else {
+    state.transactions.push({
+      id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).substring(2),
+      date, description: desc, category: cat, amount: amt, source: src, notes
+    });
+  }
+
+  save();
+  closeModal();
+  render();
+};
+
+window.deleteTxn = function (id) {
+  if (!confirm("Delete this transaction?")) return;
+  state.transactions = state.transactions.filter(t => t.id !== id);
+  save();
+  render();
+};
+
+/* ══════════════════════════════════════════════════
+   EXPORT / IMPORT / RESET
+   ══════════════════════════════════════════════════ */
+window.exportBudgetJSON = function () {
+  save();
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `personal-budget-${getSelectedYear()}.json`;
+  a.click();
+};
+
+window.importBudgetJSON = function (input) {
+  const f = input.files[0];
+  if (!f) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const imported = JSON.parse(reader.result);
+      if (imported.transactions) {
+        // Merge — skip duplicates by id
+        const existingIds = new Set(state.transactions.map(t => t.id));
+        let added = 0;
+        imported.transactions.forEach(t => {
+          if (!existingIds.has(t.id)) {
+            state.transactions.push(t);
+            added++;
+          }
+        });
+        save();
+        render();
+        alert(`Imported ${added} new transactions (${imported.transactions.length - added} duplicates skipped).`);
+      } else {
+        alert("No transactions found in file.");
+      }
+    } catch (e) { alert("Invalid JSON file"); }
+  };
+  reader.readAsText(f);
+  input.value = "";
+};
+
+window.resetBudget = function () {
+  if (!confirm("Delete ALL personal budget data? This cannot be undone.")) return;
+  localStorage.removeItem(LS_KEY);
+  state = getDefault();
+  render();
+};
+
+/* ══════════════════════════════════════════════════
+   HELPERS
+   ══════════════════════════════════════════════════ */
+function fmt(n) {
+  if (n == null || isNaN(n)) return "$0.00";
+  return "$" + Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function formatDate(d) {
+  if (!d) return "—";
+  const [y, m, day] = d.split("-");
+  return `${parseInt(m)}/${parseInt(day)}`;
+}
+function esc(s) { return (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+
+/* ══════════════════════════════════════════════════
+   BOOT
+   ══════════════════════════════════════════════════ */
+document.addEventListener("DOMContentLoaded", () => {
+  // Populate year select
+  const yearSel = document.getElementById("yearSelect");
+  getYears().forEach(y => {
+    const opt = document.createElement("option");
+    opt.value = y; opt.textContent = y;
+    yearSel.appendChild(opt);
+  });
+  yearSel.value = "2025";
+
+  // Close modal on overlay click
+  document.getElementById("txnModal").addEventListener("click", e => {
+    if (e.target === e.currentTarget) closeModal();
+  });
+
+  render();
+});
+</script>
+</body>
+</html>
