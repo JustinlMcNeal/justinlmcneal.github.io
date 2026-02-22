@@ -560,6 +560,11 @@ function sortTxns(field) {
   renderTxnTable();
 }
 
+// Expose to inline HTML event handlers (module scope is not global)
+window.render = render;
+window.renderTxnTable = renderTxnTable;
+window.sortTxns = sortTxns;
+
 function updateFilters(year) {
   const fMonth = document.getElementById("filterMonth");
   const fCat = document.getElementById("filterCat");
