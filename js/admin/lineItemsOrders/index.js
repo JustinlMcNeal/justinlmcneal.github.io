@@ -520,6 +520,10 @@ async function updateKpisServer() {
     if (els.kpiRevenue) els.kpiRevenue.textContent = moneyFromCents(k?.revenue_cents ?? 0);
     if (els.kpiProfit) els.kpiProfit.textContent = moneyFromCents(k?.profit_cents ?? 0);
     if (els.kpiUnfulfilled) els.kpiUnfulfilled.textContent = String(k?.unfulfilled_count ?? 0);
+    if (els.kpiRefunded) {
+      const cnt = Number(k?.refunded_count ?? 0);
+      els.kpiRefunded.textContent = cnt > 0 ? `${cnt} (${moneyFromCents(k?.refunded_cents ?? 0)})` : '0';
+    }
   } catch (e) {
     console.error(e);
     // KPI failure should not block the page

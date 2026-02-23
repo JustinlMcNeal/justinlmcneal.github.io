@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KARRY KRAZE — Order Confirmed!</title>
+
+  <!-- SEO -->
+  <meta name="description" content="Your Karry Kraze order has been placed successfully! Thank you for shopping with us." />
+  <meta name="robots" content="noindex, nofollow" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="KARRY KRAZE" />
+  <meta property="og:title" content="Order Confirmed — KARRY KRAZE" />
+  <meta property="og:description" content="Thank you for your order!" />
+  <meta property="og:image" content="https://karrykraze.com/imgs/brand/og-default.jpg" />
+
+  <!-- Global theme -->
+  <link rel="stylesheet" href="/css/theme/base.css">
+  <link rel="stylesheet" href="/css/theme/components.css">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            kkpink: '#f58f86',
+            kkpeach: '#f6dcc6',
+          },
+          borderWidth: {
+            '4': '4px',
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    @keyframes confetti-fall {
+      0%   { transform: translateY(-20px) rotate(0deg); opacity: 1; }
+      100% { transform: translateY(60vh) rotate(720deg); opacity: 0; }
+    }
+    .confetti-piece {
+      position: fixed;
+      top: -10px;
+      width: 10px;
+      height: 10px;
+      animation: confetti-fall 3s ease-out forwards;
+      z-index: 50;
+      pointer-events: none;
+    }
+    @keyframes check-draw {
+      0%   { stroke-dashoffset: 100; }
+      100% { stroke-dashoffset: 0; }
+    }
+    .check-anim {
+      stroke-dasharray: 100;
+      stroke-dashoffset: 100;
+      animation: check-draw 0.8s ease-out 0.3s forwards;
+    }
+    @keyframes fade-up {
+      0%   { opacity: 0; transform: translateY(20px); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+    .fade-up {
+      opacity: 0;
+      animation: fade-up 0.6s ease-out forwards;
+    }
+    .fade-up-1 { animation-delay: 0.5s; }
+    .fade-up-2 { animation-delay: 0.7s; }
+    .fade-up-3 { animation-delay: 0.9s; }
+    .fade-up-4 { animation-delay: 1.1s; }
+  </style>
+</head>
+
+<body class="kk-page bg-white">
+
+  <!-- ✅ NAVBAR INSERT MOUNT -->
+  <div id="kkNavbarMount"></div>
+
+  <!-- SUCCESS CONTENT -->
+  <main class="min-h-[70vh] flex items-center justify-center px-4 py-12">
+    <div class="max-w-lg w-full text-center">
+
+      <!-- Animated Checkmark -->
+      <div class="mx-auto mb-6 w-24 h-24">
+        <svg viewBox="0 0 52 52" class="w-full h-full">
+          <circle cx="26" cy="26" r="24" fill="none" stroke="#f58f86" stroke-width="3" opacity="0.2" />
+          <circle cx="26" cy="26" r="24" fill="none" stroke="#f58f86" stroke-width="3"
+            stroke-dasharray="150" stroke-dashoffset="150"
+            style="animation: check-draw 0.6s ease-out 0.1s forwards;" />
+          <path class="check-anim" fill="none" stroke="#f58f86" stroke-width="3.5"
+            stroke-linecap="round" stroke-linejoin="round"
+            d="M14 27l7 7L38 18" />
+        </svg>
+      </div>
+
+      <!-- Heading -->
+      <h1 class="fade-up fade-up-1 text-3xl sm:text-4xl font-black uppercase tracking-tight leading-tight">
+        Order Confirmed!
+      </h1>
+
+      <!-- Order ID -->
+      <div id="orderIdWrap" class="fade-up fade-up-2 mt-3 hidden">
+        <span class="inline-block bg-kkpeach/40 border-2 border-kkpink/30 rounded-full px-5 py-1.5 text-sm font-black tracking-wider text-kkpink">
+          <span id="orderId"></span>
+        </span>
+      </div>
+
+      <!-- Thank-you message -->
+      <p class="fade-up fade-up-2 mt-5 text-gray-600 text-base sm:text-lg leading-relaxed">
+        Thank you for shopping with <strong class="text-black">Karry Kraze</strong>!<br />
+        A confirmation email is on its way to your inbox.
+      </p>
+
+      <!-- What happens next -->
+      <div class="fade-up fade-up-3 mt-8 bg-gray-50 rounded-2xl border border-gray-100 p-6 text-left">
+        <div class="text-[10px] font-black uppercase tracking-[.25em] text-gray-400 mb-4">What happens next</div>
+        <div class="space-y-4">
+          <div class="flex gap-3 items-start">
+            <div class="w-7 h-7 rounded-full bg-kkpink/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <span class="text-kkpink text-xs font-black">1</span>
+            </div>
+            <div>
+              <div class="font-bold text-sm">Order Processing</div>
+              <div class="text-xs text-gray-500 mt-0.5">We're getting your items ready for shipment.</div>
+            </div>
+          </div>
+          <div class="flex gap-3 items-start">
+            <div class="w-7 h-7 rounded-full bg-kkpink/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <span class="text-kkpink text-xs font-black">2</span>
+            </div>
+            <div>
+              <div class="font-bold text-sm">Shipping Confirmation</div>
+              <div class="text-xs text-gray-500 mt-0.5">You'll receive a tracking number once your order ships.</div>
+            </div>
+          </div>
+          <div class="flex gap-3 items-start">
+            <div class="w-7 h-7 rounded-full bg-kkpink/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <span class="text-kkpink text-xs font-black">3</span>
+            </div>
+            <div>
+              <div class="font-bold text-sm">Delivered!</div>
+              <div class="text-xs text-gray-500 mt-0.5">Enjoy your new Karry Kraze items! 💖</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CTA Buttons -->
+      <div class="fade-up fade-up-4 mt-8 flex flex-col sm:flex-row gap-3 justify-center">
+        <a href="/pages/catalog.html"
+          class="inline-block px-6 py-3 bg-black text-white text-sm font-black uppercase tracking-wider rounded-full hover:bg-kkpink transition-colors">
+          Continue Shopping
+        </a>
+        <a href="/"
+          class="inline-block px-6 py-3 border-2 border-black text-black text-sm font-black uppercase tracking-wider rounded-full hover:bg-black hover:text-white transition-colors">
+          Back to Home
+        </a>
+      </div>
+
+      <!-- Support note -->
+      <p class="fade-up fade-up-4 mt-6 text-xs text-gray-400">
+        Questions about your order?
+        <a href="/pages/contact.html" class="text-kkpink hover:underline font-bold">Contact Us</a>
+        or check our <a href="/pages/faq.html" class="text-kkpink hover:underline font-bold">FAQ</a>.
+      </p>
+    </div>
+  </main>
+
+  <!-- Confetti container -->
+  <div id="confettiContainer"></div>
+
+  <!-- ✅ FOOTER INSERT MOUNT -->
+  <div id="kkFooterMount"></div>
+
+  <script type="module" src="/js/success/index.js"></script>
+</body>
+</html>

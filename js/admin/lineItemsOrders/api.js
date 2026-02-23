@@ -364,7 +364,7 @@ export async function fetchOrderKpis({ q = "", status = "", dateFrom = "", dateT
   if (error) throw error;
 
   const row = Array.isArray(data) ? data[0] : data;
-  const baseKpis = row || { orders_count: 0, revenue_cents: 0, profit_cents: 0, unfulfilled_count: 0 };
+  const baseKpis = row || { orders_count: 0, revenue_cents: 0, profit_cents: 0, unfulfilled_count: 0, refunded_count: 0, refunded_cents: 0 };
 
   // Profit comes from v_order_summary_plus (via v_order_financials) which already
   // handles legacy stored cost vs dynamic CPI. Sum it for the filtered orders.

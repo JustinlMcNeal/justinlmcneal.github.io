@@ -60,6 +60,7 @@ export const els = {
   kpiRevenue: document.getElementById("kpiRevenue"),
   kpiProfit: document.getElementById("kpiProfit"),
   kpiUnfulfilled: document.getElementById("kpiUnfulfilled"),
+  kpiRefunded: document.getElementById("kpiRefunded"),
 
   // modal
   modal: document.getElementById("modal"),
