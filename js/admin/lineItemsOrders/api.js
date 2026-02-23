@@ -45,7 +45,7 @@ export async function fetchOrderDetails(stripe_checkout_session_id) {
     const { data: products, error: pErr } = await supabase
       .from("products")
       .select(`
-        id, code, name, unit_cost, weight_g, primary_image_url, catalog_image_url,
+        id, code, slug, name, unit_cost, weight_g, primary_image_url, catalog_image_url,
         product_variants (option_value, preview_image_url)
       `)
       .in("code", productCodes);
@@ -91,6 +91,7 @@ export async function fetchOrderDetails(stripe_checkout_session_id) {
     
     return {
       ...li,
+      product_slug: product?.slug || null,
       product_image_url: imageUrl,
       unit_cost_cents: Math.round(unitCostDollars * 100),
       supplier_ship_cents: Math.round(supplierShipDollars * 100),
