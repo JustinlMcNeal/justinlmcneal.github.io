@@ -1,0 +1,7 @@
+{
+  "dependencies": {
+    "@supabase/supabase-js": "^2.97.0",
+    "pg": "^8.18.0",
+    "stripe": "^20.3.1"
+  }
+}

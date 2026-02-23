@@ -27,6 +27,19 @@ function statusPillClasses(labelStatus) {
   return `${base} bg-white text-black`;
 }
 
+function refundBadgeHtml(refund) {
+  if (!refund?.refund_status) return "";
+  const isFull = refund.refund_status === "full";
+  const label = isFull ? "REFUNDED" : "PARTIAL REFUND";
+  const amt = refund.refund_amount_cents
+    ? ` $${(refund.refund_amount_cents / 100).toFixed(2)}`
+    : "";
+  const cls = isFull
+    ? "bg-red-600 text-white border-red-700"
+    : "bg-amber-500 text-white border-amber-600";
+  return `<span class="inline-flex items-center border-[3px] ${cls} px-2 py-1 text-[10px] font-black uppercase tracking-[.18em] whitespace-nowrap ml-1">${label}${amt}</span>`;
+}
+
 function displayStatus(labelStatus) {
   return String(labelStatus || "pending").replaceAll("_", " ");
 }
@@ -80,9 +93,12 @@ function renderMobileCards(rows = []) {
                 </div>
 
                 <div class="shrink-0 flex flex-col items-end gap-2">
-                  <span class="${statusPillClasses(labelStatus)}">
-                    ${esc(displayStatus(labelStatus))}
-                  </span>
+                  <div class="flex flex-wrap items-center gap-1">
+                    <span class="${statusPillClasses(labelStatus)}">
+                      ${esc(displayStatus(labelStatus))}
+                    </span>
+                    ${refundBadgeHtml(r.refund)}
+                  </div>
 
                   <button
                     type="button"
@@ -176,9 +192,12 @@ function renderDesktopRows(rows = []) {
           </td>
 
           <td class="px-4 py-3">
-            <span class="${statusPillClasses(labelStatus)}">
-              ${esc(displayStatus(labelStatus))}
-            </span>
+            <div class="flex flex-wrap items-center gap-1">
+              <span class="${statusPillClasses(labelStatus)}">
+                ${esc(displayStatus(labelStatus))}
+              </span>
+              ${refundBadgeHtml(r.refund)}
+            </div>
           </td>
 
           <td class="px-4 py-3 text-right whitespace-nowrap">

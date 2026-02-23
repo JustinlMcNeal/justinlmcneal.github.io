@@ -3,7 +3,7 @@ import { initAdminNav } from "/js/shared/adminNav.js";
 import { initFooter } from "/js/shared/footer.js";
 import { els, wireDomHelpers, setStatus, setCountLabel, moneyFromCents, showImportResult, showImportPreview, hideImportPreview } from "./dom.js";
 import { state } from "./state.js";
-import { fetchOrderSummaryPage, fetchOrderSummaryAllForExport, fetchOrderKpis, importPirateShipExport, fetchOrderDetails } from "./api.js";
+import { fetchOrderSummaryPage, fetchOrderSummaryAllForExport, fetchOrderKpis, importPirateShipExport, fetchOrderDetails, issueRefund } from "./api.js";
 import { renderOrdersRows } from "./renderTable.js";
 import { downloadShipReadyCSV } from "./shipReadyCsv.js";
 import { bindEditModal } from "./modalEditor.js";
@@ -64,6 +64,9 @@ function bindViewModal() {
     try {
       const { order, lineItems, shipment } = await fetchOrderDetails(row.stripe_checkout_session_id);
       viewModalBody.innerHTML = renderOrderDetailsHtml(order, lineItems, shipment);
+
+      // Wire refund button(s) inside the modal
+      wireRefundButtons(viewModalBody, order, row);
     } catch (err) {
       console.error(err);
       viewModalBody.innerHTML = `<div class="text-red-600 p-4">${err.message || "Failed to load order"}</div>`;
@@ -252,6 +255,55 @@ function renderOrderDetailsHtml(order, lineItems, shipment) {
       </div>
     </section>
 
+    <!-- Refund Status / Actions -->
+    <section>
+      <div class="text-[11px] font-black uppercase tracking-[.25em] flex items-center gap-2 mb-4">
+        <span class="w-5 h-5 bg-black text-white text-[10px] flex items-center justify-center">7</span>
+        Refund
+      </div>
+      ${order.refund_status
+        ? `<div class="grid sm:grid-cols-3 gap-4 mb-4">
+            <div class="border-4 ${order.refund_status === 'full' ? 'border-red-400 bg-red-50' : 'border-amber-400 bg-amber-50'} p-4">
+              <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">Status</div>
+              <div class="font-black uppercase ${order.refund_status === 'full' ? 'text-red-600' : 'text-amber-600'}">${esc(order.refund_status)} refund</div>
+            </div>
+            <div class="border-4 border-black p-4">
+              <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">Refunded</div>
+              <div class="font-black text-lg text-red-600">${money(order.refund_amount_cents)}</div>
+            </div>
+            <div class="border-4 border-black p-4 bg-emerald-50">
+              <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">Net Revenue</div>
+              <div class="font-black text-lg text-emerald-600">${money((order.total_paid_cents || 0) - (order.refund_amount_cents || 0))}</div>
+            </div>
+          </div>
+          ${order.refunded_at ? `<div class="text-xs text-gray-500 mb-4">Refunded on ${formatDate(order.refunded_at)}</div>` : ''}`
+        : '<div class="text-sm text-gray-400 mb-4">No refund issued.</div>'}
+
+      ${order.source === 'amazon'
+        ? '<div class="text-xs text-gray-400 italic">Refunds for Amazon orders must be handled through Amazon Seller Central.</div>'
+        : `<div class="flex flex-wrap gap-3">
+            <button data-refund-full
+              class="px-4 py-2 text-xs font-black uppercase tracking-wider border-4 border-red-600 text-red-600 hover:bg-red-600 hover:text-white transition disabled:opacity-30 disabled:cursor-not-allowed"
+              ${order.refund_status === 'full' ? 'disabled' : ''}>
+              ${order.refund_status === 'full' ? 'Fully Refunded' : 'Issue Full Refund'}
+            </button>
+            ${order.refund_status !== 'full' ? `
+            <div class="flex items-center gap-2">
+              <span class="text-[10px] font-black uppercase text-black/60">$</span>
+              <input data-refund-amount type="number" step="0.01" min="0.01"
+                placeholder="Amount"
+                class="w-24 border-4 border-black px-2 py-1 text-sm font-mono focus:outline-none focus:border-blue-600" />
+              <button data-refund-partial
+                class="px-4 py-2 text-xs font-black uppercase tracking-wider border-4 border-amber-500 text-amber-600 hover:bg-amber-500 hover:text-white transition">
+                Partial Refund
+              </button>
+            </div>` : ''}
+          </div>`
+      }
+    </section>
+
+    <div class="border-t-4 border-gray-100"></div>
+
     <!-- IDs (collapsed) -->
     <details class="border-4 border-gray-200 p-4">
       <summary class="text-[11px] font-black uppercase tracking-[.18em] text-gray-500 cursor-pointer">
@@ -265,6 +317,68 @@ function renderOrderDetailsHtml(order, lineItems, shipment) {
       </div>
     </details>
   `;
+}
+
+/* -------------------------
+   REFUND BUTTON WIRING
+-------------------------- */
+function wireRefundButtons(container, order, row) {
+  const btnFull = container.querySelector("[data-refund-full]");
+  const btnPartial = container.querySelector("[data-refund-partial]");
+  const amtInput = container.querySelector("[data-refund-amount]");
+
+  const totalCents = order.total_paid_cents || 0;
+  const alreadyRefundedCents = order.refund_amount_cents || 0;
+  const remainingCents = totalCents - alreadyRefundedCents;
+
+  if (btnFull && !btnFull.disabled) {
+    btnFull.addEventListener("click", async () => {
+      const dollars = (remainingCents / 100).toFixed(2);
+      if (!confirm(`Issue a FULL refund of $${dollars} for order ${order.kk_order_id || order.stripe_checkout_session_id}?\n\nThis cannot be undone.`)) return;
+
+      btnFull.disabled = true;
+      btnFull.textContent = "Processing…";
+      try {
+        const result = await issueRefund(order.stripe_checkout_session_id);
+        alert(`Refund successful!\nRefund ID: ${result.refund_id}\nAmount: $${(result.refund_amount_cents / 100).toFixed(2)}`);
+        // Re-open the modal to refresh data
+        state.openViewModal(row);
+      } catch (err) {
+        alert("Refund failed: " + (err.message || err));
+        btnFull.disabled = false;
+        btnFull.textContent = "Issue Full Refund";
+      }
+    });
+  }
+
+  if (btnPartial) {
+    btnPartial.addEventListener("click", async () => {
+      const val = parseFloat(amtInput?.value);
+      if (!val || val <= 0) {
+        alert("Enter a valid refund amount.");
+        amtInput?.focus();
+        return;
+      }
+      const amountCents = Math.round(val * 100);
+      if (amountCents > remainingCents) {
+        alert(`Amount exceeds refundable balance of $${(remainingCents / 100).toFixed(2)}.`);
+        return;
+      }
+      if (!confirm(`Issue a partial refund of $${val.toFixed(2)} for order ${order.kk_order_id || order.stripe_checkout_session_id}?\n\nThis cannot be undone.`)) return;
+
+      btnPartial.disabled = true;
+      btnPartial.textContent = "Processing…";
+      try {
+        const result = await issueRefund(order.stripe_checkout_session_id, amountCents);
+        alert(`Partial refund successful!\nRefund ID: ${result.refund_id}\nAmount: $${(result.refund_amount_cents / 100).toFixed(2)}`);
+        state.openViewModal(row);
+      } catch (err) {
+        alert("Refund failed: " + (err.message || err));
+        btnPartial.disabled = false;
+        btnPartial.textContent = "Partial Refund";
+      }
+    });
+  }
 }
 
 function wireEvents() {

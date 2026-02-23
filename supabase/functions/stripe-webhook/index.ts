@@ -125,6 +125,87 @@ if (req.method === "GET") {
       return json({ error: "Invalid signature" }, 400);
     }
 
+    // ── Handle charge.refunded ──────────────────────────────────
+    if (event.type === "charge.refunded") {
+      const charge = event.data.object as Stripe.Charge;
+      const paymentIntentId = safeStr(charge.payment_intent).trim();
+      if (!paymentIntentId) return json({ received: true, note: "no PI on charge" }, 200);
+
+      // Find the order by stripe_payment_intent_id OR by looking up the checkout session
+      // Stripe charges have payment_intent; our orders_raw has stripe_checkout_session_id.
+      // We need to find the order. Strategy:
+      // 1) Try to match by stripe_payment_intent_id (if we stored it)
+      // 2) Retrieve the payment intent to find the checkout session metadata
+
+      const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
+
+      // The checkout session ID might be in the PI metadata or we search by PI
+      let orderSessionId: string | null = null;
+
+      // Check PI metadata first (our webhook stores kk_order_id but not session_id on PI)
+      // Fallback: list checkout sessions for this payment intent
+      const sessions = await stripe.checkout.sessions.list({
+        payment_intent: paymentIntentId,
+        limit: 1,
+      });
+      if (sessions.data.length > 0) {
+        orderSessionId = sessions.data[0].id;
+      }
+
+      if (!orderSessionId) {
+        // Try matching by payment_intent_id in our DB
+        const { data: matchRows } = await supabaseAdmin
+          .from("orders_raw")
+          .select("stripe_checkout_session_id")
+          .eq("stripe_payment_intent_id", paymentIntentId)
+          .limit(1);
+        if (matchRows?.length) {
+          orderSessionId = matchRows[0].stripe_checkout_session_id;
+        }
+      }
+
+      if (!orderSessionId) {
+        console.error("[stripe-webhook] charge.refunded: could not find order for PI", paymentIntentId);
+        return json({ received: true, warning: "Order not found for refund" }, 200);
+      }
+
+      // Calculate refund totals from the charge object
+      const totalRefundedCents = charge.amount_refunded ?? 0;
+      const totalChargedCents = charge.amount ?? 0;
+      const isFullRefund = totalRefundedCents >= totalChargedCents;
+      const latestRefundId = charge.refunds?.data?.[0]?.id ?? null;
+
+      const refundPatch = {
+        refund_status: isFullRefund ? "full" : "partial",
+        refund_amount_cents: totalRefundedCents,
+        refunded_at: new Date().toISOString(),
+        stripe_refund_id: latestRefundId,
+        stripe_payment_intent_id: paymentIntentId,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error: refErr } = await supabaseAdmin
+        .from("orders_raw")
+        .update(refundPatch)
+        .eq("stripe_checkout_session_id", orderSessionId);
+
+      if (refErr) {
+        console.error("[stripe-webhook] refund update failed", refErr);
+        return json({ error: "Failed to update refund", detail: refErr }, 500);
+      }
+
+      console.log(`[stripe-webhook] Refund recorded: ${orderSessionId} → ${isFullRefund ? "FULL" : "PARTIAL"} $${(totalRefundedCents / 100).toFixed(2)}`);
+
+      return json({
+        received: true,
+        type: "charge.refunded",
+        orderSessionId,
+        refund_status: refundPatch.refund_status,
+        refund_amount_cents: totalRefundedCents,
+      }, 200);
+    }
+
+    // ── Ignore other event types ─────────────────────────────────
     if (event.type !== "checkout.session.completed") {
       return json({ received: true, ignored: true, type: event.type }, 200);
     }
@@ -314,6 +395,7 @@ if (req.method === "GET") {
       stripe_checkout_session_id: sessionId,
       kk_order_id,
       stripe_customer_id,
+      stripe_payment_intent_id: safeStr(fullSession.payment_intent).trim() || null,
 
       coupon_code_used,
 
