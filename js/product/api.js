@@ -16,6 +16,20 @@ export async function fetchProductBySlug(slug) {
   return data;
 }
 
+export async function fetchProductByCode(code) {
+  const sb = getSupabaseClient();
+
+  const { data, error } = await sb
+    .from("products")
+    .select(PRODUCT_SELECT)
+    .eq("code", code)
+    .eq("is_active", true)
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 export async function fetchCategoryName(categoryId) {
   if (!categoryId) return "";
   const sb = getSupabaseClient();

@@ -4,6 +4,7 @@ import { initFooter } from "../shared/footer.js";
 
 import {
   fetchProductBySlug,
+  fetchProductByCode,
   fetchCategoryName,
   fetchVariants,
   fetchGallery,
@@ -35,11 +36,13 @@ let selectedVariant = null;
 
 /* ---------------- utils ---------------- */
 
-function getSlugFromUrl() {
+function getProductIdentFromUrl() {
   const u = new URL(location.href);
-  return (u.searchParams.get("sku") || u.searchParams.get("slug") || "")
-    .trim()
-    .toLowerCase();
+  const sku = (u.searchParams.get("sku") || "").trim();
+  const slug = (u.searchParams.get("slug") || "").trim();
+  if (slug) return { value: slug.toLowerCase(), type: "slug" };
+  if (sku)  return { value: sku.toUpperCase(),  type: "code" };
+  return { value: "", type: "slug" };
 }
 
 function killJump(e) {
@@ -201,9 +204,9 @@ async function initProductPage() {
   const els = getProductEls();
   wireQtyControls(els);
 
-  const slug = getSlugFromUrl();
+  const ident = getProductIdentFromUrl();
 
-  if (!slug) {
+  if (!ident.value) {
     show(els.loading, false);
     show(els.error, true);
     if (els.errorMsg) {
@@ -220,7 +223,9 @@ async function initProductPage() {
     setActionMsg(els, "");
 
     // Fetch main product
-    const product = await fetchProductBySlug(slug);
+    const product = ident.type === "code"
+      ? await fetchProductByCode(ident.value)
+      : await fetchProductBySlug(ident.value);
 
     // Parallel fetches
     const [categoryName, variants, gallery, tags, sections] = await Promise.all([
