@@ -125,13 +125,28 @@ export async function fetchOrderDetails(stripe_checkout_session_id) {
   const productCpiCents = calculatedCostCents > 0 ? calculatedCostCents : viewCpiCents;
   const labelCostCents = shipment?.label_cost_cents || 0;
   const refundCents = Number(refund?.refund_amount_cents || 0);
-  const profitCents = Number(orderData.total_paid_cents || 0) - productCpiCents - labelCostCents - refundCents;
+  const refundReason = refund?.refund_reason || orderData.refund_reason || null;
+  const totalPaid = Number(orderData.total_paid_cents || 0);
+
+  // Smart profit based on refund reason (mirrors v_order_financials logic)
+  let profitCents;
+  if (orderData.refund_status === "full" && (!refundReason || refundReason === "cancelled_before_ship")) {
+    // Never shipped / cancelled → no costs incurred → $0 profit
+    profitCents = 0;
+  } else if (refundReason === "returned") {
+    // Customer returned → product cost is sunk, no label cost
+    profitCents = totalPaid - refundCents - productCpiCents;
+  } else {
+    // refunded_kept_item, partial, or no refund → standard calc
+    profitCents = totalPaid - productCpiCents - labelCostCents - refundCents;
+  }
 
   const orderWithCost = {
     ...orderData,
     product_cpi_cents: productCpiCents,
     profit_cents: profitCents,
     refund: refund || null,
+    refund_reason: refundReason,
   };
 
   return {
@@ -200,7 +215,7 @@ async function getRefundsMap(sessionIds) {
 
   const { data, error } = await supabase
     .from("v_order_refunds")
-    .select("stripe_checkout_session_id, refund_status, refund_amount_cents, refunded_at, stripe_refund_id, net_revenue_cents")
+    .select("stripe_checkout_session_id, refund_status, refund_reason, refund_amount_cents, refunded_at, stripe_refund_id, net_revenue_cents")
     .in("stripe_checkout_session_id", sessionIds);
 
   if (error) {
@@ -427,7 +442,16 @@ export async function importPirateShipExport({ batchId, rows } = {}) {
  * @param {string} stripe_checkout_session_id
  * @param {number|null} amount_cents - null for full refund
  */
-export async function issueRefund(stripe_checkout_session_id, amount_cents = null) {
+export async function updateRefundReason(stripe_checkout_session_id, refund_reason) {
+  if (!stripe_checkout_session_id) throw new Error("Missing session ID");
+  const { error } = await supabase
+    .from("orders_raw")
+    .update({ refund_reason, updated_at: new Date().toISOString() })
+    .eq("stripe_checkout_session_id", stripe_checkout_session_id);
+  if (error) throw new Error(error.message);
+}
+
+export async function issueRefund(stripe_checkout_session_id, amount_cents = null, refund_reason = null) {
   if (!stripe_checkout_session_id) throw new Error("Missing session ID");
 
   const { data: { session } } = await supabase.auth.getSession();
@@ -435,6 +459,7 @@ export async function issueRefund(stripe_checkout_session_id, amount_cents = nul
 
   const body = { stripe_checkout_session_id };
   if (amount_cents != null) body.amount_cents = amount_cents;
+  if (refund_reason) body.refund_reason = refund_reason;
 
   const res = await fetch(`${SUPABASE_URL}/functions/v1/stripe-refund`, {
     method: "POST",

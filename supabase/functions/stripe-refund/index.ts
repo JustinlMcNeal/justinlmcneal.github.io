@@ -52,6 +52,13 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const sessionId = (body.stripe_checkout_session_id || "").trim();
     const amountCents = body.amount_cents != null ? Math.max(0, Math.round(Number(body.amount_cents))) : null;
+    const refundReason = (body.refund_reason || "").trim() || null;
+
+    // Validate refund_reason if supplied
+    const VALID_REASONS = ["cancelled_before_ship", "refunded_kept_item", "returned"];
+    if (refundReason && !VALID_REASONS.includes(refundReason)) {
+      return json({ error: `Invalid refund_reason. Must be one of: ${VALID_REASONS.join(", ")}` }, 400);
+    }
 
     if (!sessionId) return json({ error: "Missing stripe_checkout_session_id" }, 400);
 
@@ -108,7 +115,7 @@ Deno.serve(async (req) => {
     const newTotalRefund = previousRefund + (refund.amount ?? 0);
     const isFullRefund = newTotalRefund >= totalPaid;
 
-    const patch = {
+    const patch: Record<string, unknown> = {
       refund_status: isFullRefund ? "full" : "partial",
       refund_amount_cents: newTotalRefund,
       refunded_at: new Date().toISOString(),
@@ -116,6 +123,7 @@ Deno.serve(async (req) => {
       stripe_payment_intent_id: paymentIntentId,
       updated_at: new Date().toISOString(),
     };
+    if (refundReason) patch.refund_reason = refundReason;
 
     const { error: dbErr } = await supabaseAdmin
       .from("orders_raw")
@@ -140,6 +148,7 @@ Deno.serve(async (req) => {
       amount_refunded_cents: refund.amount,
       total_refunded_cents: newTotalRefund,
       refund_status: patch.refund_status,
+      refund_reason: refundReason,
     }, 200);
 
   } catch (err: any) {

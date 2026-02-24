@@ -30,13 +30,35 @@ function statusPillClasses(labelStatus) {
 function refundBadgeHtml(refund) {
   if (!refund?.refund_status) return "";
   const isFull = refund.refund_status === "full";
-  const label = isFull ? "REFUNDED" : "PARTIAL REFUND";
+
+  // Reason-aware label
+  const reason = refund.refund_reason;
+  let label;
+  if (!isFull) {
+    label = "PARTIAL REFUND";
+  } else if (reason === "cancelled_before_ship") {
+    label = "CANCELLED";
+  } else if (reason === "refunded_kept_item") {
+    label = "REFUNDED · KEPT";
+  } else if (reason === "returned") {
+    label = "RETURNED";
+  } else {
+    label = "REFUNDED";
+  }
+
   const amt = refund.refund_amount_cents
     ? ` $${(refund.refund_amount_cents / 100).toFixed(2)}`
     : "";
+
+  const clsMap = {
+    cancelled_before_ship: "bg-gray-600 text-white border-gray-700",
+    refunded_kept_item: "bg-amber-500 text-white border-amber-600",
+    returned: "bg-purple-600 text-white border-purple-700",
+  };
   const cls = isFull
-    ? "bg-red-600 text-white border-red-700"
+    ? (clsMap[reason] || "bg-red-600 text-white border-red-700")
     : "bg-amber-500 text-white border-amber-600";
+
   return `<span class="inline-flex items-center border-[3px] ${cls} px-2 py-1 text-[10px] font-black uppercase tracking-[.18em] whitespace-nowrap ml-1">${label}${amt}</span>`;
 }
 
