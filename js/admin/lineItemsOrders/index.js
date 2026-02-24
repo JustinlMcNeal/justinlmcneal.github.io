@@ -74,6 +74,108 @@ function bindViewModal() {
   };
 }
 
+/* -------------------------
+   REFUND SECTION BUILDER
+   (extracted to avoid nested template literal issues)
+-------------------------- */
+function buildRefundSectionHtml(order, esc, money, formatDate) {
+  let html = '<section>';
+  html += '<div class="text-[11px] font-black uppercase tracking-[.25em] flex items-center gap-2 mb-4">';
+  html += '<span class="w-5 h-5 bg-black text-white text-[10px] flex items-center justify-center">7</span>';
+  html += 'Refund</div>';
+
+  if (order.refund_status) {
+    // Status cards
+    const statusBorder = order.refund_status === "full" ? "border-red-400 bg-red-50" : "border-amber-400 bg-amber-50";
+    const statusColor = order.refund_status === "full" ? "text-red-600" : "text-amber-600";
+    const netRevenue = (order.total_paid_cents || 0) - (order.refund_amount_cents || 0);
+
+    html += '<div class="grid sm:grid-cols-3 gap-4 mb-4">';
+    html += `<div class="border-4 ${statusBorder} p-4">`;
+    html += '<div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">Status</div>';
+    html += `<div class="font-black uppercase ${statusColor}">${esc(order.refund_status)} refund</div></div>`;
+    html += '<div class="border-4 border-black p-4">';
+    html += '<div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">Refunded</div>';
+    html += `<div class="font-black text-lg text-red-600">${money(order.refund_amount_cents)}</div></div>`;
+    html += '<div class="border-4 border-black p-4 bg-emerald-50">';
+    html += '<div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">Net Revenue</div>';
+    html += `<div class="font-black text-lg text-emerald-600">${money(netRevenue)}</div></div>`;
+    html += '</div>';
+
+    // Refund reason toggles
+    html += '<div class="mb-4">';
+    html += '<div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-2">Refund Reason</div>';
+    html += '<div class="flex flex-wrap gap-2">';
+
+    const reasons = [
+      { key: "cancelled_before_ship", label: "🚫 Cancelled / Never Shipped", activeClass: "border-blue-600 bg-blue-600 text-white" },
+      { key: "refunded_kept_item",    label: "🎁 Refunded · Kept Item",      activeClass: "border-amber-500 bg-amber-500 text-white" },
+      { key: "returned",              label: "📦 Returned",                   activeClass: "border-purple-600 bg-purple-600 text-white" },
+    ];
+    for (const r of reasons) {
+      const cls = order.refund_reason === r.key ? r.activeClass : "border-gray-300 text-gray-600 hover:border-black";
+      html += `<button data-set-reason="${r.key}" class="px-3 py-2 text-[11px] font-black uppercase tracking-wider border-4 transition ${cls}">${r.label}</button>`;
+    }
+    html += '</div>';
+
+    // Reason explanation
+    const explanations = {
+      cancelled_before_ship: "Product never shipped → profit = $0 (no costs incurred)",
+      refunded_kept_item: "Customer kept the item → product cost + shipping are real losses",
+      returned: "Customer returned item → product cost is sunk, no shipping loss",
+    };
+    const explanation = explanations[order.refund_reason] || "Select a reason to adjust how profit is calculated";
+    html += `<div class="mt-2 text-[10px] text-gray-500">${explanation}</div>`;
+    html += '</div>';
+
+    if (order.refunded_at) {
+      html += `<div class="text-xs text-gray-500 mb-4">Refunded on ${formatDate(order.refunded_at)}</div>`;
+    }
+  } else {
+    html += '<div class="text-sm text-gray-400 mb-4">No refund issued.</div>';
+  }
+
+  // Action buttons
+  if (order.source === "amazon") {
+    html += '<div class="text-xs text-gray-400 italic">Refunds for Amazon orders must be handled through Amazon Seller Central.</div>';
+  } else {
+    html += '<div class="mt-3">';
+
+    // Reason dropdown (only for new refunds)
+    if (!order.refund_status) {
+      html += '<div class="mb-4">';
+      html += '<div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-2">Refund Reason (required)</div>';
+      html += '<select data-refund-reason-select class="border-4 border-black px-3 py-2 text-sm w-full sm:w-auto focus:border-kkpink outline-none">';
+      html += '<option value="">— Select reason —</option>';
+      html += '<option value="cancelled_before_ship">🚫 Cancelled / Never Shipped</option>';
+      html += '<option value="refunded_kept_item">🎁 Refunded · Customer Keeps Item</option>';
+      html += '<option value="returned">📦 Returned by Customer</option>';
+      html += '</select></div>';
+    }
+
+    html += '<div class="flex flex-wrap gap-3">';
+
+    // Full refund button
+    const fullDisabled = order.refund_status === "full" ? "disabled" : "";
+    const fullLabel = order.refund_status === "full" ? "Fully Refunded" : "Issue Full Refund";
+    html += `<button data-refund-full class="px-4 py-2 text-xs font-black uppercase tracking-wider border-4 border-red-600 text-red-600 hover:bg-red-600 hover:text-white transition disabled:opacity-30 disabled:cursor-not-allowed" ${fullDisabled}>${fullLabel}</button>`;
+
+    // Partial refund controls
+    if (order.refund_status !== "full") {
+      html += '<div class="flex items-center gap-2">';
+      html += '<span class="text-[10px] font-black uppercase text-black/60">$</span>';
+      html += '<input data-refund-amount type="number" step="0.01" min="0.01" placeholder="Amount" class="w-24 border-4 border-black px-2 py-1 text-sm font-mono focus:outline-none focus:border-blue-600" />';
+      html += '<button data-refund-partial class="px-4 py-2 text-xs font-black uppercase tracking-wider border-4 border-amber-500 text-amber-600 hover:bg-amber-500 hover:text-white transition">Partial Refund</button>';
+      html += '</div>';
+    }
+
+    html += '</div></div>';
+  }
+
+  html += '</section>';
+  return html;
+}
+
 function renderOrderDetailsHtml(order, lineItems, shipment) {
   const esc = (s) => String(s ?? "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const money = (cents) => {
@@ -102,6 +204,9 @@ function renderOrderDetailsHtml(order, lineItems, shipment) {
   const labelStatus = shipment?.label_status || "pending";
   const tracking = shipment?.tracking_number || "—";
   const carrier = shipment?.carrier || "—";
+
+  // ── Build refund section HTML before the main template ──
+  const refundSectionHtml = buildRefundSectionHtml(order, esc, money, formatDate);
 
   return `
     <!-- Customer Info -->
@@ -257,94 +362,7 @@ function renderOrderDetailsHtml(order, lineItems, shipment) {
     </section>
 
     <!-- Refund Status / Actions -->
-    <section>
-      <div class="text-[11px] font-black uppercase tracking-[.25em] flex items-center gap-2 mb-4">
-        <span class="w-5 h-5 bg-black text-white text-[10px] flex items-center justify-center">7</span>
-        Refund
-      </div>
-      ${order.refund_status
-        ? `<div class="grid sm:grid-cols-3 gap-4 mb-4">
-            <div class="border-4 ${order.refund_status === 'full' ? 'border-red-400 bg-red-50' : 'border-amber-400 bg-amber-50'} p-4">
-              <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">Status</div>
-              <div class="font-black uppercase ${order.refund_status === 'full' ? 'text-red-600' : 'text-amber-600'}">${esc(order.refund_status)} refund</div>
-            </div>
-            <div class="border-4 border-black p-4">
-              <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">Refunded</div>
-              <div class="font-black text-lg text-red-600">${money(order.refund_amount_cents)}</div>
-            </div>
-            <div class="border-4 border-black p-4 bg-emerald-50">
-              <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">Net Revenue</div>
-              <div class="font-black text-lg text-emerald-600">${money((order.total_paid_cents || 0) - (order.refund_amount_cents || 0))}</div>
-            </div>
-          </div>
-
-          <!-- Refund Reason -->
-          <div class="mb-4">
-            <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-2">Refund Reason</div>
-            <div class="flex flex-wrap gap-2">
-              <button data-set-reason="cancelled_before_ship"
-                class="px-3 py-2 text-[11px] font-black uppercase tracking-wider border-4 transition
-                  ${order.refund_reason === 'cancelled_before_ship' ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-300 text-gray-600 hover:border-black'}">
-                🚫 Cancelled / Never Shipped
-              </button>
-              <button data-set-reason="refunded_kept_item"
-                class="px-3 py-2 text-[11px] font-black uppercase tracking-wider border-4 transition
-                  ${order.refund_reason === 'refunded_kept_item' ? 'border-amber-500 bg-amber-500 text-white' : 'border-gray-300 text-gray-600 hover:border-black'}">
-                🎁 Refunded · Kept Item
-              </button>
-              <button data-set-reason="returned"
-                class="px-3 py-2 text-[11px] font-black uppercase tracking-wider border-4 transition
-                  ${order.refund_reason === 'returned' ? 'border-purple-600 bg-purple-600 text-white' : 'border-gray-300 text-gray-600 hover:border-black'}">
-                📦 Returned
-              </button>
-            </div>
-            <div class="mt-2 text-[10px] text-gray-500">
-              ${order.refund_reason === 'cancelled_before_ship' ? 'Product never shipped → profit = $0 (no costs incurred)' :
-                order.refund_reason === 'refunded_kept_item' ? 'Customer kept the item → product cost + shipping are real losses' :
-                order.refund_reason === 'returned' ? 'Customer returned item → product cost is sunk, no shipping loss' :
-                'Select a reason to adjust how profit is calculated'}
-            </div>
-          </div>
-
-          ${order.refunded_at ? \`<div class="text-xs text-gray-500 mb-4">Refunded on \${formatDate(order.refunded_at)}</div>\` : ''}\`
-        : '<div class="text-sm text-gray-400 mb-4">No refund issued.</div>'}
-
-      ${order.source === 'amazon'
-        ? '<div class="text-xs text-gray-400 italic">Refunds for Amazon orders must be handled through Amazon Seller Central.</div>'
-        : \`<div class="mt-3">
-            <!-- Refund reason selector (shown before issuing refund) -->
-            \${!order.refund_status ? \`
-            <div class="mb-4">
-              <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-2">Refund Reason (required)</div>
-              <select data-refund-reason-select class="border-4 border-black px-3 py-2 text-sm w-full sm:w-auto focus:border-kkpink outline-none">
-                <option value="">— Select reason —</option>
-                <option value="cancelled_before_ship">🚫 Cancelled / Never Shipped</option>
-                <option value="refunded_kept_item">🎁 Refunded · Customer Keeps Item</option>
-                <option value="returned">📦 Returned by Customer</option>
-              </select>
-            </div>\` : ''}
-
-            <div class="flex flex-wrap gap-3">
-              <button data-refund-full
-                class="px-4 py-2 text-xs font-black uppercase tracking-wider border-4 border-red-600 text-red-600 hover:bg-red-600 hover:text-white transition disabled:opacity-30 disabled:cursor-not-allowed"
-                \${order.refund_status === 'full' ? 'disabled' : ''}>
-                \${order.refund_status === 'full' ? 'Fully Refunded' : 'Issue Full Refund'}
-              </button>
-              \${order.refund_status !== 'full' ? \`
-              <div class="flex items-center gap-2">
-                <span class="text-[10px] font-black uppercase text-black/60">$</span>
-                <input data-refund-amount type="number" step="0.01" min="0.01"
-                  placeholder="Amount"
-                  class="w-24 border-4 border-black px-2 py-1 text-sm font-mono focus:outline-none focus:border-blue-600" />
-                <button data-refund-partial
-                  class="px-4 py-2 text-xs font-black uppercase tracking-wider border-4 border-amber-500 text-amber-600 hover:bg-amber-500 hover:text-white transition">
-                  Partial Refund
-                </button>
-              </div>\` : ''}
-            </div>
-          </div>\`
-      }
-    </section>
+    ${refundSectionHtml}
 
     <div class="border-t-4 border-gray-100"></div>
 
