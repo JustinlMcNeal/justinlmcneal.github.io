@@ -63,12 +63,12 @@ BEGIN
       AND (v_date_to   = '' OR o.order_date <= (v_date_to || 'T23:59:59Z')::timestamptz)
   )
   SELECT json_build_object(
-    'order_count',     COUNT(*),
-    'revenue_cents',   COALESCE(SUM(total_paid_cents - COALESCE(refund_amount_cents,0)), 0),
-    'profit_cents',    COALESCE(SUM(profit_cents), 0),
-    'unfulfilled',     COUNT(*) FILTER (WHERE COALESCE(label_status,'pending') = 'pending'),
-    'refunded_count',  COUNT(*) FILTER (WHERE refund_status IS NOT NULL),
-    'refunded_cents',  COALESCE(SUM(refund_amount_cents) FILTER (WHERE refund_status IS NOT NULL), 0)
+    'orders_count',      COUNT(*),
+    'revenue_cents',     COALESCE(SUM(total_paid_cents - COALESCE(refund_amount_cents,0)), 0),
+    'profit_cents',      COALESCE(SUM(profit_cents), 0),
+    'unfulfilled_count', COUNT(*) FILTER (WHERE COALESCE(label_status,'pending') = 'pending'),
+    'refunded_count',    COUNT(*) FILTER (WHERE refund_status IS NOT NULL),
+    'refunded_cents',    COALESCE(SUM(refund_amount_cents) FILTER (WHERE refund_status IS NOT NULL), 0)
   ) INTO result
   FROM base;
 
