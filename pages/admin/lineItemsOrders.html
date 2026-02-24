@@ -326,13 +326,10 @@
 
     <!-- Table -->
     <section id="tableWrap" class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-      <!-- Mobile Card View -->
-      <div id="mobileOrderCards" class="sm:hidden"></div>
-
-      <!-- Desktop Table View -->
-      <div class="hidden sm:block overflow-x-auto custom-scrollbar">
+      <!-- Responsive: mobile cards + desktop table share the same <tbody> -->
+      <div class="overflow-x-auto custom-scrollbar">
         <table id="ordersTable" class="w-full border-collapse text-sm">
-          <thead class="bg-black text-white">
+          <thead class="bg-black text-white hidden sm:table-header-group">
             <tr class="text-left uppercase tracking-[.12em] text-[11px] font-black">
               <th class="px-4 py-4">Date</th>
               <th class="px-4 py-4">Order</th>

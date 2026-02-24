@@ -158,22 +158,22 @@ function renderOrderDetailsHtml(order, lineItems, shipment) {
             const unitCents = li.post_discount_unit_price_cents ?? li.unit_price_cents;
             const lineTotalCents = unitCents != null ? unitCents * qty : null;
             const imgHtml = li.product_image_url 
-              ? `<img src="${esc(li.product_image_url)}" class="w-16 h-16 object-cover border-2 border-black flex-shrink-0" onerror="this.outerHTML='<div class=\\'w-16 h-16 bg-gray-100 border-2 border-black flex items-center justify-center text-[10px] text-gray-400 flex-shrink-0\\'>📦</div>'" />`
-              : `<div class="w-16 h-16 bg-gray-100 border-2 border-black flex items-center justify-center text-[10px] text-gray-400 flex-shrink-0">📦</div>`;
+              ? `<img src="${esc(li.product_image_url)}" class="w-12 h-12 sm:w-16 sm:h-16 object-cover border-2 border-black flex-shrink-0" onerror="this.outerHTML='<div class=\\'w-12 h-12 sm:w-16 sm:h-16 bg-gray-100 border-2 border-black flex items-center justify-center text-[10px] text-gray-400 flex-shrink-0\\'>📦</div>'" />`
+              : `<div class="w-12 h-12 sm:w-16 sm:h-16 bg-gray-100 border-2 border-black flex items-center justify-center text-[10px] text-gray-400 flex-shrink-0">📦</div>`;
             return `
-            <div class="border-4 border-black p-4 flex gap-4">
+            <div class="border-4 border-black p-3 sm:p-4 flex gap-3 sm:gap-4">
               ${imgHtml}
               <div class="flex-1 min-w-0">
                 <a href="/pages/product.html?slug=${encodeURIComponent(li.product_slug || li.product_id || '')}" target="_blank"
                   class="font-black text-sm line-clamp-2 text-kkpink hover:underline cursor-pointer">${esc(li.product_name || li.product_id || "Unknown Product")}</a>
                 ${li.variant ? `<div class="text-xs text-gray-500 mt-1">Variant: ${esc(li.variant)}</div>` : ""}
-                <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm">
+                <div class="flex flex-wrap items-center gap-x-3 sm:gap-x-4 gap-y-1 mt-2 text-xs sm:text-sm">
                   <span>Qty: <strong>${qty}</strong></span>
                   <span>Price: <strong>${money(unitCents)}</strong></span>
                   <span>Revenue: <strong>${money(lineTotalCents)}</strong></span>
                 </div>
                 ${li.cpi_cents ? `
-                <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-xs text-red-600">
+                <div class="flex flex-wrap items-center gap-x-3 sm:gap-x-4 gap-y-1 mt-1 text-[11px] sm:text-xs text-red-600">
                   <span>CPI: ${money(li.cpi_cents)}/ea</span>
                   <span>×${qty} = <strong>${money(li.line_cost_cents)}</strong></span>
                 </div>` : ''}

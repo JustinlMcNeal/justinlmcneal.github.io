@@ -9,7 +9,7 @@ function truncateId(id, max = 16) {
 }
 
 function isMobile() {
-  return window.matchMedia("(max-width: 768px)").matches;
+  return window.matchMedia("(max-width: 639px)").matches;
 }
 
 function statusPillClasses(labelStatus) {
