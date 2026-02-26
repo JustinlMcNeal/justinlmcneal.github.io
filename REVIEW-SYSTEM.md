@@ -20,14 +20,16 @@ Customers can leave verified reviews after placing an order. Reviews are tied to
 
 | Function | Auth | Purpose |
 |---|---|---|
-| `verify-order` | `--no-verify-jwt` | Validates email + KK order ID, returns line items + review status |
+| `verify-order` | `--no-verify-jwt` | Validates email + KK order ID, returns line items + review status + coupon codes |
 | `submit-review` | `--no-verify-jwt` | Saves review, generates `THANKS-XXXXXX` coupon |
+| `lookup-orders` | `--no-verify-jwt` | Email + first name lookup → returns all orders, items, review status, coupon codes |
 
 ### Frontend Pages
 
 | Page | JS Module | Purpose |
 |---|---|---|
 | `/pages/reviews.html` | `/js/reviews/index.js` | Customer review flow (4 steps) |
+| `/pages/my-orders.html` | `/js/my-orders/index.js` | Order lookup by email + name (coupon recovery) |
 | `/pages/admin/reviews.html` | `/js/admin/reviews/index.js` | Admin management panel |
 | `/pages/success.html` | `/js/success/index.js` | Post-checkout with order details + review CTA |
 
@@ -35,10 +37,24 @@ Customers can leave verified reviews after placing an order. Reviews are tied to
 
 ## Customer Flow
 
+### Review Flow (`/pages/reviews.html`)
+
 1. **Order Lookup** — Customer enters email + KK order number (e.g. `KKO-A1B2C3`)
-2. **Product Picker** — Shows all items from that order; already-reviewed items are grayed out
+2. **Product Picker** — Shows all items from that order; already-reviewed items show their coupon code
 3. **Review Form** — Star rating (1-5), name, title, body text, optional photo upload
 4. **Thank You** — Shows coupon code (if auto-approved) or "pending approval" message
+
+> "Don't know your order number?" link routes to My Orders page.
+> Reviews page accepts `?oid=KKO-XXXXX` query param to prefill the order ID.
+
+### My Orders Flow (`/pages/my-orders.html`)
+
+1. **Lookup** — Customer enters email + first name
+2. **Orders List** — Shows all matching orders with date, order #, item thumbnails, total
+3. **Order Detail** — Click an order to see full item list, review status, and coupon codes
+4. **Actions** — "Leave a Review" links to reviews page with `?oid=` prefilled; copy coupon codes
+
+> Linked from: footer, success page, reviews page
 
 ## Admin Flow
 
@@ -64,15 +80,18 @@ supabase/
   migrations/20260226_create_reviews.sql   # DB schema
   functions/verify-order/index.ts          # Order verification endpoint
   functions/submit-review/index.ts         # Review + coupon creation endpoint
+  functions/lookup-orders/index.ts         # Email + name order lookup endpoint
 
 js/
   reviews/index.js                         # Customer reviews page logic
+  my-orders/index.js                       # My Orders page logic
   admin/reviews/api.js                     # Admin Supabase queries
   admin/reviews/index.js                   # Admin page logic
   success/index.js                         # Updated success page (order details)
 
 pages/
   reviews.html                             # Customer review page
+  my-orders.html                           # Order lookup + coupon recovery page
   success.html                             # Updated success page
   admin/reviews.html                       # Admin review management
 
@@ -86,7 +105,7 @@ page_inserts/
 
 ### High Priority
 
-- [ ] **Coupon code recovery** — When a customer looks up an order and a product is already reviewed, show the coupon code that was generated for that review (verify-order already flags `already_reviewed`; extend it to return `coupon_code` from the `reviews` table so the customer can retrieve a lost code)
+- [x] **Coupon code recovery** — ✅ Done: My Orders page (`/pages/my-orders.html`) lets customers look up orders by email + first name. Shows coupon codes for reviewed items with copy button. Reviews page also shows coupon codes inline and supports `?oid=` URL param prefill. `verify-order` and `lookup-orders` both return coupon codes.
 - [ ] **Star ratings on catalog cards** — Query average rating + review count per product from `reviews` table and display stars on each product card in `/pages/catalog.html`
 - [ ] **Star ratings on product page** — Show aggregate star rating + review count on `/pages/product.html` near the product title/price area
 - [ ] **Sort by rating on catalog page** — Add a "Top Rated" sort option to the catalog sort dropdown; requires joining or pre-computing average ratings
