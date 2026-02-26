@@ -115,8 +115,33 @@
         A confirmation email is on its way to your inbox.
       </p>
 
+      <!-- Order Details (populated by JS) -->
+      <div id="orderDetailsSection" class="fade-up fade-up-3 mt-8 hidden">
+        <div class="bg-gray-50 rounded-2xl border border-gray-100 p-6 text-left">
+          <div class="text-[10px] font-black uppercase tracking-[.25em] text-gray-400 mb-4">Order Details</div>
+
+          <!-- Items list -->
+          <div id="orderItemsList" class="space-y-3 mb-4"></div>
+
+          <!-- Totals -->
+          <div class="border-t border-gray-200 pt-3 space-y-1">
+            <div class="flex justify-between text-xs"><span class="text-gray-500">Subtotal</span><span id="orderSubtotal" class="font-bold">—</span></div>
+            <div class="flex justify-between text-xs"><span class="text-gray-500">Tax</span><span id="orderTax" class="font-bold">—</span></div>
+            <div class="flex justify-between text-xs"><span class="text-gray-500">Shipping</span><span id="orderShipping" class="font-bold">—</span></div>
+            <div id="orderSavingsRow" class="flex justify-between text-xs hidden"><span class="text-green-600">Savings</span><span id="orderSavings" class="font-bold text-green-600">—</span></div>
+            <div class="flex justify-between text-sm font-black border-t border-gray-300 pt-2 mt-2"><span>Total</span><span id="orderTotal">—</span></div>
+          </div>
+
+          <!-- Shipping Address -->
+          <div id="shippingAddressBlock" class="mt-4 pt-3 border-t border-gray-200 hidden">
+            <div class="text-[10px] font-black uppercase tracking-[.25em] text-gray-400 mb-1">Shipping To</div>
+            <div id="shippingAddress" class="text-xs text-gray-600 leading-relaxed"></div>
+          </div>
+        </div>
+      </div>
+
       <!-- What happens next -->
-      <div class="fade-up fade-up-3 mt-8 bg-gray-50 rounded-2xl border border-gray-100 p-6 text-left">
+      <div class="fade-up fade-up-3 mt-6 bg-gray-50 rounded-2xl border border-gray-100 p-6 text-left">
         <div class="text-[10px] font-black uppercase tracking-[.25em] text-gray-400 mb-4">What happens next</div>
         <div class="space-y-4">
           <div class="flex gap-3 items-start">
@@ -154,6 +179,10 @@
         <a href="/pages/catalog.html"
           class="inline-block px-6 py-3 bg-black text-white text-sm font-black uppercase tracking-wider rounded-full hover:bg-kkpink transition-colors">
           Continue Shopping
+        </a>
+        <a id="btnLeaveReview" href="/pages/reviews.html"
+          class="inline-block px-6 py-3 border-2 border-kkpink text-kkpink text-sm font-black uppercase tracking-wider rounded-full hover:bg-kkpink hover:text-white transition-colors">
+          ⭐ Leave a Review — Get 5% Off
         </a>
         <a href="/"
           class="inline-block px-6 py-3 border-2 border-black text-black text-sm font-black uppercase tracking-wider rounded-full hover:bg-black hover:text-white transition-colors">
