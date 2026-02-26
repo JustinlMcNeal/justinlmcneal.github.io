@@ -55,14 +55,19 @@ Deno.serve(async (req) => {
       return json({ error: "Could not fetch order items" }, 500);
     }
 
-    // Check which items already have reviews
+    // Check which items already have reviews (include coupon codes for recovery)
     const { data: existingReviews } = await sb
       .from("reviews")
-      .select("product_id")
+      .select("product_id, coupon_code")
       .eq("order_session_id", order.stripe_checkout_session_id);
 
     const reviewedProducts = new Set(
       (existingReviews || []).map((r: any) => r.product_id)
+    );
+    const couponByProduct = new Map(
+      (existingReviews || [])
+        .filter((r: any) => r.coupon_code)
+        .map((r: any) => [r.product_id, r.coupon_code])
     );
 
     // Enrich items with product images
@@ -91,6 +96,7 @@ Deno.serve(async (req) => {
       quantity: it.quantity,
       image_url: imageMap.get(it.product_id) || null,
       already_reviewed: reviewedProducts.has(it.product_id),
+      coupon_code: couponByProduct.get(it.product_id) || null,
     }));
 
     return json({

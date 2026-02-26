@@ -108,6 +108,12 @@ function renderProductList(data) {
         ${reviewed
           ? `<div class="text-[10px] text-green-600 font-bold uppercase mt-1">✓ Already reviewed</div>`
           : `<div class="text-[10px] text-kkpink font-bold uppercase mt-1">Click to review</div>`}
+        ${reviewed && item.coupon_code
+          ? `<div class="mt-1 inline-flex items-center gap-1 bg-green-50 border border-green-200 px-2 py-0.5 rounded">
+              <span class="text-[10px] text-green-700">Your coupon:</span>
+              <span class="text-xs font-mono font-black text-green-800">${escHtml(item.coupon_code)}</span>
+            </div>`
+          : ""}
       </div>
       ${reviewed ? "" : `<div class="text-lg">→</div>`}
     `;
@@ -444,4 +450,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Load the approved reviews feed
   loadApprovedReviews();
+
+  // Prefill order ID from URL params (e.g. from My Orders page)
+  const params = new URLSearchParams(window.location.search);
+  const oid = params.get("oid");
+  if (oid && $("lookupOrderId")) {
+    $("lookupOrderId").value = oid;
+  }
 });

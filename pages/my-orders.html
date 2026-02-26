@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Orders · Karry Kraze</title>
+
+  <meta name="description" content="Look up your Karry Kraze orders by email. View order details, tracking, and leave reviews." />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: { kkpink: '#ff69b4', kkpeach: '#f6dcc6' }
+        }
+      }
+    }
+  </script>
+
+  <link rel="stylesheet" href="/css/theme/base.css">
+  <link rel="stylesheet" href="/css/theme/components.css">
+
+  <style>
+    @keyframes slide-up { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+    .slide-up { animation: slide-up .4s ease-out forwards; }
+    .order-card:hover { border-color: #ff69b4; }
+    @media (max-width: 640px) {
+      button, [role="button"] { min-height: 44px; }
+      input { font-size: 16px !important; }
+    }
+  </style>
+</head>
+
+<body class="kk-page bg-gray-50 min-h-screen flex flex-col">
+  <div id="kkNavbarMount"></div>
+
+  <main class="flex-1 px-4 py-8 sm:py-12">
+    <div class="max-w-2xl mx-auto">
+
+      <!-- Page Header -->
+      <div class="text-center mb-8">
+        <div class="inline-block bg-black text-white px-3 py-1 text-[10px] font-black uppercase tracking-[.25em] mb-3">
+          Order Lookup
+        </div>
+        <h1 class="text-3xl sm:text-4xl font-black tracking-tight">My Orders</h1>
+        <p class="text-gray-500 text-sm mt-2">
+          Find your orders using your email and first name.
+        </p>
+      </div>
+
+      <!-- ======== Lookup Form ======== -->
+      <section id="lookupSection" class="bg-white border-4 border-black p-5 sm:p-8 shadow-[6px_6px_0_0_rgba(0,0,0,.08)]">
+        <div class="text-[11px] font-black uppercase tracking-[.25em] flex items-center gap-2 mb-1">
+          <span class="w-6 h-6 bg-black text-white text-[11px] flex items-center justify-center">🔍</span>
+          Find Your Orders
+        </div>
+        <p class="text-xs text-gray-500 mb-5">
+          Enter the email address and first name you used at checkout.
+        </p>
+
+        <div class="space-y-3">
+          <div>
+            <label for="lookupEmail" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
+              Email Address
+            </label>
+            <input id="lookupEmail" type="email"
+              class="w-full border-4 border-black px-3 py-2.5 text-sm outline-none focus:border-kkpink transition-colors"
+              placeholder="you@example.com" />
+          </div>
+          <div>
+            <label for="lookupName" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
+              First Name
+            </label>
+            <input id="lookupName" type="text"
+              class="w-full border-4 border-black px-3 py-2.5 text-sm outline-none focus:border-kkpink transition-colors"
+              placeholder="Jane" />
+          </div>
+          <div id="lookupError" class="hidden text-sm text-red-600 font-bold bg-red-50 border border-red-200 p-3 rounded"></div>
+          <button id="btnLookup" type="button"
+            class="w-full border-4 border-black bg-black text-white px-6 py-3 font-black uppercase tracking-[.12em] text-sm
+                   hover:bg-kkpink hover:border-kkpink hover:text-black transition-all
+                   disabled:opacity-50 disabled:cursor-not-allowed">
+            Find My Orders
+          </button>
+        </div>
+      </section>
+
+      <!-- ======== Results ======== -->
+      <section id="resultsSection" class="hidden mt-6 slide-up">
+        <div class="bg-white border-4 border-black p-5 sm:p-8 shadow-[6px_6px_0_0_rgba(0,0,0,.08)]">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <div class="text-[11px] font-black uppercase tracking-[.25em] flex items-center gap-2 mb-1">
+                <span class="w-6 h-6 bg-black text-white text-[11px] flex items-center justify-center">📦</span>
+                Your Orders
+              </div>
+              <p class="text-xs text-gray-500">
+                Hi <strong id="customerName"></strong>! Here are your orders.
+              </p>
+            </div>
+            <button id="btnNewSearch" type="button"
+              class="border-2 border-black px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider hover:bg-black hover:text-white transition-colors">
+              New Search
+            </button>
+          </div>
+
+          <div id="ordersList" class="space-y-4"></div>
+        </div>
+      </section>
+
+      <!-- ======== Order Detail Expanded ======== -->
+      <section id="orderDetailSection" class="hidden mt-6 slide-up">
+        <div class="bg-white border-4 border-black p-5 sm:p-8 shadow-[6px_6px_0_0_rgba(0,0,0,.08)]">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <div class="text-[11px] font-black uppercase tracking-[.25em] mb-1">
+                Order <span id="detailOrderId" class="text-kkpink"></span>
+              </div>
+              <div class="text-xs text-gray-500" id="detailOrderDate"></div>
+            </div>
+            <button id="btnBackToList" type="button"
+              class="border-2 border-black px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider hover:bg-black hover:text-white transition-colors">
+              ← Back
+            </button>
+          </div>
+
+          <!-- Items -->
+          <div id="detailItemsList" class="space-y-2 mb-4"></div>
+
+          <!-- Total -->
+          <div class="border-t-2 border-black pt-3 flex justify-between items-center">
+            <span class="text-sm font-bold">Total</span>
+            <span id="detailTotal" class="text-lg font-black"></span>
+          </div>
+
+          <!-- Coupon Recovery -->
+          <div id="couponRecoverySection" class="hidden mt-4 pt-4 border-t-2 border-gray-200">
+            <div class="text-[10px] font-black uppercase tracking-[.25em] text-green-600 mb-2">🎁 Your Review Coupons</div>
+            <div id="couponRecoveryList" class="space-y-2"></div>
+          </div>
+
+          <!-- CTA -->
+          <div class="mt-6 flex flex-col sm:flex-row gap-2">
+            <a id="btnLeaveReview" href="/pages/reviews.html"
+              class="flex-1 text-center border-4 border-black bg-kkpink text-black px-4 py-3 font-black uppercase tracking-[.12em] text-xs hover:bg-black hover:text-white hover:border-black transition-all">
+              ⭐ Leave a Review
+            </a>
+            <a href="/pages/contact.html"
+              class="flex-1 text-center border-4 border-black bg-white text-black px-4 py-3 font-black uppercase tracking-[.12em] text-xs hover:bg-black hover:text-white transition-all">
+              Need Help?
+            </a>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <div id="kkFooterMount"></div>
+
+  <script type="module" src="/js/my-orders/index.js"></script>
+</body>
+</html>
