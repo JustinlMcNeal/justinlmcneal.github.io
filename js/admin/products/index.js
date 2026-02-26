@@ -14,6 +14,8 @@ import {
   upsertSectionItemsForProduct,
 } from "./sectionItems.js";
 
+import { createAiFillPanel } from "./aiFill.js";
+
 function buildLoginRedirect() {
   const next = `${location.pathname}${location.search}`;
   return `/pages/admin/login.html?next=${encodeURIComponent(next)}`;
@@ -96,6 +98,20 @@ async function boot() {
     galleryUrlInput: $("galleryUrlInput"),
     btnAddGalleryUrl: $("btnAddGalleryUrl"),
   };
+
+  // 3.5) Mount AI Auto-Fill panel
+  const aiFillMount = $("aiFillMount");
+  if (aiFillMount) {
+    const aiFillPanel = createAiFillPanel({
+      nameInput: els.fName,
+      categorySelect: els.fCategory,
+      tagsInput: els.fTags,
+      primaryImgInput: els.fPrimaryImg,
+      catalogImgInput: els.fCatalogImg,
+      modalMsg: els.modalMsg,
+    });
+    aiFillMount.appendChild(aiFillPanel);
+  }
 
   // 4) Modal binder
   const modal = bindModal(
