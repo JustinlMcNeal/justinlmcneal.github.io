@@ -71,6 +71,14 @@ function formatTracking(trk) {
   return t.length ? t : "—";
 }
 
+function reviewBadgeHtml(reviewCount) {
+  const n = Number(reviewCount || 0);
+  if (n > 0) {
+    return `<span class="inline-flex items-center gap-1 border-[3px] border-emerald-600 bg-emerald-50 text-emerald-700 px-2 py-1 text-[10px] font-black uppercase tracking-[.14em] whitespace-nowrap" title="${n} review${n === 1 ? '' : 's'}">⭐ ${n}</span>`;
+  }
+  return `<span class="inline-flex items-center border-[3px] border-gray-200 bg-gray-50 text-gray-400 px-2 py-1 text-[10px] font-black uppercase tracking-[.14em] whitespace-nowrap">No reviews</span>`;
+}
+
 /* -------------------------
    MOBILE RENDER (CARDS)
 -------------------------- */
@@ -138,7 +146,7 @@ function renderMobileCards(rows = []) {
               </div>
 
               <!-- stats grid -->
-              <div class="mt-4 grid grid-cols-3 gap-3 text-sm">
+              <div class="mt-4 grid grid-cols-4 gap-3 text-sm">
                 <div class="border-[3px] border-black p-3">
                   <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60">Items</div>
                   <div class="mt-1 font-black">${esc(items)}</div>
@@ -152,6 +160,11 @@ function renderMobileCards(rows = []) {
                 <div class="border-[3px] border-black p-3">
                   <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60">Profit</div>
                   <div class="mt-1 font-black ${profitColor}">${esc(profit)}</div>
+                </div>
+
+                <div class="border-[3px] border-black p-3">
+                  <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60">Reviews</div>
+                  <div class="mt-1">${reviewBadgeHtml(r.review_count)}</div>
                 </div>
               </div>
             </div>
@@ -222,6 +235,10 @@ function renderDesktopRows(rows = []) {
             </div>
           </td>
 
+          <td class="px-4 py-3 text-center">
+            ${reviewBadgeHtml(r.review_count)}
+          </td>
+
           <td class="px-4 py-3 text-right whitespace-nowrap">
             <button
               type="button"
@@ -255,7 +272,7 @@ export function renderOrdersRows({ tbodyEl, rows = [], onEdit, onView, countLabe
   if (!rows.length) {
     tbodyEl.innerHTML = `
       <tr>
-        <td colspan="12" class="px-4 py-8">
+        <td colspan="9" class="px-4 py-8">
           <div class="text-sm text-black/70">No orders found.</div>
         </td>
       </tr>

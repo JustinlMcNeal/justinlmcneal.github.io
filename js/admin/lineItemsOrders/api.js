@@ -241,6 +241,48 @@ function buildSearchOr(q) {
   ].join(",");
 }
 
+/**
+ * Fetch review counts per order session ID (batch).
+ * Returns Map<session_id, number>
+ */
+async function getReviewCountsMap(sessionIds) {
+  if (!sessionIds?.length) return new Map();
+
+  // Query reviews grouped by order_session_id for the given session IDs
+  const { data, error } = await supabase
+    .from("reviews")
+    .select("order_session_id")
+    .in("order_session_id", sessionIds);
+
+  if (error) {
+    console.warn("[api] reviews fetch failed:", error.message);
+    return new Map();
+  }
+
+  const m = new Map();
+  for (const row of data || []) {
+    const sid = row.order_session_id;
+    m.set(sid, (m.get(sid) || 0) + 1);
+  }
+  return m;
+}
+
+/**
+ * Get all session IDs that have at least one review.
+ */
+async function getReviewedSessionIds() {
+  const { data, error } = await supabase
+    .from("reviews")
+    .select("order_session_id");
+
+  if (error) {
+    console.warn("[api] reviews fetch failed:", error.message);
+    return new Set();
+  }
+
+  return new Set((data || []).map(r => r.order_session_id));
+}
+
 function applyDateRange(qb, dateFrom, dateTo) {
   if (dateFrom) qb = qb.gte("order_date", `${dateFrom}T00:00:00Z`);
   if (dateTo) qb = qb.lte("order_date", `${dateTo}T23:59:59Z`);
@@ -252,6 +294,7 @@ export async function fetchOrderSummaryPage({
   status = "",
   dateFrom = "",
   dateTo = "",
+  reviewStatus = "",
   limit = 25,
   offset = 0,
 } = {}) {
@@ -263,6 +306,13 @@ export async function fetchOrderSummaryPage({
   if (status) {
     statusSessionIds = await getSessionIdsByStatus(status);
     if (!statusSessionIds.length) return { rows: [], totalCount: 0, hasMore: false };
+  }
+
+  // Review filter: get session IDs that have reviews
+  let reviewSessionIds = null;
+  if (reviewStatus === "reviewed" || reviewStatus === "no_reviews") {
+    const reviewedSet = await getReviewedSessionIds();
+    reviewSessionIds = { set: reviewedSet, mode: reviewStatus };
   }
 
   let countQ = supabase.from(SUMMARY).select("*", { count: "exact", head: true });
@@ -282,6 +332,23 @@ export async function fetchOrderSummaryPage({
     dataQ = dataQ.in("stripe_checkout_session_id", statusSessionIds);
   }
 
+  // Apply review filter at the query level
+  if (reviewSessionIds) {
+    const ids = [...reviewSessionIds.set];
+    if (reviewSessionIds.mode === "reviewed") {
+      if (ids.length === 0) return { rows: [], totalCount: 0, hasMore: false };
+      countQ = countQ.in("stripe_checkout_session_id", ids);
+      dataQ = dataQ.in("stripe_checkout_session_id", ids);
+    } else if (reviewSessionIds.mode === "no_reviews") {
+      // Supabase doesn't have a NOT IN direct method, use .not + .in
+      if (ids.length > 0) {
+        countQ = countQ.not("stripe_checkout_session_id", "in", `(${ids.join(",")})`);
+        dataQ = dataQ.not("stripe_checkout_session_id", "in", `(${ids.join(",")})`);
+      }
+      // If ids.length === 0 => all orders have no reviews, no filter needed
+    }
+  }
+
   dataQ = dataQ.order("order_date", { ascending: false }).range(O, O + L - 1);
 
   const [{ count, error: countErr }, { data, error: dataErr }] = await Promise.all([countQ, dataQ]);
@@ -293,13 +360,15 @@ export async function fetchOrderSummaryPage({
 
   const shipMap = await getShipmentsMap(sessionIds);
   const refundMap = await getRefundsMap(sessionIds);
+  const reviewMap = await getReviewCountsMap(sessionIds);
 
   // Cost & profit come from the v_order_summary_plus view (via v_order_financials).
   // The view already handles legacy stored cost vs dynamic CPI correctly.
   const merged = rows.map((r) => {
     const shipment = shipMap.get(r.stripe_checkout_session_id) || null;
     const refund = refundMap.get(r.stripe_checkout_session_id) || null;
-    return { ...r, shipment, refund };
+    const review_count = reviewMap.get(r.stripe_checkout_session_id) || 0;
+    return { ...r, shipment, refund, review_count };
   });
 
   const totalCount = Number(count ?? 0);

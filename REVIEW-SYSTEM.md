@@ -63,6 +63,7 @@ Customers can leave verified reviews after placing an order. Reviews are tied to
 - **Edit Modal** — Change any field (product name, reviewer, rating, title, body, photo, status), delete
 - **Add Review** — Admin can manually create reviews (e.g. for testimonials)
 - **Coupons Log** — View all generated coupons, their status, and usage
+- **Orders Page** — Review status column + "Reviews" filter (All / Has Reviews / No Reviews) on the admin orders page (`/pages/admin/lineItemsOrders.html`)
 
 ## Coupon Details
 
@@ -87,7 +88,11 @@ js/
   my-orders/index.js                       # My Orders page logic
   admin/reviews/api.js                     # Admin Supabase queries
   admin/reviews/index.js                   # Admin page logic
+  admin/lineItemsOrders/api.js             # Updated: review count enrichment
+  admin/lineItemsOrders/renderTable.js     # Updated: review badge column
   success/index.js                         # Updated success page (order details)
+
+import-legacy-reviews.mjs                    # CSV import script for backlogging reviews
 
 pages/
   reviews.html                             # Customer review page
@@ -133,4 +138,5 @@ page_inserts/
 - **RLS:** Anon users can only SELECT approved reviews. Service role (edge functions) has full access. Authenticated (admin) has full CRUD.
 - **Unique constraint:** One review per product per order (`uq_review_order_product`)
 - **Photo storage:** Uploaded to Supabase Storage `products` bucket under `reviews/` prefix
+- **Legacy review import:** 56 reviews backlogged from CSV (Depop, Etsy, KarryKraze platforms). 30 matched to real orders, 30 with synthetic session IDs for external orders. All set to `approved` status. Run via `node import-legacy-reviews.mjs <SERVICE_ROLE_KEY>`.
 - **Migration history:** The `supabase db push` has version conflicts from older migrations sharing timestamps. New migrations were applied via direct DB connection (`SET ROLE postgres`). Future migrations should use unique timestamps.

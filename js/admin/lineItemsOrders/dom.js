@@ -62,6 +62,9 @@ export const els = {
   kpiUnfulfilled: document.getElementById("kpiUnfulfilled"),
   kpiRefunded: document.getElementById("kpiRefunded"),
 
+  // review filter
+  reviewFilter: document.getElementById("reviewFilter"),
+
   // modal
   modal: document.getElementById("modal"),
 };

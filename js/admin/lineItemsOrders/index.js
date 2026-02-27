@@ -580,6 +580,7 @@ function wireEvents() {
   els.statusFilter.addEventListener("change", () => reload({ hard: true }));
   els.dateFrom.addEventListener("change", () => reload({ hard: true }));
   els.dateTo.addEventListener("change", () => reload({ hard: true }));
+  if (els.reviewFilter) els.reviewFilter.addEventListener("change", () => reload({ hard: true }));
 
   // Manual refresh
   els.btnRefresh.addEventListener("click", () => reload({ hard: true }));
@@ -608,6 +609,7 @@ function readFilters() {
     status: (els.statusFilter.value || "").trim(),
     dateFrom: (els.dateFrom.value || "").trim(),
     dateTo: (els.dateTo.value || "").trim(),
+    reviewStatus: (els.reviewFilter?.value || "").trim(),
   };
 }
 
