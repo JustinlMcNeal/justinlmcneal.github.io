@@ -207,6 +207,7 @@ async function loadCoupons() {
 
 /* ── Modal ── */
 let editingId = null;
+let productSortBy = "name"; // "name" or "code"
 
 function openModal(id) {
   const review = id ? allReviews.find((r) => String(r.id) === String(id)) : null;
@@ -214,15 +215,12 @@ function openModal(id) {
 
   $("reviewModalTitle").textContent = review ? "Edit Review" : "Add Review";
 
-  // Populate product dropdown
-  const sel = $("mProduct");
-  sel.innerHTML = `<option value="">— Select a product —</option>` +
-    allProducts.map((p) =>
-      `<option value="${escHtml(p.code)}" data-name="${escHtml(p.name)}">${escHtml(p.name)} (${escHtml(p.code)})</option>`
-    ).join("");
+  // Populate product dropdown (sorted)
+  populateProductDropdown();
 
   // Pre-select matching product (or add a custom option for discontinued codes)
   if (review?.product_id) {
+    const sel = $("mProduct");
     const match = allProducts.find((p) => p.code === review.product_id);
     if (match) {
       sel.value = review.product_id;
@@ -248,6 +246,28 @@ function openModal(id) {
 
   $("btnDeleteReview").classList.toggle("hidden", !review);
   $("reviewModal").classList.remove("hidden");
+}
+
+function populateProductDropdown(preserveValue) {
+  const sel = $("mProduct");
+  const curVal = preserveValue || sel.value;
+  const sorted = [...allProducts].sort((a, b) =>
+    productSortBy === "code"
+      ? a.code.localeCompare(b.code)
+      : a.name.localeCompare(b.name)
+  );
+  const label = productSortBy === "code" ? "Code ↓" : "Name ↓";
+  $("btnToggleProductSort").textContent = `Sort: ${label}`;
+
+  sel.innerHTML = `<option value="">— Select a product —</option>` +
+    sorted.map((p) => {
+      const display = productSortBy === "code"
+        ? `${escHtml(p.code)} — ${escHtml(p.name)}`
+        : `${escHtml(p.name)} (${escHtml(p.code)})`;
+      return `<option value="${escHtml(p.code)}" data-name="${escHtml(p.name)}">${display}</option>`;
+    }).join("");
+
+  if (curVal) sel.value = curVal;
 }
 
 function closeModal() {
@@ -331,6 +351,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("reviewModalOverlay").addEventListener("click", closeModal);
   $("btnSaveReview").addEventListener("click", saveModal);
   $("btnDeleteReview").addEventListener("click", deleteModal);
+
+  // Product sort toggle
+  $("btnToggleProductSort").addEventListener("click", () => {
+    productSortBy = productSortBy === "name" ? "code" : "name";
+    populateProductDropdown($("mProduct").value);
+  });
 
   // Load all
   allProducts = await fetchProducts();
