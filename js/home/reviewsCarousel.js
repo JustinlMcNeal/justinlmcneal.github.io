@@ -98,20 +98,19 @@ export async function initReviewsCarousel() {
 
     // Build section HTML
     mount.innerHTML = `
-      <section class="max-w-6xl mx-auto px-4 mt-12 mb-16" id="reviewsCarouselSection">
-        <!-- Header -->
-        <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-8">
-          <div class="text-center sm:text-left">
-            <h2 class="font-black text-3xl md:text-5xl uppercase tracking-tighter leading-none relative inline-block">
-              What Customers Say
-              <div class="absolute -bottom-3 md:-bottom-4 left-0 w-full h-3 md:h-4 text-kkpink">
-                <svg viewBox="0 0 100 20" preserveAspectRatio="none" class="w-full h-full">
-                  <path d="M0 10 Q 25 20, 50 10 T 100 10" stroke="currentColor" stroke-width="4" fill="none" />
-                </svg>
-              </div>
+      <section class="mt-[40px] mb-[20px] max-w-6xl mx-auto px-4" id="reviewsCarouselSection">
+        <!-- Header (matches 99¢ Deals style) -->
+        <div class="flex items-center justify-between gap-3 mb-[16px] border-b-[4px] border-black/10 pb-2">
+          <div>
+            <h2 class="inline-block bg-amber-400 text-black px-3 py-1 uppercase font-[1000] text-2xl sm:text-3xl tracking-tight transform -skew-x-6">
+              <span class="block transform skew-x-6">⭐ Reviews</span>
             </h2>
-            <p class="mt-4 text-sm text-gray-500 font-medium">Real reviews from real customers</p>
+            <p class="mt-2 text-[13px] font-bold uppercase tracking-wider opacity-60">
+              What our customers are saying
+            </p>
           </div>
+
+          <!-- All Reviews Button -->
           <a href="/pages/reviews.html" class="hidden sm:inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest border-2 border-black px-4 py-2 hover:bg-black hover:text-white transition-all group">
             All Reviews
             <svg class="w-4 h-4 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -120,15 +119,17 @@ export async function initReviewsCarousel() {
           </a>
         </div>
 
-        <!-- Carousel Track -->
-        <div class="relative group/carousel">
-          <div
-            id="reviewsCarouselTrack"
-            class="flex gap-4 overflow-x-auto snap-x snap-mandatory scrollbar-hide pb-4 scroll-smooth"
-            style="scrollbar-width: none; -ms-overflow-style: none;"
-          >
-            ${reviews.map(r => buildReviewCard(r)).join("")}
-          </div>
+        <!-- Carousel Track (visible scrollbar like 99¢ section) -->
+        <div
+          id="reviewsCarouselTrack"
+          class="flex gap-4 overflow-x-auto snap-x snap-mandatory scroll-smooth py-[6px] px-[2px] pb-[20px]
+                 [&::-webkit-scrollbar]:h-[6px]
+                 [&::-webkit-scrollbar-track]:bg-gray-100
+                 [&::-webkit-scrollbar-thumb]:bg-black
+                 [&::-webkit-scrollbar-thumb]:hover:bg-amber-400"
+          style="scrollbar-width: thin; scrollbar-color: #000 #f3f4f6;"
+        >
+          ${reviews.map(r => buildReviewCard(r)).join("")}
         </div>
 
         <!-- Mobile "See All" link -->
@@ -138,10 +139,6 @@ export async function initReviewsCarousel() {
           </a>
         </div>
       </section>
-
-      <style>
-        #reviewsCarouselTrack::-webkit-scrollbar { display: none; }
-      </style>
     `;
   } catch (err) {
     console.warn("[reviewsCarousel] init error:", err);
