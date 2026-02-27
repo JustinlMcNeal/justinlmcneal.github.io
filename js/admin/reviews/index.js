@@ -113,10 +113,14 @@ function renderReviewRows() {
         ? `<span title="${escHtml(r.product_id)}">${displayName}</span>`
         : displayName;
 
-    // Order link — goes to admin orders page with search pre-filled
-    const orderCell = r.order_session_id
-      ? `<a href="/pages/admin/lineItemsOrders.html?q=${encodeURIComponent(r.order_session_id)}" target="_blank" class="text-blue-600 hover:underline text-[10px]" title="View order in admin">🔗 Order</a>`
-      : `<span class="text-gray-300 text-[10px]">—</span>`;
+    // Order link — only link real Stripe sessions (cs_*); show label for legacy
+    const sid = r.order_session_id || "";
+    const isStripe = sid.startsWith("cs_");
+    const orderCell = isStripe
+      ? `<a href="/pages/admin/lineItemsOrders.html?q=${encodeURIComponent(sid)}" target="_blank" class="text-blue-600 hover:underline text-[10px]" title="View order in admin">🔗 Order</a>`
+      : sid
+        ? `<span class="text-gray-400 text-[10px] truncate max-w-[80px] inline-block" title="${escHtml(sid)}">${escHtml(sid)}</span>`
+        : `<span class="text-gray-300 text-[10px]">—</span>`;
 
     return `
     <tr class="review-row border-b border-gray-100 cursor-pointer" data-id="${r.id}">
