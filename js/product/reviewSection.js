@@ -77,10 +77,80 @@ function renderReviewCard(review) {
         <span class="text-[10px] text-black/30 font-bold uppercase tracking-wider whitespace-nowrap">${esc(date)}</span>
       </div>
       ${body ? `<p class="text-sm text-black/60 leading-relaxed mb-2">${body}</p>` : ""}
-      ${photo ? `<img src="${esc(photo)}" alt="Review photo" class="w-24 h-24 object-cover rounded-lg border border-black/10 mb-2" loading="lazy">` : ""}
+      ${photo ? `<img src="${esc(photo)}" alt="Review photo" class="js-review-photo w-24 h-24 object-cover rounded-lg border border-black/10 mb-2 cursor-pointer hover:opacity-80 transition-opacity" data-full="${esc(photo)}" loading="lazy">` : ""}
       <div class="text-xs font-bold text-black/40 uppercase tracking-wider">${name}</div>
     </div>
   `;
+}
+
+/**
+ * Render photo gallery strip (thumbnails of all review photos).
+ */
+function renderPhotoGallery(reviews) {
+  const photos = reviews
+    .filter((r) => r.photo_url)
+    .map((r) => ({ url: r.photo_url, name: r.reviewer_name || "Verified Buyer" }));
+  if (!photos.length) return "";
+
+  return `
+    <div class="mb-6">
+      <div class="text-[10px] font-black uppercase tracking-widest text-black/40 mb-2">Customer Photos (${photos.length})</div>
+      <div class="flex gap-2 overflow-x-auto pb-2
+                  [&::-webkit-scrollbar]:h-[4px]
+                  [&::-webkit-scrollbar-track]:bg-gray-100
+                  [&::-webkit-scrollbar-thumb]:bg-black/30"
+           style="scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.3) #f3f4f6;">
+        ${photos.map((p) => `
+          <img src="${esc(p.url)}" alt="Photo by ${esc(p.name)}"
+               class="js-review-photo w-16 h-16 sm:w-20 sm:h-20 object-cover rounded-lg border-2 border-black/10 shrink-0 cursor-pointer hover:border-black/40 hover:scale-105 transition-all"
+               data-full="${esc(p.url)}" loading="lazy" />
+        `).join("")}
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Create and mount the photo lightbox overlay.
+ */
+function mountLightbox(container) {
+  const lightbox = document.createElement("div");
+  lightbox.id = "reviewPhotoLightbox";
+  lightbox.className = "fixed inset-0 z-[9999] hidden items-center justify-center bg-black/80 backdrop-blur-sm";
+  lightbox.innerHTML = `
+    <button class="absolute top-4 right-4 w-10 h-10 flex items-center justify-center bg-white/20 hover:bg-white/40 rounded-full text-white text-xl font-bold transition-colors z-10" id="lightboxClose">&times;</button>
+    <img id="lightboxImg" src="" alt="Review photo" class="max-w-[90vw] max-h-[85vh] object-contain rounded-lg shadow-2xl" />
+  `;
+  document.body.appendChild(lightbox);
+
+  const img = lightbox.querySelector("#lightboxImg");
+  const close = lightbox.querySelector("#lightboxClose");
+
+  function openLightbox(src) {
+    img.src = src;
+    lightbox.classList.remove("hidden");
+    lightbox.classList.add("flex");
+    document.body.style.overflow = "hidden";
+  }
+
+  function closeLightbox() {
+    lightbox.classList.add("hidden");
+    lightbox.classList.remove("flex");
+    img.src = "";
+    document.body.style.overflow = "";
+  }
+
+  close.addEventListener("click", closeLightbox);
+  lightbox.addEventListener("click", (e) => { if (e.target === lightbox) closeLightbox(); });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !lightbox.classList.contains("hidden")) closeLightbox();
+  });
+
+  // Delegate clicks on review photos
+  container.addEventListener("click", (e) => {
+    const photo = e.target.closest(".js-review-photo");
+    if (photo?.dataset.full) openLightbox(photo.dataset.full);
+  });
 }
 
 /**
@@ -126,6 +196,7 @@ export async function initProductReviewSection(productCode, mountEl) {
 
     const aggregateStars = renderStarRating(avg, total, { size: "lg", showCount: true });
     const breakdown = renderBreakdown(reviews);
+    const photoGallery = renderPhotoGallery(reviews);
 
     // Initially show first 5 reviews
     const INITIAL_SHOW = 5;
@@ -150,6 +221,9 @@ export async function initProductReviewSection(productCode, mountEl) {
           </div>
         </div>
 
+        <!-- Photo Gallery -->
+        ${photoGallery}
+
         <!-- Reviews List -->
         <div id="reviewsList" class="space-y-6">
           ${reviewCards}
@@ -167,6 +241,9 @@ export async function initProductReviewSection(productCode, mountEl) {
         ` : ""}
       </section>
     `;
+
+    // Wire photo lightbox
+    mountLightbox(mountEl);
 
     // Wire show more / collapse
     if (hasMore) {

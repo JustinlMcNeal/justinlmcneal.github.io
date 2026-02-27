@@ -1,5 +1,7 @@
 // /js/shared/reviewStats.js
-// Fetches and caches aggregate review stats (avg_rating, review_count) per product.
+// Fetches cached aggregate review stats from product_review_stats table.
+// The DB table is maintained by a trigger on the reviews table so stats
+// are always up-to-date without computing on-the-fly.
 
 import { getSupabaseClient } from "./supabaseClient.js";
 
@@ -12,39 +14,24 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
  * Returns Map<product_id, { avg_rating: number, review_count: number }>
  */
 export async function fetchAllReviewStats() {
-  // Return cache if fresh
   if (_cache && Date.now() - _cacheTime < CACHE_TTL) return _cache;
 
   const sb = getSupabaseClient();
 
-  // Only count approved reviews
   const { data, error } = await sb
-    .from("reviews")
-    .select("product_id, rating")
-    .eq("status", "approved");
+    .from("product_review_stats")
+    .select("product_id, avg_rating, review_count");
 
   if (error) {
-    console.warn("[reviewStats] Failed to fetch reviews:", error.message);
+    console.warn("[reviewStats] Failed to fetch stats:", error.message);
     return new Map();
   }
 
-  // Aggregate per product
-  const map = new Map();
-  for (const row of data || []) {
-    const pid = row.product_id;
-    if (!pid) continue;
-    if (!map.has(pid)) map.set(pid, { total: 0, count: 0 });
-    const entry = map.get(pid);
-    entry.total += Number(row.rating || 0);
-    entry.count += 1;
-  }
-
-  // Convert to avg_rating + review_count 
   const result = new Map();
-  for (const [pid, { total, count }] of map) {
-    result.set(pid, {
-      avg_rating: Math.round((total / count) * 10) / 10, // 1 decimal
-      review_count: count,
+  for (const row of data || []) {
+    result.set(row.product_id, {
+      avg_rating: Number(row.avg_rating),
+      review_count: Number(row.review_count),
     });
   }
 

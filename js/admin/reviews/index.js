@@ -78,6 +78,32 @@ function showSettingsMsg(msg, isError) {
   setTimeout(() => el.classList.add("hidden"), 3000);
 }
 
+/* ── Analytics ── */
+async function loadAnalytics() {
+  try {
+    // Fetch ALL reviews (unfiltered) for analytics
+    const allForStats = await fetchReviews(null);
+    const coupons = await fetchCoupons();
+
+    const total = allForStats.length;
+    const approved = allForStats.filter((r) => r.status === "approved").length;
+    const pending = allForStats.filter((r) => r.status === "pending").length;
+    const sum = allForStats.reduce((s, r) => s + Number(r.rating || 0), 0);
+    const avg = total ? (sum / total).toFixed(1) : "—";
+    const issued = coupons.length;
+    const redeemed = coupons.filter((c) => c.used_at).length;
+
+    $("anTotal").textContent = total;
+    $("anAvg").textContent = avg;
+    $("anApproved").textContent = approved;
+    $("anPending").textContent = pending;
+    $("anCoupons").textContent = issued;
+    $("anRedeemed").textContent = redeemed;
+  } catch (err) {
+    console.error("[admin reviews] analytics error:", err);
+  }
+}
+
 /* ── Reviews Table ── */
 let allReviews = [];
 let allProducts = [];    // cached for dropdown + slug lookup
@@ -365,5 +391,5 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Load all
   allProducts = await fetchProducts();
   productMap = Object.fromEntries(allProducts.map((p) => [p.code, p]));
-  await Promise.all([loadSettings(), loadReviews(), loadCoupons()]);
+  await Promise.all([loadSettings(), loadReviews(), loadCoupons(), loadAnalytics()]);
 });

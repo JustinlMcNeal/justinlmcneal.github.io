@@ -123,11 +123,11 @@ page_inserts/
 
 ### Lower Priority
 
-- [ ] **Review photo gallery** — Show uploaded review photos in a lightbox/modal on the reviews page
+- [x] **Review photo gallery** — Lightbox/modal for review photos on product page + "Customer Photos" gallery strip at top of reviews section
 - [ ] **Admin email notification** — When `moderation.notify_admin` is true, send admin an email/push when new review is submitted
 - [ ] **Customer coupon email** — After admin approves a pending review, email the customer their coupon code (requires email provider — Resend.com recommended)
-- [ ] **Review analytics** — Admin dashboard widget showing review volume, average rating, coupon redemption rate
-- [ ] **Star rating caching** — Create a materialized view or summary table (`product_review_stats`) with avg_rating + review_count per product_id for fast catalog/product page queries instead of computing on-the-fly
+- [x] **Review analytics** — Admin reviews page analytics card: Total Reviews, Avg Rating, Approved, Pending, Coupons Issued, Coupons Used
+- [x] **Star rating caching** — `product_review_stats` table with trigger-based auto-refresh on reviews INSERT/UPDATE/DELETE; `reviewStats.js` queries cached table instead of aggregating on-the-fly
 - [ ] **Review helpfulness** — "Was this helpful?" voting on public reviews
 - [ ] **Review response** — Allow admin to post a public reply to a review
 
