@@ -18,8 +18,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   await initAdminNav("Orders");
   initFooter();
 
-  // Defaults
-  els.searchInput.value = "";
+  // Defaults — check URL for ?q= search param (used by admin reviews order links)
+  const urlQ = new URLSearchParams(window.location.search).get("q") || "";
+  els.searchInput.value = urlQ;
   els.statusFilter.value = "";
   els.dateFrom.value = "";
   els.dateTo.value = "";

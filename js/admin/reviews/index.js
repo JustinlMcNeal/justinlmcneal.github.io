@@ -113,9 +113,9 @@ function renderReviewRows() {
         ? `<span title="${escHtml(r.product_id)}">${displayName}</span>`
         : displayName;
 
-    // Order link
+    // Order link — goes to admin orders page with search pre-filled
     const orderCell = r.order_session_id
-      ? `<a href="/pages/success.html?session_id=${encodeURIComponent(r.order_session_id)}" target="_blank" class="text-blue-600 hover:underline text-[10px]" title="View order">🔗 Order</a>`
+      ? `<a href="/pages/admin/lineItemsOrders.html?q=${encodeURIComponent(r.order_session_id)}" target="_blank" class="text-blue-600 hover:underline text-[10px]" title="View order in admin">🔗 Order</a>`
       : `<span class="text-gray-300 text-[10px]">—</span>`;
 
     return `
