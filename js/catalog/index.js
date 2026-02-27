@@ -10,6 +10,7 @@ import {
 } from "../shared/promotionLoader.js";
 import { renderHomeCard } from "../shared/components/productCardHome.js";
 import { addToCart, openCartDrawer } from "../shared/cartStore.js";
+import { fetchAllReviewStats } from "../shared/reviewStats.js";
 
 function escapeHtml(str) {
   return String(str).replace(/[&<>"']/g, (m) => (
@@ -38,6 +39,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   let allPromotions = [];
   let variantMap = new Map();
   let bestSellerTagIds = [];
+  let reviewStatsMap = new Map();
   
   // State
   let activeCategoryId = "all";
@@ -244,6 +246,14 @@ document.addEventListener("DOMContentLoaded", async () => {
           return (a.name || "").localeCompare(b.name || "");
         case "name_desc":
           return (b.name || "").localeCompare(a.name || "");
+        case "top_rated": {
+           const aStats = reviewStatsMap.get(a.code) || { avg_rating: 0, review_count: 0 };
+           const bStats = reviewStatsMap.get(b.code) || { avg_rating: 0, review_count: 0 };
+           // Primary: higher avg rating first. Secondary: more reviews. Tertiary: newest.
+           if (bStats.avg_rating !== aStats.avg_rating) return bStats.avg_rating - aStats.avg_rating;
+           if (bStats.review_count !== aStats.review_count) return bStats.review_count - aStats.review_count;
+           return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+        }
         case "newest":
         default:
           return new Date(b.created_at || 0) - new Date(a.created_at || 0);
@@ -306,7 +316,8 @@ document.addEventListener("DOMContentLoaded", async () => {
          
          fallbackGrid.innerHTML = toRender.map(p => {
             const v = variantMap.get(p.id) || [];
-            return renderHomeCard(p, v, { variantLimit: 4 });
+            const s = reviewStatsMap.get(p.code) || null;
+            return renderHomeCard(p, v, { variantLimit: 4, reviewStats: s });
          }).join("");
       }
       return;
@@ -331,9 +342,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       
       // Feature: Staggered Animation
       const delay = (idx % PAGE_SIZE) * 50; // ms
+      const stats = reviewStatsMap.get(product.code) || null;
       temp.innerHTML = renderHomeCard(product, variants, { 
         variantLimit: 4,
-        style: `style="animation-delay: ${delay}ms; animation-fill-mode: backwards;"`
+        style: `style="animation-delay: ${delay}ms; animation-fill-mode: backwards;"`,
+        reviewStats: stats
       });
       
       while (temp.firstChild) {
@@ -531,17 +544,19 @@ document.addEventListener("DOMContentLoaded", async () => {
       // Read URL first
       readURL();
 
-      const [_products, _categories, _promos, _bestSellerIds] = await Promise.all([
+      const [_products, _categories, _promos, _bestSellerIds, _reviewStats] = await Promise.all([
         fetchActiveProducts(),
         fetchCategories(),
         fetchActivePromotions(),
-        fetchBestSellerTagIds()
+        fetchBestSellerTagIds(),
+        fetchAllReviewStats()
       ]);
       
       allProducts = _products || [];
       allCategories = _categories || [];
       allPromotions = _promos || [];
       bestSellerTagIds = _bestSellerIds || [];
+      reviewStatsMap = _reviewStats || new Map();
       
       const ids = allProducts.map(p => p.id);
       if (ids.length) {

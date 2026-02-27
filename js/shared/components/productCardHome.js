@@ -1,6 +1,7 @@
 // /js/shared/components/productCardHome.js
 
 import { parseColorValue } from "../colorUtils.js";
+import { renderStarRating } from "./starRating.js";
 
 function esc(s) {
   return String(s ?? "")
@@ -101,6 +102,12 @@ export function renderHomeCard(product, variants = [], opts = {}) {
     `;
   }
 
+  // Star rating (if review stats provided)
+  const reviewStats = opts.reviewStats || null;
+  const starsHtml = reviewStats
+    ? renderStarRating(reviewStats.avg_rating, reviewStats.review_count, { size: "sm", showCount: true })
+    : "";
+
   return `
     <article class="product-card block group relative flex flex-col h-full animate-fade-in-up" ${opts.style || ""}>
       <a href="${href}" class="block w-full aspect-square bg-neutral-100 overflow-hidden border border-black/5 relative">
@@ -120,6 +127,7 @@ export function renderHomeCard(product, variants = [], opts = {}) {
           <h3 class="m-0 font-bold tracking-wide leading-snug text-lg uppercase line-clamp-2 min-h-[2.5em] font-['Archivo_Black',sans-serif]">${esc(name)}</h3>
         </a>
         <div class="mt-1 font-black tracking-wide text-base">${priceDisplay}</div>
+        ${starsHtml ? `<div class="mt-1">${starsHtml}</div>` : ""}
         ${variantsRow}
       </div>
     </article>

@@ -27,6 +27,8 @@ import {
 } from "./render.js";
 
 import { getProductPromotions } from "/js/shared/promotionLoader.js";
+import { fetchProductReviewStats } from "/js/shared/reviewStats.js";
+import { renderStarRating } from "/js/shared/components/starRating.js";
 
 import { loadInsert, getProductEls, show, setActionMsg } from "./dom.js";
 import { wireQtyControls, buildCartPayload, emitAddToCart } from "./cart.js";
@@ -242,6 +244,22 @@ async function initProductPage() {
     if (els.category) els.category.textContent = categoryName || "Karry Kraze";
     if (els.name) els.name.textContent = product.name || "";
     if (els.code) els.code.textContent = product.code || "";
+
+    // Star rating
+    const ratingMount = document.getElementById("productRating");
+    if (ratingMount) {
+      fetchProductReviewStats(product.code).then(stats => {
+        if (stats) {
+          ratingMount.innerHTML = renderStarRating(stats.avg_rating, stats.review_count, {
+            size: "md",
+            showCount: true,
+            linkTo: `/pages/reviews.html?product=${encodeURIComponent(product.code)}`
+          });
+        } else {
+          ratingMount.innerHTML = renderStarRating(0, 0, { size: "md", showEmpty: true });
+        }
+      }).catch(() => {});
+    }
 
     // Update SEO meta tags for social sharing
     updateSeoMeta(product, categoryName, gallery);

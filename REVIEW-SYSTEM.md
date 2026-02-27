@@ -111,9 +111,9 @@ page_inserts/
 ### High Priority
 
 - [x] **Coupon code recovery** — ✅ Done: My Orders page (`/pages/my-orders.html`) lets customers look up orders by email + first name. Shows coupon codes for reviewed items with copy button. Reviews page also shows coupon codes inline and supports `?oid=` URL param prefill. `verify-order` and `lookup-orders` both return coupon codes.
-- [ ] **Star ratings on catalog cards** — Query average rating + review count per product from `reviews` table and display stars on each product card in `/pages/catalog.html`
-- [ ] **Star ratings on product page** — Show aggregate star rating + review count on `/pages/product.html` near the product title/price area
-- [ ] **Sort by rating on catalog page** — Add a "Top Rated" sort option to the catalog sort dropdown; requires joining or pre-computing average ratings
+- [x] **Star ratings on catalog cards** — ✅ Done: `js/shared/reviewStats.js` fetches + caches approved review stats per product. `js/shared/components/starRating.js` renders SVG stars. `productCardHome.js` accepts `opts.reviewStats` and shows stars below price. `catalog/index.js` fetches all review stats on boot and passes to each card.
+- [x] **Star ratings on product page** — ✅ Done: `product/index.js` imports `fetchProductReviewStats` + `renderStarRating`, renders medium-sized star rating in `#productRating` div below the product name. Links to reviews page filtered by product code. Shows "No reviews" empty state when no approved reviews exist.
+- [x] **Sort by rating on catalog page** — ✅ Done: Added `<option value="top_rated">Top Rated</option>` to catalog sort dropdown. `sortProducts()` in `catalog/index.js` has a `top_rated` case sorting by avg_rating desc → review_count desc → newest.
 
 ### Medium Priority
 
