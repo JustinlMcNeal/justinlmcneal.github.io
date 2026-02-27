@@ -5,6 +5,7 @@ import { initFooter } from "/js/shared/footer.js";
 import { init99CentSection } from "./99cent.js";
 import { initHomeCategoryStrip } from "./categoryStrip.js";
 import { initShopTheLook } from "./shopTheLook.js";
+import { initReviewsCarousel } from "./reviewsCarousel.js";
 
 import {
   fetchHomePromos,
@@ -221,6 +222,7 @@ document.body.addEventListener("click", (e) => {
   
   const pBanner = loadBanner().catch(e => console.error("Banner failed", e));
   const pCats = loadCategories().then(() => initHomeCategoryStrip()).catch(e => console.error("Cats failed", e));
+  const pReviews = initReviewsCarousel().catch(e => console.error("Reviews carousel failed", e));
   const pSTL = initShopTheLook().catch(e => console.error("STL failed", e));
   const p99 = init99CentSection().catch(e => console.error("99c failed", e));
   const pGrid = loadGrid().catch(e => console.error("Grid failed", e));

@@ -155,6 +155,30 @@ Deno.serve(async (req) => {
     const promoMode = promoCode ? "code" : (savingsCents > 0 ? "auto" : "none");
     const promoIdsCsv = appliedIds.slice(0, 20).join(",");
 
+    // ── Review coupon validation (THANKS-XXXXXX) ──────────────
+    let reviewCouponId: string | null = null;
+    const isReviewCoupon = promoCode.startsWith("THANKS-");
+
+    if (isReviewCoupon && promoCode) {
+      const { data: rcData, error: rcErr } = await supabaseAdmin
+        .from("review_coupons")
+        .select("id, used_at, expires_at, single_use")
+        .eq("code", promoCode)
+        .maybeSingle();
+
+      if (rcErr) {
+        console.warn("[create-checkout-session] review coupon lookup failed:", rcErr.message);
+      } else if (!rcData) {
+        return json({ error: "Review coupon not found." }, 400);
+      } else if (rcData.used_at && rcData.single_use) {
+        return json({ error: "This review coupon has already been used." }, 400);
+      } else if (rcData.expires_at && new Date(rcData.expires_at) < new Date()) {
+        return json({ error: "This review coupon has expired." }, 400);
+      } else {
+        reviewCouponId = rcData.id;
+      }
+    }
+
     // ✅ weight lookup from products table by SKU code
     const skus = uniqStrings(items.map((it: any) => it?.product_id || it?.id || ""));
     const weightMap = new Map<string, number>();
@@ -337,6 +361,20 @@ Deno.serve(async (req) => {
         shipping_options,
       }),
     });
+
+    // ── Mark review coupon as used ───────────────────────────
+    if (reviewCouponId && session.id) {
+      const { error: markErr } = await supabaseAdmin
+        .from("review_coupons")
+        .update({ used_at: new Date().toISOString(), used_order_id: session.id })
+        .eq("id", reviewCouponId);
+
+      if (markErr) {
+        console.warn("[create-checkout-session] Could not mark review coupon as used:", markErr.message);
+      } else {
+        console.log(`[create-checkout-session] Review coupon ${promoCode} marked used for session ${session.id}`);
+      }
+    }
 
     return json({ url: session.url, kk_order_id });
   } catch (err) {

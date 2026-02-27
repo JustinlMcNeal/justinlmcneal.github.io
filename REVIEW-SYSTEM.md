@@ -117,9 +117,9 @@ page_inserts/
 
 ### Medium Priority
 
-- [ ] **Reviews carousel on home page** — Add a "What Customers Say" section to the home page with a horizontal swipeable carousel of approved reviews (pull latest 10-15 approved reviews, show name + stars + snippet + product name)
-- [ ] **Product page review section** — Below the product details on `/pages/product.html`, show a full reviews feed filtered to that specific product (approved reviews only, with star breakdown bar chart)
-- [ ] **Review coupon checkout integration** — Wire `review_coupons` table into the existing coupon validation at checkout (`couponManager.js` / `create-checkout-session`) so `THANKS-XXXXXX` codes actually apply the discount
+- [x] **Reviews carousel on home page** — ✅ Done: `js/home/reviewsCarousel.js` fetches latest 15 approved reviews, renders "What Customers Say" horizontal swipeable carousel. Mount at `#kkReviewsCarouselMount` in `index.html`, wired in `home/index.js`. Shows reviewer name, stars, title, body snippet, product name + link, time ago.
+- [x] **Product page review section** — ✅ Done: `js/product/reviewSection.js` renders full reviews feed for the product below the main content. Shows aggregate score + star breakdown bar chart + individual review cards with show more/less. Mount at `#productReviewsMount` in `product.html`, wired in `product/index.js`.
+- [x] **Review coupon checkout integration** — ✅ Done: `promoCoupons.js` checks `review_coupons` table for `THANKS-` codes, validates expiry/used/min_order, returns promo-like object. `create-checkout-session/index.ts` validates review coupon server-side and marks it as `used_at` + `used_order_id` after Stripe session is created.
 
 ### Lower Priority
 

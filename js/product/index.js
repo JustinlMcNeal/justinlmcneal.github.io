@@ -33,6 +33,7 @@ import { renderStarRating } from "/js/shared/components/starRating.js";
 import { loadInsert, getProductEls, show, setActionMsg } from "./dom.js";
 import { wireQtyControls, buildCartPayload, emitAddToCart } from "./cart.js";
 import { renderProductPromoPanel, applyProductPriceWithPromos } from "./promos.js";
+import { initProductReviewSection } from "./reviewSection.js";
 
 let selectedVariant = null;
 
@@ -438,6 +439,14 @@ async function initProductPage() {
         `;
         els.pairsWrap.classList.remove("hidden");
       }
+    }
+
+    // Reviews section (non-blocking)
+    const reviewsMount = document.getElementById("productReviewsMount");
+    if (reviewsMount && product.code) {
+      initProductReviewSection(product.code, reviewsMount).catch(e =>
+        console.warn("[product] reviews section failed:", e)
+      );
     }
 
     show(els.loading, false);
