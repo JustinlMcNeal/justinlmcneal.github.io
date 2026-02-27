@@ -113,3 +113,14 @@ export async function fetchCoupons() {
   if (error) throw error;
   return data || [];
 }
+
+/* ── Products (for dropdown) ── */
+export async function fetchProducts() {
+  const { data, error } = await supabase
+    .from("products")
+    .select("code, name, slug")
+    .order("name", { ascending: true });
+
+  if (error) throw error;
+  return data || [];
+}
