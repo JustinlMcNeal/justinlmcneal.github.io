@@ -294,6 +294,26 @@ Deno.serve(async (req) => {
 
     console.log(`[auto-queue] Image pipeline enabled=${pipelineSettings.enabled}, blacklisted=${blacklistRows?.length || 0} images, AI approved=${aiImageRows?.length || 0} images`);
 
+    // ── Helper: decide if this product should get a carousel post ──
+    // Carousel if product has 3+ approved AI images and platform supports it
+    function shouldUseCarousel(productId: string, platform: string): {
+      isCarousel: boolean;
+      carouselUrls: string[];
+    } {
+      if (platform !== "instagram") return { isCarousel: false, carouselUrls: [] };
+      const aiImages = aiImageMap[productId];
+      if (!aiImages || aiImages.length < 3) return { isCarousel: false, carouselUrls: [] };
+      // 50% chance of carousel when enough images available (variety of post types)
+      if (Math.random() > 0.5) return { isCarousel: false, carouselUrls: [] };
+      // Pick 3-5 images for the carousel
+      const shuffled = [...aiImages].sort(() => Math.random() - 0.5);
+      const carouselCount = Math.min(shuffled.length, Math.floor(Math.random() * 3) + 3); // 3-5
+      return {
+        isCarousel: true,
+        carouselUrls: shuffled.slice(0, carouselCount).map((img: any) => img.public_url),
+      };
+    }
+
     // ── Helper: resolve best image for a product ──
     function resolveImage(productId: string, catalogUrl: string): {
       imageUrl: string;
@@ -414,15 +434,20 @@ Deno.serve(async (req) => {
 
       // Create post for EACH selected platform
       for (const plat of platformList) {
+        // Check if this should be a carousel post
+        const carouselResult = shouldUseCarousel(product.id, plat);
+
         generatedPosts.push({
           product_id: product.id,
           product_name: product.name,
           product_slug: product.slug,
           catalog_image_url: product.catalog_image_url,
           resolved_image_url: imageResult.imageUrl,
-          image_source: imageResult.imageSource,
+          image_source: carouselResult.isCarousel ? "ai_carousel" : imageResult.imageSource,
           generated_image_id: imageResult.generatedImageId,
           needs_generation: imageResult.needsGeneration,
+          is_carousel: carouselResult.isCarousel,
+          carousel_urls: carouselResult.carouselUrls,
           category_name: categoryName,
           platform: plat,
           caption,
@@ -564,21 +589,31 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Create the post
+        // Create the post (carousel or single image)
+        const postPayload: Record<string, any> = {
+          variation_id: variationId,
+          platform: post.platform,
+          caption: post.caption,
+          hashtags: post.hashtags,
+          link_url: post.link_url,
+          scheduled_for: post.scheduled_for,
+          status: postStatus,
+          requires_approval: postStatus === "pending_review",
+          image_source: post.image_source,
+          generated_image_id: finalGeneratedImageId,
+        };
+
+        // Add carousel fields if this is a carousel post
+        if (post.is_carousel && post.carousel_urls?.length >= 2) {
+          postPayload.media_type = "carousel";
+          postPayload.image_urls = post.carousel_urls;
+          postPayload.image_url = post.carousel_urls[0]; // thumbnail
+          console.log(`[auto-queue] Creating carousel post with ${post.carousel_urls.length} images for "${post.product_name}"`);
+        }
+
         const { data: newPost, error: postErr } = await supabase
           .from("social_posts")
-          .insert({
-            variation_id: variationId,
-            platform: post.platform,
-            caption: post.caption,
-            hashtags: post.hashtags,
-            link_url: post.link_url,
-            scheduled_for: post.scheduled_for,
-            status: postStatus,
-            requires_approval: postStatus === "pending_review",
-            image_source: post.image_source,
-            generated_image_id: finalGeneratedImageId,
-          })
+          .insert(postPayload)
           .select("id")
           .single();
 

@@ -376,6 +376,109 @@ Make the product the clear hero/focal point. Premium, aspirational, scroll-stopp
   return { prompt, fingerprint: { env, mood, camera } };
 }
 
+// ═══════════ CAROUSEL SLIDE PROMPT BUILDERS ═══════════
+// For carousel sets, the camera style stays CONSISTENT across all slides
+// for visual coherence, but environment, mood, and props change to make
+// each slide worth swiping to. Compositions are chosen to create a
+// narrative flow across slides (wide → mid → close-up → detail).
+
+const CAROUSEL_COMPOSITION_FLOW = [
+  "environmental wide shot showing the product in context at medium distance",
+  "centered hero shot — product dominates the frame",
+  "45-degree angle tabletop view",
+  "close-up macro detail shot filling 80% of the frame",
+  "held in a hand/between fingers",
+];
+
+function buildCarouselSlidePrompt(
+  productName: string,
+  categoryCtx: string,
+  recentScenes: SceneFingerprint[],
+  lockedCamera: string,
+  slideIndex: number,
+  totalSlides: number
+): { prompt: string; fingerprint: SceneFingerprint } {
+  const season = getCurrentSeason();
+  const seasonal = SEASONAL_EXTRAS[season];
+
+  const recentEnvs = recentScenes.map((s) => s.env);
+  const recentMoods = recentScenes.map((s) => s.mood);
+
+  const env = pickAvoiding(
+    [...ENVIRONMENTS, ...(seasonal?.envs || [])],
+    recentEnvs
+  );
+  const light = pick(LIGHTING);
+  // Composition follows a narrative flow for carousels
+  const comp = CAROUSEL_COMPOSITION_FLOW[slideIndex % CAROUSEL_COMPOSITION_FLOW.length];
+  const mood = pickAvoiding(
+    [...MOODS, ...(seasonal?.moods || [])],
+    recentMoods
+  );
+  const prop = pickSeasonal(PROPS, seasonal?.props || []);
+
+  const prompt = `Transform this product photo into a stunning social-media-ready image.
+This is SLIDE ${slideIndex + 1} of ${totalSlides} in an Instagram carousel.
+
+SCENE: ${env}
+LIGHTING: ${light}
+COMPOSITION: ${comp}
+MOOD/AESTHETIC: ${mood}
+NEARBY PROPS: ${prop}
+CAMERA STYLE: ${lockedCamera}
+
+CRITICAL RULES:
+- Keep the product EXACTLY as it appears in the reference photo — same colors, shape, materials, patterns, textures, and every small detail. Do NOT redesign, reimagine, simplify, or alter the product in ANY way.
+- Only change the background, setting, lighting, and surrounding environment.
+- The product ("${productName}" — ${categoryCtx}) must be the clear hero and focal point.
+- Make it look premium, aspirational, and scroll-stopping for Instagram/TikTok.
+- No text, watermarks, logos, or brand names on the image.
+- Photorealistic quality.`;
+
+  return { prompt, fingerprint: { env, mood, camera: lockedCamera } };
+}
+
+function buildCarouselSlidePromptText(
+  productName: string,
+  categoryCtx: string,
+  recentScenes: SceneFingerprint[],
+  lockedCamera: string,
+  slideIndex: number,
+  totalSlides: number
+): { prompt: string; fingerprint: SceneFingerprint } {
+  const season = getCurrentSeason();
+  const seasonal = SEASONAL_EXTRAS[season];
+
+  const recentEnvs = recentScenes.map((s) => s.env);
+  const recentMoods = recentScenes.map((s) => s.mood);
+
+  const env = pickAvoiding(
+    [...ENVIRONMENTS, ...(seasonal?.envs || [])],
+    recentEnvs
+  );
+  const light = pick(LIGHTING);
+  const comp = CAROUSEL_COMPOSITION_FLOW[slideIndex % CAROUSEL_COMPOSITION_FLOW.length];
+  const mood = pickAvoiding(
+    [...MOODS, ...(seasonal?.moods || [])],
+    recentMoods
+  );
+  const prop = pickSeasonal(PROPS, seasonal?.props || []);
+
+  const prompt = `Create a stunning product photo of "${productName}" (${categoryCtx}).
+This is slide ${slideIndex + 1} of ${totalSlides} in an Instagram carousel.
+
+SCENE: ${env}
+LIGHTING: ${light}
+COMPOSITION: ${comp}
+MOOD/AESTHETIC: ${mood}
+NEARBY PROPS: ${prop}
+CAMERA STYLE: ${lockedCamera}
+
+Make the product the clear hero/focal point. Premium, aspirational, scroll-stopping for Instagram/TikTok. Photorealistic. No text, watermarks, or logos.`;
+
+  return { prompt, fingerprint: { env, mood, camera: lockedCamera } };
+}
+
 // ───── category context: tells the AI how each product type is USED ─────
 const CATEGORY_CONTEXT: Record<string, string> = {
   accessories:
@@ -443,6 +546,7 @@ Deno.serve(async (req) => {
       count = 1,    // how many images to generate (max 4)
       batch = false, // if true, generate for multiple products (body.product_ids)
       product_ids,  // array of product IDs for batch mode
+      carousel = false, // if true, generate a carousel set (3-5 images with shared set ID)
     } = body;
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
@@ -503,7 +607,10 @@ Deno.serve(async (req) => {
 
     // ── Generate images ──
     const results: any[] = [];
-    const imageCount = Math.min(count, 4); // cap at 4 per product
+    const imageCount = carousel ? Math.max(3, Math.min(count, 5)) : Math.min(count, 4);
+
+    // For carousel mode, each product gets a shared set ID
+    const carouselSetId = carousel ? crypto.randomUUID() : null;
 
     for (const product of products) {
       const categoryName =
@@ -538,7 +645,10 @@ Deno.serve(async (req) => {
       const recentScenes = await getRecentScenes(supabase, product.id, 5);
       console.log(`[generate-social-image] Found ${recentScenes.length} recent scenes for deduplication`);
 
-      const currentStyle = style || "random";
+      const currentStyle = carousel ? "carousel" : (style || "random");
+
+      // For carousels, lock camera style for visual coherence across slides
+      const carouselCamera = carousel ? pick(CAMERA_STYLES) : null;
 
       for (let i = 0; i < imageCount; i++) {
         let genResult: GenResult;
@@ -546,9 +656,9 @@ Deno.serve(async (req) => {
 
         if (productImageBlob) {
           // ═══ IMAGE-TO-IMAGE: Send actual product photo ═══
-          const { prompt: fullPrompt, fingerprint } = buildRandomScenePrompt(
-            product.name, categoryCtx, recentScenes
-          );
+          const { prompt: fullPrompt, fingerprint } = carousel
+            ? buildCarouselSlidePrompt(product.name, categoryCtx, recentScenes, carouselCamera!, i, imageCount)
+            : buildRandomScenePrompt(product.name, categoryCtx, recentScenes);
           sceneFingerprint = fingerprint;
 
           console.log(`[generate-social-image] img2img scene ${i + 1}: env="${fingerprint.env.substring(0, 40)}..." mood="${fingerprint.mood.substring(0, 30)}..."`);
@@ -559,9 +669,9 @@ Deno.serve(async (req) => {
           });
         } else {
           // ═══ TEXT-TO-IMAGE FALLBACK: No product photo available ═══
-          const { prompt: fullPrompt, fingerprint } = buildRandomScenePromptText(
-            product.name, categoryCtx, recentScenes
-          );
+          const { prompt: fullPrompt, fingerprint } = carousel
+            ? buildCarouselSlidePromptText(product.name, categoryCtx, recentScenes, carouselCamera || pick(CAMERA_STYLES), i, imageCount)
+            : buildRandomScenePromptText(product.name, categoryCtx, recentScenes);
           sceneFingerprint = fingerprint;
 
           console.log(`[generate-social-image] txt2img scene ${i + 1}: env="${fingerprint.env.substring(0, 40)}..."`);
@@ -666,6 +776,7 @@ Deno.serve(async (req) => {
               size: useSize,
               status: finalStatus,
               generation_cost_cents: costCents,
+              carousel_set_id: carouselSetId,
               metadata: {
                 mode: genMode,
                 revised_prompt: genResult.revised_prompt || null,
@@ -678,6 +789,8 @@ Deno.serve(async (req) => {
                 scene_camera: sceneFingerprint.camera,
                 quality_score: qualityScore,
                 quality_feedback: qualityFeedback,
+                carousel_set_id: carouselSetId,
+                carousel_index: carousel ? i : null,
               },
             })
             .select("id, status, public_url")
@@ -736,12 +849,19 @@ Deno.serve(async (req) => {
     const successful = results.filter((r) => r.success);
     const totalCost = successful.reduce((sum, r) => sum + (r.cost_cents || 0), 0);
 
+    // Build carousel URLs array if in carousel mode
+    const carouselUrls = carousel
+      ? successful.filter((r) => r.status === "approved").map((r) => r.public_url)
+      : null;
+
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Generated ${successful.length}/${results.length} images`,
+        message: `Generated ${successful.length}/${results.length} images${carousel ? ` (carousel set)` : ""}`,
         total_cost_cents: totalCost,
         total_cost_display: `$${(totalCost / 100).toFixed(2)}`,
+        carousel_set_id: carouselSetId,
+        carousel_urls: carouselUrls,
         results,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }

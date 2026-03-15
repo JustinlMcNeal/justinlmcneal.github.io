@@ -296,6 +296,21 @@ export function bindModal(els, refreshTable, sectionApi = {}) {
         await upsertSectionItemsForProduct(saved.id, sectionItems);
       }
 
+      // Auto-import supplier images to Supabase Storage (fire-and-forget)
+      try {
+        const { SUPABASE_URL, SUPABASE_ANON_KEY } = await import("../../config/env.js");
+        fetch(`${SUPABASE_URL}/functions/v1/import-product-images`, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ product_id: saved.id }),
+        }).then(r => r.json()).then(res => {
+          if (res.imported > 0) console.log(`[auto-import] Imported ${res.imported} images for ${saved.id}`);
+        }).catch(() => {}); // silent — don't block save
+      } catch (_) {}
+
       state.products = await fetchProducts();
       refreshTable();
       closeModal();

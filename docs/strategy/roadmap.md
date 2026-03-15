@@ -2,7 +2,7 @@
 
 > Created: March 15, 2026  
 > Last updated: March 15, 2026  
-> Status: Phase 1 in progress  
+> Status: Phase 2 complete ✅ — Phase 3 next  
 > Goal: Consistent social media content → website traffic → sales
 
 ---
@@ -41,7 +41,7 @@ Zero social media presence → zero website traffic → minimal sales. Content c
 | 2 | ~~Instagram token expires (60 days)~~ | ✅ Fixed | `refresh-tokens` edge function deployed, runs daily at 3 AM UTC, auto-refreshes within 7 days of expiry |
 | 3 | ~~Instagram needs reconnection~~ | ✅ Fixed | Reconnected March 15. Token valid 60 days. Auto-refresh CRON will maintain it. |
 | 4 | **Pinterest stuck in sandbox** | 🟠 High | Both OAuth and posting use `api-sandbox.pinterest.com`. Token expired. Needs production API access from Pinterest. |
-| 5 | **No image generation/enhancement** | 🟠 High | AI generates captions but NOT images. Social posts rely on whatever supplier images exist. |
+| 5 | ~~No image generation/enhancement~~ | ✅ Fixed | Full AI image pipeline: gpt-image-1 img2img, 18.9M scene combos, quality scoring, seasonal awareness, smart dedup |
 | 6 | **No PWA** | 🟡 Medium | No manifest.json, no service worker, no push notifications. |
 | 7 | **Amazon SP-API** | 🟡 Blocked | Registration submitted Feb 24, 2026 — pending review. Nothing built. |
 | 8 | **eBay API** | 🟡 Not started | Not even registered yet. |
@@ -73,16 +73,24 @@ Zero social media presence → zero website traffic → minimal sales. Content c
 > **Priority:** 🟠 HIGH  
 > **Estimated effort:** 3-5 sessions
 
-- [x] AI image generation pipeline (DALL-E 3 via `generate-social-image` edge function) — deployed + tested
+- [x] AI image generation pipeline (`generate-social-image` edge function) — deployed + tested
+  - gpt-image-1 `/v1/images/edits` (true image-to-image, product photo as reference)
+  - DALL-E 3 text-to-image fallback when no catalog photo exists
+- [x] 18.9M scene randomizer — 30 envs × 15 lighting × 12 comps × 14 moods × 25 props × 10 cameras
+- [x] Seasonal awareness — spring/summer/fall/winter pools, 60/40 weighted selection
+- [x] Smart scheduling dedup — SceneFingerprint (env/mood/camera), avoids last 5 scenes per product
+- [x] Quality scoring — GPT-4o-mini Vision compares generated vs original, auto-approve 8+, review 5-7, reject <5
 - [x] Image blacklist system (`image_blacklist` table + admin UI) — blacklist bad product images from autopilot
 - [x] Image review queue (`social_generated_images` table with pending_review/approved/rejected workflow)
 - [x] Admin UI: "AI Images" tab with review queue, approved gallery, blacklist manager, pipeline settings
 - [x] Auto-queue integration: checks blacklist → uses approved AI images → generates new ones → pending_review
 - [x] Pipeline settings: model, quality, max daily, style presets, require review toggle
-- [ ] Text/price overlay generator for promo posts
-- [ ] Supplier image auto-import when adding products
-- [x] Image quality scoring — blacklist system lets admin flag bad supplier images
-- [ ] Carousel image set generation (multiple angles/backgrounds per product)
+- [x] Category-aware prompts for all 6 product categories (accessories, headwear, bags, jewelry, plushies, lego)
+- [x] Carousel image sets — generates 3-5 images with shared `carousel_set_id`, locked camera style for visual coherence, narrative composition flow (wide → hero → angled → close-up → held)
+- [x] Auto-queue carousel support — `shouldUseCarousel()` triggers 50% of the time when product has 3+ approved AI images on Instagram
+- [x] Supplier image auto-import (`import-product-images` edge function) — downloads external URLs to Supabase Storage, dedup, auto-updates product records. Auto-fires on product save.
+- [x] DB migration: `carousel_set_id` on `social_generated_images`, `imported_product_images` table
+- [~] Text/price overlay generator for promo posts — deferred (low priority)
 
 ---
 
@@ -167,6 +175,8 @@ Product in DB
 | `submit-review` | Customer review submission |
 | `verify-order` | Verify order for review eligibility |
 | `refresh-tokens` | Auto-refresh Instagram/Facebook/Pinterest tokens |
+| `generate-social-image` | AI image generation (gpt-image-1 img2img + quality scoring + carousel sets) |
+| `import-product-images` | Download external supplier images to Supabase Storage |
 
 ### Active CRON Jobs (pg_cron)
 | Job | Schedule | Function |
