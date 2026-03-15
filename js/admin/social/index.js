@@ -3,6 +3,7 @@
 
 import { getSupabaseClient } from "../../shared/supabaseClient.js";
 import { initAdminNav } from "../../shared/adminNav.js";
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from "../../config/env.js";
 import {
   fetchProducts,
   fetchProductGalleryImages,
@@ -66,6 +67,10 @@ import {
   getAllCategoryInsights,
   getCategoryInsights
 } from "./postLearning.js";
+import {
+  loadImagePipelineData,
+  setupImagePipeline,
+} from "./imagePipeline.js";
 
 // ============================================
 // State
@@ -144,8 +149,7 @@ function showToast(message, type = 'info') {
 // DOM Elements
 // ============================================
 
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl4ZHp2enNjdWZrdmV3ZWN2YWdxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU3MzQ5NDAsImV4cCI6MjA4MTMxMDk0MH0.cuCteItNo6yFCYcot0Vx7kUOUtV0r-iCwJ_ACAiKGso";
-const SUPABASE_FUNCTIONS_URL = "https://yxdzvzscufkvewecvagq.supabase.co/functions/v1";
+const SUPABASE_FUNCTIONS_URL = `${SUPABASE_URL}/functions/v1`;
 
 // Module-level supabase client for use in modal functions
 let supabaseClient = null;
@@ -627,6 +631,7 @@ async function init() {
     setupAutopilot();
     setupAnalytics();
     setupCarouselBuilder();
+    setupImagePipeline(state.products);
     
     // Show calendar tab by default
     switchTab("calendar");
@@ -846,6 +851,9 @@ function switchTab(tab) {
       break;
     case "carousel":
       loadRecentCarousels();
+      break;
+    case "images":
+      loadImagePipelineData();
       break;
   }
 }
@@ -3043,7 +3051,7 @@ async function previewAutoQueue() {
   `;
   
   try {
-    const response = await fetch("https://yxdzvzscufkvewecvagq.supabase.co/functions/v1/auto-queue", {
+    const response = await fetch(`${SUPABASE_FUNCTIONS_URL}/auto-queue`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -3099,7 +3107,7 @@ async function generateAutoQueue() {
   `;
   
   try {
-    const response = await fetch("https://yxdzvzscufkvewecvagq.supabase.co/functions/v1/auto-queue", {
+    const response = await fetch(`${SUPABASE_FUNCTIONS_URL}/auto-queue`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -3261,7 +3269,7 @@ async function previewRepost() {
   btn.textContent = "Loading...";
   
   try {
-    const response = await fetch("https://yxdzvzscufkvewecvagq.supabase.co/functions/v1/auto-repost", {
+    const response = await fetch(`${SUPABASE_FUNCTIONS_URL}/auto-repost`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -3307,7 +3315,7 @@ async function generateRepost() {
   btn.textContent = "Generating...";
   
   try {
-    const response = await fetch("https://yxdzvzscufkvewecvagq.supabase.co/functions/v1/auto-repost", {
+    const response = await fetch(`${SUPABASE_FUNCTIONS_URL}/auto-repost`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
