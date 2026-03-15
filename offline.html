@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Offline — KARRY KRAZE</title>
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#f58f86" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #fef7f5;
+      color: #333;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 2rem;
+    }
+    .offline-icon {
+      width: 120px;
+      height: 120px;
+      border-radius: 24px;
+      margin-bottom: 2rem;
+      box-shadow: 0 4px 20px rgba(245, 143, 134, 0.3);
+    }
+    h1 {
+      font-size: 1.8rem;
+      color: #f58f86;
+      margin-bottom: 0.5rem;
+    }
+    p {
+      font-size: 1.1rem;
+      color: #666;
+      max-width: 400px;
+      line-height: 1.6;
+      margin-bottom: 1.5rem;
+    }
+    .retry-btn {
+      display: inline-block;
+      padding: 12px 32px;
+      background: #f58f86;
+      color: white;
+      font-size: 1rem;
+      font-weight: 600;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 0.2s;
+    }
+    .retry-btn:hover { background: #e07a72; }
+    .retry-btn:active { transform: scale(0.98); }
+    .brand {
+      position: absolute;
+      bottom: 2rem;
+      font-size: 0.85rem;
+      color: #ccc;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+  </style>
+</head>
+<body>
+  <img src="/imgs/icons/icon-192x192.png" alt="Karry Kraze" class="offline-icon" />
+  <h1>You're Offline</h1>
+  <p>It looks like you've lost your internet connection. Don't worry — check your connection and try again!</p>
+  <button class="retry-btn" onclick="window.location.reload()">Try Again</button>
+  <div class="brand">KARRY KRAZE</div>
+</body>
+</html>

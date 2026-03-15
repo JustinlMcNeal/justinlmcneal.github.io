@@ -3,6 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#f58f86" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="apple-touch-icon" href="/imgs/icons/apple-touch-icon.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/imgs/icons/favicon-32x32.png" />
   <title>Admin · Site Settings</title>
 
   <!-- Tailwind -->
@@ -274,6 +278,71 @@
         </div>
       </section>
 
+      <!-- Push Notifications Section -->
+      <section class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6">
+        <h2 class="text-lg font-black uppercase tracking-wider mb-4">🔔 Push Notifications</h2>
+
+        <!-- Admin Device Registration -->
+        <div class="mb-6 p-4 bg-gray-50 rounded-xl">
+          <h3 class="font-bold text-sm uppercase tracking-wider mb-2">This Device</h3>
+          <p class="text-xs text-gray-500 mb-3">Register this browser to receive admin push notifications (new orders, alerts).</p>
+          <div class="flex flex-wrap gap-2">
+            <button id="btnRegisterAdmin" type="button"
+              class="bg-black text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-kkpink hover:text-black transition-all">
+              📱 Register as Admin Device
+            </button>
+            <span id="adminPushStatus" class="text-xs text-gray-400 self-center"></span>
+          </div>
+        </div>
+
+        <!-- Send Push Notification -->
+        <div class="p-4 bg-gray-50 rounded-xl">
+          <h3 class="font-bold text-sm uppercase tracking-wider mb-2">Send Notification</h3>
+          <div class="space-y-3">
+            <div>
+              <label class="block text-xs font-bold text-gray-600 mb-1">Title</label>
+              <input id="pushTitle" type="text" value="KARRY KRAZE" maxlength="80"
+                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-black focus:border-black" />
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-gray-600 mb-1">Message</label>
+              <textarea id="pushBody" rows="2" maxlength="200" placeholder="Your notification message..."
+                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-black focus:border-black"></textarea>
+            </div>
+            <div class="flex flex-wrap gap-3">
+              <div class="flex-1 min-w-[140px]">
+                <label class="block text-xs font-bold text-gray-600 mb-1">URL (optional)</label>
+                <input id="pushUrl" type="text" value="/" placeholder="/"
+                  class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-black focus:border-black" />
+              </div>
+              <div class="min-w-[120px]">
+                <label class="block text-xs font-bold text-gray-600 mb-1">Target</label>
+                <select id="pushTarget"
+                  class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-black focus:border-black">
+                  <option value="all">All</option>
+                  <option value="admin">Admin Only</option>
+                  <option value="customers">Customers Only</option>
+                </select>
+              </div>
+            </div>
+            <div class="flex items-center gap-3">
+              <button id="btnSendPush" type="button"
+                class="bg-black text-white px-5 py-2 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-kkpink hover:text-black transition-all">
+                📤 Send Push
+              </button>
+              <span id="pushSendStatus" class="text-xs text-gray-400"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="mt-4 flex flex-wrap gap-4 text-xs text-gray-500">
+          <span id="pushSubCount">Subscribers: —</span>
+          <span id="pushAdminCount">Admin devices: —</span>
+          <span id="pushSentTotal">Notifications sent: —</span>
+        </div>
+      </section>
+
       <!-- Save Button -->
       <div class="flex justify-end gap-3">
         <button
@@ -510,6 +579,87 @@
     }
 
     init();
+
+    // ─── Push Notifications Admin Panel ─────────────────────
+    const SUPABASE_URL = "https://yxdzvzscufkvewecvagq.supabase.co";
+    const SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl4ZHp2enNjdWZrdmV3ZWN2YWdxIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NTczNDk0MCwiZXhwIjoyMDgxMzEwOTQwfQ.a3efcbSIIY9u0iIiKteahNQC_d5K6fbKYyk7Oh8LbSw";
+
+    async function loadPushStats() {
+      try {
+        const headers = { "Authorization": `Bearer ${SERVICE_KEY}`, "apikey": SERVICE_KEY };
+        const [subsResp, logResp] = await Promise.all([
+          fetch(`${SUPABASE_URL}/rest/v1/push_subscriptions?select=id,is_admin,is_active`, { headers }),
+          fetch(`${SUPABASE_URL}/rest/v1/push_notifications_log?select=sent_count&order=created_at.desc&limit=100`, { headers }),
+        ]);
+        const subs = await subsResp.json();
+        const logs = await logResp.json();
+        const activeSubs = Array.isArray(subs) ? subs.filter(s => s.is_active) : [];
+        const adminSubs = activeSubs.filter(s => s.is_admin);
+        const totalSent = Array.isArray(logs) ? logs.reduce((sum, l) => sum + (l.sent_count || 0), 0) : 0;
+        document.getElementById("pushSubCount").textContent = `Subscribers: ${activeSubs.length}`;
+        document.getElementById("pushAdminCount").textContent = `Admin devices: ${adminSubs.length}`;
+        document.getElementById("pushSentTotal").textContent = `Notifications sent: ${totalSent}`;
+      } catch (e) { console.error("Push stats load failed:", e); }
+    }
+
+    // Register this device as admin
+    document.getElementById("btnRegisterAdmin").addEventListener("click", async () => {
+      const status = document.getElementById("adminPushStatus");
+      status.textContent = "Requesting permission...";
+      try {
+        const permission = await Notification.requestPermission();
+        if (permission !== "granted") { status.textContent = "❌ Permission denied"; return; }
+
+        // Import pwa module to subscribe
+        const { subscribeToPush } = await import("/js/shared/pwa.js");
+        const sub = await subscribeToPush();
+        if (!sub) { status.textContent = "❌ Subscription failed"; return; }
+
+        // Mark this subscription as admin
+        const subJSON = sub.toJSON();
+        await fetch(`${SUPABASE_URL}/rest/v1/push_subscriptions?endpoint=eq.${encodeURIComponent(subJSON.endpoint)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SERVICE_KEY}`, "apikey": SERVICE_KEY, "Prefer": "return=minimal" },
+          body: JSON.stringify({ is_admin: true }),
+        });
+        status.textContent = "✅ Registered as admin device!";
+        loadPushStats();
+      } catch (e) { status.textContent = "❌ Error: " + e.message; console.error(e); }
+    });
+
+    // Send push notification
+    document.getElementById("btnSendPush").addEventListener("click", async () => {
+      const status = document.getElementById("pushSendStatus");
+      const btn = document.getElementById("btnSendPush");
+      const title = document.getElementById("pushTitle").value.trim();
+      const body = document.getElementById("pushBody").value.trim();
+      const url = document.getElementById("pushUrl").value.trim() || "/";
+      const target = document.getElementById("pushTarget").value;
+
+      if (!title || !body) { status.textContent = "❌ Title and message required"; return; }
+
+      btn.disabled = true; btn.textContent = "Sending..."; status.textContent = "";
+      try {
+        const resp = await fetch(`${SUPABASE_URL}/functions/v1/send-push-notification`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SERVICE_KEY}` },
+          body: JSON.stringify({ title, body, url, target }),
+        });
+        const result = await resp.json();
+        if (result.success) {
+          status.textContent = `✅ Sent to ${result.sent} device(s)` + (result.failed > 0 ? `, ${result.failed} failed` : "");
+          document.getElementById("pushBody").value = "";
+          loadPushStats();
+        } else {
+          status.textContent = "❌ " + (result.error || "Send failed");
+        }
+      } catch (e) { status.textContent = "❌ Error: " + e.message; }
+      finally { btn.disabled = false; btn.textContent = "📤 Send Push"; }
+    });
+
+    // Load stats on page load
+    loadPushStats();
   </script>
+<script type="module" src="/js/shared/pwa.js"></script>
 </body>
 </html>

@@ -467,6 +467,32 @@ if (fErr) {
       return json({ error: "Failed to upsert line items", detail: liErr }, 500);
     }
 
+    // ✅ 3) Send push notification to admin about new order (fire-and-forget)
+    try {
+      const orderTotal = `$${(total_paid_cents / 100).toFixed(2)}`;
+      const itemSummary = total_items === 1 ? "1 item" : `${total_items} items`;
+      const custName = first_name ? `${first_name}${last_name ? ' ' + last_name : ''}` : (email || 'A customer');
+
+      fetch(`${supabaseUrl}/functions/v1/send-push-notification`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${supabaseServiceRole}`,
+        },
+        body: JSON.stringify({
+          title: `🛒 New Order — ${orderTotal}`,
+          body: `${custName} just ordered ${itemSummary}!`,
+          url: "/pages/admin/lineItemsOrders.html",
+          tag: `order-${sessionId.slice(0, 8)}`,
+          target: "admin",
+        }),
+      }).catch((pushErr) => {
+        console.error("[stripe-webhook] push notification failed (non-fatal):", pushErr);
+      });
+    } catch (pushErr) {
+      console.error("[stripe-webhook] push notification setup failed (non-fatal):", pushErr);
+    }
+
     return json(
       {
         received: true,

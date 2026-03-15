@@ -2,7 +2,7 @@
 
 > Created: March 15, 2026  
 > Last updated: March 15, 2026  
-> Status: Phase 2 complete ✅ — Phase 3 next  
+> Status: Phase 3 complete ✅ — Phase 4 next  
 > Goal: Consistent social media content → website traffic → sales
 
 ---
@@ -42,7 +42,7 @@ Zero social media presence → zero website traffic → minimal sales. Content c
 | 3 | ~~Instagram needs reconnection~~ | ✅ Fixed | Reconnected March 15. Token valid 60 days. Auto-refresh CRON will maintain it. |
 | 4 | **Pinterest stuck in sandbox** | 🟠 High | Both OAuth and posting use `api-sandbox.pinterest.com`. Token expired. Needs production API access from Pinterest. |
 | 5 | ~~No image generation/enhancement~~ | ✅ Fixed | Full AI image pipeline: gpt-image-1 img2img, 18.9M scene combos, quality scoring, seasonal awareness, smart dedup |
-| 6 | **No PWA** | 🟡 Medium | No manifest.json, no service worker, no push notifications. |
+| 6 | ~~No PWA~~ | ✅ Fixed | manifest.json, service worker, offline page, install prompt, push notifications all deployed |
 | 7 | **Amazon SP-API** | 🟡 Blocked | Registration submitted Feb 24, 2026 — pending review. Nothing built. |
 | 8 | **eBay API** | 🟡 Not started | Not even registered yet. |
 | 9 | **Review email notifications** | 🟡 Low | Admin + customer coupon emails after approval — needs email provider. |
@@ -99,12 +99,18 @@ Zero social media presence → zero website traffic → minimal sales. Content c
 > **Priority:** 🟡 MEDIUM  
 > **Estimated effort:** 1-2 sessions
 
-- [ ] Create `manifest.json` (app name, icons, theme colors, display: standalone)
-- [ ] Build service worker (cache static assets, offline fallback page)
-- [ ] "Add to Home Screen" prompt logic
-- [ ] Web push notifications setup (VAPID keys, subscription flow)
-- [ ] Admin push notification on new Stripe order (via webhook)
-- [ ] Optional: customer push for order shipped / review reminder
+- [x] Create `manifest.json` (app name, icons, 10 icon sizes + maskable variants, display: standalone)
+- [x] Build service worker (network-first pages, cache-first images, stale-while-revalidate CSS/JS, offline fallback)
+- [x] "Add to Home Screen" install banner (auto-shows on eligible devices, dismissible)
+- [x] PWA icons generated: 72–512px + maskable + apple-touch-icon + favicons
+- [x] Web push notifications (VAPID keys, subscription flow, soft permission prompt)
+- [x] `send-push-notification` edge function — sends to all/admin/customers, auto-cleans stale subs
+- [x] Admin push notification on new Stripe order via webhook (fire-and-forget)
+- [x] Admin Settings: push notification composer panel (send to all/admin/customers)
+- [x] Admin device registration (mark subscription as admin for order alerts)
+- [x] Push subscription stored in `push_subscriptions` table, notification log in `push_notifications_log`
+- [x] PWA tags + service worker registered in all 34 HTML pages
+- [ ] Optional: customer push for order shipped / review reminder (future)
 
 ---
 
@@ -177,6 +183,7 @@ Product in DB
 | `refresh-tokens` | Auto-refresh Instagram/Facebook/Pinterest tokens |
 | `generate-social-image` | AI image generation (gpt-image-1 img2img + quality scoring + carousel sets) |
 | `import-product-images` | Download external supplier images to Supabase Storage |
+| `send-push-notification` | Send web push notifications to subscribed browsers |
 
 ### Active CRON Jobs (pg_cron)
 | Job | Schedule | Function |
