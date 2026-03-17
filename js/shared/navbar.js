@@ -12,6 +12,8 @@ import {
   calculateCartTotals,
   buildCheckoutPromoPayload,
 } from "./cart/cartTotals.js";
+import { getAppliedCoupon } from "./couponManager.js";
+import { checkPromotionApplies } from "./promotions/promoScope.js";
 
 function isAdminPage() {
   const base = getSiteBasePath();
@@ -280,13 +282,14 @@ export async function initNavbar() {
         const subtotal = Number(totals.subtotal || 0);
         const total = Number(totals.total || 0);
 
-        // ✅ Total discount across everything (auto promos + bogo + coupon)
-        const totalDiscounts = Math.max(0, subtotal - total);
+        // Separate auto promo discounts from coupon discounts
+        const autoDiscount = Number(totals.autoDiscount || 0);
+        const couponDiscount = Number(totals.couponDiscount || 0);
 
         // ✅ Build promo metadata for webhook storage
         const promo = await buildCheckoutPromoPayload(cart);
 
-        // Distribute total discounts proportionally across items
+        // Calculate cart subtotal for proportional distribution
         const cartSubtotal =
           cart.reduce(
             (sum, item) =>
@@ -295,14 +298,44 @@ export async function initNavbar() {
             0
           ) || 1;
 
-        const items = cart.map((item) => {
+        // Determine which items are matched by the coupon's scope
+        const coupon = getAppliedCoupon();
+        const couponScopeType = coupon?.scope_type || "all";
+
+        // Calculate the subtotal of coupon-matching items (for proportional split within scope)
+        let couponMatchSubtotal = 0;
+        const couponMatchFlags = cart.map((item) => {
+          if (!coupon || couponDiscount <= 0) return false;
+          if (couponScopeType === "all") return true;
+          return checkPromotionApplies(coupon, item);
+        });
+
+        couponMatchFlags.forEach((matches, idx) => {
+          if (matches) {
+            const item = cart[idx];
+            const qty = Math.max(1, Number(item.qty || 1));
+            couponMatchSubtotal += Number(item.price || 0) * qty;
+          }
+        });
+        couponMatchSubtotal = couponMatchSubtotal || 1;
+
+        const items = cart.map((item, idx) => {
           const qty = Math.max(1, Number(item.qty || 1));
           const unitPrice = Number(item.price || 0);
           const lineSubtotal = unitPrice * qty;
 
-          const weight = lineSubtotal / cartSubtotal;
-          const lineDiscount = totalDiscounts * weight;
+          // 1) Auto promo discount — distributed proportionally across ALL items
+          const autoWeight = lineSubtotal / cartSubtotal;
+          const lineAutoDiscount = autoDiscount * autoWeight;
 
+          // 2) Coupon discount — distributed ONLY to items matching coupon scope
+          let lineCouponDiscount = 0;
+          if (couponMatchFlags[idx]) {
+            const couponWeight = lineSubtotal / couponMatchSubtotal;
+            lineCouponDiscount = couponDiscount * couponWeight;
+          }
+
+          const lineDiscount = lineAutoDiscount + lineCouponDiscount;
           const unitDiscount = lineDiscount / qty;
           const discounted_price = Math.max(0, unitPrice - unitDiscount);
 

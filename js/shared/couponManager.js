@@ -3,7 +3,7 @@
  * Handles coupon code validation and application
  */
 
-import { validateCouponCode } from "./promotionLoader.js";
+import { validateCouponCode, checkPromotionApplies } from "./promotionLoader.js";
 import { getCart } from "./cartStore.js";
 
 // Global coupon state
@@ -49,19 +49,38 @@ export function getAppliedCoupon() {
 }
 
 /**
- * Calculate discount from applied coupon
- * @param {number} subtotal - Cart subtotal
+ * Calculate discount from applied coupon (scope-aware)
+ * @param {number} subtotal - Cart subtotal (used for scope_type="all")
+ * @param {Array} items - Cart items (used for scoped coupons)
  * @returns {number} - Coupon discount amount
  */
-export function calculateCouponDiscount(subtotal = 0) {
+export function calculateCouponDiscount(subtotal = 0, items = []) {
   if (!appliedCoupon) return 0;
 
-  let discount = 0;
   const sub = Number(subtotal || 0);
+  const scopeType = appliedCoupon.scope_type || "all";
+
+  // Determine the eligible subtotal based on scope
+  let eligibleSubtotal = sub;
+
+  if (scopeType !== "all" && items && items.length > 0) {
+    // Only count items matching the coupon's scope
+    eligibleSubtotal = items.reduce((sum, it) => {
+      if (checkPromotionApplies(appliedCoupon, it)) {
+        return sum + Number(it.price || 0) * Math.max(1, Number(it.qty || 1));
+      }
+      return sum;
+    }, 0);
+
+    // Don't exceed the overall subtotal passed in (which may have auto-discounts removed)
+    eligibleSubtotal = Math.min(eligibleSubtotal, sub);
+  }
+
+  let discount = 0;
 
   switch (appliedCoupon.type) {
     case "percentage":
-      discount = (sub * Number(appliedCoupon.value || 0)) / 100;
+      discount = (eligibleSubtotal * Number(appliedCoupon.value || 0)) / 100;
       break;
     case "fixed":
       discount = Number(appliedCoupon.value || 0);
@@ -70,7 +89,8 @@ export function calculateCouponDiscount(subtotal = 0) {
       discount = 0;
   }
 
-  return Math.max(0, Math.min(discount, sub));
+  // Coupon discount can't exceed the eligible subtotal
+  return Math.max(0, Math.min(discount, eligibleSubtotal));
 }
 
 /**

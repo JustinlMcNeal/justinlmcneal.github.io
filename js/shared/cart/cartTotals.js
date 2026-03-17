@@ -57,9 +57,9 @@ export async function calculateCartTotals(items) {
   if (coupon) {
     const t = String(coupon.type || "").toLowerCase();
 
-    // % / fixed coupon
+    // % / fixed coupon — pass items for scope-aware calculation
     if (t === "percentage" || t === "fixed") {
-      couponAmount = calculateCouponDiscount(subtotal - autoDiscount);
+      couponAmount = calculateCouponDiscount(subtotal - autoDiscount, safeItems);
     }
 
     // BOGO coupon
