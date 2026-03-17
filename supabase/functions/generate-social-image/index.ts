@@ -847,6 +847,7 @@ Deno.serve(async (req) => {
     }
 
     const successful = results.filter((r) => r.success);
+    const failed = results.filter((r) => !r.success);
     const totalCost = successful.reduce((sum, r) => sum + (r.cost_cents || 0), 0);
 
     // Build carousel URLs array if in carousel mode
@@ -854,9 +855,13 @@ Deno.serve(async (req) => {
       ? successful.filter((r) => r.status === "approved").map((r) => r.public_url)
       : null;
 
+    // Return success:false only when ALL images failed
+    const overallSuccess = successful.length > 0;
+
     return new Response(
       JSON.stringify({
-        success: true,
+        success: overallSuccess,
+        error: overallSuccess ? undefined : (failed[0]?.error || "All images failed to generate"),
         message: `Generated ${successful.length}/${results.length} images${carousel ? ` (carousel set)` : ""}`,
         total_cost_cents: totalCost,
         total_cost_display: `$${(totalCost / 100).toFixed(2)}`,

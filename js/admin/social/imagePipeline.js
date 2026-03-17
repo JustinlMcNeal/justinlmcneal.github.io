@@ -90,20 +90,37 @@ async function loadPipelineSettings() {
     .eq("setting_key", "image_pipeline")
     .single();
 
-  imgState.pipelineSettings = data?.setting_value || {
-    enabled: false,
+  const defaults = {
+    enabled: true,
     auto_generate: false,
-    model: "dall-e-3",
-    quality: "hd",
+    model: "gpt-image-1",
+    quality: "high",
+    size: "1024x1024",
     require_review: true,
     max_generations_per_day: 50,
     style_presets: ["lifestyle"],
+    fallback_to_catalog: true,
   };
+
+  if (!data?.setting_value) {
+    // No settings row exists — create it
+    imgState.pipelineSettings = defaults;
+    try {
+      await sb().from("social_settings").upsert(
+        { setting_key: "image_pipeline", setting_value: defaults },
+        { onConflict: "setting_key" }
+      );
+    } catch (e) {
+      console.warn("[imagePipeline] Could not create default settings:", e);
+    }
+  } else {
+    imgState.pipelineSettings = data.setting_value;
+  }
 
   // Populate settings UI
   const el = (id) => document.getElementById(id);
-  if (el("pipelineModel")) el("pipelineModel").value = imgState.pipelineSettings.model || "dall-e-3";
-  if (el("pipelineQuality")) el("pipelineQuality").value = imgState.pipelineSettings.quality || "hd";
+  if (el("pipelineModel")) el("pipelineModel").value = imgState.pipelineSettings.model || "gpt-image-1";
+  if (el("pipelineQuality")) el("pipelineQuality").value = imgState.pipelineSettings.quality || "high";
   if (el("pipelineMaxDaily")) el("pipelineMaxDaily").value = imgState.pipelineSettings.max_generations_per_day || 50;
   if (el("pipelineStyle")) el("pipelineStyle").value = imgState.pipelineSettings.style_presets?.[0] || "lifestyle";
   if (el("pipelineEnabled")) el("pipelineEnabled").checked = imgState.pipelineSettings.enabled || false;
@@ -389,12 +406,23 @@ export async function triggerGeneration(productId, style, count) {
   const el = (id) => document.getElementById(id);
   const progressEl = el("genProgress");
   const progressText = el("genProgressText");
+  const resultsEl = el("genResults");
   const runBtn = el("btnRunGenerate");
 
+  // Hide any previous results, show progress
+  if (resultsEl) resultsEl.classList.add("hidden");
+  if (progressEl) progressEl.classList.remove("hidden");
+  if (runBtn) runBtn.disabled = true;
+
+  // Timer so user knows it's still working
+  const startTime = Date.now();
+  const timer = setInterval(() => {
+    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+    if (progressText) progressText.textContent = `Generating images... (${elapsed}s)`;
+  }, 1000);
+
   try {
-    if (progressEl) progressEl.classList.remove("hidden");
-    if (runBtn) runBtn.disabled = true;
-    if (progressText) progressText.textContent = "Generating images...";
+    if (progressText) progressText.textContent = "Generating images... (0s)";
 
     const body = productId === "__all__"
       ? { batch: true, product_ids: imgState.products.map((p) => p.id), style, count }
@@ -412,27 +440,89 @@ export async function triggerGeneration(productId, style, count) {
       body: JSON.stringify(body),
     });
 
+    clearInterval(timer);
+
+    if (!resp.ok) {
+      const txt = await resp.text();
+      let errMsg;
+      try { errMsg = JSON.parse(txt).error; } catch { errMsg = `HTTP ${resp.status}: ${txt.substring(0, 100)}`; }
+      if (progressText) progressText.textContent = `❌ Error: ${errMsg}`;
+      showToast(`Generation failed: ${errMsg}`, "error");
+      return;
+    }
+
     const result = await resp.json();
 
-    if (result.success) {
-      const msg = `Generated ${result.results?.filter((r) => r.success).length || 0} images (${result.total_cost_display || "$0.00"})`;
-      if (progressText) progressText.textContent = msg;
-      showToast(msg, "success");
-      // Refresh review queue
-      await loadImagePipelineData();
-    } else {
-      if (progressText) progressText.textContent = `Error: ${result.error}`;
-      showToast(`Generation failed: ${result.error}`, "error");
+    const successful = result.results?.filter((r) => r.success) || [];
+    const failed = result.results?.filter((r) => !r.success) || [];
+
+    if (successful.length === 0 && failed.length > 0) {
+      // All images failed
+      const errMsg = failed[0].error || "Unknown generation error";
+      if (progressText) progressText.textContent = `❌ Generation failed: ${errMsg}`;
+      showToast(`Generation failed: ${errMsg}`, "error");
+      return;
     }
+
+    // Show results with image previews
+    if (progressEl) progressEl.classList.add("hidden");
+
+    if (resultsEl && successful.length > 0) {
+      const statusBadge = (status, score) => {
+        if (status === "approved") return `<span class="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-bold rounded-full">✅ Auto-Approved (${score}/10)</span>`;
+        if (status === "rejected") return `<span class="px-2 py-0.5 bg-red-100 text-red-700 text-xs font-bold rounded-full">❌ Rejected (${score}/10)</span>`;
+        return `<span class="px-2 py-0.5 bg-yellow-100 text-yellow-700 text-xs font-bold rounded-full">⏳ Pending Review (${score}/10)</span>`;
+      };
+
+      const approvedCount = successful.filter(r => r.status === "approved").length;
+      const pendingCount = successful.filter(r => r.status === "pending_review").length;
+      const rejectedCount = successful.filter(r => r.status === "rejected").length;
+
+      resultsEl.innerHTML = `
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <p class="text-sm font-bold text-green-700">🎉 Generated ${successful.length} image${successful.length > 1 ? "s" : ""} (${result.total_cost_display || "$0.00"})</p>
+            ${failed.length ? `<p class="text-xs text-red-500">${failed.length} failed</p>` : ""}
+          </div>
+          <div class="grid grid-cols-${Math.min(successful.length, 3)} gap-3">
+            ${successful.map(r => `
+              <div class="border rounded-xl overflow-hidden">
+                ${r.public_url 
+                  ? `<img src="${r.public_url}" alt="${r.product_name}" class="w-full aspect-square object-cover">`
+                  : `<div class="w-full aspect-square bg-gray-100 flex items-center justify-center text-gray-400 text-xs">No preview</div>`
+                }
+                <div class="p-2 space-y-1">
+                  <p class="text-xs font-medium truncate">${r.product_name}</p>
+                  ${statusBadge(r.status, r.quality_score)}
+                  <p class="text-xs text-gray-400">${r.quality_feedback || ""}</p>
+                  <p class="text-xs text-gray-400">${r.model} · ${r.mode}</p>
+                </div>
+              </div>
+            `).join("")}
+          </div>
+          <div class="flex gap-2 pt-2">
+            ${approvedCount ? `<button onclick="switchImageSubTab('approved'); document.getElementById('generateImagesModal').classList.add('hidden');" class="flex-1 py-2 text-sm font-bold bg-green-500 text-white rounded-lg hover:bg-green-600">View Approved (${approvedCount})</button>` : ""}
+            ${pendingCount ? `<button onclick="switchImageSubTab('review'); document.getElementById('generateImagesModal').classList.add('hidden');" class="flex-1 py-2 text-sm font-bold bg-yellow-500 text-white rounded-lg hover:bg-yellow-600">Review Queue (${pendingCount})</button>` : ""}
+            <button onclick="document.getElementById('genResults').classList.add('hidden');" class="px-4 py-2 text-sm font-medium border rounded-lg hover:bg-gray-50">Close</button>
+          </div>
+        </div>
+      `;
+      resultsEl.classList.remove("hidden");
+    }
+
+    const msg = `Generated ${successful.length} image${successful.length > 1 ? "s" : ""} (${result.total_cost_display || "$0.00"})`;
+    showToast(msg, "success");
+
+    // Refresh all data
+    await loadImagePipelineData();
+
   } catch (err) {
+    clearInterval(timer);
     console.error("[imagePipeline] Generation error:", err);
-    if (progressText) progressText.textContent = `Error: ${err.message}`;
-    showToast("Generation failed", "error");
+    if (progressText) progressText.textContent = `❌ Error: ${err.message}`;
+    showToast("Generation failed — check console for details", "error");
   } finally {
     if (runBtn) runBtn.disabled = false;
-    setTimeout(() => {
-      if (progressEl) progressEl.classList.add("hidden");
-    }, 5000);
   }
 }
 
@@ -455,10 +545,13 @@ export async function savePipelineSettings() {
   };
 
   try {
+    // Use upsert so settings are created if they don't exist yet
     const { error } = await sb()
       .from("social_settings")
-      .update({ setting_value: settings })
-      .eq("setting_key", "image_pipeline");
+      .upsert(
+        { setting_key: "image_pipeline", setting_value: settings },
+        { onConflict: "setting_key" }
+      );
 
     if (error) throw error;
     imgState.pipelineSettings = settings;
