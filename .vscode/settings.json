@@ -1,0 +1,33 @@
+{
+  // Enable Deno ONLY for edge functions (keeps normal JS files using standard TS/JS)
+  "deno.enablePaths": ["./supabase/functions"],
+  "deno.unstable": true,
+
+  // File associations
+  "files.associations": {
+    "*.html": "html"
+  },
+
+  // Exclude noise from search & explorer
+  "files.exclude": {
+    "node_modules": true,
+    ".git": true
+  },
+  "search.exclude": {
+    "node_modules": true,
+    "package-lock.json": true
+  },
+
+  // Recommended editor defaults
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "[html]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[json]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  }
+}

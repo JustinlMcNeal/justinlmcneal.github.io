@@ -207,12 +207,13 @@ Respond ONLY with valid JSON in this exact format:
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (err) {
-    console.error("[ai-product-fill] Error:", err);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[ai-product-fill] Error:", msg);
     return new Response(
       JSON.stringify({
         success: false,
-        error: err.message || "Unknown error",
+        error: msg || "Unknown error",
       }),
       {
         status: 500,

@@ -253,9 +253,10 @@ Deno.serve(async (req) => {
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (err) {
-    console.error("[1688] Error:", err);
-    return error(err.message || "Internal error", 500);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[1688] Error:", msg);
+    return error(msg || "Internal error", 500);
   }
 });
 

@@ -912,7 +912,7 @@ Deno.serve(async (req) => {
             style: iterStyle,
             mode: genMode,
             success: false,
-            error: genError.message,
+            error: (genError instanceof Error ? genError.message : String(genError)),
           });
         }
       }
@@ -943,9 +943,10 @@ Deno.serve(async (req) => {
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (err) {
-    console.error("[generate-social-image] Error:", err);
-    return error(err.message, 500);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[generate-social-image] Error:", msg);
+    return error(msg, 500);
   }
 });
 
