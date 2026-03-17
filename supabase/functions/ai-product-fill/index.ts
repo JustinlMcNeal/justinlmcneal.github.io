@@ -1,52 +1,33 @@
 // supabase/functions/ai-product-fill/index.ts
 // AI-powered product description generator using GPT-4o vision
-// Analyzes product images and returns description, sizing, and care bullet points
-
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+// Analyzes product images and returns description, sizing, care, tags, and name
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-interface ProductFillRequest {
-  /** Base64-encoded images (data URIs or raw base64) */
-  images: string[];
-  /** Optional: image URLs to analyze instead of base64 */
-  imageUrls?: string[];
-  /** Optional: product name if already known */
-  productName?: string;
-  /** Optional: product category if already known */
-  category?: string;
-  /** Which sections to generate */
-  sections?: ("description" | "sizing" | "care" | "tags" | "name")[];
+function error(msg: string, status = 400) {
+  return new Response(JSON.stringify({ success: false, error: msg }), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
 }
 
-interface ProductFillResponse {
-  success: boolean;
-  data?: {
-    name?: string;
-    description: string[];
-    sizing: string[];
-    care: string[];
-    tags?: string[];
-  };
-  error?: string;
-}
-
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
     if (!OPENAI_API_KEY) {
-      throw new Error("OPENAI_API_KEY not configured");
+      return error("OPENAI_API_KEY not configured", 500);
     }
 
-    const body: ProductFillRequest = await req.json();
+    const body = await req.json();
     const {
       images = [],
       imageUrls = [],
@@ -68,28 +49,29 @@ serve(async (req) => {
         : `data:image/jpeg;base64,${img}`;
       imageContent.push({
         type: "image_url",
-        image_url: { url: dataUri, detail: "high" },
+        image_url: { url: dataUri, detail: "low" },
       });
     }
 
-    // Add URL-based images
+    // Add URL-based images (use low detail to reduce token cost)
     for (const url of imageUrls) {
-      if (url) {
+      if (url && url.startsWith("http")) {
         imageContent.push({
           type: "image_url",
-          image_url: { url, detail: "high" },
+          image_url: { url, detail: "low" },
         });
       }
     }
 
     if (imageContent.length === 0) {
-      throw new Error(
-        "At least one image (base64 or URL) is required for AI analysis"
-      );
+      return error("At least one image (base64 or URL) is required for AI analysis");
     }
 
+    // Cap at 4 images to stay within token limits
+    const cappedImages = imageContent.slice(0, 4);
+
     // Build the system prompt
-    const systemPrompt = `You are an expert e-commerce product copywriter for "Kool Kreations" (KK), a trendy online store selling fashion accessories, bags, headwear, jewelry, plushies, and collectibles.
+    const systemPrompt = `You are an expert e-commerce product copywriter for "Karry Kraze", a trendy online store selling fashion accessories, bags, headwear, jewelry, plushies, and collectibles. Your target audience is Gen-Z and young women (ages 16-28).
 
 Your task is to analyze product images and generate structured product information. Write engaging, concise bullet points that highlight key features and appeal to young, fashion-forward customers.
 
@@ -98,21 +80,18 @@ IMPORTANT RULES:
 - Description: 4-6 bullets about material, design, features, and appeal
 - Sizing: 3-5 bullets about dimensions, fit, adjustability (estimate from image)
 - Care: 3-4 bullets about washing, storage, and maintenance
-- Tags: 5-8 relevant keywords for search/filtering
+- Tags: 5-8 relevant lowercase keywords for search/filtering
+- Name: A creative, catchy product name (2-5 words)
 - Be specific about what you see (colors, materials, patterns, closures)
 - If you can't determine exact measurements, give reasonable estimates or say "One size fits most"
 
-Respond ONLY with valid JSON in this exact format:
-{
-  "name": "Product Name Here",
-  "description": ["bullet 1", "bullet 2", ...],
-  "sizing": ["bullet 1", "bullet 2", ...],
-  "care": ["bullet 1", "bullet 2", ...],
-  "tags": ["tag1", "tag2", ...]
-}`;
+You MUST respond with ONLY valid JSON. No markdown fences, no explanation, no extra text.
+The JSON must have this exact structure:
+{"name":"Product Name","description":["bullet 1","bullet 2"],"sizing":["bullet 1"],"care":["bullet 1"],"tags":["tag1","tag2"]}`;
 
     // Build the user prompt
-    let userPrompt = "Analyze this product image(s) and generate product listing content.";
+    let userPrompt =
+      "Analyze this product image(s) and generate product listing content.";
     if (productName) {
       userPrompt += `\n\nThe product is called: "${productName}"`;
     }
@@ -125,7 +104,7 @@ Respond ONLY with valid JSON in this exact format:
     userPrompt += `\n\nReturn ONLY valid JSON. No markdown, no code blocks, just the JSON object.`;
 
     console.log(
-      `[ai-product-fill] Analyzing ${imageContent.length} image(s), sections: ${requestedSections}`
+      `[ai-product-fill] Analyzing ${cappedImages.length} image(s), sections: ${requestedSections}`
     );
 
     // Call OpenAI Vision API
@@ -145,29 +124,37 @@ Respond ONLY with valid JSON in this exact format:
               role: "user",
               content: [
                 { type: "text", text: userPrompt },
-                ...imageContent,
+                ...cappedImages,
               ],
             },
           ],
           max_tokens: 1500,
           temperature: 0.7,
+          response_format: { type: "json_object" },
         }),
       }
     );
 
     if (!response.ok) {
       const errBody = await response.text();
-      console.error("[ai-product-fill] OpenAI error:", errBody);
-      throw new Error(`OpenAI API error: ${response.status}`);
+      console.error("[ai-product-fill] OpenAI error:", response.status, errBody);
+      return error(`OpenAI API error: ${response.status}`, 502);
     }
 
     const completion = await response.json();
     const rawContent =
       completion.choices?.[0]?.message?.content?.trim() || "";
 
-    console.log("[ai-product-fill] Raw response length:", rawContent.length);
+    console.log(
+      "[ai-product-fill] Raw response length:",
+      rawContent.length
+    );
 
-    // Parse the JSON response (strip markdown code blocks if present)
+    if (!rawContent) {
+      return error("AI returned an empty response. Please try again.", 502);
+    }
+
+    // Parse the JSON response — strip markdown fences just in case
     let cleaned = rawContent;
     if (cleaned.startsWith("```")) {
       cleaned = cleaned
@@ -178,16 +165,16 @@ Respond ONLY with valid JSON in this exact format:
     let parsed;
     try {
       parsed = JSON.parse(cleaned);
-    } catch {
-      console.error(
-        "[ai-product-fill] Failed to parse JSON:",
-        cleaned.substring(0, 500)
+    } catch (parseErr: unknown) {
+      const snippet = cleaned.substring(0, 300);
+      console.error("[ai-product-fill] Failed to parse JSON:", snippet);
+      return error(
+        "AI returned invalid JSON. Please try again.",
+        502
       );
-      throw new Error("AI returned invalid JSON. Please try again.");
     }
 
-    // Validate and normalize the response
-    const result: ProductFillResponse = {
+    const result = {
       success: true,
       data: {
         name: parsed.name || undefined,
@@ -201,7 +188,9 @@ Respond ONLY with valid JSON in this exact format:
     };
 
     console.log(
-      `[ai-product-fill] Generated: ${result.data!.description.length} desc, ${result.data!.sizing.length} sizing, ${result.data!.care.length} care, ${(result.data!.tags || []).length} tags`
+      `[ai-product-fill] Generated: ${result.data.description.length} desc, ` +
+        `${result.data.sizing.length} sizing, ${result.data.care.length} care, ` +
+        `${(result.data.tags || []).length} tags`
     );
 
     return new Response(JSON.stringify(result), {
@@ -210,15 +199,6 @@ Respond ONLY with valid JSON in this exact format:
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[ai-product-fill] Error:", msg);
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: msg || "Unknown error",
-      }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+    return error(msg || "Internal error", 500);
   }
 });

@@ -52,11 +52,13 @@ export function bindModal(els, refreshTable, sectionApi = {}) {
     setMsg(els.modalMsg, "", false);
     show(els.modal, true);
     els.modal.classList.add("is-open");
+    els.modal.setAttribute("aria-hidden", "false");
   }
 
   function closeModal() {
     show(els.modal, false);
     els.modal.classList.remove("is-open");
+    els.modal.setAttribute("aria-hidden", "true");
     state.editing = null;
   }
 
@@ -124,6 +126,7 @@ export function bindModal(els, refreshTable, sectionApi = {}) {
     setMsg(els.modalMsg, "Loading product…", false);
     show(els.modal, true);
     els.modal.classList.add("is-open");
+    els.modal.setAttribute("aria-hidden", "false");
     showCopyJsonBtn(true); // Show copy button when editing
 
     const full = await fetchProductFull(productId);
