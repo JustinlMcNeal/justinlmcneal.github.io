@@ -80,6 +80,7 @@ function pickBestAddress(
 type ProductLookup = {
   price_cents: number;
   weight_g: number | null;
+  product_uuid: string;
 };
 
 Deno.serve(async (req) => {
@@ -196,6 +197,65 @@ if (req.method === "GET") {
 
       console.log(`[stripe-webhook] Refund recorded: ${orderSessionId} → ${isFullRefund ? "FULL" : "PARTIAL"} $${(totalRefundedCents / 100).toFixed(2)}`);
 
+      // ✅ Re-increment stock on full refund
+      if (isFullRefund) {
+        try {
+          // Get original line items for this order
+          const { data: orderLines } = await supabaseAdmin
+            .from("line_items_raw")
+            .select("product_id, variant, quantity")
+            .eq("stripe_checkout_session_id", orderSessionId);
+
+          for (const li of orderLines || []) {
+            if (!li.product_id) continue;
+
+            // Look up product UUID from SKU code
+            const { data: prodRow } = await supabaseAdmin
+              .from("products")
+              .select("id")
+              .eq("code", li.product_id)
+              .single();
+
+            if (!prodRow?.id) continue;
+
+            // Find variant
+            const vQuery = supabaseAdmin
+              .from("product_variants")
+              .select("id, stock, product_id")
+              .eq("product_id", prodRow.id);
+
+            if (li.variant) vQuery.eq("option_value", li.variant);
+
+            const { data: vRows } = await vQuery.limit(1);
+            if (!vRows?.length) continue;
+
+            const v = vRows[0];
+            const stockBefore = v.stock ?? 0;
+            const qty = li.quantity || 1;
+            const stockAfter = stockBefore + qty;
+
+            await supabaseAdmin
+              .from("product_variants")
+              .update({ stock: stockAfter })
+              .eq("id", v.id);
+
+            await supabaseAdmin.from("stock_ledger").insert({
+              variant_id: v.id,
+              product_id: prodRow.id,
+              change: qty,
+              reason: "refund",
+              reference_id: orderSessionId,
+              stock_before: stockBefore,
+              stock_after: stockAfter,
+            });
+
+            console.log(`[stripe-webhook] stock refund: ${li.product_id}/${li.variant} ${stockBefore} → ${stockAfter} (+${qty})`);
+          }
+        } catch (stockRefundErr) {
+          console.error("[stripe-webhook] stock re-increment on refund failed (non-fatal):", stockRefundErr);
+        }
+      }
+
       return json({
         received: true,
         type: "charge.refunded",
@@ -304,7 +364,7 @@ if (req.method === "GET") {
     if (skus.length) {
       const { data: prodRows, error: prodErr } = await supabaseAdmin
         .from("products")
-        .select("code, price, weight_g")
+        .select("id, code, price, weight_g")
         .in("code", skus);
 
       if (prodErr) {
@@ -312,6 +372,7 @@ if (req.method === "GET") {
       } else {
         for (const p of prodRows || []) {
           const code = safeStr((p as any).code).trim();
+          const productUuid = safeStr((p as any).id).trim();
           const priceNum = Number((p as any).price ?? 0);
           const weightNum = (p as any).weight_g == null ? null : Number((p as any).weight_g);
 
@@ -319,7 +380,7 @@ if (req.method === "GET") {
           const weight_g =
             weightNum == null ? null : Number.isFinite(weightNum) ? Math.round(weightNum) : null;
 
-          if (code) skuMap.set(code, { price_cents, weight_g });
+          if (code) skuMap.set(code, { price_cents, weight_g, product_uuid: productUuid });
         }
       }
     }
@@ -465,6 +526,66 @@ if (fErr) {
     if (liErr) {
       console.error("[stripe-webhook] line_items_raw upsert failed", liErr);
       return json({ error: "Failed to upsert line items", detail: liErr }, 500);
+    }
+
+    // ✅ 2.5) STOCK DECREMENT — non-blocking (order succeeds even if stock update fails)
+    try {
+      for (const row of lineRows) {
+        const sku = row.product_id;
+        const variantName = row.variant;
+        const qty = row.quantity || 1;
+
+        if (!sku) continue;
+        const lookup = skuMap.get(sku);
+        if (!lookup?.product_uuid) continue;
+
+        // Find the variant by product UUID + option_value
+        const variantQuery = supabaseAdmin
+          .from("product_variants")
+          .select("id, stock, product_id")
+          .eq("product_id", lookup.product_uuid);
+
+        // Match variant by name if present, otherwise take first active
+        if (variantName) {
+          variantQuery.eq("option_value", variantName);
+        }
+
+        const { data: variantRows, error: vErr } = await variantQuery.limit(1);
+        if (vErr || !variantRows?.length) {
+          console.warn(`[stripe-webhook] stock: variant not found for ${sku}/${variantName}`);
+          continue;
+        }
+
+        const variant = variantRows[0];
+        const stockBefore = variant.stock ?? 0;
+        const stockAfter = Math.max(0, stockBefore - qty);
+
+        // Decrement stock
+        const { error: updateErr } = await supabaseAdmin
+          .from("product_variants")
+          .update({ stock: stockAfter })
+          .eq("id", variant.id);
+
+        if (updateErr) {
+          console.error(`[stripe-webhook] stock decrement failed for variant ${variant.id}:`, updateErr);
+          continue;
+        }
+
+        // Audit log
+        await supabaseAdmin.from("stock_ledger").insert({
+          variant_id: variant.id,
+          product_id: lookup.product_uuid,
+          change: -qty,
+          reason: "order",
+          reference_id: kk_order_id || sessionId,
+          stock_before: stockBefore,
+          stock_after: stockAfter,
+        });
+
+        console.log(`[stripe-webhook] stock: ${sku}/${variantName} ${stockBefore} → ${stockAfter} (-${qty})`);
+      }
+    } catch (stockErr) {
+      console.error("[stripe-webhook] stock decrement failed (non-fatal):", stockErr);
     }
 
     // ✅ 3) Send push notification to admin about new order (fire-and-forget)

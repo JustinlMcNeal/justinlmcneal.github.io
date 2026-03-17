@@ -3,7 +3,7 @@ import { initAdminNav } from "/js/shared/adminNav.js";
 import { initFooter } from "/js/shared/footer.js";
 import { requireAdmin } from "/js/shared/guard.js";
 
-import { fetchCategories, fetchProducts, uploadProductImage } from "./api.js";
+import { fetchCategories, fetchProducts, fetchInventorySummary, uploadProductImage } from "./api.js";
 import { state } from "./state.js";
 import { renderTable } from "./renderTable.js";
 import { bindModal, applyJsonToForm } from "./modalEditor.js";
@@ -301,8 +301,54 @@ async function boot() {
 
   // 7) Load data + render
   state.categories = await fetchCategories();
-  state.products = await fetchProducts();
+  const [products, inventoryRows] = await Promise.all([
+    fetchProducts(),
+    fetchInventorySummary(),
+  ]);
+
+  // Merge stock totals onto products
+  const stockMap = new Map(inventoryRows.map(r => [r.id, r]));
+  state.products = products.map(p => {
+    const inv = stockMap.get(p.id);
+    return { ...p, _totalStock: inv?.total_stock ?? null };
+  });
+
+  // Populate inventory fiscal panel
+  populateInventoryPanel(inventoryRows);
+
   refreshTable();
+}
+
+/**
+ * Populate the inventory fiscal overview panel
+ */
+function populateInventoryPanel(rows) {
+  const panel = document.getElementById("inventoryPanel");
+  if (!panel) return;
+
+  const totals = (rows || []).reduce((acc, r) => ({
+    totalUnits: acc.totalUnits + (r.total_stock || 0),
+    totalCost: acc.totalCost + Number(r.inventory_cost || 0),
+    totalRevenue: acc.totalRevenue + Number(r.potential_revenue || 0),
+    totalProfit: acc.totalProfit + Number(r.potential_profit || 0),
+    outOfStock: acc.outOfStock + (r.total_stock === 0 ? 1 : 0),
+    lowStock: acc.lowStock + (r.total_stock > 0 && r.total_stock <= 3 ? 1 : 0),
+  }), { totalUnits: 0, totalCost: 0, totalRevenue: 0, totalProfit: 0, outOfStock: 0, lowStock: 0 });
+
+  const fmt = (n) => n.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+  const profitMargin = totals.totalRevenue > 0 ? ((totals.totalProfit / totals.totalRevenue) * 100).toFixed(1) : "0.0";
+
+  const el = (id) => document.getElementById(id);
+  const set = (id, txt) => { const e = el(id); if (e) e.textContent = txt; };
+
+  set("invTotalUnits", totals.totalUnits.toLocaleString());
+  set("invCost", fmt(totals.totalCost));
+  set("invRevenue", fmt(totals.totalRevenue));
+  set("invProfit", `${fmt(totals.totalProfit)} (${profitMargin}%)`);
+  set("invOOS", `${totals.outOfStock} of ${rows.length}`);
+  set("invLowStock", String(totals.lowStock));
+
+  panel.classList.remove("hidden");
 }
 
 /**

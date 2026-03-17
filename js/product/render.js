@@ -11,9 +11,27 @@ export function money(n) {
   return num.toLocaleString(undefined, { style: "currency", currency: "USD" });
 }
 
-export function shippingText(shipping_status) {
-  if (shipping_status === "mto") return "Made to order · ships in 3–5 weeks";
-  return "Ready to ship · ships in 1–3 business days";
+export function shippingText(shipping_status, variant = null) {
+  if (shipping_status === "mto") return "⏳ Made to order · ships in 2–4 weeks";
+  if (variant && (variant.stock ?? null) !== null && variant.stock <= 0) {
+    return "📦 Back-order · ships in 4–6 weeks";
+  }
+  return "🚀 In Stock · ships in 1–2 business days";
+}
+
+export function stockBadgeHtml(variant = null, shipping_status = "") {
+  if (shipping_status === "mto") {
+    return `<span class="inline-block bg-blue-100 text-blue-800 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">Made to Order</span>`;
+  }
+  if (!variant || (variant.stock ?? null) === null) return "";
+  const stock = variant.stock;
+  if (stock <= 0) {
+    return `<span class="inline-block bg-red-100 text-red-800 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">Back-order · 4–6 weeks</span>`;
+  }
+  if (stock <= 3) {
+    return `<span class="inline-block bg-yellow-100 text-yellow-800 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">⚠ Only ${stock} left!</span>`;
+  }
+  return `<span class="inline-block bg-green-100 text-green-800 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">✓ In Stock</span>`;
 }
 
 export function pickMainImage(product, gallery = [], variants = []) {
@@ -256,6 +274,7 @@ export function renderVariantSwatches(container, variants = [], onSelect) {
   variants.forEach((variant, idx) => {
     const label = variant?.option_value || "";
     const { background, isMultiColor } = parseColorValue(label);
+    const isOutOfStock = (variant.stock ?? null) !== null && variant.stock <= 0;
 
     const btn = document.createElement("button");
     btn.type = "button";
@@ -269,17 +288,26 @@ export function renderVariantSwatches(container, variants = [], onSelect) {
       "hover:border-black focus:border-black",
       "transition-all duration-150",
       "outline-none",
+      "relative",
     ].join(" ");
 
     btn.style.background = background;
+
+    // Diagonal line for out-of-stock variants (still clickable — back-orderable)
+    if (isOutOfStock) {
+      btn.style.opacity = "0.7";
+      btn.innerHTML = `<span class="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <span class="block w-[140%] h-[2px] bg-red-500 rotate-45 opacity-80"></span>
+      </span>`;
+    }
     
     // Add a subtle inner border for white/light colors
     if (!isMultiColor && (label.toLowerCase().includes("white") || label.toLowerCase().includes("cream") || label.toLowerCase().includes("ivory"))) {
       btn.classList.add("ring-1", "ring-inset", "ring-black/10");
     }
 
-    btn.setAttribute("aria-label", label || `Color option ${idx + 1}`);
-    btn.title = label || "";
+    btn.setAttribute("aria-label", `${label || `Color option ${idx + 1}`}${isOutOfStock ? " (back-order)" : ""}`);
+    btn.title = `${label || ""}${isOutOfStock ? " (back-order)" : ""}`;
 
     btn.onclick = () => {
       if (activeBtn) {

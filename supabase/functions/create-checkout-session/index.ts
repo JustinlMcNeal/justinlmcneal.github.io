@@ -182,11 +182,12 @@ Deno.serve(async (req) => {
     // ✅ weight lookup from products table by SKU code
     const skus = uniqStrings(items.map((it: any) => it?.product_id || it?.id || ""));
     const weightMap = new Map<string, number>();
+    const productUuidMap = new Map<string, string>();
 
     if (skus.length) {
       const { data, error } = await supabaseAdmin
         .from("products")
-        .select("code, weight_g")
+        .select("id, code, weight_g")
         .in("code", skus);
 
       if (error) {
@@ -195,9 +196,55 @@ Deno.serve(async (req) => {
         for (const row of data || []) {
           const code = String((row as any).code ?? "").trim();
           const w = Number((row as any).weight_g ?? 0);
-          if (code) weightMap.set(code, Number.isFinite(w) ? Math.max(0, Math.round(w)) : 0);
+          const uuid = String((row as any).id ?? "");
+          if (code) {
+            weightMap.set(code, Number.isFinite(w) ? Math.max(0, Math.round(w)) : 0);
+            if (uuid) productUuidMap.set(code, uuid);
+          }
         }
       }
+    }
+
+    // ✅ Stock check — determine which items are back-ordered (informational, not blocking)
+    const backOrderSkus = new Set<string>();
+    try {
+      const uuids = [...productUuidMap.values()].filter(Boolean);
+      if (uuids.length) {
+        const { data: variantRows } = await supabaseAdmin
+          .from("product_variants")
+          .select("product_id, option_value, stock")
+          .in("product_id", uuids)
+          .eq("is_active", true);
+
+        // Build a map of product_uuid → variant → stock
+        const stockMap = new Map<string, Map<string, number>>();
+        for (const v of variantRows || []) {
+          const pid = String(v.product_id);
+          if (!stockMap.has(pid)) stockMap.set(pid, new Map());
+          stockMap.get(pid)!.set(String(v.option_value || "").toLowerCase(), v.stock ?? 0);
+        }
+
+        // Check each cart item for back-order
+        for (const it of items) {
+          const sku = String(it?.product_id || it?.id || "").trim();
+          const variant = String(it?.variant || "").trim().toLowerCase();
+          const uuid = productUuidMap.get(sku);
+          if (!uuid) continue;
+
+          const variants = stockMap.get(uuid);
+          if (!variants) continue;
+
+          // If specific variant has stock 0, or product has no stock at all
+          const variantStock = variant ? (variants.get(variant) ?? null) : null;
+          const totalStock = [...variants.values()].reduce((s, v) => s + v, 0);
+
+          if ((variantStock !== null && variantStock <= 0) || totalStock <= 0) {
+            backOrderSkus.add(sku);
+          }
+        }
+      }
+    } catch (stockErr) {
+      console.warn("[create-checkout-session] stock check failed (non-fatal):", stockErr);
     }
 
     // ✅ Stripe line items
@@ -245,6 +292,7 @@ Deno.serve(async (req) => {
               kk_unit_price_cents: String(originalUnitCents),
               kk_post_discount_unit_price_cents: String(finalUnitCents),
               kk_item_weight_g: String(itemWeightG),
+              ...(backOrderSkus.has(productId) ? { kk_back_order: "true" } : {}),
             },
           },
         },

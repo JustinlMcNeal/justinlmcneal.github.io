@@ -47,6 +47,18 @@ export async function fetchProducts() {
   return data || [];
 }
 
+export async function fetchInventorySummary() {
+  const { data, error } = await sb()
+    .from("inventory_summary")
+    .select("*");
+
+  if (error) {
+    console.warn("inventory_summary fetch failed:", error.message);
+    return [];
+  }
+  return data || [];
+}
+
 export async function fetchProductFull(productId) {
   const { data: product, error: pErr } = await sb()
 .from("products")

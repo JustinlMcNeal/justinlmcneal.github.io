@@ -3,6 +3,13 @@ import { state } from "./state.js";
 import { getProfitIndicator, calculateProfitProjections } from "../pStorage/profitCalc.js";
 import { quickUpdateProduct, fetchProducts } from "./api.js";
 
+function stockBadge(totalStock) {
+  if (totalStock == null) return '<span class="text-gray-400">—</span>';
+  if (totalStock <= 0) return '<span class="bg-red-100 text-red-800 px-2 py-0.5 text-[10px] font-bold rounded-sm uppercase">OOS</span>';
+  if (totalStock <= 3) return `<span class="bg-yellow-100 text-yellow-800 px-2 py-0.5 text-[10px] font-bold rounded-sm">⚠ ${totalStock}</span>`;
+  return `<span class="text-green-700 font-bold text-sm">${totalStock}</span>`;
+}
+
 /**
  * Sort products based on current sort state
  */
@@ -41,6 +48,10 @@ function sortProducts(products, catMap) {
       case 'status':
         aVal = a.is_active ? 1 : 0;
         bVal = b.is_active ? 1 : 0;
+        break;
+      case 'stock':
+        aVal = a._totalStock ?? 0;
+        bVal = b._totalStock ?? 0;
         break;
       default:
         return 0;
@@ -120,11 +131,12 @@ function mobileCardRow(p, cat, active, readOnly) {
             </div>
           </div>
 
-          <!-- Bottom row: Price + Margin + Edit -->
+          <!-- Bottom row: Price + Margin + Stock + Edit -->
           <div class="flex items-center justify-between mt-2">
             <div class="flex items-center gap-2">
               <div class="font-black text-base">${money(p.price)}</div>
               ${marginBadge}
+              ${stockBadge(p._totalStock)}
             </div>
             ${!readOnly ? `
               <button
@@ -268,6 +280,9 @@ export function renderTable({
           </td>
           <td class="px-4 py-3 text-center hidden lg:table-cell">
             ${marginHtml}
+          </td>
+          <td class="px-4 py-3 text-center">
+            ${stockBadge(p._totalStock)}
           </td>
           <td class="px-4 py-3 text-center">
             <span class="${statusClass} px-2 py-1 text-[10px] font-bold uppercase tracking-wider rounded-sm">

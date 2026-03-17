@@ -15,6 +15,7 @@ import {
 
 import {
   shippingText,
+  stockBadgeHtml,
   pickMainImage,
   renderThumbGrid,
   renderThumbCarousel,
@@ -55,7 +56,7 @@ function killJump(e) {
 
 /* ---------------- SEO / Social Sharing Meta ---------------- */
 
-function updateSeoMeta(product, categoryName, gallery) {
+function updateSeoMeta(product, categoryName, gallery, variants = []) {
   const name = product.name || "Product";
   const price = Number(product.price || 0).toFixed(2);
   const description = `Shop ${name} at KARRY KRAZE${categoryName ? ` in ${categoryName}` : ""}. $${price} - Quality fashion accessories with free shipping on orders over $35!`;
@@ -69,6 +70,16 @@ function updateSeoMeta(product, categoryName, gallery) {
   const pageUrl = window.location.href;
   const canonicalUrl = `https://karrykraze.com/pages/product.html?slug=${encodeURIComponent(product.slug || "")}`;
   
+  // Compute stock-aware availability
+  const totalStock = (variants || []).reduce((sum, v) => sum + (v.stock ?? 0), 0);
+  const hasVariants = variants && variants.length > 0;
+  let availability = "https://schema.org/InStock";
+  if (!product.is_active) {
+    availability = "https://schema.org/Discontinued";
+  } else if (hasVariants && totalStock <= 0) {
+    availability = "https://schema.org/BackOrder";
+  }
+
   // Helper to update or create meta tag
   const setMeta = (selector, content) => {
     const el = document.querySelector(selector);
@@ -115,7 +126,7 @@ function updateSeoMeta(product, categoryName, gallery) {
         "url": canonicalUrl,
         "priceCurrency": "USD",
         "price": price,
-        "availability": product.is_active ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+        "availability": availability,
         "seller": {
           "@type": "Organization",
           "name": "KARRY KRAZE"
@@ -263,7 +274,7 @@ async function initProductPage() {
     }
 
     // Update SEO meta tags for social sharing
-    updateSeoMeta(product, categoryName, gallery);
+    updateSeoMeta(product, categoryName, gallery, variants);
     // Promotions (auto promos only)
     const promos = await getProductPromotions(
       product.id,
@@ -275,8 +286,18 @@ async function initProductPage() {
     const base = Number(product.price || 0);
     applyProductPriceWithPromos(els.price, base, promos);
 
-    // Shipping under price
-    if (els.shipping) els.shipping.textContent = shippingText(product.shipping_status);
+    // Shipping under price (initial — updated dynamically when variant is selected)
+    const shippingSpan = els.shipping?.querySelector("span");
+    if (shippingSpan) shippingSpan.textContent = shippingText(product.shipping_status);
+
+    // Stock badge placeholder
+    const stockBadgeEl = document.getElementById("stockBadge");
+
+    // Helper: update shipping text + stock badge when variant changes
+    function updateStockDisplay(variant) {
+      if (shippingSpan) shippingSpan.textContent = shippingText(product.shipping_status, variant);
+      if (stockBadgeEl) stockBadgeEl.innerHTML = stockBadgeHtml(variant, product.shipping_status);
+    }
 
     // Amazon link (show/hide button and set href)
     if (els.amazonBtn) {
@@ -383,6 +404,9 @@ async function initProductPage() {
       
       renderVariantSwatches(els.variantSwatches, variants, (v) => {
         selectedVariant = v || null;
+
+        // Update stock badge + shipping text dynamically
+        updateStockDisplay(v);
 
         // jump to matching variant image
         if (v?.preview_image_url) {
