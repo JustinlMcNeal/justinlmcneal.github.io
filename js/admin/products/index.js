@@ -15,6 +15,7 @@ import {
 } from "./sectionItems.js";
 
 import { createAiFillPanel } from "./aiFill.js";
+import { create1688Importer } from "./import1688.js";
 
 function buildLoginRedirect() {
   const next = `${location.pathname}${location.search}`;
@@ -183,6 +184,14 @@ async function boot() {
   els.btnNew?.addEventListener("click", () => {
     modal.openNew();
   });
+
+  // 1688 Import
+  const importer1688 = create1688Importer({
+    openNewProduct: () => modal.openNew(),
+    applyJson: applyJsonToForm,
+    formEls: els,
+  });
+  $("btnImport1688")?.addEventListener("click", () => importer1688.open());
 
   // JSON Import Modal logic
   const jsonImportModal = $("json-import-modal");
