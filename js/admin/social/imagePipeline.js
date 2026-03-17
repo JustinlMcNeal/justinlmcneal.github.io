@@ -215,12 +215,14 @@ function renderApprovedImages() {
   grid.innerHTML = imgState.approvedImages
     .map(
       (img) => `
-    <div class="border rounded-xl overflow-hidden hover:shadow-md transition-shadow">
+    <div class="border rounded-xl overflow-hidden hover:shadow-md transition-shadow group relative">
       <img src="${img.public_url}" alt="${img.product?.name || 'AI Generated'}" 
            class="w-full aspect-square object-cover" loading="lazy">
       <div class="p-2">
         <p class="text-xs font-medium truncate">${img.product?.name || "Unknown"}</p>
         <p class="text-xs text-gray-400">${img.style} · ${new Date(img.created_at).toLocaleDateString()}</p>
+        <button onclick="window._imagePipeline.rejectImage('${img.id}')" 
+                class="mt-1 text-xs text-red-600 hover:text-red-800 hover:underline">❌ Reject</button>
       </div>
     </div>
   `
