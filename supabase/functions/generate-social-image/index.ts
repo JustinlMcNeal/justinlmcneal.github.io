@@ -290,11 +290,60 @@ function pickAvoiding<T extends string>(pool: T[], avoid: string[]): T {
   return pick(pool); // if everything is used, just pick random
 }
 
+// ═══════════════════ STYLE-SPECIFIC PROMPT DIRECTIVES ═══════════════════
+// When a user picks a specific style, these directives override parts of
+// the random scene to enforce the correct visual concept.
+
+interface StyleDirective {
+  /** Extra instruction appended to the prompt */
+  instruction: string;
+  /** If set, forces a specific composition instead of random */
+  forcedComposition?: string;
+  /** If set, filters or replaces the environment pool */
+  environmentHint?: string;
+  /** If set, filters or replaces camera pool */
+  forcedCamera?: string;
+}
+
+function getStyleDirective(styleName: string, categoryCtx: string): StyleDirective {
+  switch (styleName) {
+    case "on_model":
+      return {
+        instruction: `CRITICAL STYLE: "ON MODEL" — The product MUST be shown being WORN or HELD by a real-looking person. If it's headwear, show it on someone's head. If it's a bag, show someone carrying it. If it's jewelry, show it on someone's neck/wrist. If it's an accessory, show someone holding or wearing it. The person should look natural and stylish — focus on the product but include enough of the person to show how the product is used. DO NOT just place the product on a surface or display stand.`,
+        forcedComposition: "product being worn/held by a person — show product in natural use",
+        forcedCamera: "mirrorless camera with 85mm portrait lens — creamy bokeh",
+      };
+    case "flat_lay":
+      return {
+        instruction: `CRITICAL STYLE: "FLAT LAY" — The product must be photographed from DIRECTLY ABOVE (bird's eye view) lying flat on a surface. Arrange it with complementary props in a curated, aesthetic layout. Think Pinterest flat-lay aesthetic — perfectly arranged items viewed from overhead.`,
+        forcedComposition: "overhead flat-lay view from directly above — product with curated arrangement of props",
+        forcedCamera: "Pinterest flat-lay aesthetic — perfectly curated overhead shot",
+      };
+    case "close_up":
+      return {
+        instruction: `CRITICAL STYLE: "CLOSE UP" — This must be a tight macro/detail shot. Fill 80%+ of the frame with the product. Show the texture, material quality, stitching, patterns, or fine details up close. Shallow depth of field with the product tack-sharp.`,
+        forcedComposition: "close-up macro detail shot filling 80% of the frame",
+        forcedCamera: "macro lens detail photography — every texture visible",
+      };
+    case "seasonal":
+      return {
+        instruction: `CRITICAL STYLE: "SEASONAL" — The image must strongly reflect the CURRENT season. Use season-appropriate colors, weather, clothing on any people, and environmental cues. Make it immediately obvious what time of year it is.`,
+        environmentHint: "seasonal", // triggers extra seasonal env selection
+      };
+    case "lifestyle":
+    default:
+      return {
+        instruction: "", // lifestyle is the default random behavior
+      };
+  }
+}
+
 // ── Build a unique scene prompt — seasonal + deduplicated ──
 function buildRandomScenePrompt(
   productName: string,
   categoryCtx: string,
-  recentScenes: SceneFingerprint[] = []
+  recentScenes: SceneFingerprint[] = [],
+  styleDirective?: StyleDirective
 ): { prompt: string; fingerprint: SceneFingerprint } {
   const season = getCurrentSeason();
   const seasonal = SEASONAL_EXTRAS[season];
@@ -303,18 +352,24 @@ function buildRandomScenePrompt(
   const recentMoods = recentScenes.map((s) => s.mood);
   const recentCameras = recentScenes.map((s) => s.camera);
 
-  const env = pickAvoiding(
-    [...ENVIRONMENTS, ...(seasonal?.envs || [])],
-    recentEnvs
-  );
+  // If style wants seasonal emphasis, prioritize seasonal environments
+  const envPool = styleDirective?.environmentHint === "seasonal" && seasonal?.envs?.length
+    ? [...seasonal.envs, ...seasonal.envs, ...ENVIRONMENTS]  // double-weight seasonal
+    : [...ENVIRONMENTS, ...(seasonal?.envs || [])];
+
+  const env = pickAvoiding(envPool, recentEnvs);
   const light = pick(LIGHTING);
-  const comp = pick(COMPOSITIONS);
+  const comp = styleDirective?.forcedComposition || pick(COMPOSITIONS);
   const mood = pickAvoiding(
     [...MOODS, ...(seasonal?.moods || [])],
     recentMoods
   );
   const prop = pickSeasonal(PROPS, seasonal?.props || []);
-  const camera = pickAvoiding(CAMERA_STYLES, recentCameras);
+  const camera = styleDirective?.forcedCamera || pickAvoiding(CAMERA_STYLES, recentCameras);
+
+  const styleInstruction = styleDirective?.instruction
+    ? `\n\n${styleDirective.instruction}`
+    : "";
 
   const prompt = `Transform this product photo into a stunning social-media-ready image.
 
@@ -331,7 +386,7 @@ CRITICAL RULES:
 - The product ("${productName}" — ${categoryCtx}) must be the clear hero and focal point.
 - Make it look premium, aspirational, and scroll-stopping for Instagram/TikTok.
 - No text, watermarks, logos, or brand names on the image.
-- Photorealistic quality.`;
+- Photorealistic quality.${styleInstruction}`;
 
   return { prompt, fingerprint: { env, mood, camera } };
 }
@@ -340,7 +395,8 @@ CRITICAL RULES:
 function buildRandomScenePromptText(
   productName: string,
   categoryCtx: string,
-  recentScenes: SceneFingerprint[] = []
+  recentScenes: SceneFingerprint[] = [],
+  styleDirective?: StyleDirective
 ): { prompt: string; fingerprint: SceneFingerprint } {
   const season = getCurrentSeason();
   const seasonal = SEASONAL_EXTRAS[season];
@@ -349,18 +405,23 @@ function buildRandomScenePromptText(
   const recentMoods = recentScenes.map((s) => s.mood);
   const recentCameras = recentScenes.map((s) => s.camera);
 
-  const env = pickAvoiding(
-    [...ENVIRONMENTS, ...(seasonal?.envs || [])],
-    recentEnvs
-  );
+  const envPool = styleDirective?.environmentHint === "seasonal" && seasonal?.envs?.length
+    ? [...seasonal.envs, ...seasonal.envs, ...ENVIRONMENTS]
+    : [...ENVIRONMENTS, ...(seasonal?.envs || [])];
+
+  const env = pickAvoiding(envPool, recentEnvs);
   const light = pick(LIGHTING);
-  const comp = pick(COMPOSITIONS);
+  const comp = styleDirective?.forcedComposition || pick(COMPOSITIONS);
   const mood = pickAvoiding(
     [...MOODS, ...(seasonal?.moods || [])],
     recentMoods
   );
   const prop = pickSeasonal(PROPS, seasonal?.props || []);
-  const camera = pickAvoiding(CAMERA_STYLES, recentCameras);
+  const camera = styleDirective?.forcedCamera || pickAvoiding(CAMERA_STYLES, recentCameras);
+
+  const styleInstruction = styleDirective?.instruction
+    ? `\n\n${styleDirective.instruction}`
+    : "";
 
   const prompt = `Create a stunning product photo of "${productName}" (${categoryCtx}).
 
@@ -371,7 +432,7 @@ MOOD/AESTHETIC: ${mood}
 NEARBY PROPS: ${prop}
 CAMERA STYLE: ${camera}
 
-Make the product the clear hero/focal point. Premium, aspirational, scroll-stopping for Instagram/TikTok. Photorealistic. No text, watermarks, or logos.`;
+Make the product the clear hero/focal point. Premium, aspirational, scroll-stopping for Instagram/TikTok. Photorealistic. No text, watermarks, or logos.${styleInstruction}`;
 
   return { prompt, fingerprint: { env, mood, camera } };
 }
@@ -539,7 +600,8 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const {
       product_id,
-      style,        // optional: lifestyle | flat_lay | close_up | on_model | seasonal
+      style,        // optional: lifestyle | flat_lay | close_up | on_model | seasonal OR array of styles
+      styles,       // optional: array of styles (alternative to style)
       model,        // optional: dall-e-3 | gpt-image-1
       quality,      // optional: standard | hd
       size,         // optional: 1024x1024 | 1024x1792
@@ -548,6 +610,14 @@ Deno.serve(async (req) => {
       product_ids,  // array of product IDs for batch mode
       carousel = false, // if true, generate a carousel set (3-5 images with shared set ID)
     } = body;
+
+    // Normalize styles: support single string, array in `style`, or `styles` array
+    const resolvedStyles: string[] = (() => {
+      if (styles && Array.isArray(styles) && styles.length > 0) return styles;
+      if (Array.isArray(style) && style.length > 0) return style;
+      if (typeof style === "string" && style) return [style];
+      return ["lifestyle"];
+    })();
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -645,12 +715,14 @@ Deno.serve(async (req) => {
       const recentScenes = await getRecentScenes(supabase, product.id, 5);
       console.log(`[generate-social-image] Found ${recentScenes.length} recent scenes for deduplication`);
 
-      const currentStyle = carousel ? "carousel" : (style || "random");
-
       // For carousels, lock camera style for visual coherence across slides
       const carouselCamera = carousel ? pick(CAMERA_STYLES) : null;
 
       for (let i = 0; i < imageCount; i++) {
+        // Pick a style for this image iteration (cycle through selected styles)
+        const iterStyle = carousel ? "carousel" : resolvedStyles[i % resolvedStyles.length];
+        const directive = getStyleDirective(iterStyle, categoryCtx);
+
         let genResult: GenResult;
         let sceneFingerprint: SceneFingerprint;
 
@@ -658,7 +730,7 @@ Deno.serve(async (req) => {
           // ═══ IMAGE-TO-IMAGE: Send actual product photo ═══
           const { prompt: fullPrompt, fingerprint } = carousel
             ? buildCarouselSlidePrompt(product.name, categoryCtx, recentScenes, carouselCamera!, i, imageCount)
-            : buildRandomScenePrompt(product.name, categoryCtx, recentScenes);
+            : buildRandomScenePrompt(product.name, categoryCtx, recentScenes, directive);
           sceneFingerprint = fingerprint;
 
           console.log(`[generate-social-image] img2img scene ${i + 1}: env="${fingerprint.env.substring(0, 40)}..." mood="${fingerprint.mood.substring(0, 30)}..."`);
@@ -671,7 +743,7 @@ Deno.serve(async (req) => {
           // ═══ TEXT-TO-IMAGE FALLBACK: No product photo available ═══
           const { prompt: fullPrompt, fingerprint } = carousel
             ? buildCarouselSlidePromptText(product.name, categoryCtx, recentScenes, carouselCamera || pick(CAMERA_STYLES), i, imageCount)
-            : buildRandomScenePromptText(product.name, categoryCtx, recentScenes);
+            : buildRandomScenePromptText(product.name, categoryCtx, recentScenes, directive);
           sceneFingerprint = fingerprint;
 
           console.log(`[generate-social-image] txt2img scene ${i + 1}: env="${fingerprint.env.substring(0, 40)}..."`);
@@ -688,7 +760,7 @@ Deno.serve(async (req) => {
             results.push({
               product_id: product.id,
               product_name: product.name,
-              style: currentStyle,
+              style: iterStyle,
               mode: genMode,
               success: false,
               error: genResult.error,
@@ -716,7 +788,7 @@ Deno.serve(async (req) => {
             results.push({
               product_id: product.id,
               product_name: product.name,
-              style: currentStyle,
+              style: iterStyle,
               success: false,
               error: `Upload failed: ${uploadErr.message}`,
             });
@@ -771,7 +843,7 @@ Deno.serve(async (req) => {
               public_url: finalStatus === "rejected" ? null : publicUrl,
               prompt: usedPrompt,
               model: useModel,
-              style: currentStyle,
+              style: iterStyle,
               quality: useQuality,
               size: useSize,
               status: finalStatus,
@@ -801,7 +873,7 @@ Deno.serve(async (req) => {
             results.push({
               product_id: product.id,
               product_name: product.name,
-              style: currentStyle,
+              style: iterStyle,
               success: false,
               error: `DB error: ${insertErr.message}`,
             });
@@ -814,7 +886,7 @@ Deno.serve(async (req) => {
           results.push({
             product_id: product.id,
             product_name: product.name,
-            style: currentStyle,
+            style: iterStyle,
             mode: genMode,
             success: true,
             generated_image_id: genImg.id,
@@ -837,7 +909,7 @@ Deno.serve(async (req) => {
           results.push({
             product_id: product.id,
             product_name: product.name,
-            style: currentStyle,
+            style: iterStyle,
             mode: genMode,
             success: false,
             error: genError.message,

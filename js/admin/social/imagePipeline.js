@@ -402,12 +402,15 @@ export async function blacklistImage(productId, imageUrl, reason) {
 // Generate Images
 // ============================================
 
-export async function triggerGeneration(productId, style, count) {
+export async function triggerGeneration(productId, styles, count) {
   const el = (id) => document.getElementById(id);
   const progressEl = el("genProgress");
   const progressText = el("genProgressText");
   const resultsEl = el("genResults");
   const runBtn = el("btnRunGenerate");
+
+  // Normalize styles to array
+  const stylesArr = Array.isArray(styles) ? styles : [styles || "lifestyle"];
 
   // Hide any previous results, show progress
   if (resultsEl) resultsEl.classList.add("hidden");
@@ -425,8 +428,8 @@ export async function triggerGeneration(productId, style, count) {
     if (progressText) progressText.textContent = "Generating images... (0s)";
 
     const body = productId === "__all__"
-      ? { batch: true, product_ids: imgState.products.map((p) => p.id), style, count }
-      : { product_id: productId, style, count };
+      ? { batch: true, product_ids: imgState.products.map((p) => p.id), styles: stylesArr, count }
+      : { product_id: productId, styles: stylesArr, count };
 
     const { data: { session } } = await sb().auth.getSession();
     const token = session?.access_token || SUPABASE_ANON_KEY;
@@ -613,25 +616,34 @@ export function setupImagePipeline(products) {
   // Generate button in modal
   el("btnRunGenerate")?.addEventListener("click", () => {
     const productId = el("genProductSelect")?.value;
-    const style = document.querySelector(".gen-style-btn.bg-purple-100")?.dataset?.style || "lifestyle";
+    // Collect ALL selected styles (multi-select)
+    const selectedBtns = document.querySelectorAll(".gen-style-btn.bg-purple-100");
+    const styles = Array.from(selectedBtns).map((b) => b.dataset.style).filter(Boolean);
+    if (styles.length === 0) styles.push("lifestyle"); // fallback
     const count = parseInt(el("genCount")?.value) || 1;
 
     if (!productId) {
       showToast("Please select a product", "error");
       return;
     }
-    triggerGeneration(productId, style, count);
+    triggerGeneration(productId, styles, count);
   });
 
-  // Style buttons in generate modal
+  // Style buttons in generate modal — toggle multi-select
   document.querySelectorAll(".gen-style-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
-      document.querySelectorAll(".gen-style-btn").forEach((b) => {
-        b.classList.remove("bg-purple-100", "border-purple-300");
-        b.classList.add("hover:bg-gray-50");
-      });
-      btn.classList.add("bg-purple-100", "border-purple-300");
-      btn.classList.remove("hover:bg-gray-50");
+      const isSelected = btn.classList.contains("bg-purple-100");
+      if (isSelected) {
+        // Deselect — but ensure at least one stays selected
+        const totalSelected = document.querySelectorAll(".gen-style-btn.bg-purple-100").length;
+        if (totalSelected <= 1) return; // can't deselect the last one
+        btn.classList.remove("bg-purple-100", "border-purple-300");
+        btn.classList.add("hover:bg-gray-50");
+      } else {
+        // Select
+        btn.classList.add("bg-purple-100", "border-purple-300");
+        btn.classList.remove("hover:bg-gray-50");
+      }
     });
   });
 
