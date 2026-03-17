@@ -186,12 +186,18 @@ async function boot() {
   });
 
   // 1688 Import
-  const importer1688 = create1688Importer({
-    openNewProduct: () => modal.openNew(),
-    applyJson: applyJsonToForm,
-    formEls: els,
-  });
-  $("btnImport1688")?.addEventListener("click", () => importer1688.open());
+  let importer1688;
+  try {
+    importer1688 = create1688Importer({
+      openNewProduct: () => modal.openNew(),
+      applyJson: applyJsonToForm,
+      formEls: els,
+    });
+    $("btnImport1688")?.addEventListener("click", () => importer1688.open());
+    console.log("[1688] Importer ready");
+  } catch (err) {
+    console.error("[1688] Importer init failed:", err);
+  }
 
   // JSON Import Modal logic
   const jsonImportModal = $("json-import-modal");

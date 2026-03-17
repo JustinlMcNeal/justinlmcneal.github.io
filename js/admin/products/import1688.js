@@ -160,28 +160,28 @@ export function create1688Importer({ openNewProduct, applyJson, formEls }) {
   document.body.appendChild(overlay);
 
   /* ---- Wire up elements ---- */
-  const $ = (id) => document.getElementById(id);
+  const q = (id) => overlay.querySelector(`#${id}`);
 
-  const urlInput    = $("i1688Url");
-  const fetchBtn    = $("i1688Fetch");
-  const markupSlider= $("i1688Markup");
-  const markupLabel = $("i1688MarkupLabel");
-  const loading     = $("i1688Loading");
-  const errorBox    = $("i1688Error");
-  const errorMsg    = $("i1688ErrorMsg");
-  const preview     = $("i1688Preview");
-  const footer      = $("i1688Footer");
+  const urlInput    = q("i1688Url");
+  const fetchBtn    = q("i1688Fetch");
+  const markupSlider= q("i1688Markup");
+  const markupLabel = q("i1688MarkupLabel");
+  const loading     = q("i1688Loading");
+  const errorBox    = q("i1688Error");
+  const errorMsg    = q("i1688ErrorMsg");
+  const preview     = q("i1688Preview");
+  const footer      = q("i1688Footer");
 
   // Preview fields
-  const pName     = $("i1688Name");
-  const pCategory = $("i1688Category");
-  const pPrice    = $("i1688Price");
-  const pTags     = $("i1688Tags");
-  const pDesc     = $("i1688Desc");
-  const pColors   = $("i1688Colors");
-  const pImages   = $("i1688Images");
-  const pImgCount = $("i1688ImgCount");
-  const pRaw      = $("i1688Raw");
+  const pName     = q("i1688Name");
+  const pCategory = q("i1688Category");
+  const pPrice    = q("i1688Price");
+  const pTags     = q("i1688Tags");
+  const pDesc     = q("i1688Desc");
+  const pColors   = q("i1688Colors");
+  const pImages   = q("i1688Images");
+  const pImgCount = q("i1688ImgCount");
+  const pRaw      = q("i1688Raw");
 
   // Stash the latest result for the "Apply" step
   let latestResult = null;
@@ -213,8 +213,8 @@ export function create1688Importer({ openNewProduct, applyJson, formEls }) {
     latestResult = null;
   }
 
-  $("i1688Close").addEventListener("click", close);
-  $("i1688Cancel").addEventListener("click", close);
+  q("i1688Close")?.addEventListener("click", close);
+  q("i1688Cancel")?.addEventListener("click", close);
   overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && !overlay.classList.contains("hidden")) close();
@@ -313,7 +313,7 @@ export function create1688Importer({ openNewProduct, applyJson, formEls }) {
   }
 
   /* ---- Apply to product editor ---- */
-  $("i1688Apply").addEventListener("click", () => {
+  q("i1688Apply")?.addEventListener("click", () => {
     if (!latestResult) return;
 
     const p = latestResult.product;
