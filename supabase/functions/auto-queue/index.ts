@@ -124,15 +124,33 @@ function pickRandom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-// Generate caption from template
+// Generate caption from template — platform-aware
 function generateCaption(
   template: string,
-  product: { name: string; category_name: string; slug: string }
+  product: { name: string; category_name: string; slug: string },
+  platform: string = "instagram"
 ): string {
-  return template
+  let caption = template
     .replace(/{product_name}/g, product.name)
-    .replace(/{category}/g, product.category_name || "item")
-    .replace(/{link}/g, `https://karrykraze.com/pages/product.html?slug=${product.slug}`);
+    .replace(/{category}/g, product.category_name || "item");
+
+  if (platform === "instagram") {
+    // Instagram doesn't hyperlink body text — replace {link} lines with CTA
+    // Remove entire lines that are just a link or "Shop now: {link}" etc.
+    caption = caption
+      .replace(/\n*.*\{link\}.*/g, "")
+      .trim();
+    // Add clean CTA
+    caption += "\n\n🔗 Link in bio! Comment KK for a discount! 💕";
+  } else {
+    // Facebook, Pinterest etc. — keep the actual URL
+    caption = caption.replace(
+      /{link}/g,
+      `https://karrykraze.com/pages/product.html?slug=${product.slug}`
+    );
+  }
+
+  return caption;
 }
 
 // Get next available posting times
@@ -322,9 +340,8 @@ Deno.serve(async (req) => {
       needsGeneration: boolean;
     } {
       const blacklisted = blacklistMap[productId] || new Set();
-      const catalogBlacklisted = blacklisted.has(catalogUrl);
 
-      // Priority 1: Approved AI-generated image
+      // Priority 1: Approved AI-generated image (ALWAYS preferred for social)
       const aiImages = aiImageMap[productId];
       if (aiImages?.length) {
         const pick = aiImages[Math.floor(Math.random() * aiImages.length)];
@@ -336,7 +353,22 @@ Deno.serve(async (req) => {
         };
       }
 
-      // Priority 2: Non-blacklisted gallery image
+      // No approved AI images — trigger generation if pipeline enabled
+      // This ensures every product gets lifestyle images instead of raw catalog photos
+      if (pipelineSettings.enabled && pipelineSettings.auto_generate) {
+        console.log(`[auto-queue] No AI images for product ${productId} — will trigger generation`);
+        // Use catalog as temporary fallback while generation runs
+        const galleryUrls = (galleryMap[productId] || []).filter(url => !blacklisted.has(url));
+        const tempUrl = galleryUrls.length > 0 ? galleryUrls[0] : catalogUrl;
+        return {
+          imageUrl: tempUrl,
+          imageSource: "catalog",
+          generatedImageId: null,
+          needsGeneration: true,
+        };
+      }
+
+      // Pipeline disabled — fall through to catalog/gallery
       const galleryUrls = (galleryMap[productId] || []).filter(url => !blacklisted.has(url));
       if (galleryUrls.length) {
         return {
@@ -347,43 +379,11 @@ Deno.serve(async (req) => {
         };
       }
 
-      // Priority 3: Non-blacklisted catalog image
-      if (!catalogBlacklisted) {
-        return {
-          imageUrl: catalogUrl,
-          imageSource: "catalog",
-          generatedImageId: null,
-          needsGeneration: false,
-        };
-      }
-
-      // Priority 4: All images blacklisted — need AI generation
-      if (pipelineSettings.enabled && pipelineSettings.auto_generate) {
-        return {
-          imageUrl: catalogUrl, // temporary fallback
-          imageSource: "catalog",
-          generatedImageId: null,
-          needsGeneration: true,
-        };
-      }
-
-      // Fallback: use catalog anyway if fallback enabled
-      if (pipelineSettings.fallback_to_catalog) {
-        console.warn(`[auto-queue] All images blacklisted for product ${productId}, falling back to catalog`);
-        return {
-          imageUrl: catalogUrl,
-          imageSource: "catalog",
-          generatedImageId: null,
-          needsGeneration: false,
-        };
-      }
-
-      // No usable image
       return {
         imageUrl: catalogUrl,
         imageSource: "catalog",
         generatedImageId: null,
-        needsGeneration: true,
+        needsGeneration: false,
       };
     }
 
@@ -415,12 +415,6 @@ Deno.serve(async (req) => {
       const tone = pickRandom(tones);
       const template = pickRandom(CAPTION_TEMPLATES[tone] || CAPTION_TEMPLATES.casual);
       
-      const caption = generateCaption(template, {
-        name: product.name,
-        category_name: categoryName,
-        slug: product.slug,
-      });
-
       // Get hashtags for this category
       const categoryHashtags = hashtagMap[categoryName.toLowerCase()] || globalHashtags;
       
@@ -434,6 +428,13 @@ Deno.serve(async (req) => {
 
       // Create post for EACH selected platform
       for (const plat of platformList) {
+        // Platform-specific caption (IG gets no URLs, FB keeps them)
+        const caption = generateCaption(template, {
+          name: product.name,
+          category_name: categoryName,
+          slug: product.slug,
+        }, plat);
+
         // Check if this should be a carousel post
         const carouselResult = shouldUseCarousel(product.id, plat);
 
@@ -485,6 +486,11 @@ Deno.serve(async (req) => {
         if (existingAsset) {
           assetId = existingAsset.id;
           console.log(`[auto-queue] Using existing asset for product ${post.product_id}`);
+          // Update existing asset with best available image
+          await supabase
+            .from("social_assets")
+            .update({ original_image_path: post.resolved_image_url })
+            .eq("id", assetId);
         } else {
           // Create new asset pointing to resolved image (AI-generated, gallery, or catalog)
           const { data: newAsset, error: assetErr } = await supabase
@@ -518,6 +524,11 @@ Deno.serve(async (req) => {
 
         if (existingVariation) {
           variationId = existingVariation.id;
+          // Update existing variation with best available image
+          await supabase
+            .from("social_variations")
+            .update({ image_path: post.resolved_image_url })
+            .eq("id", variationId);
         } else {
           // Create variation pointing to resolved image
           const { data: newVariation, error: varErr } = await supabase
@@ -544,6 +555,7 @@ Deno.serve(async (req) => {
         // ── Trigger AI generation if needed ──
         let finalGeneratedImageId = post.generated_image_id;
         let postStatus = "queued";
+        let resolvedImageUrl = post.resolved_image_url;
 
         if (post.needs_generation && pipelineSettings.enabled && pipelineSettings.auto_generate) {
           console.log(`[auto-queue] Triggering AI image generation for "${post.product_name}"`);
@@ -563,23 +575,25 @@ Deno.serve(async (req) => {
             if (genResult.success && genResult.results?.[0]?.success) {
               const genImg = genResult.results[0];
               finalGeneratedImageId = genImg.generated_image_id;
-              // If review is required, image stays pending — post goes to pending_review
-              if (pipelineSettings.require_review) {
-                postStatus = "pending_review";
-                console.log(`[auto-queue] AI image generated for "${post.product_name}" → pending review`);
-              } else {
-                // Auto-approved: update variation with the AI image
-                postStatus = "queued";
-                await supabase
-                  .from("social_variations")
-                  .update({ image_path: genImg.public_url })
-                  .eq("id", variationId);
-                await supabase
-                  .from("social_assets")
-                  .update({ original_image_path: genImg.public_url })
-                  .eq("id", assetId);
-                console.log(`[auto-queue] AI image auto-approved for "${post.product_name}"`);
-              }
+              // Auto-approve: update variation + asset with the AI image
+              postStatus = "queued";
+              resolvedImageUrl = genImg.public_url;
+              await supabase
+                .from("social_variations")
+                .update({ image_path: genImg.public_url })
+                .eq("id", variationId);
+              await supabase
+                .from("social_assets")
+                .update({ original_image_path: genImg.public_url })
+                .eq("id", assetId);
+              // Also auto-approve the generated image record
+              await supabase
+                .from("social_generated_images")
+                .update({ status: "approved" })
+                .eq("id", genImg.generated_image_id);
+              console.log(`[auto-queue] AI image auto-approved for "${post.product_name}": ${genImg.public_url}`);
+              // Update image source to reflect AI generation
+              post.image_source = "ai_generated";
             } else {
               console.warn(`[auto-queue] AI generation failed for "${post.product_name}": ${genResult.error || 'unknown'}`);
               // Fall through with catalog image as fallback
@@ -601,6 +615,7 @@ Deno.serve(async (req) => {
           requires_approval: postStatus === "pending_review",
           image_source: post.image_source,
           generated_image_id: finalGeneratedImageId,
+          image_url: resolvedImageUrl, // Always set the image URL on the post
         };
 
         // Add carousel fields if this is a carousel post

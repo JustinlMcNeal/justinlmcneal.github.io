@@ -106,9 +106,12 @@ serve(async (req) => {
         console.log(`[process-scheduled-posts] Asset: original_image_path=${asset?.original_image_path}`);
         console.log(`[process-scheduled-posts] Product: catalog_image_url=${product?.catalog_image_url}`);
 
-        // Get image URL - convert storage paths to full public URLs
-        // Priority: variation image_path > asset original_image_path > product catalog_image_url
-        if (variation?.image_path) {
+        // Get image URL - priority: post.image_url > variation > asset > product catalog
+        // post.image_url is set by auto-queue with the best resolved image (AI-generated preferred)
+        if (post.image_url) {
+          imageUrl = post.image_url;
+          console.log(`[process-scheduled-posts] Using post.image_url directly`);
+        } else if (variation?.image_path) {
           // Check if it's already a full URL or a storage path
           if (variation.image_path.startsWith('http://') || variation.image_path.startsWith('https://')) {
             imageUrl = variation.image_path;
