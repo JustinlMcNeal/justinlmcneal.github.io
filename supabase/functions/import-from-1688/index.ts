@@ -1,11 +1,11 @@
-// Import from 1688.com — Fetches product data, translates with GPT-4o,
-// and returns structured product data ready for the admin product editor.
+// Import from 1688.com — Accepts product title + image URLs from the client,
+// translates with GPT-4o vision, and returns structured product data.
 //
 // POST body:
-//   { url: string, markup_percent?: number }
+//   { title: string, images: string[], price_cny?: number, markup_percent?: number }
 //
 // Returns:
-//   { success: true, product: { name, price, ... }, raw: { ... } }
+//   { success: true, product: { name, price, ... } }
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -46,153 +46,6 @@ const CATEGORY_KEYWORDS: Record<string, string[]> = {
   ],
 };
 
-// ── 1688 Data Extraction ──────────────────────────────
-// 1688 offers ID (offerId) lives in the URL path
-
-function extractOfferId(url: string): string | null {
-  // Patterns:
-  // https://detail.1688.com/offer/XXXXXXXXXX.html
-  // https://m.1688.com/offer/XXXXXXXXXX.html
-  // https://offer.1688.com/offer/XXXXXXXXXX.html
-  const m = url.match(/(\d{10,})/);
-  return m ? m[1] : null;
-}
-
-interface Raw1688Data {
-  title: string;
-  price_range: string;
-  images: string[];
-  sku_props: Array<{
-    prop_name: string;
-    values: Array<{ name: string; image_url?: string }>;
-  }>;
-  detail_images: string[];
-  min_order: number;
-  unit: string;
-  seller_name: string;
-}
-
-async function fetch1688Data(offerId: string): Promise<Raw1688Data> {
-  // Try the mobile API endpoint first (returns JSON)
-  const apiUrl = `https://m.1688.com/page/offerRemark.htm?offerId=${offerId}`;
-  const detailUrl = `https://h5api.m.1688.com/h5/mtop.alibaba.1688.detail.getdetail/1.0/?offerId=${offerId}`;
-
-  // Use the offer detail page HTML as a fallback – parse structured data from it
-  const pageUrl = `https://detail.1688.com/offer/${offerId}.html`;
-
-  // Try fetching the detail page for structured data
-  const headers = {
-    "User-Agent":
-      "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1",
-    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-  };
-
-  let title = "";
-  let priceRange = "";
-  let images: string[] = [];
-  let skuProps: Raw1688Data["sku_props"] = [];
-  let detailImages: string[] = [];
-  let minOrder = 1;
-  let unit = "件";
-  let sellerName = "";
-
-  try {
-    // Try mobile offer detail endpoint
-    const mobileUrl = `https://m.1688.com/offer/${offerId}.html`;
-    const resp = await fetch(mobileUrl, { headers });
-    const html = await resp.text();
-
-    // Extract title
-    const titleMatch = html.match(
-      /<title[^>]*>([^<]+)<\/title>/i
-    );
-    if (titleMatch) {
-      title = titleMatch[1]
-        .replace(/-1688\.com$/, "")
-        .replace(/-阿里巴巴$/, "")
-        .trim();
-    }
-
-    // Extract images from various patterns
-    const imgMatches = html.matchAll(
-      /["'](https?:\/\/cbu\d*\.alicdn\.com\/[^"']+\.(?:jpg|jpeg|png|webp)[^"']*)/gi
-    );
-    const imgSet = new Set<string>();
-    for (const m of imgMatches) {
-      let url = m[1].split("?")[0]; // strip query params
-      if (!url.includes("_")) {
-        imgSet.add(url);
-      } else {
-        // Try to get original by stripping resize suffix
-        const orig = url.replace(/_\d+x\d+\.\w+$/, "");
-        imgSet.add(url);
-      }
-    }
-    images = Array.from(imgSet).slice(0, 20);
-
-    // Extract price
-    const priceMatch = html.match(
-      /(?:price|价格)[^"]*?(\d+\.?\d*)\s*[-–~]\s*(\d+\.?\d*)/i
-    ) || html.match(
-      /¥\s*(\d+\.?\d*)/
-    );
-    if (priceMatch) {
-      priceRange = priceMatch[2]
-        ? `¥${priceMatch[1]} - ¥${priceMatch[2]}`
-        : `¥${priceMatch[1]}`;
-    }
-
-    // Extract SKU/color data from JSON embedded in page
-    const skuDataMatch = html.match(
-      /skuProps['":\s]*(\[[\s\S]*?\])\s*[,;}\]]/
-    );
-    if (skuDataMatch) {
-      try {
-        skuProps = JSON.parse(skuDataMatch[1]);
-      } catch { /* ignore parse errors */ }
-    }
-
-    // Min order
-    const moqMatch = html.match(/(\d+)\s*件起批/);
-    if (moqMatch) minOrder = parseInt(moqMatch[1]);
-
-  } catch (fetchErr) {
-    console.warn("[1688] Mobile fetch failed, trying desktop:", fetchErr);
-    
-    // Fallback: try desktop page
-    try {
-      const resp = await fetch(pageUrl, { headers: { ...headers, "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" } });
-      const html = await resp.text();
-
-      const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-      if (titleMatch) title = titleMatch[1].replace(/-1688\.com$/, "").replace(/-阿里巴巴$/, "").trim();
-
-      const imgMatches = html.matchAll(
-        /["'](https?:\/\/cbu\d*\.alicdn\.com\/[^"']+\.(?:jpg|jpeg|png|webp)[^"']*)/gi
-      );
-      const imgSet = new Set<string>();
-      for (const m of imgMatches) {
-        imgSet.add(m[1].split("?")[0]);
-      }
-      images = Array.from(imgSet).slice(0, 20);
-    } catch (e2) {
-      console.error("[1688] Desktop fetch also failed:", e2);
-    }
-  }
-
-  return {
-    title,
-    price_range: priceRange,
-    images,
-    sku_props: skuProps,
-    detail_images: detailImages,
-    min_order: minOrder,
-    unit,
-    seller_name: sellerName,
-  };
-}
-
 // ── Auto-detect category from text ─────────────────────
 function detectCategory(
   text: string,
@@ -213,12 +66,16 @@ function detectCategory(
 // ── Generate English listing with GPT-4o ──────────────
 async function generateListing(
   apiKey: string,
-  raw: Raw1688Data,
+  title: string,
+  priceCny: number | null,
   imageUrls: string[],
   categories: Array<{ id: string; name: string; slug: string }>,
   markupPercent: number
 ): Promise<any> {
   const categoryNames = categories.map((c) => c.name).join(", ");
+  const priceContext = priceCny
+    ? `The wholesale price is approximately ¥${priceCny} CNY.`
+    : "No price was provided — estimate a reasonable retail price for this type of product.";
 
   const messages = [
     {
@@ -245,11 +102,12 @@ Rules:
 - Description bullets should be persuasive marketing copy, not technical specs.
 - Include 3-6 relevant tags (lowercase, no spaces in individual tags).
 - Detect the best matching category from the store's categories.
-- Extract color/variant names and translate them to English.
-- Estimate weight in grams from the product type if not provided.
-- The suggested price should be the Chinese wholesale price × ${markupPercent / 100} markup, converted from CNY to USD (use ~7.2 CNY per USD), rounded to .99 or .49.
-- Sizing should include dimensions in inches/cm if detectable.
+- Extract color/variant names from the images or title and translate them to English.
+- Estimate weight in grams from the product type.
+- ${priceCny ? `The suggested price should be the Chinese wholesale price × ${markupPercent / 100} markup, converted from CNY to USD (use ~7.2 CNY per USD), rounded to .99 or .49.` : "Suggest a reasonable retail price in USD, rounded to .99 or .49."}
+- Sizing should include dimensions in inches/cm if detectable from images.
 - Care instructions should be appropriate for the product type.
+- Use the product images to determine colors, materials, and product details.
 
 Respond ONLY with the JSON object, no markdown fences or explanation.`,
     },
@@ -260,15 +118,13 @@ Respond ONLY with the JSON object, no markdown fences or explanation.`,
           type: "text",
           text: `Chinese 1688 product listing:
 
-Title: ${raw.title}
-Price: ${raw.price_range}
-Min Order: ${raw.min_order} ${raw.unit}
-SKU Options: ${JSON.stringify(raw.sku_props || [])}
+Title: ${title}
+${priceContext}
 
-Please create the English product listing.`,
+Please analyze the images and create the English product listing.`,
         },
-        // Include up to 3 product images for visual analysis
-        ...imageUrls.slice(0, 3).map((url) => ({
+        // Include up to 4 product images for visual analysis
+        ...imageUrls.slice(0, 4).map((url) => ({
           type: "image_url" as const,
           image_url: { url, detail: "low" as const },
         })),
@@ -289,6 +145,12 @@ Please create the English product listing.`,
       messages,
     }),
   });
+
+  if (!resp.ok) {
+    const errBody = await resp.text();
+    console.error("[1688] OpenAI error:", resp.status, errBody);
+    throw new Error(`OpenAI API error (${resp.status})`);
+  }
 
   const result = await resp.json();
   const content = result.choices?.[0]?.message?.content || "";
@@ -313,18 +175,17 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { url, markup_percent = 350 } = body; // Default 3.5x markup
+    const {
+      title = "",
+      images = [],
+      price_cny = null,
+      url = "",
+      markup_percent = 350,
+    } = body;
 
-    if (!url) {
-      return error("URL is required", 400);
-    }
-
-    const offerId = extractOfferId(url);
-    if (!offerId) {
-      return error(
-        "Could not extract offer ID from URL. Please use a direct 1688.com product link.",
-        400
-      );
+    // Must have title or images
+    if (!title && images.length === 0) {
+      return error("Please provide a product title and/or image URLs.", 400);
     }
 
     const openaiKey = Deno.env.get("OPENAI_API_KEY") || "";
@@ -341,76 +202,54 @@ Deno.serve(async (req) => {
       .from("categories")
       .select("id, name, slug");
 
-    console.log(`[1688] Fetching offer ${offerId}...`);
+    console.log(`[1688] Generating listing for: "${title}" with ${images.length} images`);
 
-    // Step 1: Fetch raw data from 1688
-    const raw = await fetch1688Data(offerId);
-
-    if (!raw.title && raw.images.length === 0) {
-      return error(
-        "Could not fetch product data from 1688. The page may be blocked or the URL may be invalid. Try pasting the product images and title manually.",
-        422
-      );
-    }
-
-    console.log(`[1688] Got: "${raw.title}" with ${raw.images.length} images`);
-
-    // Step 2: Generate English listing with GPT-4o (with vision)
+    // Generate English listing with GPT-4o (with vision)
     const listing = await generateListing(
       openaiKey,
-      raw,
-      raw.images,
+      title,
+      price_cny ? Number(price_cny) : null,
+      images,
       categories || [],
       markup_percent
     );
 
-    // Step 3: Match category
+    // Match category
     const matchedCategory =
       detectCategory(
-        `${raw.title} ${listing.category || ""}`,
+        `${title} ${listing.category || ""}`,
         categories || []
       ) ||
       (categories || []).find(
-        (c) => c.name.toLowerCase() === (listing.category || "").toLowerCase()
+        (c: any) => c.name.toLowerCase() === (listing.category || "").toLowerCase()
       );
 
-    // Step 4: Build structured product data
+    // Build structured product data
     const slug = (listing.name || "product")
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-|-$/g, "");
 
     const product = {
-      name: listing.name || raw.title,
+      name: listing.name || title,
       slug,
       category_id: matchedCategory?.id || null,
       category_name: matchedCategory?.name || listing.category || "uncategorized",
       price: listing.suggested_price_usd || 9.99,
       weight_g: listing.weight_g || null,
-      supplier_url: url,
+      supplier_url: url || null,
       tags: listing.tags || [],
       description: listing.description || [],
       sizing: listing.sizing || [],
       care: listing.care || [],
       colors: listing.colors || [],
-      images: raw.images.slice(0, 10), // Primary images
-      detail_images: raw.detail_images.slice(0, 10),
+      images: images.slice(0, 10),
     };
 
-    // Return everything — the frontend will use this to populate the product editor
     return new Response(
       JSON.stringify({
         success: true,
         product,
-        raw: {
-          title: raw.title,
-          price_range: raw.price_range,
-          images: raw.images,
-          sku_props: raw.sku_props,
-          min_order: raw.min_order,
-          offer_id: offerId,
-          seller_name: raw.seller_name,
-        },
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

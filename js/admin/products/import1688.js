@@ -1,12 +1,14 @@
 // js/admin/products/import1688.js
-// Fetches a 1688.com product listing, translates it with GPT-4o,
-// and populates the product editor form for review before saving.
+// 1688 Product Importer — collects product title + image URLs from the user,
+// sends to GPT-4o for translation, returns structured product data.
+//
+// WHY client-side input: 1688.com blocks server-side scraping, so the user
+// copies the title and image URLs from their browser (which CAN access 1688).
 
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "../../config/env.js";
 
 /**
  * Creates and returns the 1688 import modal DOM + wiring.
- * Call mount() to append it to the document.
  *
  * @param {Object} opts
  * @param {Function} opts.openNewProduct  - opens an empty product-editor modal
@@ -35,41 +37,83 @@ export function create1688Importer({ openNewProduct, applyJson, formEls }) {
 
       <!-- Body -->
       <div class="p-4 sm:p-6 overflow-y-auto flex-1 space-y-5" id="i1688Body">
-        <!-- URL Input -->
-        <div>
-          <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-2 text-black/70">
-            1688 Product URL
-          </label>
-          <div class="flex gap-2">
-            <input id="i1688Url" type="text"
-              class="flex-1 border-4 border-black px-4 py-3 text-sm outline-none focus:border-kkpink transition-colors"
-              placeholder="https://detail.1688.com/offer/XXXXXXXXXX.html" />
-            <button id="i1688Fetch" type="button"
-              class="border-4 border-black bg-black text-white px-6 py-3 font-black uppercase tracking-[.12em] text-xs
-                     hover:bg-kkpink hover:border-kkpink hover:text-black transition-colors whitespace-nowrap">
-              🔍 Fetch
-            </button>
-          </div>
-          <p class="text-xs text-gray-400 mt-1">Paste a direct product link from 1688.com</p>
+        <!-- Instructions -->
+        <div class="bg-gray-50 border-2 border-gray-200 p-4 text-sm space-y-2">
+          <div class="font-black uppercase tracking-wider text-[11px] text-gray-600">How it works</div>
+          <ol class="list-decimal list-inside space-y-1 text-gray-600 text-xs">
+            <li>Open the product on <strong>1688.com</strong> in another tab</li>
+            <li>Copy the <strong>Chinese title</strong> and paste it below</li>
+            <li>Right-click product images → <strong>"Copy image address"</strong> and paste URLs below</li>
+            <li>Optionally enter the <strong>price in ¥</strong></li>
+            <li>Hit <strong>Generate</strong> — AI creates your English listing!</li>
+          </ol>
         </div>
 
-        <!-- Markup Slider -->
+        <!-- Product Title -->
         <div>
           <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-2 text-black/70">
-            Price Markup: <span id="i1688MarkupLabel" class="text-kkpink">3.5×</span>
+            Chinese Product Title
           </label>
-          <input id="i1688Markup" type="range" min="200" max="800" value="350" step="50"
-            class="w-full accent-[#ff69b4]" />
-          <div class="flex justify-between text-[10px] text-gray-400 mt-1">
-            <span>2×</span><span>4×</span><span>6×</span><span>8×</span>
+          <input id="i1688Title" type="text"
+            class="w-full border-4 border-black px-4 py-3 text-sm outline-none focus:border-kkpink transition-colors"
+            placeholder="Paste the Chinese product title here…" />
+        </div>
+
+        <!-- Image URLs -->
+        <div>
+          <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-2 text-black/70">
+            Image URLs <span class="text-gray-400 font-normal">(one per line, paste up to 10)</span>
+          </label>
+          <textarea id="i1688Images" rows="4"
+            class="w-full border-4 border-black px-4 py-3 text-sm outline-none resize-none focus:border-kkpink transition-colors font-mono"
+            placeholder="https://cbu01.alicdn.com/img/...&#10;https://cbu01.alicdn.com/img/...&#10;(right-click images → Copy image address)"></textarea>
+          <div id="i1688ImgPreview" class="flex gap-2 mt-2 overflow-x-auto"></div>
+        </div>
+
+        <!-- Price + Markup Row -->
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-2 text-black/70">
+              Price in ¥ <span class="text-gray-400 font-normal">(optional)</span>
+            </label>
+            <input id="i1688PriceCny" type="number" step="0.01"
+              class="w-full border-4 border-black px-4 py-3 text-sm outline-none focus:border-kkpink transition-colors"
+              placeholder="e.g. 15.80" />
+          </div>
+          <div>
+            <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-2 text-black/70">
+              Markup: <span id="i1688MarkupLabel" class="text-kkpink">3.5×</span>
+            </label>
+            <input id="i1688Markup" type="range" min="200" max="800" value="350" step="50"
+              class="w-full accent-[#ff69b4] mt-2" />
+            <div class="flex justify-between text-[10px] text-gray-400 mt-1">
+              <span>2×</span><span>4×</span><span>6×</span><span>8×</span>
+            </div>
           </div>
         </div>
+
+        <!-- 1688 URL (optional, saved as supplier_url) -->
+        <div>
+          <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-2 text-black/70">
+            1688 Link <span class="text-gray-400 font-normal">(optional — saved as supplier URL)</span>
+          </label>
+          <input id="i1688Url" type="text"
+            class="w-full border-4 border-black px-4 py-3 text-sm outline-none focus:border-kkpink transition-colors"
+            placeholder="https://detail.1688.com/offer/..." />
+        </div>
+
+        <!-- Generate Button -->
+        <button id="i1688Generate" type="button"
+          class="w-full border-4 border-black bg-black text-white px-6 py-4 font-black uppercase tracking-[.15em] text-sm
+                 hover:bg-kkpink hover:border-kkpink hover:text-black transition-colors">
+          ✨ Generate English Listing
+        </button>
 
         <!-- Loading State -->
-        <div id="i1688Loading" class="hidden text-center py-12">
+        <div id="i1688Loading" class="hidden text-center py-10">
           <div class="inline-block animate-spin w-10 h-10 border-4 border-black border-t-kkpink rounded-full"></div>
-          <p class="mt-4 text-sm font-bold uppercase tracking-wider">Fetching &amp; translating…</p>
-          <p class="text-xs text-gray-400 mt-1">AI is analyzing images and creating your listing</p>
+          <p class="mt-4 text-sm font-bold uppercase tracking-wider">AI is analyzing &amp; translating…</p>
+          <p class="text-xs text-gray-400 mt-1">This usually takes 5-10 seconds</p>
         </div>
 
         <!-- Error State -->
@@ -81,7 +125,7 @@ export function create1688Importer({ openNewProduct, applyJson, formEls }) {
         <!-- Preview (hidden until results arrive) -->
         <div id="i1688Preview" class="hidden space-y-5">
           <div class="border-4 border-green-500 bg-green-50 p-3 text-center">
-            <span class="text-[11px] font-black uppercase tracking-[.2em] text-green-700">✓ Listing Generated</span>
+            <span class="text-[11px] font-black uppercase tracking-[.2em] text-green-700">✓ Listing Generated — review &amp; edit below</span>
           </div>
 
           <!-- Product Name -->
@@ -127,18 +171,10 @@ export function create1688Importer({ openNewProduct, applyJson, formEls }) {
           <!-- Images Preview -->
           <div>
             <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-2 text-black/70">
-              Images <span id="i1688ImgCount" class="text-gray-400 font-normal">(0)</span>
+              Images <span id="i1688ResultImgCount" class="text-gray-400 font-normal">(0)</span>
             </label>
-            <div id="i1688Images" class="grid grid-cols-4 sm:grid-cols-5 gap-2 max-h-48 overflow-y-auto"></div>
+            <div id="i1688ResultImages" class="grid grid-cols-4 sm:grid-cols-5 gap-2 max-h-48 overflow-y-auto"></div>
           </div>
-
-          <!-- Raw Info (collapsible) -->
-          <details class="border-2 border-gray-200">
-            <summary class="cursor-pointer px-3 py-2 bg-gray-50 text-[11px] font-black uppercase tracking-[.12em] text-gray-500 select-none">
-              Raw 1688 Data
-            </summary>
-            <pre id="i1688Raw" class="p-3 text-[11px] text-gray-600 overflow-x-auto max-h-48 bg-gray-50 whitespace-pre-wrap"></pre>
-          </details>
         </div>
       </div>
 
@@ -162,15 +198,19 @@ export function create1688Importer({ openNewProduct, applyJson, formEls }) {
   /* ---- Wire up elements ---- */
   const q = (id) => overlay.querySelector(`#${id}`);
 
-  const urlInput    = q("i1688Url");
-  const fetchBtn    = q("i1688Fetch");
-  const markupSlider= q("i1688Markup");
-  const markupLabel = q("i1688MarkupLabel");
-  const loading     = q("i1688Loading");
-  const errorBox    = q("i1688Error");
-  const errorMsg    = q("i1688ErrorMsg");
-  const preview     = q("i1688Preview");
-  const footer      = q("i1688Footer");
+  const titleInput    = q("i1688Title");
+  const imagesInput   = q("i1688Images");
+  const imgPreview    = q("i1688ImgPreview");
+  const priceCnyInput = q("i1688PriceCny");
+  const urlInput      = q("i1688Url");
+  const markupSlider  = q("i1688Markup");
+  const markupLabel   = q("i1688MarkupLabel");
+  const generateBtn   = q("i1688Generate");
+  const loading       = q("i1688Loading");
+  const errorBox      = q("i1688Error");
+  const errorMsg      = q("i1688ErrorMsg");
+  const preview       = q("i1688Preview");
+  const footer        = q("i1688Footer");
 
   // Preview fields
   const pName     = q("i1688Name");
@@ -179,25 +219,48 @@ export function create1688Importer({ openNewProduct, applyJson, formEls }) {
   const pTags     = q("i1688Tags");
   const pDesc     = q("i1688Desc");
   const pColors   = q("i1688Colors");
-  const pImages   = q("i1688Images");
-  const pImgCount = q("i1688ImgCount");
-  const pRaw      = q("i1688Raw");
+  const pResultImages  = q("i1688ResultImages");
+  const pResultImgCount = q("i1688ResultImgCount");
 
   // Stash the latest result for the "Apply" step
   let latestResult = null;
+  let inputImages = [];   // parsed from textarea
+
+  /* ---- Helpers ---- */
+  function parseImageUrls() {
+    const raw = imagesInput.value.trim();
+    if (!raw) return [];
+    return raw
+      .split(/[\n\r,]+/)
+      .map(s => s.trim())
+      .filter(s => s.startsWith("http"));
+  }
 
   /* ---- Markup slider ---- */
   markupSlider.addEventListener("input", () => {
     markupLabel.textContent = `${(markupSlider.value / 100).toFixed(1)}×`;
   });
 
+  /* ---- Live image preview ---- */
+  imagesInput.addEventListener("input", () => {
+    const urls = parseImageUrls();
+    imgPreview.innerHTML = urls.slice(0, 8).map(url =>
+      `<img src="${url}" class="w-14 h-14 object-cover border-2 border-black shrink-0"
+            onerror="this.style.display='none'" />`
+    ).join("");
+  });
+
   /* ---- Open / Close ---- */
   function open() {
+    titleInput.value = "";
+    imagesInput.value = "";
+    priceCnyInput.value = "";
     urlInput.value = "";
+    imgPreview.innerHTML = "";
     resetStates();
     overlay.classList.remove("hidden");
     overlay.classList.add("flex");
-    urlInput.focus();
+    titleInput.focus();
   }
 
   function close() {
@@ -210,6 +273,7 @@ export function create1688Importer({ openNewProduct, applyJson, formEls }) {
     errorBox.classList.add("hidden");
     preview.classList.add("hidden");
     footer.classList.add("hidden");
+    generateBtn.classList.remove("hidden");
     latestResult = null;
   }
 
@@ -220,20 +284,23 @@ export function create1688Importer({ openNewProduct, applyJson, formEls }) {
     if (e.key === "Escape" && !overlay.classList.contains("hidden")) close();
   });
 
-  /* ---- Fetch handler ---- */
-  async function doFetch() {
-    const url = urlInput.value.trim();
-    if (!url) { urlInput.focus(); return; }
+  /* ---- Generate handler ---- */
+  async function doGenerate() {
+    const title = titleInput.value.trim();
+    inputImages = parseImageUrls();
 
-    if (!url.includes("1688.com") && !url.match(/\d{10,}/)) {
-      showError("Please enter a valid 1688.com product URL.");
+    if (!title && inputImages.length === 0) {
+      showError("Please provide at least a product title or some image URLs.");
       return;
     }
 
     resetStates();
     loading.classList.remove("hidden");
-    fetchBtn.disabled = true;
-    fetchBtn.textContent = "Fetching…";
+    generateBtn.classList.add("hidden");
+
+    // 60-second client-side timeout
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 60000);
 
     try {
       const resp = await fetch(`${SUPABASE_URL}/functions/v1/import-from-1688`, {
@@ -243,32 +310,39 @@ export function create1688Importer({ openNewProduct, applyJson, formEls }) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          url,
+          title,
+          images: inputImages,
+          price_cny: priceCnyInput.value ? Number(priceCnyInput.value) : null,
+          url: urlInput.value.trim(),
           markup_percent: Number(markupSlider.value),
         }),
+        signal: controller.signal,
       });
 
+      clearTimeout(timeout);
       const data = await resp.json();
 
       if (!resp.ok || !data.success) {
-        throw new Error(data.error || "Unknown error");
+        throw new Error(data.error || `Server error (${resp.status})`);
       }
 
       latestResult = data;
+      latestResult._inputImages = inputImages; // keep for gallery
       renderPreview(data);
     } catch (err) {
-      showError(err.message || "Failed to fetch product data.");
+      if (err.name === "AbortError") {
+        showError("Request timed out after 60 seconds. Try with fewer images or a shorter title.");
+      } else {
+        showError(err.message || "Failed to generate listing.");
+      }
     } finally {
-      fetchBtn.disabled = false;
-      fetchBtn.textContent = "🔍 Fetch";
+      clearTimeout(timeout);
       loading.classList.add("hidden");
+      generateBtn.classList.remove("hidden");
     }
   }
 
-  fetchBtn.addEventListener("click", doFetch);
-  urlInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") { e.preventDefault(); doFetch(); }
-  });
+  generateBtn.addEventListener("click", doGenerate);
 
   /* ---- Error helper ---- */
   function showError(msg) {
@@ -284,32 +358,27 @@ export function create1688Importer({ openNewProduct, applyJson, formEls }) {
     pCategory.value = p.category_name || "";
     pPrice.value = p.price || "";
     pTags.value = (p.tags || []).join(", ");
-    pDesc.value = (p.description || []).map((b) => `• ${b}`).join("\n");
+    pDesc.value = (p.description || []).map(b => `• ${b}`).join("\n");
     pColors.value = (p.colors || []).join(", ");
 
     // Render image thumbnails
-    const imgs = [...(p.images || []), ...(p.detail_images || [])];
-    pImgCount.textContent = `(${imgs.length})`;
-    pImages.innerHTML = imgs
+    const imgs = p.images || inputImages;
+    pResultImgCount.textContent = `(${imgs.length})`;
+    pResultImages.innerHTML = imgs
       .slice(0, 20)
-      .map(
-        (url, i) => `
+      .map((url, i) => `
         <div class="relative group">
           <img src="${url}" loading="lazy"
-               class="w-full aspect-square object-cover border-2 border-black cursor-pointer hover:opacity-80 transition"
-               title="Image ${i + 1}"
-               onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1 1%22><rect fill=%22%23eee%22 width=%221%22 height=%221%22/></svg>'" />
+               class="w-full aspect-square object-cover border-2 border-black"
+               onerror="this.parentElement.style.display='none'" />
           <span class="absolute bottom-0 right-0 bg-black text-white text-[9px] px-1">${i + 1}</span>
         </div>
-      `
-      )
+      `)
       .join("");
-
-    // Raw data
-    pRaw.textContent = JSON.stringify(data.raw || {}, null, 2);
 
     preview.classList.remove("hidden");
     footer.classList.remove("hidden");
+    generateBtn.classList.add("hidden");
   }
 
   /* ---- Apply to product editor ---- */
@@ -317,13 +386,14 @@ export function create1688Importer({ openNewProduct, applyJson, formEls }) {
     if (!latestResult) return;
 
     const p = latestResult.product;
+    const imgs = p.images || latestResult._inputImages || [];
 
     // Read possibly-edited values from the preview form
-    const editedName  = pName.value.trim() || p.name;
-    const editedPrice = parseFloat(pPrice.value) || p.price;
-    const editedTags  = pTags.value.split(",").map((t) => t.trim()).filter(Boolean);
-    const editedDesc  = pDesc.value.split("\n").map((l) => l.replace(/^[•\-]\s*/, "").trim()).filter(Boolean);
-    const editedColors= pColors.value.split(",").map((c) => c.trim()).filter(Boolean);
+    const editedName   = pName.value.trim() || p.name;
+    const editedPrice  = parseFloat(pPrice.value) || p.price;
+    const editedTags   = pTags.value.split(",").map(t => t.trim()).filter(Boolean);
+    const editedDesc   = pDesc.value.split("\n").map(l => l.replace(/^[•\-]\s*/, "").trim()).filter(Boolean);
+    const editedColors = pColors.value.split(",").map(c => c.trim()).filter(Boolean);
 
     // Build the JSON object that applyJsonToForm expects
     const formData = {
@@ -332,7 +402,7 @@ export function create1688Importer({ openNewProduct, applyJson, formEls }) {
       category: pCategory.value.trim(),
       price: editedPrice,
       weight_g: p.weight_g || null,
-      supplier_url: p.supplier_url || "",
+      supplier_url: p.supplier_url || urlInput.value.trim() || "",
       tags: editedTags,
       descriptionList: editedDesc,
       sizingList: p.sizing || [],
@@ -340,16 +410,16 @@ export function create1688Importer({ openNewProduct, applyJson, formEls }) {
 
       // Variants from colors
       custom1Options: editedColors.join(" | "),
-      variantStock: Object.fromEntries(editedColors.map((c) => [c, 0])),
+      variantStock: Object.fromEntries(editedColors.map(c => [c, 0])),
       variantImages: {},
 
-      // Images: first image → catalog, second → hover, third → primary
-      catalogImage: (p.images || [])[0] || "",
-      catalogImageHover: (p.images || [])[1] || "",
-      image: (p.images || [])[2] || (p.images || [])[0] || "",
+      // Images: first → catalog, second → hover, third → primary
+      catalogImage: imgs[0] || "",
+      catalogImageHover: imgs[1] || "",
+      image: imgs[2] || imgs[0] || "",
 
       // Rest of images → gallery thumbnails
-      thumbnails: (p.images || []).slice(1),
+      thumbnails: imgs.slice(1),
     };
 
     // Close 1688 modal
