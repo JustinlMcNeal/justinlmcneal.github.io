@@ -289,7 +289,7 @@ export async function importEbayOrders(validRows) {
         quantity: qty,
         unit_price_cents: unitPriceCents,
         post_discount_unit_price_cents: unitPriceCents,
-        item_weight_g: null,
+        item_weight_g: 0,
       });
     }
 
@@ -306,7 +306,7 @@ export async function importEbayOrders(validRows) {
       tax_cents: orderTaxCents,
       shipping_paid_cents: orderShipCents,
       total_paid_cents: totalPaidCents,
-      total_weight_g: null,
+      total_weight_g: 0,
       order_savings_total_cents: 0,
       order_savings_code_cents: 0,
       order_savings_auto_cents: 0,
