@@ -240,6 +240,16 @@
             📦 Import Amazon
           </button>
 
+          <button
+            id="btnImportEbay"
+            type="button"
+            class="border-4 border-black bg-white text-black px-4 py-2 font-black uppercase tracking-[.12em] text-[10px]
+                   hover:bg-black hover:text-white transition-all
+                   drop-zone"
+          >
+            🏷️ Import eBay
+          </button>
+
           <span class="text-xs text-gray-400 ml-2">Click or drag & drop file</span>
         </div>
         
@@ -312,6 +322,56 @@
               <div id="amzUnmappedWrap" class="hidden mt-2 text-xs text-amber-700"></div>
             </div>
             <button id="amzResultClose" type="button" class="text-emerald-600 hover:text-emerald-800 text-lg font-bold">×</button>
+          </div>
+        </div>
+
+        <!-- eBay Import Preview Panel -->
+        <div id="ebayPreviewPanel" class="hidden mt-4 p-4 border-4 border-blue-500 bg-blue-50 rounded-lg">
+          <div class="flex items-start gap-3">
+            <div class="text-2xl">🏷️</div>
+            <div class="flex-1">
+              <div class="font-black text-blue-800">eBay Import Ready</div>
+              <div class="mt-2 text-sm text-blue-700">
+                <div>File: <span id="ebayFileName" class="font-bold"></span></div>
+                <div>Total rows: <span id="ebayTotalRows" class="font-bold"></span></div>
+                <div>Valid orders: <span id="ebayValidCount" class="font-bold text-emerald-700"></span></div>
+              </div>
+              <div class="text-xs text-blue-600 mt-2">This will insert new orders + line items into orders_raw & line_items_raw. Duplicates are skipped automatically.</div>
+              <div class="flex gap-2 mt-3">
+                <button id="ebayConfirmBtn" type="button" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-1.5 rounded font-bold text-sm transition-colors">✓ Confirm Import</button>
+                <button id="ebayCancelBtn" type="button" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-1.5 rounded font-bold text-sm transition-colors">Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- eBay Import Result Panel -->
+        <div id="ebayResultPanel" class="hidden mt-4 p-4 border-4 border-emerald-500 bg-emerald-50 rounded-lg">
+          <div class="flex items-start gap-3">
+            <div class="text-2xl">✅</div>
+            <div class="flex-1">
+              <div class="font-black text-emerald-800">eBay Import Complete</div>
+              <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-2 text-sm">
+                <div>
+                  <span class="text-emerald-600">Orders:</span>
+                  <span id="ebayOrdersCount" class="font-bold">0</span>
+                </div>
+                <div>
+                  <span class="text-emerald-600">Line Items:</span>
+                  <span id="ebayLineItemsCount" class="font-bold">0</span>
+                </div>
+                <div>
+                  <span class="text-emerald-600">Revenue:</span>
+                  <span id="ebayRevenue" class="font-bold">$0</span>
+                </div>
+                <div>
+                  <span class="text-gray-500">Skipped (dup):</span>
+                  <span id="ebaySkippedCount" class="font-bold">0</span>
+                </div>
+              </div>
+              <div id="ebayBreakdownWrap" class="mt-3 text-xs text-emerald-700"></div>
+            </div>
+            <button id="ebayResultClose" type="button" class="text-emerald-600 hover:text-emerald-800 text-lg font-bold">×</button>
           </div>
         </div>
 

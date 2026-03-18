@@ -29,6 +29,22 @@ export const els = {
   amzUnmappedWrap: document.getElementById("amzUnmappedWrap"),
   amzResultClose: document.getElementById("amzResultClose"),
 
+  // eBay import elements
+  btnImportEbay: document.getElementById("btnImportEbay"),
+  ebayPreviewPanel: document.getElementById("ebayPreviewPanel"),
+  ebayFileName: document.getElementById("ebayFileName"),
+  ebayTotalRows: document.getElementById("ebayTotalRows"),
+  ebayValidCount: document.getElementById("ebayValidCount"),
+  ebayConfirmBtn: document.getElementById("ebayConfirmBtn"),
+  ebayCancelBtn: document.getElementById("ebayCancelBtn"),
+  ebayResultPanel: document.getElementById("ebayResultPanel"),
+  ebayOrdersCount: document.getElementById("ebayOrdersCount"),
+  ebayLineItemsCount: document.getElementById("ebayLineItemsCount"),
+  ebayRevenue: document.getElementById("ebayRevenue"),
+  ebaySkippedCount: document.getElementById("ebaySkippedCount"),
+  ebayBreakdownWrap: document.getElementById("ebayBreakdownWrap"),
+  ebayResultClose: document.getElementById("ebayResultClose"),
+
   // import preview panel (confirm before import)
   importPreviewPanel: document.getElementById("importPreviewPanel"),
   importFileName: document.getElementById("importFileName"),
@@ -105,6 +121,13 @@ export function wireDomHelpers() {
     els.amzCancelBtn.addEventListener("click", () => {
       if (els.amazonPreviewPanel) els.amazonPreviewPanel.classList.add("hidden");
       setStatus("Amazon import canceled.");
+    });
+  }
+
+  // Wire close/cancel for eBay import panels
+  if (els.ebayResultClose) {
+    els.ebayResultClose.addEventListener("click", () => {
+      if (els.ebayResultPanel) els.ebayResultPanel.classList.add("hidden");
     });
   }
   

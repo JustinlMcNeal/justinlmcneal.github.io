@@ -9,6 +9,7 @@ import { downloadShipReadyCSV } from "./shipReadyCsv.js";
 import { bindEditModal } from "./modalEditor.js";
 import { wirePirateShipImport } from "./pirateShipImport.js";
 import { wireAmazonImport } from "./amazonImport.js";
+import { wireEbayImport } from "./ebayImport.js";
 
 
 wireDomHelpers();
@@ -567,6 +568,58 @@ function wireEvents() {
       setTimeout(() => els.amazonResultPanel?.classList.add("hidden"), 15000);
 
       // refresh the orders table
+      await reload({ hard: true });
+    },
+  });
+
+  // Import eBay orders (CSV drop)
+  wireEbayImport({
+    buttonEl: els.btnImportEbay,
+    setStatus,
+    showPreview: ({ fileName, parsed, onConfirm }) => {
+      if (els.ebayFileName) els.ebayFileName.textContent = fileName;
+      if (els.ebayTotalRows) els.ebayTotalRows.textContent = parsed.total;
+      if (els.ebayValidCount) els.ebayValidCount.textContent = parsed.valid.length;
+
+      if (els.ebayResultPanel) els.ebayResultPanel.classList.add("hidden");
+      if (els.ebayPreviewPanel) els.ebayPreviewPanel.classList.remove("hidden");
+
+      if (els.ebayConfirmBtn) {
+        const btn = els.ebayConfirmBtn.cloneNode(true);
+        els.ebayConfirmBtn.parentNode.replaceChild(btn, els.ebayConfirmBtn);
+        els.ebayConfirmBtn = btn;
+        btn.addEventListener("click", () => {
+          els.ebayPreviewPanel?.classList.add("hidden");
+          onConfirm();
+        });
+      }
+      if (els.ebayCancelBtn) {
+        const btn = els.ebayCancelBtn.cloneNode(true);
+        els.ebayCancelBtn.parentNode.replaceChild(btn, els.ebayCancelBtn);
+        els.ebayCancelBtn = btn;
+        btn.addEventListener("click", () => {
+          els.ebayPreviewPanel?.classList.add("hidden");
+        });
+      }
+    },
+    onImported: async (result) => {
+      if (els.ebayOrdersCount) els.ebayOrdersCount.textContent = result.ordersInserted;
+      if (els.ebayLineItemsCount) els.ebayLineItemsCount.textContent = result.lineItemsInserted;
+      if (els.ebayRevenue) els.ebayRevenue.textContent = `$${(result.revenue / 100).toFixed(2)}`;
+      if (els.ebaySkippedCount) els.ebaySkippedCount.textContent = result.skippedDuplicates;
+
+      if (els.ebayBreakdownWrap && result.breakdown) {
+        const lines = Object.entries(result.breakdown)
+          .sort((a, b) => b[1].cents - a[1].cents)
+          .map(([code, p]) => `<div>${p.name} — ${p.qty} units — $${(p.cents / 100).toFixed(2)}</div>`);
+        els.ebayBreakdownWrap.innerHTML = lines.length
+          ? `<div class="font-bold mb-1">Product breakdown:</div>${lines.join("")}`
+          : "";
+      }
+
+      if (els.ebayResultPanel) els.ebayResultPanel.classList.remove("hidden");
+      setTimeout(() => els.ebayResultPanel?.classList.add("hidden"), 15000);
+
       await reload({ hard: true });
     },
   });
