@@ -62,11 +62,16 @@
             Track business expenses, purchases, and operating costs
           </p>
         </div>
-        <div class="flex gap-2 self-start sm:self-auto">
+        <div class="flex gap-2 self-start sm:self-auto flex-wrap">
           <button id="btnImportInvoices" type="button"
             class="border-4 border-black bg-white text-black px-5 py-2.5 font-black uppercase tracking-[.12em] text-xs
                    hover:bg-gray-100 transition-all">
             📋 Import
+          </button>
+          <button id="btnImportEbay" type="button"
+            class="border-4 border-black bg-white text-black px-5 py-2.5 font-black uppercase tracking-[.12em] text-xs
+                   hover:bg-gray-100 transition-all drop-zone">
+            🏷️ eBay Transactions
           </button>
           <button id="btnAddExpense" type="button"
             class="border-4 border-black bg-black text-white px-5 py-2.5 font-black uppercase tracking-[.12em] text-xs
@@ -505,6 +510,146 @@ FW0GGVST-0020  Paid  $10.00  Mar 9, 2026, 5:17 PM"
       backdrop.addEventListener("click", () => closeBtn.click());
     })();
   </script>
+
+  <!-- EBAY TRANSACTION REPORT MODAL -->
+  <div id="ebayTxnModal" class="hidden fixed inset-0 z-[200]" aria-hidden="true">
+    <div id="ebayTxnBackdrop" class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
+    <div class="relative h-full w-full overflow-y-auto">
+      <div class="min-h-full flex items-end sm:items-center justify-center p-0 sm:p-6">
+        <div class="w-full sm:max-w-2xl bg-white border-0 sm:border-4 border-black shadow-none sm:shadow-[8px_8px_0_0_rgba(0,0,0,0.1)] min-h-screen sm:min-h-0">
+          <!-- Head -->
+          <div class="sticky top-0 z-10 flex items-center justify-between gap-3 p-3 sm:p-5 border-b-4 border-black bg-white">
+            <div class="min-w-0">
+              <div class="inline-block bg-blue-500 text-white px-2 py-0.5 text-[8px] sm:text-[9px] font-black uppercase tracking-[.2em] mb-1">
+                eBay
+              </div>
+              <h3 class="text-lg sm:text-2xl font-black tracking-tight truncate">
+                Import eBay Transactions
+              </h3>
+            </div>
+            <button id="btnCloseEbayTxn" type="button"
+              class="border-4 border-black bg-white w-10 h-10 flex items-center justify-center font-black text-lg
+                     hover:bg-black hover:text-white transition-colors flex-shrink-0"
+              aria-label="Close">✕</button>
+          </div>
+
+          <!-- Body -->
+          <div class="p-3 sm:p-6 space-y-5 pb-24 sm:pb-6">
+            <div id="ebayTxnMsg" class="hidden p-3 border-4 text-sm"></div>
+
+            <!-- File drop -->
+            <div>
+              <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
+                Upload Transaction Report CSV
+              </label>
+              <div id="ebayTxnDropZone"
+                class="border-4 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer
+                       hover:border-black hover:bg-gray-50 transition-colors">
+                <div class="text-2xl mb-2">📄</div>
+                <div class="text-sm text-gray-500">Click or drag & drop your eBay Transaction Report CSV</div>
+                <div id="ebayTxnFileName" class="text-xs font-bold text-black mt-2 hidden"></div>
+              </div>
+              <input id="ebayTxnFileInput" type="file" accept=".csv" class="hidden" />
+            </div>
+
+            <!-- Parse button -->
+            <button id="btnParseEbayTxn" type="button" disabled
+              class="border-4 border-black bg-gray-100 text-black px-4 py-2 font-black uppercase tracking-[.12em] text-xs
+                     hover:bg-gray-200 transition-all w-full disabled:opacity-40 disabled:cursor-not-allowed">
+              🔍 Preview Parsed Entries
+            </button>
+
+            <!-- Preview -->
+            <div id="ebayTxnPreviewWrap" class="hidden space-y-4">
+              <!-- Shipping labels summary -->
+              <div id="ebayTxnShipWrap" class="hidden">
+                <div class="flex items-center justify-between mb-1">
+                  <span class="text-[11px] font-black uppercase tracking-[.12em] text-black/70">📦 Shipping Labels</span>
+                  <span id="ebayTxnShipCount" class="text-xs font-bold text-gray-500"></span>
+                </div>
+                <div class="text-xs text-gray-500 mb-2">Will update existing eBay order shipping costs + tracking numbers in the orders table.</div>
+                <div class="border-4 border-black overflow-x-auto max-h-40 overflow-y-auto">
+                  <table class="w-full text-xs">
+                    <thead class="bg-black text-white sticky top-0">
+                      <tr class="text-left uppercase tracking-[.12em] font-black">
+                        <th class="px-3 py-2">Date</th>
+                        <th class="px-3 py-2">Order</th>
+                        <th class="px-3 py-2 text-right">Label Cost</th>
+                        <th class="px-3 py-2">Tracking</th>
+                      </tr>
+                    </thead>
+                    <tbody id="ebayTxnShipBody" class="divide-y divide-gray-200"></tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Fees summary -->
+              <div id="ebayTxnFeesWrap" class="hidden">
+                <div class="flex items-center justify-between mb-1">
+                  <span class="text-[11px] font-black uppercase tracking-[.12em] text-black/70">💰 eBay Fees → Expenses</span>
+                  <span id="ebayTxnFeesCount" class="text-xs font-bold text-gray-500"></span>
+                </div>
+                <div class="border-4 border-black overflow-x-auto max-h-40 overflow-y-auto">
+                  <table class="w-full text-xs">
+                    <thead class="bg-black text-white sticky top-0">
+                      <tr class="text-left uppercase tracking-[.12em] font-black">
+                        <th class="px-3 py-2">Date</th>
+                        <th class="px-3 py-2">Description</th>
+                        <th class="px-3 py-2 text-right">Amount</th>
+                        <th class="px-3 py-2">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody id="ebayTxnFeesBody" class="divide-y divide-gray-200"></tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Selling fees summary -->
+              <div id="ebayTxnSellingWrap" class="hidden">
+                <div class="flex items-center justify-between mb-1">
+                  <span class="text-[11px] font-black uppercase tracking-[.12em] text-black/70">📊 Selling Fees → Expenses (Monthly)</span>
+                  <span id="ebayTxnSellingCount" class="text-xs font-bold text-gray-500"></span>
+                </div>
+                <div class="border-4 border-black overflow-x-auto max-h-40 overflow-y-auto">
+                  <table class="w-full text-xs">
+                    <thead class="bg-black text-white sticky top-0">
+                      <tr class="text-left uppercase tracking-[.12em] font-black">
+                        <th class="px-3 py-2">Month</th>
+                        <th class="px-3 py-2">Orders</th>
+                        <th class="px-3 py-2 text-right">Total Fees</th>
+                      </tr>
+                    </thead>
+                    <tbody id="ebayTxnSellingBody" class="divide-y divide-gray-200"></tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div id="ebayTxnDupeWarning" class="hidden text-xs text-amber-600 font-bold">
+                ⚠️ Rows highlighted in yellow are already imported and will be skipped.
+              </div>
+            </div>
+          </div>
+
+          <!-- Foot -->
+          <div class="sticky bottom-0 flex items-center justify-between gap-3 p-3 sm:p-5 border-t-4 border-black bg-gray-50">
+            <div></div>
+            <div class="flex items-center gap-3">
+              <button id="btnCancelEbayTxn" type="button"
+                class="border-4 border-black bg-white text-black px-4 py-2 font-black uppercase tracking-[.12em] text-xs
+                       hover:bg-gray-100 transition-all">
+                Cancel
+              </button>
+              <button id="btnRunEbayTxn" type="button" disabled
+                class="border-4 border-black bg-black text-white px-6 py-2 font-black uppercase tracking-[.12em] text-xs
+                       hover:bg-kkpink hover:border-kkpink hover:text-black transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                Import All
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script type="module" src="/js/admin/expenses/index.js"></script>
 <script type="module" src="/js/shared/pwa.js"></script>

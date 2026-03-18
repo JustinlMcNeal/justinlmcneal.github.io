@@ -57,6 +57,30 @@ export function getEls() {
     importPreviewCount: document.getElementById("importPreviewCount"),
     importDupeWarning: document.getElementById("importDupeWarning"),
     importMsg: document.getElementById("importMsg"),
+
+    // eBay transaction modal
+    btnImportEbay: document.getElementById("btnImportEbay"),
+    ebayTxnModal: document.getElementById("ebayTxnModal"),
+    ebayTxnBackdrop: document.getElementById("ebayTxnBackdrop"),
+    btnCloseEbayTxn: document.getElementById("btnCloseEbayTxn"),
+    btnCancelEbayTxn: document.getElementById("btnCancelEbayTxn"),
+    btnParseEbayTxn: document.getElementById("btnParseEbayTxn"),
+    btnRunEbayTxn: document.getElementById("btnRunEbayTxn"),
+    ebayTxnMsg: document.getElementById("ebayTxnMsg"),
+    ebayTxnDropZone: document.getElementById("ebayTxnDropZone"),
+    ebayTxnFileInput: document.getElementById("ebayTxnFileInput"),
+    ebayTxnFileName: document.getElementById("ebayTxnFileName"),
+    ebayTxnPreviewWrap: document.getElementById("ebayTxnPreviewWrap"),
+    ebayTxnShipWrap: document.getElementById("ebayTxnShipWrap"),
+    ebayTxnShipCount: document.getElementById("ebayTxnShipCount"),
+    ebayTxnShipBody: document.getElementById("ebayTxnShipBody"),
+    ebayTxnFeesWrap: document.getElementById("ebayTxnFeesWrap"),
+    ebayTxnFeesCount: document.getElementById("ebayTxnFeesCount"),
+    ebayTxnFeesBody: document.getElementById("ebayTxnFeesBody"),
+    ebayTxnSellingWrap: document.getElementById("ebayTxnSellingWrap"),
+    ebayTxnSellingCount: document.getElementById("ebayTxnSellingCount"),
+    ebayTxnSellingBody: document.getElementById("ebayTxnSellingBody"),
+    ebayTxnDupeWarning: document.getElementById("ebayTxnDupeWarning"),
   };
 }
 

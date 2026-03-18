@@ -27,6 +27,12 @@ import {
   findExistingInvoices,
   bulkInsertInvoices
 } from "./importInvoices.js";
+import {
+  parseEbayTransactions,
+  updateOrderShippingCosts,
+  findExistingEbayExpenses,
+  importEbayExpenses
+} from "./importEbayTransactions.js";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const ADMIN_ENTRY_PAGE = "/pages/admin/index.html";
@@ -324,6 +330,266 @@ async function runImport() {
   }
 }
 
+/* ── eBay transaction modal ─────────────────────── */
+
+function openEbayTxnModal() {
+  const { els } = window.__kkExpenses;
+  els.ebayTxnPreviewWrap?.classList.add("hidden");
+  els.btnRunEbayTxn.disabled = true;
+  els.btnParseEbayTxn.disabled = true;
+  els.ebayTxnFileName?.classList.add("hidden");
+  hideEbayTxnMsg();
+  window.__kkExpenses.ebayTxnFile = null;
+  window.__kkExpenses.ebayTxnParsed = null;
+
+  els.ebayTxnModal?.classList.remove("hidden");
+  els.ebayTxnModal?.setAttribute("aria-hidden", "false");
+  document.body.style.overflow = "hidden";
+}
+
+function closeEbayTxnModal() {
+  const { els } = window.__kkExpenses;
+  els.ebayTxnModal?.classList.add("hidden");
+  els.ebayTxnModal?.setAttribute("aria-hidden", "true");
+  document.body.style.overflow = "";
+}
+
+function showEbayTxnMsg(text, isError = true) {
+  const { els } = window.__kkExpenses;
+  els.ebayTxnMsg.textContent = text;
+  els.ebayTxnMsg.className = `p-3 border-4 text-sm ${isError
+    ? "border-red-300 bg-red-50 text-red-700"
+    : "border-green-300 bg-green-50 text-green-700"}`;
+  els.ebayTxnMsg.classList.remove("hidden");
+}
+
+function hideEbayTxnMsg() {
+  const { els } = window.__kkExpenses;
+  els.ebayTxnMsg?.classList.add("hidden");
+}
+
+function wireEbayTxnFileDrop() {
+  const { els } = window.__kkExpenses;
+  if (!els.ebayTxnDropZone || !els.ebayTxnFileInput) return;
+
+  els.ebayTxnDropZone.addEventListener("click", () => els.ebayTxnFileInput.click());
+  els.ebayTxnFileInput.addEventListener("change", () => {
+    const file = els.ebayTxnFileInput.files?.[0];
+    els.ebayTxnFileInput.value = "";
+    if (file) setEbayTxnFile(file);
+  });
+
+  els.ebayTxnDropZone.addEventListener("dragover", e => {
+    e.preventDefault();
+    els.ebayTxnDropZone.classList.add("border-black", "bg-gray-50");
+  });
+  els.ebayTxnDropZone.addEventListener("dragleave", e => {
+    e.preventDefault();
+    els.ebayTxnDropZone.classList.remove("border-black", "bg-gray-50");
+  });
+  els.ebayTxnDropZone.addEventListener("drop", e => {
+    e.preventDefault();
+    els.ebayTxnDropZone.classList.remove("border-black", "bg-gray-50");
+    const file = e.dataTransfer?.files?.[0];
+    if (file) setEbayTxnFile(file);
+  });
+}
+
+function setEbayTxnFile(file) {
+  const { els } = window.__kkExpenses;
+  window.__kkExpenses.ebayTxnFile = file;
+  els.ebayTxnFileName.textContent = file.name;
+  els.ebayTxnFileName.classList.remove("hidden");
+  els.btnParseEbayTxn.disabled = false;
+  hideEbayTxnMsg();
+}
+
+function escH(s) {
+  return (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+async function parseEbayTxn() {
+  const { els } = window.__kkExpenses;
+  hideEbayTxnMsg();
+
+  const file = window.__kkExpenses.ebayTxnFile;
+  if (!file) { showEbayTxnMsg("Select a file first."); return; }
+
+  try {
+    showEbayTxnMsg("Parsing…", false);
+    const text = await file.text();
+    const parsed = parseEbayTransactions(text);
+
+    if (parsed.errors.length) {
+      showEbayTxnMsg(parsed.errors.join(" | "));
+      return;
+    }
+
+    if (!parsed.shippingLabels.length && !parsed.fees.length && !parsed.sellingFees.length) {
+      showEbayTxnMsg("No importable transactions found in this CSV.");
+      return;
+    }
+
+    // Check for existing expenses (dupe detection)
+    const allRefs = [
+      ...parsed.fees.map(f => f.referenceId || `ebay_fee_${f.date}_${f.amountCents}`),
+      ...Object.keys(aggregateSellingFees(parsed.sellingFees)).map(m => `ebay_selling_fees_${m}`),
+    ];
+    let existingRefs = new Set();
+    try {
+      existingRefs = await findExistingEbayExpenses(allRefs);
+    } catch (err) {
+      console.warn("Dupe check failed:", err);
+    }
+
+    // Render shipping labels preview
+    if (parsed.shippingLabels.length) {
+      els.ebayTxnShipWrap.classList.remove("hidden");
+      els.ebayTxnShipCount.textContent = `${parsed.shippingLabels.length} labels`;
+      els.ebayTxnShipBody.innerHTML = parsed.shippingLabels.map(l => `
+        <tr>
+          <td class="px-3 py-1.5">${escH(l.date)}</td>
+          <td class="px-3 py-1.5 font-mono text-[10px]">${escH(l.orderNumber || "—")}</td>
+          <td class="px-3 py-1.5 text-right font-bold">$${(l.costCents / 100).toFixed(2)}</td>
+          <td class="px-3 py-1.5 font-mono text-[10px]">${escH(l.tracking || "—")}</td>
+        </tr>`).join("");
+    } else {
+      els.ebayTxnShipWrap.classList.add("hidden");
+    }
+
+    // Render fees preview
+    let newFeeCount = 0;
+    if (parsed.fees.length) {
+      els.ebayTxnFeesWrap.classList.remove("hidden");
+      els.ebayTxnFeesBody.innerHTML = parsed.fees.map(f => {
+        const refId = f.referenceId || `ebay_fee_${f.date}_${f.amountCents}`;
+        const isDupe = existingRefs.has(refId);
+        if (!isDupe) newFeeCount++;
+        return `
+          <tr class="${isDupe ? 'bg-amber-50 text-amber-500 line-through' : ''}">
+            <td class="px-3 py-1.5">${escH(f.date)}</td>
+            <td class="px-3 py-1.5">${escH(f.description)}</td>
+            <td class="px-3 py-1.5 text-right font-bold">$${(f.amountCents / 100).toFixed(2)}</td>
+            <td class="px-3 py-1.5">${isDupe ? "Already imported" : "New"}</td>
+          </tr>`;
+      }).join("");
+      els.ebayTxnFeesCount.textContent = `${newFeeCount} new / ${parsed.fees.length} total`;
+    } else {
+      els.ebayTxnFeesWrap.classList.add("hidden");
+    }
+
+    // Render selling fees preview (monthly aggregated)
+    const monthly = aggregateSellingFees(parsed.sellingFees);
+    const monthKeys = Object.keys(monthly).sort();
+    let newSellingCount = 0;
+    if (monthKeys.length) {
+      els.ebayTxnSellingWrap.classList.remove("hidden");
+      els.ebayTxnSellingBody.innerHTML = monthKeys.map(m => {
+        const agg = monthly[m];
+        const refId = `ebay_selling_fees_${m}`;
+        const isDupe = existingRefs.has(refId);
+        if (!isDupe) newSellingCount++;
+        return `
+          <tr class="${isDupe ? 'bg-amber-50 text-amber-500 line-through' : ''}">
+            <td class="px-3 py-1.5">${escH(m)}</td>
+            <td class="px-3 py-1.5">${agg.count} orders</td>
+            <td class="px-3 py-1.5 text-right font-bold">$${(agg.cents / 100).toFixed(2)}</td>
+          </tr>`;
+      }).join("");
+      els.ebayTxnSellingCount.textContent = `${newSellingCount} new / ${monthKeys.length} total`;
+    } else {
+      els.ebayTxnSellingWrap.classList.add("hidden");
+    }
+
+    if (existingRefs.size > 0) {
+      els.ebayTxnDupeWarning.classList.remove("hidden");
+    } else {
+      els.ebayTxnDupeWarning.classList.add("hidden");
+    }
+
+    els.ebayTxnPreviewWrap.classList.remove("hidden");
+
+    // Store parsed data
+    window.__kkExpenses.ebayTxnParsed = parsed;
+    window.__kkExpenses.ebayTxnExistingRefs = existingRefs;
+
+    const totalNew = parsed.shippingLabels.length + newFeeCount + newSellingCount;
+    els.btnRunEbayTxn.disabled = totalNew === 0;
+
+    if (totalNew === 0) {
+      showEbayTxnMsg("Everything is already imported!", false);
+    } else {
+      showEbayTxnMsg(
+        `Ready: ${parsed.shippingLabels.length} shipping labels to update, ` +
+        `${newFeeCount + newSellingCount} fee expenses to import.`,
+        false
+      );
+    }
+  } catch (err) {
+    console.error(err);
+    showEbayTxnMsg(err?.message || "Parse failed.");
+  }
+}
+
+function aggregateSellingFees(sellingFees) {
+  const monthly = {};
+  for (const sf of sellingFees) {
+    const month = sf.date.slice(0, 7);
+    if (!monthly[month]) monthly[month] = { cents: 0, count: 0 };
+    monthly[month].cents += sf.amountCents;
+    monthly[month].count++;
+  }
+  return monthly;
+}
+
+async function runEbayTxnImport() {
+  const { els } = window.__kkExpenses;
+  const parsed = window.__kkExpenses.ebayTxnParsed;
+  const existingRefs = window.__kkExpenses.ebayTxnExistingRefs || new Set();
+  if (!parsed) return;
+
+  els.btnRunEbayTxn.disabled = true;
+  els.btnParseEbayTxn.disabled = true;
+
+  try {
+    const results = [];
+
+    // 1. Update shipping costs on existing orders
+    if (parsed.shippingLabels.length) {
+      showEbayTxnMsg("Updating order shipping costs…", false);
+      const shipResult = await updateOrderShippingCosts(parsed.shippingLabels);
+      results.push(`${shipResult.updated} order shipping costs updated`);
+    }
+
+    // 2. Import fees as expenses
+    if (parsed.fees.length || parsed.sellingFees.length) {
+      showEbayTxnMsg("Importing eBay fees as expenses…", false);
+      const count = await importEbayExpenses({
+        fees: parsed.fees,
+        sellingFees: parsed.sellingFees,
+        existingRefs,
+      });
+      results.push(`${count} expense${count === 1 ? "" : "s"} imported`);
+    }
+
+    showEbayTxnMsg(`✓ Done! ${results.join(", ")}.`, false);
+
+    // Refresh data
+    await Promise.all([
+      loadExpenses({ reset: true }),
+      refreshKpis()
+    ]);
+
+    setTimeout(() => closeEbayTxnModal(), 1500);
+  } catch (err) {
+    console.error(err);
+    showEbayTxnMsg(err?.message || "Import failed.");
+    els.btnRunEbayTxn.disabled = false;
+  } finally {
+    els.btnParseEbayTxn.disabled = false;
+  }
+}
+
 /* ── wiring ─────────────────────────────────────── */
 
 function attachHandlers() {
@@ -362,10 +628,20 @@ function attachHandlers() {
   const importBackdrop = document.getElementById("importModalBackdrop");
   importBackdrop?.addEventListener("click", () => closeImportModal());
 
+  // eBay Transaction modal
+  els.btnImportEbay?.addEventListener("click", () => openEbayTxnModal());
+  els.btnCloseEbayTxn?.addEventListener("click", () => closeEbayTxnModal());
+  els.btnCancelEbayTxn?.addEventListener("click", () => closeEbayTxnModal());
+  els.ebayTxnBackdrop?.addEventListener("click", () => closeEbayTxnModal());
+  els.btnParseEbayTxn?.addEventListener("click", () => parseEbayTxn());
+  els.btnRunEbayTxn?.addEventListener("click", () => runEbayTxnImport());
+  wireEbayTxnFileDrop();
+
   // ESC to close
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       closeImportModal();
+      closeEbayTxnModal();
       closeModal(els);
     }
   });
