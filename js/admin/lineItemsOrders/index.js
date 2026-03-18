@@ -612,9 +612,15 @@ function wireEvents() {
         const lines = Object.entries(result.breakdown)
           .sort((a, b) => b[1].cents - a[1].cents)
           .map(([code, p]) => `<div>${p.name} — ${p.qty} units — $${(p.cents / 100).toFixed(2)}</div>`);
-        els.ebayBreakdownWrap.innerHTML = lines.length
+        let html = lines.length
           ? `<div class="font-bold mb-1">Product breakdown:</div>${lines.join("")}`
           : "";
+        // Show unmapped eBay titles
+        if (result.unmappedTitles?.length) {
+          html += `<div class="font-bold mt-2 text-amber-700">⚠️ Unmapped eBay titles (not linked to products):</div>`;
+          html += result.unmappedTitles.map(t => `<div class="ml-2 text-amber-600">${t}</div>`).join("");
+        }
+        els.ebayBreakdownWrap.innerHTML = html;
       }
 
       if (els.ebayResultPanel) els.ebayResultPanel.classList.remove("hidden");

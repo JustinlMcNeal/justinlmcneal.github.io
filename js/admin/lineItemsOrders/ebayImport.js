@@ -11,6 +11,51 @@ function stripBom(s) {
   return s.charCodeAt(0) === 0xfeff ? s.slice(1) : s;
 }
 
+/**
+ * Normalize a string for fuzzy matching —
+ * lowercase, strip punctuation, collapse whitespace.
+ */
+function norm(s) {
+  return (s || "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Try to match an eBay item title to a product in the DB.
+ * Returns the product `code` or null.
+ *
+ * Strategy (in order):
+ *  1. Exact normalised match  (norm(ebayTitle) === norm(productName))
+ *  2. Product name is a substring of the eBay title
+ *  3. eBay title is a substring of the product name
+ *  4. Token-overlap score: pick the product with the most shared words
+ *     (at least 2 shared tokens required)
+ */
+function matchProduct(ebayTitle, products) {
+  const t = norm(ebayTitle);
+  if (!t) return null;
+
+  // Pass 1 — exact
+  for (const p of products) if (norm(p.name) === t) return p.code;
+
+  // Pass 2 — substring matches
+  for (const p of products) {
+    const n = norm(p.name);
+    if (t.includes(n) || n.includes(t)) return p.code;
+  }
+
+  // Pass 3 — token overlap (at least 2+ meaningful shared tokens)
+  const tTokens = new Set(t.split(" ").filter(w => w.length > 2));
+  let bestCode = null;
+  let bestScore = 1; // need at least 2 shared tokens
+  for (const p of products) {
+    const pTokens = norm(p.name).split(" ").filter(w => w.length > 2);
+    let score = 0;
+    for (const w of pTokens) if (tTokens.has(w)) score++;
+    if (score > bestScore) { bestScore = score; bestCode = p.code; }
+  }
+  return bestCode;
+}
+
 /** Parse RFC 4180 CSV (handles quoted fields with embedded commas/newlines). */
 function parseCSV(text) {
   const raw = stripBom(text).replace(/\r\n/g, "\n").replace(/\r/g, "\n");
@@ -93,12 +138,6 @@ function parseEbayDate(str) {
   // Fallback: try native parsing
   const d = new Date(str);
   return isNaN(d.getTime()) ? null : d.toISOString();
-}
-
-// ── USPS label cost estimator (same as Amazon importer) ─────────
-function estimateLabelCostCents() {
-  // eBay orders are typically small items; use 4oz rate
-  return 400;
 }
 
 // ── parseEbayCSV (exported for preview) ─────────────────────────
@@ -218,7 +257,16 @@ export function parseEbayCSV(text) {
 export async function importEbayOrders(validRows) {
   const supabase = getSupabaseClient();
 
-  // Group by order number (one eBay order can have multiple items)
+  // 1. Fetch all products for title → code matching
+  const { data: products } = await supabase
+    .from("products")
+    .select("code, name, weight_g, unit_cost");
+
+  const prodMap = {};
+  for (const p of (products || [])) prodMap[p.code] = p;
+  const unmappedTitles = new Set();
+
+  // 2. Group by order number (one eBay order can have multiple items)
   const orderMap = {};
   for (const r of validRows) {
     const id = r.orderNumber || `sr_${r.salesRecordNumber}`;
@@ -241,7 +289,7 @@ export async function importEbayOrders(validRows) {
     orderMap[id].items.push(r);
   }
 
-  // Build order + line-item rows (same shape as Amazon importer)
+  // 3. Build order + line-item rows
   const orderDbRows = [];
   const lineItemDbRows = [];
   let totalRevenueCents = 0;
@@ -256,26 +304,44 @@ export async function importEbayOrders(validRows) {
     let orderTaxCents = 0;
     let orderShipCents = 0;
     let totalQty = 0;
+    let totalWeightG = 0;
+    let orderCostCents = 0;
 
     for (let i = 0; i < order.items.length; i++) {
       const item = order.items[i];
       const qty = item.quantity;
       const unitPriceCents = qty > 0 ? Math.round(item.soldForCents / qty) : item.soldForCents;
 
+      // Match eBay title → product code
+      const kkCode = matchProduct(item.itemTitle, products || []);
+      const product = kkCode ? prodMap[kkCode] : null;
+
+      if (!kkCode) unmappedTitles.add(item.itemTitle);
+
+      const weightG = product?.weight_g || 0;
+      totalWeightG += weightG * qty;
+      if (product?.unit_cost) orderCostCents += Math.round(product.unit_cost * 100) * qty;
+
       orderSubtotalCents += item.soldForCents;
       orderTaxCents += item.taxCents;
       orderShipCents += item.shippingCents;
       totalQty += qty;
 
-      // Parse variant from "[Set:Ghost Face]" style
+      // Parse variant from "[Set:Ghost Face]" or "Set:Ghost Face" style
       let variant = null;
       if (item.variationDetails) {
         const vm = item.variationDetails.match(/\[([^\]]+)\]/);
-        if (vm) variant = vm[1];
+        if (vm) {
+          variant = vm[1];
+        } else {
+          // Try "Key:Value" format
+          const kv = item.variationDetails.match(/:\s*(.+)/);
+          if (kv) variant = kv[1].trim();
+        }
       }
 
-      const pid = item.itemNumber || `ebay_item_${i}`;
-      if (!breakdown[pid]) breakdown[pid] = { name: item.itemTitle || pid, qty: 0, cents: 0 };
+      const pid = kkCode || item.itemNumber || `ebay_item_${i}`;
+      if (!breakdown[pid]) breakdown[pid] = { name: product?.name || item.itemTitle || pid, qty: 0, cents: 0 };
       breakdown[pid].qty += qty;
       breakdown[pid].cents += item.soldForCents;
 
@@ -284,12 +350,12 @@ export async function importEbayOrders(validRows) {
         stripe_line_item_id: `ebay_${order.orderNumber || order.salesRecordNumber}_li_${item.transactionId || i}`,
         order_date: item.orderDate,
         product_id: pid,
-        product_name: item.itemTitle || "",
+        product_name: product?.name || item.itemTitle || "",
         variant,
         quantity: qty,
         unit_price_cents: unitPriceCents,
         post_discount_unit_price_cents: unitPriceCents,
-        item_weight_g: 0,
+        item_weight_g: weightG,
       });
     }
 
@@ -306,7 +372,7 @@ export async function importEbayOrders(validRows) {
       tax_cents: orderTaxCents,
       shipping_paid_cents: orderShipCents,
       total_paid_cents: totalPaidCents,
-      total_weight_g: 0,
+      total_weight_g: totalWeightG,
       order_savings_total_cents: 0,
       order_savings_code_cents: 0,
       order_savings_auto_cents: 0,
@@ -321,16 +387,18 @@ export async function importEbayOrders(validRows) {
       zip: order.shipToZip || null,
       country: order.shipToCountry || null,
       stripe_customer_id: null,
-      order_cost_total_cents: null,
-      // Fulfillment fields
+      order_cost_total_cents: orderCostCents || null,
+      // Fulfillment fields (read by the generic RPC)
       shipped_at: order.orderDate,
-      label_cost_cents: estimateLabelCostCents(),
+      label_cost_cents: 0,
+      carrier: "eBay",
+      shipping_service: order.shippingService || "eBay Standard",
       tracking_number: order.trackingNumber || null,
-      shipping_service: order.shippingService || null,
+      import_notes: "Imported from eBay Orders CSV",
     });
   }
 
-  // Insert via the same RPC (SECURITY DEFINER, handles dedup via upsert)
+  // 4. Insert via RPC (SECURITY DEFINER, handles dedup via upsert)
   const { data: rpcResult, error: rpcErr } = await supabase.rpc("rpc_import_amazon_orders", {
     p_orders: orderDbRows,
     p_items: lineItemDbRows,
@@ -346,6 +414,7 @@ export async function importEbayOrders(validRows) {
     skippedDuplicates: 0,
     revenue: totalRevenueCents,
     breakdown,
+    unmappedTitles: [...unmappedTitles],
   };
 }
 

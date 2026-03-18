@@ -203,7 +203,7 @@ export async function importAmazonOrders(validRows) {
       tax_cents: orderTaxCents,
       shipping_paid_cents: orderShipCents + orderShipTaxCents,
       total_paid_cents: totalPaidCents,
-      total_weight_g: totalWeightG || null,
+      total_weight_g: totalWeightG || 0,
       order_savings_total_cents: 0,
       order_savings_code_cents: 0,
       order_savings_auto_cents: 0,
@@ -222,6 +222,10 @@ export async function importAmazonOrders(validRows) {
       // Fields used by fulfillment_shipments (step 3 in RPC)
       shipped_at: order.purchaseDate,  // Amazon orders ship same/next day
       label_cost_cents: totalWeightG ? estimateLabelCostCents(totalWeightG) : 400,
+      carrier: "Amazon",
+      shipping_service: "Fulfilled by Amazon",
+      tracking_number: null,
+      import_notes: "Imported from Amazon Seller Central",
     });
   }
 
