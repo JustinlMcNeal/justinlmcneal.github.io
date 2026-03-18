@@ -18,32 +18,45 @@ export function parseGitHubBilling(text) {
   const lines = text.trim().split(/\n/).map(l => l.trim()).filter(Boolean);
   const results = [];
 
+  // GitHub's billing page copies with NO separators between columns, e.g.:
+  //   2026-02-230DEGCROG Visa ending in 8647$39.00Success
+  // So we use a regex to pull apart: date, id, payment method, $amount, status
+  const concatRe = /^(\d{4}-\d{2}-\d{2})([A-Z0-9]{4,16})\s+(.*?)\$(\d+\.?\d*)\s*(Success|Failed|Pending|Refunded)/i;
+
   for (const line of lines) {
-    // Skip obvious header row
-    if (/^date\s/i.test(line)) continue;
+    // Skip header row (no separators: "DateIDPayment Method...")
+    if (/^dateid/i.test(line)) continue;
     if (/^showing/i.test(line)) continue;
 
-    // Split by tab first, then fall back to 2+ spaces
-    const parts = line.includes("\t")
+    let expense_date, txnId, paymentMethod, amount_cents, status;
+
+    // Try tab-separated first (in case the browser does provide tabs)
+    const tabParts = line.includes("\t")
       ? line.split("\t").map(s => s.trim()).filter(Boolean)
-      : line.split(/\s{2,}/).map(s => s.trim()).filter(Boolean);
+      : null;
 
-    // Need at least: Date, ID, Payment Method, Amount, Status
-    if (parts.length < 5) continue;
+    if (tabParts && tabParts.length >= 5) {
+      expense_date = parseGHDate(tabParts[0]);
+      txnId = tabParts[1];
+      paymentMethod = tabParts[2];
+      const dollars = parseFloat(tabParts[3].replace(/[^0-9.]/g, "")) || 0;
+      amount_cents = Math.round(dollars * 100);
+      status = tabParts[4];
+    } else {
+      // No-separator concatenated format
+      const m = concatRe.exec(line);
+      if (!m) continue;
 
-    const dateStr = parts[0];          // "2026-02-23"
-    const txnId = parts[1];            // "0DEGCROG"
-    const paymentMethod = parts[2];    // "Visa ending in 8647"
-    const amountStr = parts[3];        // "$39.00"
-    const status = parts[4];           // "Success"
+      expense_date = m[1];              // "2026-02-23"
+      txnId = m[2];                     // "0DEGCROG"
+      paymentMethod = m[3].trim();      // "Visa ending in 8647"
+      const dollars = parseFloat(m[4]); // 39.00
+      amount_cents = Math.round(dollars * 100);
+      status = m[5];                    // "Success"
+    }
 
-    // Parse date — accept YYYY-MM-DD directly
-    const expense_date = parseGHDate(dateStr);
-    if (!expense_date) continue;
-
-    // Parse amount
-    const dollars = parseFloat(amountStr.replace(/[^0-9.]/g, "")) || 0;
-    const amount_cents = Math.round(dollars * 100);
+    if (!expense_date || !parseGHDate(expense_date)) continue;
+    expense_date = parseGHDate(expense_date);
     if (amount_cents <= 0) continue;
 
     results.push({
