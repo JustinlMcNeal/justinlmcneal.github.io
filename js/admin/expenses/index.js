@@ -38,6 +38,12 @@ import {
   findExistingGitHubExpenses,
   bulkInsertGitHubExpenses
 } from "./importGitHub.js";
+import {
+  parseAmazonTransactions,
+  updateAmazonShippingCosts,
+  findExistingAmazonExpenses,
+  importAmazonExpenses
+} from "./importAmazonTxn.js";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const ADMIN_ENTRY_PAGE = "/pages/admin/index.html";
@@ -792,6 +798,16 @@ function attachHandlers() {
   els.btnRunEbayTxn?.addEventListener("click", () => runEbayTxnImport());
   wireEbayTxnFileDrop();
 
+  // Amazon Transaction modal
+  els.btnImportAmazon?.addEventListener("click", () => openAmzTxnModal());
+  wireAmzBtnDrop();
+  els.btnCloseAmzTxn?.addEventListener("click", () => closeAmzTxnModal());
+  els.btnCancelAmzTxn?.addEventListener("click", () => closeAmzTxnModal());
+  els.amzTxnBackdrop?.addEventListener("click", () => closeAmzTxnModal());
+  els.btnParseAmzTxn?.addEventListener("click", () => parseAmzTxn());
+  els.btnRunAmzTxn?.addEventListener("click", () => runAmzTxnImport());
+  wireAmzTxnFileDrop();
+
   // GitHub billing modal
   els.btnImportGitHub?.addEventListener("click", () => openGHModal());
   els.btnCloseGH?.addEventListener("click", () => closeGHModal());
@@ -805,6 +821,7 @@ function attachHandlers() {
     if (e.key === "Escape") {
       closeImportModal();
       closeEbayTxnModal();
+      closeAmzTxnModal();
       closeGHModal();
       closeModal(els);
     }
