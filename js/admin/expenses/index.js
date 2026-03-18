@@ -19,7 +19,8 @@ import {
   readForm,
   showMsg,
   hideMsg,
-  setBusy
+  setBusy,
+  setupMileageListeners
 } from "./modal.js";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -52,6 +53,11 @@ async function refreshKpis() {
     els.kpiThisMonth.textContent = fmtMoney(kpi.monthCents);
     els.kpiCount.textContent = kpi.count;
     els.kpiTopCategory.textContent = kpi.topCategory;
+    if (els.kpiTotalMiles) {
+      els.kpiTotalMiles.textContent = kpi.totalMiles
+        ? kpi.totalMiles.toFixed(1) + " mi"
+        : "0";
+    }
   } catch (err) {
     console.warn("KPI load failed:", err);
   }
@@ -226,6 +232,7 @@ async function boot() {
   window.__kkExpenses = { els, state, session };
 
   attachHandlers();
+  setupMileageListeners(els);
 
   // Initial load
   await Promise.all([

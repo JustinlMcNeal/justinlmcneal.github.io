@@ -60,12 +60,20 @@ export async function upsertExpense(payload) {
     description: (payload.description || "").trim() || null,
     amount_cents: payload.amount_cents ?? 0,
     vendor: (payload.vendor || "").trim() || null,
-    notes: (payload.notes || "").trim() || null
+    notes: (payload.notes || "").trim() || null,
+    miles: payload.miles ?? null,
+    mileage_rate: payload.mileage_rate ?? null
   };
 
   if (!row.expense_date) throw new Error("Date is required.");
   if (!row.category) throw new Error("Category is required.");
-  if (!row.amount_cents || row.amount_cents <= 0) throw new Error("Amount must be greater than $0.");
+
+  // For mileage entries, amount is auto-calculated from miles × rate
+  if (row.category === "Mileage") {
+    if (!row.miles || row.miles <= 0) throw new Error("Miles driven is required for mileage entries.");
+  } else {
+    if (!row.amount_cents || row.amount_cents <= 0) throw new Error("Amount must be greater than $0.");
+  }
 
   if (payload.id) {
     // Update
@@ -101,7 +109,7 @@ export async function getExpenseKpis() {
   // Fetch all expenses (just the columns we need for KPIs)
   const { data, error } = await supabase
     .from("expenses")
-    .select("amount_cents,expense_date,category");
+    .select("amount_cents,expense_date,category,miles");
 
   if (error) throw error;
 
@@ -111,6 +119,7 @@ export async function getExpenseKpis() {
 
   let totalCents = 0;
   let monthCents = 0;
+  let totalMiles = 0;
   const catTotals = {};
 
   for (const r of rows) {
@@ -119,6 +128,10 @@ export async function getExpenseKpis() {
 
     if (r.expense_date && r.expense_date.startsWith(thisMonth)) {
       monthCents += amt;
+    }
+
+    if (r.miles) {
+      totalMiles += parseFloat(r.miles) || 0;
     }
 
     const cat = r.category || "Other";
@@ -139,6 +152,7 @@ export async function getExpenseKpis() {
     totalCents,
     monthCents,
     count: rows.length,
-    topCategory
+    topCategory,
+    totalMiles
   };
 }

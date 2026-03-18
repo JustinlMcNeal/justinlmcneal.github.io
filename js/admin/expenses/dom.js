@@ -35,6 +35,13 @@ export function getEls() {
     fAmount: document.getElementById("fAmount"),
     fVendor: document.getElementById("fVendor"),
     fNotes: document.getElementById("fNotes"),
+
+    // mileage
+    mileageFields: document.getElementById("mileageFields"),
+    fMiles: document.getElementById("fMiles"),
+    fMileageRate: document.getElementById("fMileageRate"),
+    mileageCalcPreview: document.getElementById("mileageCalcPreview"),
+    kpiTotalMiles: document.getElementById("kpiTotalMiles"),
   };
 }
 

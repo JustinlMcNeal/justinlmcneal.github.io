@@ -14,6 +14,7 @@ const CATEGORY_COLORS = {
   "Professional Fees":    "bg-rose-100 text-rose-800",
   "Bank Fees":            "bg-fuchsia-100 text-fuchsia-800",
   "Vehicle":              "bg-orange-100 text-orange-800",
+  "Mileage":              "bg-lime-100 text-lime-800",
   "Other":                "bg-gray-100 text-gray-800"
 };
 
@@ -37,6 +38,12 @@ function fmtMoney(cents) {
   return "$" + (cents / 100).toFixed(2);
 }
 
+function fmtMiles(r) {
+  if (!r.miles) return "—";
+  const m = parseFloat(r.miles);
+  return m > 0 ? m.toFixed(1) + " mi" : "—";
+}
+
 /**
  * Render desktop table rows.
  */
@@ -53,6 +60,7 @@ export function renderExpensesTable(tbody, rows) {
       <td class="px-4 py-3 whitespace-nowrap">${catPill(r.category)}</td>
       <td class="px-4 py-3 text-sm font-medium">${esc(r.description || "—")}</td>
       <td class="px-4 py-3 text-right font-black text-sm whitespace-nowrap">${fmtMoney(r.amount_cents)}</td>
+      <td class="px-4 py-3 text-right text-sm whitespace-nowrap ${r.miles ? 'text-lime-700 font-bold' : 'text-gray-400'}">${fmtMiles(r)}</td>
       <td class="px-4 py-3 text-sm text-gray-600">${esc(r.vendor || "—")}</td>
       <td class="px-4 py-3 text-right">
         <span class="row-actions text-xs text-gray-400 hover:text-black">Edit →</span>
@@ -78,7 +86,10 @@ export function renderMobileCards(container, rows) {
           <div class="font-black text-sm truncate">${esc(r.description || "—")}</div>
           <div class="text-xs text-gray-500 mt-0.5">${esc(r.vendor || "")} · ${fmtDate(r.expense_date)}</div>
         </div>
-        <div class="font-black text-sm whitespace-nowrap">${fmtMoney(r.amount_cents)}</div>
+        <div class="text-right">
+          <div class="font-black text-sm whitespace-nowrap">${fmtMoney(r.amount_cents)}</div>
+          ${r.miles ? `<div class="text-[10px] font-bold text-lime-700 mt-0.5">🚗 ${fmtMiles(r)}</div>` : ""}
+        </div>
       </div>
       <div>${catPill(r.category)}</div>
     </div>
