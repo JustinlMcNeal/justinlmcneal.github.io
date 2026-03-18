@@ -368,6 +368,32 @@ function hideEbayTxnMsg() {
   els.ebayTxnMsg?.classList.add("hidden");
 }
 
+/** Let users drag-and-drop a CSV straight onto the "eBay Transactions" button.
+ *  Opens the modal, pre-loads the file, and auto-parses. */
+function wireEbayBtnDrop() {
+  const { els } = window.__kkExpenses;
+  const btn = els.btnImportEbay;
+  if (!btn) return;
+
+  btn.addEventListener("dragover", e => {
+    e.preventDefault();
+    btn.classList.add("bg-kkpink", "border-kkpink", "text-black");
+  });
+  btn.addEventListener("dragleave", e => {
+    e.preventDefault();
+    btn.classList.remove("bg-kkpink", "border-kkpink", "text-black");
+  });
+  btn.addEventListener("drop", e => {
+    e.preventDefault();
+    btn.classList.remove("bg-kkpink", "border-kkpink", "text-black");
+    const file = e.dataTransfer?.files?.[0];
+    if (!file) return;
+    openEbayTxnModal();          // open modal first
+    setEbayTxnFile(file);        // pre-load the file
+    setTimeout(() => parseEbayTxn(), 100); // auto-parse
+  });
+}
+
 function wireEbayTxnFileDrop() {
   const { els } = window.__kkExpenses;
   if (!els.ebayTxnDropZone || !els.ebayTxnFileInput) return;
@@ -630,6 +656,7 @@ function attachHandlers() {
 
   // eBay Transaction modal
   els.btnImportEbay?.addEventListener("click", () => openEbayTxnModal());
+  wireEbayBtnDrop();  // drag-and-drop on the button itself
   els.btnCloseEbayTxn?.addEventListener("click", () => closeEbayTxnModal());
   els.btnCancelEbayTxn?.addEventListener("click", () => closeEbayTxnModal());
   els.ebayTxnBackdrop?.addEventListener("click", () => closeEbayTxnModal());
