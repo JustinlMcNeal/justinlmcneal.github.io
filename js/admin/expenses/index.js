@@ -22,6 +22,11 @@ import {
   setBusy,
   setupMileageListeners
 } from "./modal.js";
+import {
+  parseOpenAIInvoices,
+  findExistingInvoices,
+  bulkInsertInvoices
+} from "./importInvoices.js";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const ADMIN_ENTRY_PAGE = "/pages/admin/index.html";
@@ -185,6 +190,140 @@ async function removeExpense() {
   }
 }
 
+/* ── import modal ────────────────────────────────── */
+
+function openImportModal() {
+  const { els } = window.__kkExpenses;
+  els.importPasteArea.value = "";
+  els.importPreviewWrap.classList.add("hidden");
+  els.importPreviewBody.innerHTML = "";
+  els.importDupeWarning.classList.add("hidden");
+  els.btnRunImport.disabled = true;
+  hideImportMsg(els);
+  window.__kkExpenses.parsedInvoices = [];
+
+  els.importModal.classList.remove("hidden");
+  els.importModal.setAttribute("aria-hidden", "false");
+  document.body.style.overflow = "hidden";
+  setTimeout(() => els.importPasteArea.focus(), 80);
+}
+
+function closeImportModal() {
+  const { els } = window.__kkExpenses;
+  els.importModal.classList.add("hidden");
+  els.importModal.setAttribute("aria-hidden", "true");
+  document.body.style.overflow = "";
+}
+
+function showImportMsg(els, text, isError = true) {
+  els.importMsg.textContent = text;
+  els.importMsg.className = `p-3 border-4 text-sm ${isError
+    ? "border-red-300 bg-red-50 text-red-700"
+    : "border-green-300 bg-green-50 text-green-700"}`;
+  els.importMsg.classList.remove("hidden");
+}
+
+function hideImportMsg(els) {
+  els.importMsg.classList.add("hidden");
+  els.importMsg.textContent = "";
+}
+
+function esc(s) {
+  return (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+async function parseImport() {
+  const { els } = window.__kkExpenses;
+  hideImportMsg(els);
+
+  const text = els.importPasteArea.value.trim();
+  if (!text) {
+    showImportMsg(els, "Paste invoice data first.", true);
+    return;
+  }
+
+  const parsed = parseOpenAIInvoices(text);
+  if (!parsed.length) {
+    showImportMsg(els, "Could not parse any invoices from the pasted text.", true);
+    return;
+  }
+
+  // Check for duplicates
+  let existing = new Set();
+  try {
+    existing = await findExistingInvoices(parsed.map(p => p.invoice));
+  } catch (err) {
+    console.warn("Dupe check failed:", err);
+  }
+
+  const vendor = els.importVendor.value || "OpenAI";
+  let newCount = 0;
+
+  els.importPreviewBody.innerHTML = parsed.map(e => {
+    const isDupe = existing.has(e.invoice);
+    if (!isDupe) newCount++;
+    return `
+      <tr class="${isDupe ? 'bg-amber-50 text-amber-500 line-through' : ''}">
+        <td class="px-3 py-1.5">${esc(e.expense_date)}</td>
+        <td class="px-3 py-1.5 font-mono">${esc(e.invoice)}</td>
+        <td class="px-3 py-1.5 text-right font-bold">$${(e.amount_cents / 100).toFixed(2)}</td>
+        <td class="px-3 py-1.5">${isDupe ? "Already imported" : esc(e.status)}</td>
+      </tr>`;
+  }).join("");
+
+  els.importPreviewWrap.classList.remove("hidden");
+  els.importPreviewCount.textContent = `${newCount} new / ${parsed.length} total`;
+
+  if (existing.size > 0) {
+    els.importDupeWarning.classList.remove("hidden");
+  } else {
+    els.importDupeWarning.classList.add("hidden");
+  }
+
+  // Store only non-dupe entries for actual import
+  window.__kkExpenses.parsedInvoices = parsed.filter(e => !existing.has(e.invoice));
+  els.btnRunImport.disabled = window.__kkExpenses.parsedInvoices.length === 0;
+
+  if (newCount === 0) {
+    showImportMsg(els, "All invoices are already imported!", false);
+  } else {
+    showImportMsg(els, `${newCount} invoices ready to import as "${vendor}" expenses.`, false);
+  }
+}
+
+async function runImport() {
+  const { els } = window.__kkExpenses;
+  const entries = window.__kkExpenses.parsedInvoices || [];
+  if (!entries.length) return;
+
+  const vendor = els.importVendor.value || "OpenAI";
+  els.btnRunImport.disabled = true;
+  els.btnParseInvoices.disabled = true;
+  showImportMsg(els, `Importing ${entries.length} invoices…`, false);
+
+  try {
+    const count = await bulkInsertInvoices(entries, vendor);
+    showImportMsg(els, `✓ Successfully imported ${count} expense${count === 1 ? "" : "s"}!`, false);
+    window.__kkExpenses.parsedInvoices = [];
+    els.btnRunImport.disabled = true;
+
+    // Refresh data behind the modal
+    await Promise.all([
+      loadExpenses({ reset: true }),
+      refreshKpis()
+    ]);
+
+    // Auto-close after a beat
+    setTimeout(() => closeImportModal(), 1200);
+  } catch (err) {
+    console.error(err);
+    showImportMsg(els, err?.message || "Import failed.", true);
+    els.btnRunImport.disabled = false;
+  } finally {
+    els.btnParseInvoices.disabled = false;
+  }
+}
+
 /* ── wiring ─────────────────────────────────────── */
 
 function attachHandlers() {
@@ -212,9 +351,23 @@ function attachHandlers() {
     onDelete: () => removeExpense()
   });
 
+  // Import modal
+  els.btnImportInvoices?.addEventListener("click", () => openImportModal());
+  els.btnCloseImport?.addEventListener("click", () => closeImportModal());
+  els.btnCancelImport?.addEventListener("click", () => closeImportModal());
+  els.btnParseInvoices?.addEventListener("click", () => parseImport());
+  els.btnRunImport?.addEventListener("click", () => runImport());
+
+  // Backdrop click to close import modal
+  const importBackdrop = document.getElementById("importModalBackdrop");
+  importBackdrop?.addEventListener("click", () => closeImportModal());
+
   // ESC to close
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeModal(els);
+    if (e.key === "Escape") {
+      closeImportModal();
+      closeModal(els);
+    }
   });
 }
 

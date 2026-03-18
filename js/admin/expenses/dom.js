@@ -42,6 +42,21 @@ export function getEls() {
     fMileageRate: document.getElementById("fMileageRate"),
     mileageCalcPreview: document.getElementById("mileageCalcPreview"),
     kpiTotalMiles: document.getElementById("kpiTotalMiles"),
+
+    // import modal
+    btnImportInvoices: document.getElementById("btnImportInvoices"),
+    importModal: document.getElementById("importModal"),
+    btnCloseImport: document.getElementById("btnCloseImport"),
+    btnCancelImport: document.getElementById("btnCancelImport"),
+    btnParseInvoices: document.getElementById("btnParseInvoices"),
+    btnRunImport: document.getElementById("btnRunImport"),
+    importVendor: document.getElementById("importVendor"),
+    importPasteArea: document.getElementById("importPasteArea"),
+    importPreviewWrap: document.getElementById("importPreviewWrap"),
+    importPreviewBody: document.getElementById("importPreviewBody"),
+    importPreviewCount: document.getElementById("importPreviewCount"),
+    importDupeWarning: document.getElementById("importDupeWarning"),
+    importMsg: document.getElementById("importMsg"),
   };
 }
 
