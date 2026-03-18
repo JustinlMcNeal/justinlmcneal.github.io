@@ -33,6 +33,11 @@ import {
   findExistingEbayExpenses,
   importEbayExpenses
 } from "./importEbayTransactions.js";
+import {
+  parseGitHubBilling,
+  findExistingGitHubExpenses,
+  bulkInsertGitHubExpenses
+} from "./importGitHub.js";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const ADMIN_ENTRY_PAGE = "/pages/admin/index.html";
@@ -616,6 +621,129 @@ async function runEbayTxnImport() {
   }
 }
 
+/* ── GitHub billing modal ────────────────────────── */
+
+function openGHModal() {
+  const { els } = window.__kkExpenses;
+  els.ghPasteArea.value = "";
+  els.ghPreviewWrap.classList.add("hidden");
+  els.ghPreviewBody.innerHTML = "";
+  els.ghDupeWarning.classList.add("hidden");
+  els.btnRunGH.disabled = true;
+  hideGHMsg();
+  window.__kkExpenses.parsedGH = [];
+
+  els.ghModal.classList.remove("hidden");
+  els.ghModal.setAttribute("aria-hidden", "false");
+  document.body.style.overflow = "hidden";
+  setTimeout(() => els.ghPasteArea.focus(), 80);
+}
+
+function closeGHModal() {
+  const { els } = window.__kkExpenses;
+  els.ghModal.classList.add("hidden");
+  els.ghModal.setAttribute("aria-hidden", "true");
+  document.body.style.overflow = "";
+}
+
+function showGHMsg(text, isError = true) {
+  const { els } = window.__kkExpenses;
+  els.ghMsg.textContent = text;
+  els.ghMsg.className = `p-3 border-4 text-sm ${isError
+    ? "border-red-300 bg-red-50 text-red-700"
+    : "border-green-300 bg-green-50 text-green-700"}`;
+  els.ghMsg.classList.remove("hidden");
+}
+
+function hideGHMsg() {
+  const { els } = window.__kkExpenses;
+  els.ghMsg?.classList.add("hidden");
+}
+
+async function parseGH() {
+  const { els } = window.__kkExpenses;
+  hideGHMsg();
+
+  const text = els.ghPasteArea.value.trim();
+  if (!text) { showGHMsg("Paste billing data first."); return; }
+
+  const parsed = parseGitHubBilling(text);
+  if (!parsed.length) {
+    showGHMsg("Could not parse any billing entries from the pasted text.");
+    return;
+  }
+
+  // Dupe check
+  let existing = new Set();
+  try {
+    existing = await findExistingGitHubExpenses(parsed.map(p => p.id));
+  } catch (err) {
+    console.warn("Dupe check failed:", err);
+  }
+
+  let newCount = 0;
+  els.ghPreviewBody.innerHTML = parsed.map(e => {
+    const isDupe = existing.has(e.id);
+    if (!isDupe) newCount++;
+    return `
+      <tr class="${isDupe ? 'bg-amber-50 text-amber-500 line-through' : ''}">
+        <td class="px-3 py-1.5">${escH(e.expense_date)}</td>
+        <td class="px-3 py-1.5 font-mono">${escH(e.id)}</td>
+        <td class="px-3 py-1.5 text-right font-bold">$${(e.amount_cents / 100).toFixed(2)}</td>
+        <td class="px-3 py-1.5">${isDupe ? "Already imported" : escH(e.status)}</td>
+      </tr>`;
+  }).join("");
+
+  els.ghPreviewWrap.classList.remove("hidden");
+  els.ghPreviewCount.textContent = `${newCount} new / ${parsed.length} total`;
+
+  if (existing.size > 0) {
+    els.ghDupeWarning.classList.remove("hidden");
+  } else {
+    els.ghDupeWarning.classList.add("hidden");
+  }
+
+  // Store only new entries
+  window.__kkExpenses.parsedGH = parsed.filter(e => !existing.has(e.id));
+  els.btnRunGH.disabled = window.__kkExpenses.parsedGH.length === 0;
+
+  if (newCount === 0) {
+    showGHMsg("All entries are already imported!", false);
+  } else {
+    showGHMsg(`${newCount} GitHub Copilot expense${newCount === 1 ? "" : "s"} ready to import.`, false);
+  }
+}
+
+async function runGHImport() {
+  const { els } = window.__kkExpenses;
+  const entries = window.__kkExpenses.parsedGH || [];
+  if (!entries.length) return;
+
+  els.btnRunGH.disabled = true;
+  els.btnParseGH.disabled = true;
+  showGHMsg(`Importing ${entries.length} expense${entries.length === 1 ? "" : "s"}…`, false);
+
+  try {
+    const count = await bulkInsertGitHubExpenses(entries);
+    showGHMsg(`✓ Successfully imported ${count} expense${count === 1 ? "" : "s"}!`, false);
+    window.__kkExpenses.parsedGH = [];
+    els.btnRunGH.disabled = true;
+
+    await Promise.all([
+      loadExpenses({ reset: true }),
+      refreshKpis()
+    ]);
+
+    setTimeout(() => closeGHModal(), 1200);
+  } catch (err) {
+    console.error(err);
+    showGHMsg(err?.message || "Import failed.");
+    els.btnRunGH.disabled = false;
+  } finally {
+    els.btnParseGH.disabled = false;
+  }
+}
+
 /* ── wiring ─────────────────────────────────────── */
 
 function attachHandlers() {
@@ -664,11 +792,20 @@ function attachHandlers() {
   els.btnRunEbayTxn?.addEventListener("click", () => runEbayTxnImport());
   wireEbayTxnFileDrop();
 
+  // GitHub billing modal
+  els.btnImportGitHub?.addEventListener("click", () => openGHModal());
+  els.btnCloseGH?.addEventListener("click", () => closeGHModal());
+  els.btnCancelGH?.addEventListener("click", () => closeGHModal());
+  els.ghModalBackdrop?.addEventListener("click", () => closeGHModal());
+  els.btnParseGH?.addEventListener("click", () => parseGH());
+  els.btnRunGH?.addEventListener("click", () => runGHImport());
+
   // ESC to close
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       closeImportModal();
       closeEbayTxnModal();
+      closeGHModal();
       closeModal(els);
     }
   });

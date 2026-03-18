@@ -81,6 +81,21 @@ export function getEls() {
     ebayTxnSellingCount: document.getElementById("ebayTxnSellingCount"),
     ebayTxnSellingBody: document.getElementById("ebayTxnSellingBody"),
     ebayTxnDupeWarning: document.getElementById("ebayTxnDupeWarning"),
+
+    // GitHub billing modal
+    btnImportGitHub: document.getElementById("btnImportGitHub"),
+    ghModal: document.getElementById("ghModal"),
+    ghModalBackdrop: document.getElementById("ghModalBackdrop"),
+    btnCloseGH: document.getElementById("btnCloseGH"),
+    btnCancelGH: document.getElementById("btnCancelGH"),
+    btnParseGH: document.getElementById("btnParseGH"),
+    btnRunGH: document.getElementById("btnRunGH"),
+    ghMsg: document.getElementById("ghMsg"),
+    ghPasteArea: document.getElementById("ghPasteArea"),
+    ghPreviewWrap: document.getElementById("ghPreviewWrap"),
+    ghPreviewBody: document.getElementById("ghPreviewBody"),
+    ghPreviewCount: document.getElementById("ghPreviewCount"),
+    ghDupeWarning: document.getElementById("ghDupeWarning"),
   };
 }
 
