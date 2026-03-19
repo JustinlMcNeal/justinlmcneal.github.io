@@ -20,35 +20,53 @@ function norm(s) {
 }
 
 /**
+ * Crude stemmer: strip common English suffixes so "bunnies" ≈ "bunny", etc.
+ */
+function stem(w) {
+  return w
+    .replace(/ies$/, "y")   // bunnies → bunny
+    .replace(/es$/, "")     // plushies → plushi (close enough for overlap)
+    .replace(/s$/, "");     // charms → charm
+}
+
+/**
  * Try to match an eBay item title to a product in the DB.
  * Returns the product `code` or null.
  *
  * Strategy (in order):
  *  1. Exact normalised match  (norm(ebayTitle) === norm(productName))
- *  2. Product name is a substring of the eBay title
- *  3. eBay title is a substring of the product name
- *  4. Token-overlap score: pick the product with the most shared words
- *     (at least 2 shared tokens required)
+ *  2. Strip bracket text (e.g. "[Pink]") from eBay title and re-check exact
+ *  3. Product name is a substring of the eBay title (or vice-versa)
+ *  4. Token-overlap score with stemming: pick the product with the most shared
+ *     root words (at least 2 shared tokens required)
  */
 function matchProduct(ebayTitle, products) {
   const t = norm(ebayTitle);
   if (!t) return null;
 
-  // Pass 1 — exact
-  for (const p of products) if (norm(p.name) === t) return p.code;
+  // Also build a version with eBay bracket notation stripped:
+  // "Mini Tote - Heart Embossed[Pink]" → "mini tote heart embossed"
+  const tNoBrackets = norm((ebayTitle || "").replace(/\[[^\]]*\]/g, ""));
 
-  // Pass 2 — substring matches
+  // Pass 1 — exact
+  for (const p of products) {
+    const n = norm(p.name);
+    if (n === t || n === tNoBrackets) return p.code;
+  }
+
+  // Pass 2 — substring matches (try both with and without bracket text)
   for (const p of products) {
     const n = norm(p.name);
     if (t.includes(n) || n.includes(t)) return p.code;
+    if (tNoBrackets && (tNoBrackets.includes(n) || n.includes(tNoBrackets))) return p.code;
   }
 
-  // Pass 3 — token overlap (at least 2+ meaningful shared tokens)
-  const tTokens = new Set(t.split(" ").filter(w => w.length > 2));
+  // Pass 3 — token overlap with stemming (at least 2+ meaningful shared tokens)
+  const tTokens = new Set(t.split(" ").filter(w => w.length > 2).map(stem));
   let bestCode = null;
   let bestScore = 1; // need at least 2 shared tokens
   for (const p of products) {
-    const pTokens = norm(p.name).split(" ").filter(w => w.length > 2);
+    const pTokens = norm(p.name).split(" ").filter(w => w.length > 2).map(stem);
     let score = 0;
     for (const w of pTokens) if (tTokens.has(w)) score++;
     if (score > bestScore) { bestScore = score; bestCode = p.code; }
@@ -258,9 +276,12 @@ export async function importEbayOrders(validRows) {
   const supabase = getSupabaseClient();
 
   // 1. Fetch all products for title → code matching
-  const { data: products } = await supabase
+  const { data: products, error: prodErr } = await supabase
     .from("products")
     .select("code, name, weight_g, unit_cost");
+
+  if (prodErr) console.error("[eBay import] Failed to fetch products:", prodErr.message);
+  if (!products?.length) console.warn("[eBay import] Products list is empty — product matching will be skipped.");
 
   const prodMap = {};
   for (const p of (products || [])) prodMap[p.code] = p;
@@ -340,10 +361,13 @@ export async function importEbayOrders(validRows) {
         }
       }
 
-      const pid = kkCode || item.itemNumber || `ebay_item_${i}`;
-      if (!breakdown[pid]) breakdown[pid] = { name: product?.name || item.itemTitle || pid, qty: 0, cents: 0 };
-      breakdown[pid].qty += qty;
-      breakdown[pid].cents += item.soldForCents;
+      // product_id MUST be a KK product code — never store eBay item numbers
+      // (they'd break the product lookup in order details).
+      const pid = kkCode || null;
+      const breakdownKey = kkCode || item.itemNumber || `ebay_item_${i}`;
+      if (!breakdown[breakdownKey]) breakdown[breakdownKey] = { name: product?.name || item.itemTitle || breakdownKey, qty: 0, cents: 0 };
+      breakdown[breakdownKey].qty += qty;
+      breakdown[breakdownKey].cents += item.soldForCents;
 
       lineItemDbRows.push({
         stripe_checkout_session_id: sessionId,
@@ -416,6 +440,85 @@ export async function importEbayOrders(validRows) {
     breakdown,
     unmappedTitles: [...unmappedTitles],
   };
+}
+
+// ── rematchEbayProducts ─────────────────────────────────────────
+/**
+ * Re-run product matching on existing eBay line items that have
+ * a null or numeric (eBay item number) product_id.
+ * Fetches all products, re-matches titles, and updates line_items_raw.
+ * Returns { matched, unmatched, errors }.
+ */
+export async function rematchEbayProducts() {
+  const supabase = getSupabaseClient();
+
+  // 1. Fetch all products
+  const { data: products, error: pErr } = await supabase
+    .from("products")
+    .select("code, name, weight_g, unit_cost");
+
+  if (pErr) throw new Error(`Failed to fetch products: ${pErr.message}`);
+  if (!products?.length) throw new Error("No products in database — add products first.");
+
+  // 2. Fetch eBay line items that need re-matching
+  //    (product_id is null OR doesn't start with "KK")
+  const { data: lines, error: lErr } = await supabase
+    .from("v_order_lines")
+    .select("line_item_row_id, product_id, product_name, stripe_checkout_session_id")
+    .like("stripe_checkout_session_id", "ebay_%");
+
+  if (lErr) throw new Error(`Failed to fetch eBay line items: ${lErr.message}`);
+
+  const needsRematch = (lines || []).filter(li =>
+    !li.product_id || !/^KK[-_]/.test(li.product_id)
+  );
+
+  if (!needsRematch.length) return { matched: 0, unmatched: 0, errors: [], total: (lines || []).length };
+
+  // 3. Re-match each line item
+  let matched = 0;
+  let unmatched = 0;
+  const errors = [];
+  const unmappedTitles = [];
+
+  // Build product lookup map
+  const prodMap = {};
+  for (const p of products) prodMap[p.code] = p;
+
+  for (const li of needsRematch) {
+    const title = li.product_name || "";
+    const code = matchProduct(title, products);
+
+    if (!code) {
+      unmatched++;
+      unmappedTitles.push(title);
+      continue;
+    }
+
+    // 4. Update line_items_raw — set product_id AND product_name
+    const product = prodMap[code];
+    const { error: uErr } = await supabase
+      .from("line_items_raw")
+      .update({
+        product_id: code,
+        product_name: product?.name || title,
+        item_weight_g: product?.weight_g || 0,
+      })
+      .eq("id", li.line_item_row_id);
+
+    if (uErr) {
+      errors.push(`Update failed for "${title}": ${uErr.message}`);
+    } else {
+      matched++;
+      console.log(`[rematch] "${title}" → ${code}`);
+    }
+  }
+
+  if (unmappedTitles.length) {
+    console.warn("[rematch] Unmapped titles:", unmappedTitles);
+  }
+
+  return { matched, unmatched, errors, total: (lines || []).length, unmappedTitles };
 }
 
 // ── wireEbayImport (click + drag-drop UI) ───────────────────────

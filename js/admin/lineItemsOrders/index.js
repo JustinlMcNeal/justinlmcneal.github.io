@@ -9,7 +9,7 @@ import { downloadShipReadyCSV } from "./shipReadyCsv.js";
 import { bindEditModal } from "./modalEditor.js";
 import { wirePirateShipImport } from "./pirateShipImport.js";
 import { wireAmazonImport } from "./amazonImport.js";
-import { wireEbayImport } from "./ebayImport.js";
+import { wireEbayImport, rematchEbayProducts } from "./ebayImport.js";
 
 
 wireDomHelpers();
@@ -629,6 +629,34 @@ function wireEvents() {
       await reload({ hard: true });
     },
   });
+
+  // Re-match eBay products button
+  if (els.btnRematchEbay) {
+    els.btnRematchEbay.addEventListener("click", async () => {
+      try {
+        els.btnRematchEbay.disabled = true;
+        els.btnRematchEbay.textContent = "⏳ Matching…";
+        setStatus("Re-matching eBay products…");
+
+        const result = await rematchEbayProducts();
+
+        let msg = `Re-match complete: ${result.matched} matched, ${result.unmatched} unmatched out of ${result.total} eBay items.`;
+        if (result.errors.length) msg += ` (${result.errors.length} errors)`;
+        if (result.unmappedTitles?.length) {
+          msg += ` Unmapped: ${result.unmappedTitles.join(", ")}`;
+        }
+        setStatus(msg);
+
+        if (result.matched > 0) await reload({ hard: true });
+      } catch (e) {
+        console.error(e);
+        setStatus(`Re-match failed: ${e?.message || e}`, true);
+      } finally {
+        els.btnRematchEbay.disabled = false;
+        els.btnRematchEbay.textContent = "🔄 Re-match eBay";
+      }
+    });
+  }
 
   // Search (debounced)
   els.searchInput.addEventListener("input", () => {

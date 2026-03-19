@@ -31,6 +31,7 @@ export const els = {
 
   // eBay import elements
   btnImportEbay: document.getElementById("btnImportEbay"),
+  btnRematchEbay: document.getElementById("btnRematchEbay"),
   ebayPreviewPanel: document.getElementById("ebayPreviewPanel"),
   ebayFileName: document.getElementById("ebayFileName"),
   ebayTotalRows: document.getElementById("ebayTotalRows"),
