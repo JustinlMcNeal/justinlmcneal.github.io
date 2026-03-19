@@ -271,8 +271,11 @@ function renderOrderDetailsHtml(order, lineItems, shipment) {
             <div class="border-4 border-black p-3 sm:p-4 flex gap-3 sm:gap-4">
               ${imgHtml}
               <div class="flex-1 min-w-0">
-                <a href="/pages/product.html?slug=${encodeURIComponent(li.product_slug || li.product_id || '')}" target="_blank"
-                  class="font-black text-sm line-clamp-2 text-kkpink hover:underline cursor-pointer">${esc(li.product_name || li.product_id || "Unknown Product")}</a>
+                ${li.product_slug
+                  ? `<a href="/pages/product.html?slug=${encodeURIComponent(li.product_slug)}" target="_blank"
+                      class="font-black text-sm line-clamp-2 text-kkpink hover:underline cursor-pointer">${esc(li.product_name || li.product_id || "Unknown Product")}</a>`
+                  : `<span class="font-black text-sm line-clamp-2">${esc(li.product_name || li.product_id || "Unknown Product")}</span>`
+                }
                 ${li.variant ? `<div class="text-xs text-gray-500 mt-1">Variant: ${esc(li.variant)}</div>` : ""}
                 <div class="flex flex-wrap items-center gap-x-3 sm:gap-x-4 gap-y-1 mt-2 text-xs sm:text-sm">
                   <span>Qty: <strong>${qty}</strong></span>

@@ -475,11 +475,12 @@ export async function rematchEbayProducts() {
 
   if (!needsRematch.length) return { matched: 0, unmatched: 0, errors: [], total: (lines || []).length };
 
-  // 3. Re-match each line item
+  // 3. Re-match each line item and collect updates
   let matched = 0;
   let unmatched = 0;
   const errors = [];
   const unmappedTitles = [];
+  const batchUpdates = [];
 
   // Build product lookup map
   const prodMap = {};
@@ -495,22 +496,29 @@ export async function rematchEbayProducts() {
       continue;
     }
 
-    // 4. Update line_items_raw — set product_id AND product_name
     const product = prodMap[code];
-    const { error: uErr } = await supabase
-      .from("line_items_raw")
-      .update({
-        product_id: code,
-        product_name: product?.name || title,
-        item_weight_g: product?.weight_g || 0,
-      })
-      .eq("id", li.line_item_row_id);
+    batchUpdates.push({
+      line_item_id: li.line_item_row_id,
+      product_id: code,
+      product_name: product?.name || title,
+      item_weight_g: product?.weight_g || 0,
+    });
+    matched++;
+    console.log(`[rematch] "${title}" → ${code}`);
+  }
 
-    if (uErr) {
-      errors.push(`Update failed for "${title}": ${uErr.message}`);
+  // 4. Batch-update via SECURITY DEFINER RPC (bypasses RLS)
+  if (batchUpdates.length) {
+    const { data: rpcResult, error: rpcErr } = await supabase.rpc(
+      "rpc_batch_update_line_item_products",
+      { p_updates: batchUpdates }
+    );
+    if (rpcErr) {
+      errors.push(`Batch update RPC failed: ${rpcErr.message}`);
+      matched = 0; // none actually updated
     } else {
-      matched++;
-      console.log(`[rematch] "${title}" → ${code}`);
+      const r = Array.isArray(rpcResult) ? rpcResult[0] : rpcResult;
+      console.log("[rematch] RPC result:", r);
     }
   }
 
