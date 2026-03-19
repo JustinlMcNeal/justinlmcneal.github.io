@@ -627,6 +627,281 @@ async function runEbayTxnImport() {
   }
 }
 
+/* ── Amazon transaction modal ─────────────────────────────────── */
+
+function openAmzTxnModal() {
+  const { els } = window.__kkExpenses;
+  els.amzTxnPreviewWrap?.classList.add("hidden");
+  els.btnRunAmzTxn.disabled = true;
+  els.btnParseAmzTxn.disabled = true;
+  els.amzTxnFileName?.classList.add("hidden");
+  hideAmzTxnMsg();
+  window.__kkExpenses.amzTxnFile = null;
+  window.__kkExpenses.amzTxnParsed = null;
+
+  els.amzTxnModal?.classList.remove("hidden");
+  els.amzTxnModal?.setAttribute("aria-hidden", "false");
+  document.body.style.overflow = "hidden";
+}
+
+function closeAmzTxnModal() {
+  const { els } = window.__kkExpenses;
+  els.amzTxnModal?.classList.add("hidden");
+  els.amzTxnModal?.setAttribute("aria-hidden", "true");
+  document.body.style.overflow = "";
+}
+
+function showAmzTxnMsg(text, isError = true) {
+  const { els } = window.__kkExpenses;
+  els.amzTxnMsg.textContent = text;
+  els.amzTxnMsg.className = `p-3 border-4 text-sm ${isError
+    ? "border-red-300 bg-red-50 text-red-700"
+    : "border-green-300 bg-green-50 text-green-700"}`;
+  els.amzTxnMsg.classList.remove("hidden");
+}
+
+function hideAmzTxnMsg() {
+  const { els } = window.__kkExpenses;
+  els.amzTxnMsg?.classList.add("hidden");
+}
+
+function wireAmzTxnFileDrop() {
+  const { els } = window.__kkExpenses;
+  if (!els.amzTxnDropZone || !els.amzTxnFileInput) return;
+
+  els.amzTxnDropZone.addEventListener("click", () => els.amzTxnFileInput.click());
+  els.amzTxnFileInput.addEventListener("change", () => {
+    const file = els.amzTxnFileInput.files?.[0];
+    els.amzTxnFileInput.value = "";
+    if (file) setAmzTxnFile(file);
+  });
+
+  els.amzTxnDropZone.addEventListener("dragover", e => {
+    e.preventDefault();
+    els.amzTxnDropZone.classList.add("border-black", "bg-gray-50");
+  });
+  els.amzTxnDropZone.addEventListener("dragleave", e => {
+    e.preventDefault();
+    els.amzTxnDropZone.classList.remove("border-black", "bg-gray-50");
+  });
+  els.amzTxnDropZone.addEventListener("drop", e => {
+    e.preventDefault();
+    els.amzTxnDropZone.classList.remove("border-black", "bg-gray-50");
+    const file = e.dataTransfer?.files?.[0];
+    if (file) setAmzTxnFile(file);
+  });
+}
+
+function setAmzTxnFile(file) {
+  const { els } = window.__kkExpenses;
+  window.__kkExpenses.amzTxnFile = file;
+  els.amzTxnFileName.textContent = file.name;
+  els.amzTxnFileName.classList.remove("hidden");
+  els.btnParseAmzTxn.disabled = false;
+  hideAmzTxnMsg();
+}
+
+function wireAmzBtnDrop() {
+  const { els } = window.__kkExpenses;
+  const btn = els.btnImportAmazon;
+  if (!btn) return;
+
+  btn.addEventListener("dragover", e => {
+    e.preventDefault();
+    btn.classList.add("bg-kkpink", "border-kkpink", "text-black");
+  });
+  btn.addEventListener("dragleave", e => {
+    e.preventDefault();
+    btn.classList.remove("bg-kkpink", "border-kkpink", "text-black");
+  });
+  btn.addEventListener("drop", e => {
+    e.preventDefault();
+    btn.classList.remove("bg-kkpink", "border-kkpink", "text-black");
+    const file = e.dataTransfer?.files?.[0];
+    if (!file) return;
+    openAmzTxnModal();
+    setAmzTxnFile(file);
+    setTimeout(() => parseAmzTxn(), 100);
+  });
+}
+
+function aggregateAmzSellingFees(sellingFees) {
+  const monthly = {};
+  for (const sf of sellingFees) {
+    const month = sf.date.slice(0, 7);
+    if (!monthly[month]) monthly[month] = { cents: 0, count: 0 };
+    monthly[month].cents += sf.feeCents;
+    monthly[month].count++;
+  }
+  return monthly;
+}
+
+async function parseAmzTxn() {
+  const { els } = window.__kkExpenses;
+  hideAmzTxnMsg();
+
+  const file = window.__kkExpenses.amzTxnFile;
+  if (!file) { showAmzTxnMsg("Select a file first."); return; }
+
+  try {
+    showAmzTxnMsg("Parsing…", false);
+    const text = await file.text();
+    const parsed = parseAmazonTransactions(text);
+
+    if (parsed.errors.length) {
+      showAmzTxnMsg(parsed.errors.join(" | "));
+      return;
+    }
+
+    if (!parsed.shippingLabels.length && !parsed.subscriptionFees.length && !parsed.sellingFees.length) {
+      showAmzTxnMsg("No importable transactions found in this CSV.");
+      return;
+    }
+
+    // Dupe detection
+    const allRefs = [
+      ...parsed.subscriptionFees.map(f => `amz_sub_${f.date}`),
+      ...Object.keys(aggregateAmzSellingFees(parsed.sellingFees)).map(m => `amz_selling_fees_${m}`),
+    ];
+    let existingRefs = new Set();
+    try {
+      existingRefs = await findExistingAmazonExpenses(allRefs);
+    } catch (err) {
+      console.warn("Dupe check failed:", err);
+    }
+
+    // Shipping labels preview
+    if (parsed.shippingLabels.length) {
+      els.amzTxnShipWrap.classList.remove("hidden");
+      els.amzTxnShipCount.textContent = `${parsed.shippingLabels.length} labels`;
+      els.amzTxnShipBody.innerHTML = parsed.shippingLabels.map(l => `
+        <tr>
+          <td class="px-3 py-1.5">${escH(l.date)}</td>
+          <td class="px-3 py-1.5 font-mono text-[10px]">${escH(l.orderNumber || "—")}</td>
+          <td class="px-3 py-1.5 text-right font-bold">$${(l.costCents / 100).toFixed(2)}</td>
+        </tr>`).join("");
+    } else {
+      els.amzTxnShipWrap.classList.add("hidden");
+    }
+
+    // Subscription fees preview
+    let newSubCount = 0;
+    if (parsed.subscriptionFees.length) {
+      els.amzTxnSubWrap.classList.remove("hidden");
+      els.amzTxnSubBody.innerHTML = parsed.subscriptionFees.map(f => {
+        const refId = `amz_sub_${f.date}`;
+        const isDupe = existingRefs.has(refId);
+        if (!isDupe) newSubCount++;
+        return `
+          <tr class="${isDupe ? 'bg-amber-50 text-amber-500 line-through' : ''}">
+            <td class="px-3 py-1.5">${escH(f.date)}</td>
+            <td class="px-3 py-1.5">${escH(f.description)}</td>
+            <td class="px-3 py-1.5 text-right font-bold">$${(f.amountCents / 100).toFixed(2)}</td>
+            <td class="px-3 py-1.5">${isDupe ? "Already imported" : "New"}</td>
+          </tr>`;
+      }).join("");
+      els.amzTxnSubCount.textContent = `${newSubCount} new / ${parsed.subscriptionFees.length} total`;
+    } else {
+      els.amzTxnSubWrap.classList.add("hidden");
+    }
+
+    // Selling fees preview (monthly aggregated)
+    const monthly = aggregateAmzSellingFees(parsed.sellingFees);
+    const monthKeys = Object.keys(monthly).sort();
+    let newFeesCount = 0;
+    if (monthKeys.length) {
+      els.amzTxnFeesWrap.classList.remove("hidden");
+      els.amzTxnFeesBody.innerHTML = monthKeys.map(m => {
+        const agg = monthly[m];
+        const refId = `amz_selling_fees_${m}`;
+        const isDupe = existingRefs.has(refId);
+        if (!isDupe) newFeesCount++;
+        return `
+          <tr class="${isDupe ? 'bg-amber-50 text-amber-500 line-through' : ''}">
+            <td class="px-3 py-1.5">${escH(m)}</td>
+            <td class="px-3 py-1.5">${agg.count} orders</td>
+            <td class="px-3 py-1.5 text-right font-bold">$${(agg.cents / 100).toFixed(2)}</td>
+          </tr>`;
+      }).join("");
+      els.amzTxnFeesCount.textContent = `${newFeesCount} new / ${monthKeys.length} total`;
+    } else {
+      els.amzTxnFeesWrap.classList.add("hidden");
+    }
+
+    if (existingRefs.size > 0) {
+      els.amzTxnDupeWarning.classList.remove("hidden");
+    } else {
+      els.amzTxnDupeWarning.classList.add("hidden");
+    }
+
+    els.amzTxnPreviewWrap.classList.remove("hidden");
+
+    window.__kkExpenses.amzTxnParsed = parsed;
+    window.__kkExpenses.amzTxnExistingRefs = existingRefs;
+
+    const totalNew = parsed.shippingLabels.length + newSubCount + newFeesCount;
+    els.btnRunAmzTxn.disabled = totalNew === 0;
+
+    if (totalNew === 0) {
+      showAmzTxnMsg("Everything is already imported!", false);
+    } else {
+      showAmzTxnMsg(
+        `Ready: ${parsed.shippingLabels.length} shipping labels to update, ` +
+        `${newSubCount + newFeesCount} fee expenses to import.`,
+        false
+      );
+    }
+  } catch (err) {
+    console.error(err);
+    showAmzTxnMsg(err?.message || "Parse failed.");
+  }
+}
+
+async function runAmzTxnImport() {
+  const { els } = window.__kkExpenses;
+  const parsed = window.__kkExpenses.amzTxnParsed;
+  const existingRefs = window.__kkExpenses.amzTxnExistingRefs || new Set();
+  if (!parsed) return;
+
+  els.btnRunAmzTxn.disabled = true;
+  els.btnParseAmzTxn.disabled = true;
+
+  try {
+    const results = [];
+
+    if (parsed.shippingLabels.length) {
+      showAmzTxnMsg("Updating order shipping costs…", false);
+      const shipResult = await updateAmazonShippingCosts(parsed.shippingLabels);
+      results.push(`${shipResult.updated} order shipping costs updated`);
+    }
+
+    if (parsed.subscriptionFees.length || parsed.sellingFees.length) {
+      showAmzTxnMsg("Importing Amazon fees as expenses…", false);
+      const count = await importAmazonExpenses({
+        subscriptionFees: parsed.subscriptionFees,
+        sellingFees: parsed.sellingFees,
+        existingRefs,
+      });
+      results.push(`${count} expense${count === 1 ? "" : "s"} imported`);
+    }
+
+    showAmzTxnMsg(`✓ Done! ${results.join(", ")}.`, false);
+
+    await Promise.all([
+      loadExpenses({ reset: true }),
+      refreshKpis()
+    ]);
+
+    setTimeout(() => closeAmzTxnModal(), 1500);
+  } catch (err) {
+    console.error(err);
+    showAmzTxnMsg(err?.message || "Import failed.");
+    els.btnRunAmzTxn.disabled = false;
+  } finally {
+    els.btnParseAmzTxn.disabled = false;
+  }
+}
+
 /* ── GitHub billing modal ────────────────────────── */
 
 function openGHModal() {
