@@ -232,17 +232,34 @@ karrykraze.com/r/{sms_message_id}
 
 ## 🔜 Phase 3: Automation Flows + Dynamic Coupons — NEXT
 
-### Priority #1: Abandoned Cart SMS Flow (TOP REVENUE DRIVER)
-Cart persistence required — save cart state to Supabase for logged-in users or via phone lookup.
+### ✅ Abandoned Cart SMS Flow — COMPLETE (Apr 14, 2026)
+3-step escalation triggered by localStorage → Supabase cart sync.
 
-**Flow (3-touch escalation):**
-1. **30 min** → "You left something behind 👀" (no discount, just reminder)
-2. **6 hours** → Social proof / urgency ("Only 2 left!" or "X people bought this today")
-3. **24 hours** → Discount offer (this is where the 15% coupon lives, not upfront)
+**Architecture:**
+- `saved_carts` table tracks cart state: `active` → `abandoned` → `purchased` / `expired`
+- `cart-sync` edge function (public, no JWT) receives cart syncs from frontend
+- `cartStore.js` debounced sync (5s) on every `kk-cart-updated` event when `kk_sms_contact_id` exists in localStorage
+- `sms-subscribe` now returns `contact_id` → stored in localStorage on signup
+- `sms-abandoned-cart` edge function processes all active carts via pg_cron (every 5 min, job #10)
 
-- Edge function: `sms-abandoned-cart` triggered by pg_cron
-- Track `abandoned_cart_id` in sms_messages for attribution
-- Stop sequence immediately if user completes purchase
+**3-Step Flow:**
+1. **30 min** → "You left {items} in your cart ($XX.XX)" — plain reminder, no discount
+2. **6 hours** → "Your {items} cart is still waiting! Items sell out fast" — urgency
+3. **24 hours** → "Use {AC-XXXXXX} for 15% off orders $40+" — discount offer (48hr expiry, single-use)
+
+**Safety Rules (V1):**
+- Only triggers for active + opted-in contacts
+- Cart value must be ≥ $15 (MIN_CART_VALUE_CENTS = 1500)
+- Respects 6hr frequency cap + quiet hours (9 PM – 9 AM ET)
+- Stops sequence immediately if user purchases (stripe-webhook marks cart as `purchased`)
+- Carts expire after 3 days
+- Cart reset on re-sync (user modifies cart → step resets to 0)
+
+**Attribution:**
+- Coupon prefix `AC-` for abandoned cart coupons (distinct from `SMS-` signup coupons)
+- All sends logged to `sms_sends` with `flow = 'abandoned_cart'`
+- Click tracking via existing `sms_events` + `sms-redirect` infrastructure
+- `stripe-webhook` marks active saved_carts as `purchased` on checkout
 
 ### ✅ Coupon Escalation Flow — COMPLETE (Apr 14, 2026)
 When initial coupon expires unused, auto-upgrade to a better deal (one-time only):
