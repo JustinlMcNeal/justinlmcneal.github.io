@@ -261,6 +261,47 @@ karrykraze.com/r/{sms_message_id}
 - Click tracking via existing `sms_events` + `sms-redirect` infrastructure
 - `stripe-webhook` marks active saved_carts as `purchased` on checkout
 
+### ✅ Abandoned Cart Hardening — COMPLETE (Apr 14, 2026)
+Production-grade improvements based on advisor audit.
+
+**Cart Hash Deduplication (cart-sync):**
+- SHA-256 hash of normalized cart (`id:variant:qty` sorted, 16-char hex)
+- Same cart payload → `action: "unchanged"`, no DB write
+- Different hash → full update + reset `abandoned_step`, `abandoned_at`, step timestamps
+- Stale write guard: skips if `updated_at` is older than existing (multi-tab protection)
+
+**Abandoned Cart Timestamps (sms-abandoned-cart):**
+- `abandoned_at` set on first abandonment detection (Step 0→1)
+- `step_1_sent_at`, `step_2_sent_at`, `step_3_sent_at` recorded per send
+- Duplicate send guard: if `step_N_sent_at IS NOT NULL`, skip that step
+- Enables precise timing analytics (time-to-purchase from abandonment)
+
+**Repeat Abandoner Suppression:**
+- `abandon_count` tracked per cart (carried from prior expired/abandoned carts)
+- `abandon_count >= 3` → skip all messaging (serial abandoner suppression)
+- Prevents harassing users who consistently abandon
+
+**High-Value Cart Override ($75+):**
+- Step 3: carts ≥ $75 get flat $5 off (no minimum) instead of 15% off $40+
+- Coupon prefix `ACV-` (abandoned cart value) vs standard `AC-`
+- Protects margin on high-value orders
+
+**Improved Step 2 Copy:**
+- Old: "Your {items} cart is still waiting!"
+- New: "Almost gone 👀 {items} been selling fast. Don't miss out"
+
+**Analytics View (`sms_v_abandoned_cart`):**
+- Funnel: total_carts → active → purchased → expired
+- Step sends: step1/step2/step3 counts
+- Recovery: total_recovered, recovered_value_cents, avg_hours_to_purchase
+- Step-level conversion: which step drove the purchase
+- Recovery rate percentage
+- Abandoner profile: first_time / second_time / third_time / serial
+
+**DB Changes (migration: `20260414_saved_carts_hardening.sql`):**
+- Added columns: `cart_hash TEXT`, `abandoned_at TIMESTAMPTZ`, `step_1_sent_at TIMESTAMPTZ`, `step_2_sent_at TIMESTAMPTZ`, `step_3_sent_at TIMESTAMPTZ`, `abandon_count INT DEFAULT 0`
+- Added index: `idx_saved_carts_phone_status` on `(phone, status)`
+
 ### ✅ Coupon Escalation Flow — COMPLETE (Apr 14, 2026)
 When initial coupon expires unused, auto-upgrade to a better deal (one-time only):
 1. **Day 0** → Sign up → 15% off $40+, 2-day expiry

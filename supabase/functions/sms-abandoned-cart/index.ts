@@ -170,7 +170,7 @@ Deno.serve(async (req) => {
     // ─────────────────────────────────────────────────────────
     const { data: carts, error: cartsErr } = await sb
       .from("saved_carts")
-      .select("id, contact_id, phone, cart_data, cart_value_cents, item_count, updated_at, abandoned_step, last_sms_at")
+      .select("id, contact_id, phone, cart_data, cart_value_cents, item_count, updated_at, abandoned_step, last_sms_at, abandoned_at, step_1_sent_at, step_2_sent_at, step_3_sent_at, abandon_count")
       .eq("status", "active")
       .gte("cart_value_cents", MIN_CART_VALUE_CENTS)
       .order("updated_at", { ascending: true });
@@ -196,6 +196,12 @@ Deno.serve(async (req) => {
         .maybeSingle();
 
       if (!contact || contact.status !== "active" || !contact.sms_consent) {
+        results.skipped++;
+        continue;
+      }
+
+      // ── Suppress repeat abandoners (3+ prior abandoned carts) ──
+      if ((cart.abandon_count || 0) >= 3) {
         results.skipped++;
         continue;
       }
@@ -269,17 +275,23 @@ Deno.serve(async (req) => {
         });
 
         if (sent) {
+          const sentAt = new Date().toISOString();
           await sb.from("saved_carts").update({
             abandoned_step: 1,
-            last_sms_at: new Date().toISOString(),
+            last_sms_at: sentAt,
+            abandoned_at: cart.abandoned_at || sentAt,  // Set once on first detection
+            step_1_sent_at: sentAt,
           }).eq("id", cart.id);
           results.step1++;
         }
       }
 
-      // ── STEP 2: 6hr urgency ───────────────────────────────
+      // ── STEP 2: 6hr urgency (stronger copy) ───────────────
       else if (cart.abandoned_step === 1 && sinceUpdate >= 6 * 60 * 60 * 1000 && sinceLastSms >= 6 * 60 * 60 * 1000) {
-        const smsBody = `Karry Kraze: Your ${cartItems} cart is still waiting! Items sell out fast — grab yours: ${trackingUrl}\nReply STOP to opt out`;
+        // Duplicate send guard: skip if already sent
+        if (cart.step_2_sent_at) { results.skipped++; continue; }
+
+        const smsBody = `Karry Kraze: Almost gone \ud83d\udc40 ${cartItems} been selling fast. Don't miss out: ${trackingUrl}\nReply STOP to opt out`;
 
         sent = await sendAndLog(sb, {
           phone: cart.phone,
@@ -295,9 +307,11 @@ Deno.serve(async (req) => {
         });
 
         if (sent) {
+          const sentAt = new Date().toISOString();
           await sb.from("saved_carts").update({
             abandoned_step: 2,
-            last_sms_at: new Date().toISOString(),
+            last_sms_at: sentAt,
+            step_2_sent_at: sentAt,
           }).eq("id", cart.id);
           results.step2++;
         }
@@ -305,10 +319,17 @@ Deno.serve(async (req) => {
 
       // ── STEP 3: 24hr discount offer ───────────────────────
       else if (cart.abandoned_step === 2 && sinceUpdate >= 24 * 60 * 60 * 1000 && sinceLastSms >= 6 * 60 * 60 * 1000) {
-        // Generate unique abandoned-cart coupon (15% off $40+, 48hr expiry, single-use)
+        // Duplicate send guard: skip if already sent
+        if (cart.step_3_sent_at) { results.skipped++; continue; }
+
+        // High-value cart override: $75+ gets flat $5 off (no minimum) instead of 15%
+        const isHighValue = cart.cart_value_cents >= 7500;
+        const couponPrefix = isHighValue ? "ACV" : "AC";
+
+        // Generate unique abandoned-cart coupon
         let couponCode = "";
         for (let attempt = 0; attempt < 5; attempt++) {
-          const candidate = generateCouponCode("AC");
+          const candidate = generateCouponCode(couponPrefix);
           const { data: dup } = await sb
             .from("promotions")
             .select("id")
@@ -325,23 +346,43 @@ Deno.serve(async (req) => {
 
         const expiresAt = new Date(now + 48 * 60 * 60 * 1000).toISOString();
 
-        const { error: promoErr } = await sb.from("promotions").insert({
-          name:             `Abandoned Cart — ${couponCode}`,
-          code:             couponCode,
-          description:      `Abandoned cart coupon for ${cart.phone}`,
-          type:             "percentage",
-          value:            15,
-          scope_type:       "all",
-          scope_data:       "{}",
-          min_order_amount: 40,
-          usage_limit:      1,
-          usage_count:      0,
-          start_date:       new Date().toISOString(),
-          end_date:         expiresAt,
-          is_active:        true,
-          is_public:        true,
-          requires_code:    true,
-        });
+        const promoPayload = isHighValue
+          ? {
+              name:             `Abandoned Cart HV — ${couponCode}`,
+              code:             couponCode,
+              description:      `High-value abandoned cart coupon for ${cart.phone}`,
+              type:             "fixed" as const,
+              value:            5,
+              scope_type:       "all",
+              scope_data:       "{}",
+              min_order_amount: 0,
+              usage_limit:      1,
+              usage_count:      0,
+              start_date:       new Date().toISOString(),
+              end_date:         expiresAt,
+              is_active:        true,
+              is_public:        true,
+              requires_code:    true,
+            }
+          : {
+              name:             `Abandoned Cart — ${couponCode}`,
+              code:             couponCode,
+              description:      `Abandoned cart coupon for ${cart.phone}`,
+              type:             "percentage" as const,
+              value:            15,
+              scope_type:       "all",
+              scope_data:       "{}",
+              min_order_amount: 40,
+              usage_limit:      1,
+              usage_count:      0,
+              start_date:       new Date().toISOString(),
+              end_date:         expiresAt,
+              is_active:        true,
+              is_public:        true,
+              requires_code:    true,
+            };
+
+        const { error: promoErr } = await sb.from("promotions").insert(promoPayload);
 
         if (promoErr) {
           console.error("[sms-abandoned-cart] Coupon create error:", promoErr.message);
@@ -349,7 +390,10 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        const smsBody = `Karry Kraze: We saved your cart! Use ${couponCode} for 15% off orders $40+. Expires in 48hrs: ${trackingUrl}\nReply STOP to opt out`;
+        const offerText = isHighValue
+          ? `Use ${couponCode} for $5 off your order`
+          : `Use ${couponCode} for 15% off orders $40+`;
+        const smsBody = `Karry Kraze: We saved your cart! ${offerText}. Expires in 48hrs: ${trackingUrl}\nReply STOP to opt out`;
 
         sent = await sendAndLog(sb, {
           phone: cart.phone,
@@ -361,13 +405,15 @@ Deno.serve(async (req) => {
           flow: "abandoned_cart",
           sendReason: "cart_abandoned_24hr_discount",
           messageType: "abandoned_cart_discount",
-          snapshot: { ...snapshot, coupon_code: couponCode },
+          snapshot: { ...snapshot, coupon_code: couponCode, high_value: isHighValue },
         });
 
         if (sent) {
+          const sentAt = new Date().toISOString();
           await sb.from("saved_carts").update({
             abandoned_step: 3,
-            last_sms_at: new Date().toISOString(),
+            last_sms_at: sentAt,
+            step_3_sent_at: sentAt,
           }).eq("id", cart.id);
           results.step3++;
         }

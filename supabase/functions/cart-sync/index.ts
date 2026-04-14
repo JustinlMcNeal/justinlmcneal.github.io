@@ -1,6 +1,7 @@
 // supabase/functions/cart-sync/index.ts
 // Public endpoint — syncs localStorage cart state to saved_carts for abandonment detection.
 // Called from cartStore.js when an SMS subscriber modifies their cart.
+// Uses cart_hash for change detection + updated_at for stale write guard.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -18,6 +19,19 @@ function json(body: unknown, status = 200) {
     status,
     headers: { ...CORS, "Content-Type": "application/json" },
   });
+}
+
+/** Deterministic cart hash: sorted by id, only identity+qty fields */
+async function computeCartHash(cart: Array<Record<string, unknown>>): Promise<string> {
+  const normalized = cart
+    .map(item => `${item.id}:${item.variant || ""}:${item.qty || 1}`)
+    .sort()
+    .join("|");
+  const encoder = new TextEncoder();
+  const data = encoder.encode(normalized);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, "0")).join("").slice(0, 16);
 }
 
 Deno.serve(async (req) => {
@@ -84,10 +98,12 @@ Deno.serve(async (req) => {
     }
 
     // ── Upsert saved cart ─────────────────────────────────────
+    const cartHash = await computeCartHash(sanitizedCart);
+
     // Check for existing active cart
     const { data: existingCart } = await sb
       .from("saved_carts")
-      .select("id")
+      .select("id, cart_hash, updated_at")
       .eq("contact_id", contact_id)
       .eq("status", "active")
       .maybeSingle();
@@ -95,18 +111,43 @@ Deno.serve(async (req) => {
     const now = new Date().toISOString();
 
     if (existingCart) {
-      // Update existing cart — reset abandoned_step since cart was just modified
+      // Skip if cart hasn't actually changed (same hash)
+      if (existingCart.cart_hash === cartHash) {
+        return json({ success: true, action: "unchanged" });
+      }
+
+      // Stale write guard: only update if our timestamp is newer
+      // (protects against multiple tabs sending out-of-order)
+      const existingTime = new Date(existingCart.updated_at).getTime();
+      const nowTime = new Date(now).getTime();
+      if (nowTime < existingTime) {
+        return json({ success: true, action: "stale_skip" });
+      }
+
+      // Real change — update cart, reset abandonment step
       await sb
         .from("saved_carts")
         .update({
           cart_data:       sanitizedCart,
           cart_value_cents: cartValueCents,
           item_count:      itemCount,
+          cart_hash:       cartHash,
           updated_at:      now,
           abandoned_step:  0,  // Reset — cart was just touched
+          abandoned_at:    null, // Reset abandonment marker
+          step_1_sent_at:  null,
+          step_2_sent_at:  null,
+          step_3_sent_at:  null,
         })
         .eq("id", existingCart.id);
     } else {
+      // Check for prior abandoned/expired carts from same phone (repeat abandoner)
+      const { count } = await sb
+        .from("saved_carts")
+        .select("id", { count: "exact", head: true })
+        .eq("contact_id", contact_id)
+        .in("status", ["expired", "abandoned"]);
+
       // Create new cart
       await sb
         .from("saved_carts")
@@ -116,9 +157,11 @@ Deno.serve(async (req) => {
           cart_data:       sanitizedCart,
           cart_value_cents: cartValueCents,
           item_count:      itemCount,
+          cart_hash:       cartHash,
           updated_at:      now,
           status:          "active",
           abandoned_step:  0,
+          abandon_count:   count || 0,  // Carry forward abandon history
         });
     }
 
