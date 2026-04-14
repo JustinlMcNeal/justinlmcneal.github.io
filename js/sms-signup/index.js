@@ -87,10 +87,24 @@ async function handleSubmit() {
     }
 
     // Success
-    $("couponDisplay").textContent = data.coupon_code;
+    if (data.already_redeemed) {
+      // Used their coupon already, no new one given
+      $("couponDisplay").textContent = "—";
+      $("expiryNote").textContent = "Welcome back! Your signup coupon was already used.";
+    } else {
+      $("couponDisplay").textContent = data.coupon_code;
 
-    if (data.already_subscribed) {
-      $("expiryNote").textContent = "You already have a coupon — use it before it expires!";
+      if (data.already_subscribed) {
+        $("expiryNote").textContent = "You already have a coupon — use it before it expires!";
+      }
+    }
+
+    // If they previously opted out, they need to text START to receive SMS again
+    if (data.was_unsubscribed && !data.sms_sent) {
+      const startMsg = document.createElement("p");
+      startMsg.className = "text-xs text-amber-600 font-medium mt-2";
+      startMsg.textContent = "To receive texts again, text START to (888) 392-5295 first.";
+      $("expiryNote").after(startMsg);
     }
 
     hide($("smsForm"));

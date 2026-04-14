@@ -106,6 +106,60 @@ Deno.serve(async (req) => {
       });
     }
 
+    // ── Handle re-subscribe (was unsubscribed) ─────────────
+    const wasUnsubscribed = existing?.status === "unsubscribed";
+    let reuseCoupon: string | null = null;
+
+    if (wasUnsubscribed && existing.coupon_code) {
+      // Check if their old coupon still exists and its state
+      const { data: oldPromo } = await sb
+        .from("promotions")
+        .select("id, code, usage_count, usage_limit, end_date, is_active")
+        .eq("code", existing.coupon_code)
+        .maybeSingle();
+
+      if (oldPromo) {
+        const isUsed = (oldPromo.usage_count ?? 0) >= (oldPromo.usage_limit ?? 1);
+        const isExpired = oldPromo.end_date && new Date(oldPromo.end_date) < new Date();
+
+        if (isUsed) {
+          // They already used their coupon — no new one
+          // Re-subscribe them but don't create a new coupon
+          await sb
+            .from("customer_contacts")
+            .update({
+              status: "active",
+              sms_consent: true,
+              email: email || undefined,
+              opted_in_at: new Date().toISOString(),
+              opted_out_at: null,
+            })
+            .eq("id", existing.id);
+
+          await sb.from("sms_consent_logs").insert({
+            phone,
+            consent_type: "opt_in",
+            consent_text: consent_text,
+            source: "landing_page_coupon",
+            page_url: page_url || null,
+            ip_address: ip,
+            user_agent: user_agent || null,
+          });
+
+          return json({
+            success: true,
+            already_redeemed: true,
+            was_unsubscribed: true,
+            message: "Welcome back! Your signup coupon was already used.",
+          });
+        } else if (!isExpired && oldPromo.is_active) {
+          // Coupon still valid — reuse it
+          reuseCoupon = oldPromo.code;
+        }
+        // If expired + unused, fall through to create a new one
+      }
+    }
+
     // ── Load coupon config from site_settings ──────────────
     const { data: settingsRow } = await sb
       .from("site_settings")
@@ -121,46 +175,49 @@ Deno.serve(async (req) => {
     const prefix          = cfg.prefix         || "SMS";
     const scopeType       = cfg.scope_type     || "all";
 
-    // ── Generate unique coupon code ────────────────────────
-    let couponCode = "";
-    for (let attempt = 0; attempt < 5; attempt++) {
-      const candidate = generateCouponCode(prefix);
-      const { data: dup } = await sb
-        .from("promotions")
-        .select("id")
-        .eq("code", candidate)
-        .maybeSingle();
-      if (!dup) { couponCode = candidate; break; }
-    }
-    if (!couponCode) {
-      return json({ error: "Could not generate unique code. Please try again." }, 500);
-    }
-
-    // ── Create promotion row ───────────────────────────────
+    // ── Generate unique coupon code (skip if reusing) ─────
+    let couponCode = reuseCoupon || "";
     const now       = new Date();
-    const expiresAt = new Date(now.getTime() + expiryDays * 24 * 60 * 60 * 1000);
 
-    const { error: promoErr } = await sb.from("promotions").insert({
-      name:             `SMS Signup — ${couponCode}`,
-      code:             couponCode,
-      description:      `SMS signup coupon for ${phone}`,
-      type:             couponType,
-      value:            couponValue,
-      scope_type:       scopeType,
-      scope_data:       "{}",
-      min_order_amount: minOrderAmount,
-      usage_limit:      1,
-      usage_count:      0,
-      start_date:       now.toISOString(),
-      end_date:         expiresAt.toISOString(),
-      is_active:        true,
-      is_public:        true,       // readable by anon for code lookup (requires_code prevents auto-apply)
-      requires_code:    true,
-    });
+    if (!reuseCoupon) {
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const candidate = generateCouponCode(prefix);
+        const { data: dup } = await sb
+          .from("promotions")
+          .select("id")
+          .eq("code", candidate)
+          .maybeSingle();
+        if (!dup) { couponCode = candidate; break; }
+      }
+      if (!couponCode) {
+        return json({ error: "Could not generate unique code. Please try again." }, 500);
+      }
 
-    if (promoErr) {
-      console.error("[sms-subscribe] Promotion insert error:", promoErr.message);
-      return json({ error: "Failed to create coupon." }, 500);
+      // ── Create promotion row ───────────────────────────────
+      const expiresAt = new Date(now.getTime() + expiryDays * 24 * 60 * 60 * 1000);
+
+      const { error: promoErr } = await sb.from("promotions").insert({
+        name:             `SMS Signup — ${couponCode}`,
+        code:             couponCode,
+        description:      `SMS signup coupon for ${phone}`,
+        type:             couponType,
+        value:            couponValue,
+        scope_type:       scopeType,
+        scope_data:       "{}",
+        min_order_amount: minOrderAmount,
+        usage_limit:      1,
+        usage_count:      0,
+        start_date:       now.toISOString(),
+        end_date:         expiresAt.toISOString(),
+        is_active:        true,
+        is_public:        true,
+        requires_code:    true,
+      });
+
+      if (promoErr) {
+        console.error("[sms-subscribe] Promotion insert error:", promoErr.message);
+        return json({ error: "Failed to create coupon." }, 500);
+      }
     }
 
     // ── Upsert contact ─────────────────────────────────────
@@ -291,6 +348,7 @@ Deno.serve(async (req) => {
         success: true,
         coupon_code: couponCode,
         sms_sent: false,
+        was_unsubscribed: wasUnsubscribed,
         message: "Coupon created but SMS delivery failed. Use your code at checkout!",
       });
     }
@@ -334,6 +392,7 @@ Deno.serve(async (req) => {
       success: true,
       coupon_code: couponCode,
       sms_sent: true,
+      was_unsubscribed: wasUnsubscribed,
       message: "Check your phone for your coupon code!",
     });
   } catch (err: unknown) {
