@@ -13,8 +13,20 @@ const pct   = (n)     => Number(n || 0).toFixed(1) + "%";
 const num   = (n)     => Number(n || 0).toLocaleString();
 const dec   = (n, d = 2) => Number(n || 0).toFixed(d);
 
-function kpiCard(value, label, color = "text-gray-900") {
-  return `<div class="kpi-card"><div class="kpi-value ${color}">${value}</div><div class="kpi-label">${label}</div></div>`;
+function fmtDelta(n, isMoney = false) {
+  if (n === null || n === undefined) return null;
+  if (!isMoney) return (n > 0 ? "+" : "") + n;
+  const sign = n > 0 ? "+" : n < 0 ? "-" : "";
+  return `${sign}$${Math.abs(n).toFixed(2)}`;
+}
+
+function kpiCard(value, label, color = "text-gray-900", delta = null) {
+  let deltaHtml = "";
+  if (delta !== null) {
+    const dColor = delta.startsWith("+") ? "text-emerald-600" : delta.startsWith("-") ? "text-red-500" : "text-gray-400";
+    deltaHtml = `<div class="kpi-delta ${dColor}">${delta} vs yday</div>`;
+  }
+  return `<div class="kpi-card"><div class="kpi-value ${color}">${value}</div><div class="kpi-label">${label}</div>${deltaHtml}</div>`;
 }
 
 function statRow(label, value, cls = "") {
@@ -28,8 +40,56 @@ async function fetchView(viewName) {
   return data || [];
 }
 
+// ── Day Comparison ───────────────────────────────────────────
+async function fetchDayDeltas(clickRows) {
+  const now = new Date();
+  const todayUTC = now.toISOString().slice(0, 10);
+  const ydayUTC = new Date(now.getTime() - 86400000).toISOString().slice(0, 10);
+
+  let sendsDelta = null, clicksDelta = null;
+  try {
+    const [sToday, sYday, eToday, eYday] = await Promise.all([
+      sb.from("sms_sends").select("*", { count: "exact", head: true }).gte("created_at", todayUTC),
+      sb.from("sms_sends").select("*", { count: "exact", head: true }).gte("created_at", ydayUTC).lt("created_at", todayUTC),
+      sb.from("sms_events").select("event_type").gte("created_at", todayUTC),
+      sb.from("sms_events").select("event_type").gte("created_at", ydayUTC).lt("created_at", todayUTC),
+    ]);
+    sendsDelta = (sToday.count || 0) - (sYday.count || 0);
+    const cT = (eToday.data || []).filter(r => r.event_type === "click").length;
+    const cY = (eYday.data || []).filter(r => r.event_type === "click").length;
+    clicksDelta = cT - cY;
+  } catch (e) { console.warn("[smsAnalytics] day deltas skipped:", e.message); }
+
+  const tOrders = clickRows.filter(r => (r.order_date || "").startsWith(todayUTC));
+  const yOrders = clickRows.filter(r => (r.order_date || "").startsWith(ydayUTC));
+
+  return {
+    sends: sendsDelta,
+    clicks: clicksDelta,
+    conversions: tOrders.length - yOrders.length,
+    revenue: tOrders.reduce((s, r) => s + Number(r.order_total || 0), 0) -
+             yOrders.reduce((s, r) => s + Number(r.order_total || 0), 0),
+    profit: tOrders.reduce((s, r) => s + Number(r.order_profit || 0), 0) -
+            yOrders.reduce((s, r) => s + Number(r.order_profit || 0), 0),
+  };
+}
+
+function getTopFlow(flows) {
+  if (!flows.length) return null;
+  const best = flows.reduce((a, b) => Number(a.estimated_profit || 0) > Number(b.estimated_profit || 0) ? a : b);
+  return Number(best.estimated_profit || 0) > 0 ? best : null;
+}
+
 // ── Renderers ────────────────────────────────────────────────
-function renderKPIs(flows, abandoned, funnel) {
+function renderTopFlow(flows) {
+  const el = $("topFlow");
+  const best = getTopFlow(flows);
+  if (!best) { el.classList.add("hidden"); return; }
+  el.classList.remove("hidden");
+  el.innerHTML = `<span class="text-lg mr-1">🔥</span> <strong>Top flow:</strong> ${best.flow} — <span class="font-black text-emerald-700">$${dec(best.estimated_profit)}</span> profit`;
+}
+
+function renderKPIs(flows, abandoned, funnel, deltas) {
   const totalSends = flows.reduce((s, f) => s + Number(f.total_sends || 0), 0);
   const totalRevenue = flows.reduce((s, f) => s + Number(f.attributed_revenue || 0), 0);
   const totalConversions = flows.reduce((s, f) => s + Number(f.conversions || 0), 0);
@@ -39,12 +99,12 @@ function renderKPIs(flows, abandoned, funnel) {
   const subscriberCount = funnel.length > 0 ? Number(funnel[0].total_subscribers || 0) : 0;
 
   $("kpiStrip").innerHTML = [
-    kpiCard(num(totalSends), "Total Sends"),
+    kpiCard(num(totalSends), "Total Sends", "text-gray-900", fmtDelta(deltas.sends)),
     kpiCard(num(subscriberCount), "Subscribers", "text-blue-600"),
-    kpiCard(num(totalClicks), "Clicks", "text-purple-600"),
-    kpiCard(num(totalConversions), "Conversions", "green"),
-    kpiCard("$" + dec(totalRevenue), "Revenue", "green"),
-    kpiCard("$" + dec(totalProfit), "Est. Profit", totalProfit >= 0 ? "green" : "red"),
+    kpiCard(num(totalClicks), "Clicks", "text-purple-600", fmtDelta(deltas.clicks)),
+    kpiCard(num(totalConversions), "Conversions", "green", fmtDelta(deltas.conversions)),
+    kpiCard("$" + dec(totalRevenue), "Revenue", "green", fmtDelta(deltas.revenue, true)),
+    kpiCard("$" + dec(totalProfit), "Est. Profit", totalProfit >= 0 ? "green" : "red", fmtDelta(deltas.profit, true)),
   ].join("");
 }
 
@@ -203,7 +263,10 @@ async function loadDashboard() {
     fetchView("sms_v_click_to_purchase"),
   ]);
 
-  renderKPIs(flows, abandoned, funnel);
+  const deltas = await fetchDayDeltas(clicks);
+
+  renderTopFlow(flows);
+  renderKPIs(flows, abandoned, funnel, deltas);
   renderFlowTable(flows);
   renderAbandonedCart(abandoned);
   renderCouponTable(cohorts);
@@ -213,7 +276,7 @@ async function loadDashboard() {
 
   $("loading").classList.add("hidden");
   $("dashboard").classList.remove("hidden");
-  $("lastRefresh").textContent = "Updated " + new Date().toLocaleTimeString();
+  $("lastRefresh").textContent = "Last updated: " + new Date().toLocaleString();
 }
 
 async function init() {

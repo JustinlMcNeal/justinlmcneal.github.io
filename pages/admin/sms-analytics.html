@@ -117,6 +117,19 @@
       padding: 0.15rem 0.5rem;
       border-radius: 9999px;
     }
+    .kpi-delta {
+      font-size: 0.65rem;
+      font-weight: 700;
+      margin-top: 0.25rem;
+    }
+    .top-flow-banner {
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      border-radius: 0.75rem;
+      padding: 0.6rem 1rem;
+      font-size: 0.85rem;
+      color: #92400e;
+    }
   </style>
 </head>
 
@@ -143,6 +156,9 @@
 
     <!-- Dashboard content (hidden until loaded) -->
     <div id="dashboard" class="hidden space-y-6">
+
+      <!-- ── Top Flow Banner ────────────────────────────────── -->
+      <div id="topFlow" class="top-flow-banner hidden"></div>
 
       <!-- ── KPI Strip ──────────────────────────────────────── -->
       <section id="kpiStrip" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3"></section>
