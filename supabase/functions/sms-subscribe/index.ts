@@ -101,6 +101,7 @@ Deno.serve(async (req) => {
       return json({
         success: true,
         already_subscribed: true,
+        contact_id: existing.id,
         coupon_code: existing.coupon_code,
         message: "You're already subscribed! Here's your coupon.",
       });
@@ -150,6 +151,7 @@ Deno.serve(async (req) => {
             success: true,
             already_redeemed: true,
             was_unsubscribed: true,
+            contact_id: existing.id,
             message: "Welcome back! Your signup coupon was already used.",
           });
         } else if (!isExpired && oldPromo.is_active) {
@@ -346,6 +348,7 @@ Deno.serve(async (req) => {
 
       return json({
         success: true,
+        contact_id: contact?.id || null,
         coupon_code: couponCode,
         sms_sent: false,
         was_unsubscribed: wasUnsubscribed,
@@ -390,6 +393,7 @@ Deno.serve(async (req) => {
 
     return json({
       success: true,
+      contact_id: contact?.id || null,
       coupon_code: couponCode,
       sms_sent: true,
       was_unsubscribed: wasUnsubscribed,

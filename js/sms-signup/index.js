@@ -111,7 +111,10 @@ async function handleSubmit() {
     show($("smsSuccess"));
 
     // Remember subscription
-    try { localStorage.setItem("kk_sms_subscribed", "1"); } catch (_) {}
+    try {
+      localStorage.setItem("kk_sms_subscribed", "1");
+      if (data.contact_id) localStorage.setItem("kk_sms_contact_id", data.contact_id);
+    } catch (_) {}
   } catch (err) {
     show($("formError"));
     $("formError").textContent = err.message;

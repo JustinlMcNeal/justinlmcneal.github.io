@@ -618,6 +618,27 @@ if (req.method === "GET") {
       console.error("[stripe-webhook] SMS attribution failed (non-fatal):", smsErr);
     }
 
+    // ── Mark any active saved_carts as purchased ────────────
+    try {
+      const orderPhone = phone_number ? (
+        phone_number.replace(/\D/g, "").length === 10
+          ? `+1${phone_number.replace(/\D/g, "")}`
+          : phone_number.replace(/\D/g, "").length === 11
+            ? `+${phone_number.replace(/\D/g, "")}`
+            : phone_number
+      ) : null;
+
+      if (orderPhone) {
+        await supabaseAdmin
+          .from("saved_carts")
+          .update({ status: "purchased", purchased_at: new Date().toISOString() })
+          .eq("phone", orderPhone)
+          .eq("status", "active");
+      }
+    } catch (cartErr) {
+      console.error("[stripe-webhook] Cart status update failed (non-fatal):", cartErr);
+    }
+
 // ✅ 1.5) Ensure fulfillment row exists (idempotent; do NOT overwrite status)
 const fulfillmentRow = {
   stripe_checkout_session_id: sessionId,

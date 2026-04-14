@@ -3,6 +3,8 @@
  * Simple localStorage-backed cart store
  */
 
+import { SUPABASE_URL } from "/js/config/env.js";
+
 const STORAGE_KEY = "kk_cart_v1";
 let cart = loadCart();
 
@@ -155,3 +157,33 @@ export function openCartDrawer() {
     window.dispatchEvent(new CustomEvent("kk-open-cart-request"));
   }
 }
+
+/* =========================
+   CART SYNC (Abandoned Cart)
+   Debounced sync to Supabase for SMS subscribers
+========================= */
+
+let _syncTimer = null;
+const SYNC_DEBOUNCE_MS = 5000;
+const CART_SYNC_URL = `${SUPABASE_URL}/functions/v1/cart-sync`;
+
+function syncCartToServer() {
+  const contactId = localStorage.getItem("kk_sms_contact_id");
+  if (!contactId) return; // Not an SMS subscriber — skip
+
+  clearTimeout(_syncTimer);
+  _syncTimer = setTimeout(async () => {
+    try {
+      await fetch(CART_SYNC_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contact_id: contactId, cart }),
+      });
+    } catch (_) {
+      // Silent fail — cart sync is best-effort
+    }
+  }, SYNC_DEBOUNCE_MS);
+}
+
+// Listen for cart mutations and sync
+window.addEventListener("kk-cart-updated", syncCartToServer);

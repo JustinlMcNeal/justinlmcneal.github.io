@@ -23,18 +23,18 @@ SELECT
          THEN SUM(CASE WHEN s.outcome = 'converted' THEN 1 ELSE 0 END)::numeric / COUNT(*) * 100
          ELSE 0 END, 2)                                 AS conversion_rate_pct,
   SUM(s.cost)                                           AS total_sms_cost,
-  COALESCE(SUM(o.total_paid_cents), 0) / 100.0          AS attributed_revenue,
-  COALESCE(SUM(o.order_savings_total_cents), 0) / 100.0 AS total_discount_given,
-  -- Profit = revenue - cost_of_goods - sms_cost - discount
+  COALESCE(SUM(oa.total_paid_cents), 0) / 100.0          AS attributed_revenue,
+  COALESCE(SUM(oa.total_savings_cents), 0) / 100.0       AS total_discount_given,
+  -- Profit = revenue - cost_of_goods - sms_cost
   ROUND(
-    (COALESCE(SUM(o.total_paid_cents), 0)
-     - COALESCE(SUM(o.order_cost_total_cents), 0)
+    (COALESCE(SUM(oa.total_paid_cents), 0)
+     - COALESCE(SUM(oa.total_cost_cents), 0)
     ) / 100.0
     - COALESCE(SUM(s.cost), 0), 2)                      AS estimated_profit,
   -- Profit per SMS
   ROUND(
     CASE WHEN COUNT(*) > 0
-         THEN ((COALESCE(SUM(o.total_paid_cents), 0) - COALESCE(SUM(o.order_cost_total_cents), 0)) / 100.0
+         THEN ((COALESCE(SUM(oa.total_paid_cents), 0) - COALESCE(SUM(oa.total_cost_cents), 0)) / 100.0
                - COALESCE(SUM(s.cost), 0)) / COUNT(*)
          ELSE 0 END, 4)                                 AS profit_per_sms,
   MIN(s.created_at)                                     AS first_send,
@@ -47,7 +47,16 @@ LEFT JOIN LATERAL (
   WHERE ev.event_type = 'sms_clicked'
     AND ev.sms_send_id = s.id
 ) e_click ON true
-LEFT JOIN orders_raw o ON o.sms_send_id = s.id AND o.sms_attributed = true
+-- Pre-aggregate orders per send to prevent row multiplication
+LEFT JOIN (
+  SELECT sms_send_id,
+    SUM(total_paid_cents) AS total_paid_cents,
+    SUM(order_cost_total_cents) AS total_cost_cents,
+    SUM(order_savings_total_cents) AS total_savings_cents
+  FROM orders_raw
+  WHERE sms_attributed = true AND sms_send_id IS NOT NULL
+  GROUP BY sms_send_id
+) oa ON oa.sms_send_id = s.id
 GROUP BY s.flow, s.campaign, s.intent
 ORDER BY total_sends DESC;
 
@@ -85,19 +94,29 @@ SELECT
          THEN SUM(CASE WHEN usage_count >= usage_limit THEN 1 ELSE 0 END)::numeric / COUNT(*) * 100
          ELSE 0 END, 2)                                          AS redemption_rate_pct,
   SUM(CASE WHEN outcome = 'converted' THEN 1 ELSE 0 END)        AS sms_attributed_orders,
-  -- Join to orders for AOV
+  -- Join to pre-aggregated orders for AOV
   ROUND(AVG(
-    CASE WHEN o.total_paid_cents IS NOT NULL THEN o.total_paid_cents / 100.0 END
+    CASE WHEN oa.total_paid_cents IS NOT NULL THEN oa.total_paid_cents / 100.0 END
   ), 2)                                                           AS avg_order_value,
   ROUND(AVG(
-    CASE WHEN o.total_paid_cents IS NOT NULL
-         THEN (o.total_paid_cents - COALESCE(o.order_cost_total_cents, 0)) / 100.0
+    CASE WHEN oa.total_paid_cents IS NOT NULL
+         THEN (oa.total_paid_cents - COALESCE(oa.total_cost_cents, 0)) / 100.0
     END
   ), 2)                                                           AS avg_profit_per_order,
-  SUM(COALESCE(o.order_savings_total_cents, 0)) / 100.0           AS total_discounts_given,
+  SUM(COALESCE(oa.total_savings_cents, 0)) / 100.0                AS total_discounts_given,
   SUM(sms_cost)                                                   AS total_sms_cost
 FROM coupon_data cd
-LEFT JOIN orders_raw o ON o.sms_send_id = cd.send_id AND o.sms_attributed = true
+-- Pre-aggregate orders per send to prevent row multiplication
+LEFT JOIN (
+  SELECT sms_send_id,
+    SUM(total_paid_cents) AS total_paid_cents,
+    SUM(order_cost_total_cents) AS total_cost_cents,
+    SUM(order_savings_total_cents) AS total_savings_cents,
+    COUNT(*) AS order_count
+  FROM orders_raw
+  WHERE sms_attributed = true AND sms_send_id IS NOT NULL
+  GROUP BY sms_send_id
+) oa ON oa.sms_send_id = cd.send_id
 GROUP BY cohort
 ORDER BY cohort;
 
