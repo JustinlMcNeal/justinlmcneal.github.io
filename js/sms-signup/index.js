@@ -88,6 +88,11 @@ async function handleSubmit() {
 
     // Success
     $("couponDisplay").textContent = data.coupon_code;
+
+    if (data.already_subscribed) {
+      $("expiryNote").textContent = "You already have a coupon — use it before it expires!";
+    }
+
     hide($("smsForm"));
     show($("smsSuccess"));
 

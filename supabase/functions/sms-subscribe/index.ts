@@ -235,7 +235,7 @@ Deno.serve(async (req) => {
 
     let smsBody = `Karry Kraze: Your code ${couponCode} gets you ${discountLabel}`;
     if (minOrderAmount > 0) smsBody += ` orders $${minOrderAmount}+`;
-    smsBody += `! Shop now: ${trackingUrl}\nReply STOP to opt out`;
+    smsBody += `! Expires in ${expiryDays * 24}hrs. Shop now: ${trackingUrl}\nReply STOP to opt out`;
 
     const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_SID}/Messages.json`;
     const formData  = new URLSearchParams();
