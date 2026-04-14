@@ -352,11 +352,38 @@ Instead, offer:
 
 👉 Big discounts devalue the brand for your best customers and train them to wait for deals
 
-### Priority #3: Welcome Series (Upgraded)
-Delay the discount, escalate over time:
-1. **Day 0** → "Welcome to Karry Kraze! Here's what's trending 🔥" (no discount)
-2. **Day 2** → "Our best sellers this week" + product link
-3. **Day 5** → "Still thinking about it? Here's 10% off" (earned discount)
+### ✅ Welcome Series — COMPLETE (Apr 14, 2026)
+2-step automated welcome flow after signup, filling the gap between coupon delivery and later lifecycle triggers.
+
+**Architecture:**
+- Dedicated `sms-welcome-series` edge function (clean separation from coupon-reminder)
+- pg_cron job #11 — hourly at :45 (offset from coupon-reminder at :30)
+- Queries contacts created 2–7 days ago, checks `sms_sends` for step completion
+- Tracked via `flow = 'welcome_series'` with distinct `send_reason` per step
+
+**Flow:**
+1. **Day 0** → Signup coupon SMS (already exists, handled by `sms-subscribe`)
+2. **Day 2** → "See what everyone's grabbing right now 👀" — value/discovery, no discount
+3. **Day 5** → "Here's 10% off — just for you" — conversion push with `WS-XXXXXX` coupon (10% off, no minimum, 48hr expiry, single-use)
+
+**Suppression Logic:**
+- Purchase since signup → skip Day 5 coupon (don't waste discount on converted user)
+- Active abandoned cart flow in progress → skip (let that flow handle them, priority: abandoned_cart > welcome)
+- Fatigue score ≥ 8 → skip
+- 6-hour frequency cap respected
+- Quiet hours (9 PM – 9 AM ET) → skip entire run
+- idempotent: `alreadySent()` checks `sms_sends` by `send_reason` per contact
+
+**Coupon Strategy:**
+- Day 5 coupon: 10% off, no minimum, 48hr expiry, single-use
+- Prefix `WS-` (welcome series) — distinct from `SMS-` (signup), `AC-` (abandoned cart), `ACV-` (high-value cart)
+- Smaller than signup 15% — avoids undercutting main offer
+- Only sent to non-purchasers (already converted users don't need discounting)
+
+**Bug fix deployed alongside:**
+- `sms_messages.message_type` CHECK constraint was blocking all non-`coupon_delivery` inserts
+- Expanded to include: `abandoned_cart_reminder`, `abandoned_cart_urgency`, `abandoned_cart_discount`, `welcome_discovery`, `welcome_conversion`
+- Migration: `20260414_fix_message_type_constraint.sql`
 
 ### ✅ Frequency Caps — COMPLETE (Apr 14, 2026)
 Enforced in `send-sms` edge function (the reusable send wrapper):
