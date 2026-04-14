@@ -32,6 +32,16 @@ function generateCouponCode(prefix: string): string {
   return `${prefix}-${code}`;
 }
 
+/** Generate a short code for click tracking links */
+function generateShortCode(): string {
+  const chars = "abcdefghjkmnpqrstuvwxyz23456789";
+  let code = "";
+  for (let i = 0; i < 8; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return code;
+}
+
 /** Normalise any US phone input to E.164 +1XXXXXXXXXX */
 function normalizePhone(raw: string): string | null {
   const digits = raw.replace(/\D/g, "");
@@ -218,9 +228,14 @@ Deno.serve(async (req) => {
       discountLabel = "a discount on";
     }
 
+    // Generate short code for click tracking
+    const shortCode = generateShortCode();
+    const trackingUrl = `karrykraze.com/r/?c=${shortCode}`;
+    const targetUrl = "https://karrykraze.com/pages/catalog.html";
+
     let smsBody = `Karry Kraze: Your code ${couponCode} gets you ${discountLabel}`;
     if (minOrderAmount > 0) smsBody += ` orders $${minOrderAmount}+`;
-    smsBody += `! Shop now: karrykraze.com\nReply STOP to opt out`;
+    smsBody += `! Shop now: ${trackingUrl}\nReply STOP to opt out`;
 
     const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_SID}/Messages.json`;
     const formData  = new URLSearchParams();
@@ -244,7 +259,7 @@ Deno.serve(async (req) => {
       console.error("[sms-subscribe] Twilio error:", JSON.stringify(twilioData));
 
       // Log failed attempt
-      await sb.from("sms_messages").insert({
+      const { data: failedMsg } = await sb.from("sms_messages").insert({
         phone,
         contact_id:    contact?.id || null,
         message_body:  smsBody,
@@ -253,7 +268,24 @@ Deno.serve(async (req) => {
         status:        "failed",
         error_code:    String(twilioData.code || twilioResp.status),
         error_message: twilioData.message || "Twilio API error",
-      });
+        short_code:    shortCode,
+        redirect_url:  targetUrl,
+      }).select("id").single();
+
+      // Log sms_sends for failed attempt too
+      if (failedMsg) {
+        await sb.from("sms_sends").insert({
+          phone,
+          contact_id:     contact?.id || null,
+          campaign:       "sms_signup_coupon",
+          flow:           "signup",
+          send_reason:    "new_subscriber_coupon",
+          intent:         "marketing",
+          outcome:        "pending",
+          sms_message_id: failedMsg.id,
+          user_state_snapshot: { source: "landing_page_coupon", is_resubscribe: !!existing },
+        });
+      }
 
       return json({
         success: true,
@@ -264,7 +296,7 @@ Deno.serve(async (req) => {
     }
 
     // Log sent message
-    await sb.from("sms_messages").insert({
+    const { data: sentMsg } = await sb.from("sms_messages").insert({
       phone,
       contact_id:          contact?.id || null,
       message_body:        smsBody,
@@ -273,7 +305,30 @@ Deno.serve(async (req) => {
       status:              "sent",
       provider_message_sid: twilioData.sid,
       sent_at:             new Date().toISOString(),
-    });
+      short_code:          shortCode,
+      redirect_url:        targetUrl,
+    }).select("id").single();
+
+    // Log sms_sends (analytics layer)
+    if (sentMsg) {
+      await sb.from("sms_sends").insert({
+        phone,
+        contact_id:     contact?.id || null,
+        campaign:       "sms_signup_coupon",
+        flow:           "signup",
+        send_reason:    "new_subscriber_coupon",
+        intent:         "marketing",
+        outcome:        "pending",
+        cost:           0.0079,   // estimated toll-free SMS cost
+        sms_message_id: sentMsg.id,
+        user_state_snapshot: { source: "landing_page_coupon", is_resubscribe: !!existing },
+      });
+    }
+
+    // Update last_sms_sent_at for frequency caps
+    await sb.from("customer_contacts")
+      .update({ last_sms_sent_at: new Date().toISOString() })
+      .eq("phone", phone);
 
     return json({
       success: true,

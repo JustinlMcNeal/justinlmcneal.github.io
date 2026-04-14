@@ -498,6 +498,126 @@ if (req.method === "GET") {
       return json({ error: "Failed to upsert order", detail: oErr }, 500);
     }
 
+    // ── SMS Attribution ──────────────────────────────────────
+    // Check if this order should be attributed to SMS marketing
+    try {
+      let smsAttributed = false;
+      let smsSendId: string | null = null;
+      let smsClickAt: string | null = null;
+
+      // Method 1: Direct attribution — coupon code starts with "SMS-"
+      if (coupon_code_used && coupon_code_used.startsWith("SMS-")) {
+        smsAttributed = true;
+
+        // Find the sms_send that delivered this coupon
+        const { data: contact } = await supabaseAdmin
+          .from("customer_contacts")
+          .select("id")
+          .eq("coupon_code", coupon_code_used)
+          .maybeSingle();
+
+        if (contact) {
+          const { data: send } = await supabaseAdmin
+            .from("sms_sends")
+            .select("id")
+            .eq("contact_id", contact.id)
+            .eq("flow", "signup")
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (send) smsSendId = send.id;
+        }
+      }
+
+      // Method 2: Click-based attribution — phone matches a contact who clicked within 48h
+      if (!smsAttributed && phone_number) {
+        const normalizedPhone = phone_number.replace(/\D/g, "");
+        let e164Phone = "";
+        if (normalizedPhone.length === 10) e164Phone = `+1${normalizedPhone}`;
+        else if (normalizedPhone.length === 11 && normalizedPhone.startsWith("1")) e164Phone = `+${normalizedPhone}`;
+
+        if (e164Phone) {
+          const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+          const { data: clickEvent } = await supabaseAdmin
+            .from("sms_events")
+            .select("id, sms_send_id, created_at")
+            .eq("phone", e164Phone)
+            .eq("event_type", "sms_clicked")
+            .gte("created_at", fortyEightHoursAgo)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (clickEvent) {
+            smsAttributed = true;
+            smsSendId = clickEvent.sms_send_id;
+            smsClickAt = clickEvent.created_at;
+          }
+        }
+      }
+
+      // Update order with attribution data
+      if (smsAttributed) {
+        await supabaseAdmin
+          .from("orders_raw")
+          .update({
+            sms_attributed: true,
+            sms_send_id: smsSendId,
+            sms_click_at: smsClickAt,
+          })
+          .eq("stripe_checkout_session_id", sessionId);
+
+        // Log attribution event
+        const orderPhone = phone_number ? (
+          phone_number.replace(/\D/g, "").length === 10
+            ? `+1${phone_number.replace(/\D/g, "")}`
+            : phone_number.replace(/\D/g, "").length === 11
+              ? `+${phone_number.replace(/\D/g, "")}`
+              : phone_number
+        ) : null;
+
+        await supabaseAdmin.from("sms_events").insert({
+          event_type:  "order_attributed",
+          phone:       orderPhone,
+          sms_send_id: smsSendId,
+          metadata: {
+            order_id: kk_order_id,
+            session_id: sessionId,
+            coupon_code: coupon_code_used,
+            total_paid_cents,
+            attribution_method: coupon_code_used?.startsWith("SMS-") ? "coupon" : "click_window",
+          },
+        });
+
+        // Update sms_sends outcome to converted
+        if (smsSendId) {
+          await supabaseAdmin
+            .from("sms_sends")
+            .update({ outcome: "converted", converted_at: new Date().toISOString() })
+            .eq("id", smsSendId);
+        }
+
+        // Log coupon redemption event if SMS coupon
+        if (coupon_code_used?.startsWith("SMS-")) {
+          await supabaseAdmin.from("sms_events").insert({
+            event_type:  "coupon_redeemed",
+            phone:       orderPhone,
+            sms_send_id: smsSendId,
+            metadata: {
+              coupon_code: coupon_code_used,
+              order_id: kk_order_id,
+              total_paid_cents,
+            },
+          });
+        }
+
+        console.log(`[stripe-webhook] SMS attribution: order ${kk_order_id} attributed to SMS (method: ${coupon_code_used?.startsWith("SMS-") ? "coupon" : "click_window"}, send: ${smsSendId})`);
+      }
+    } catch (smsErr) {
+      console.error("[stripe-webhook] SMS attribution failed (non-fatal):", smsErr);
+    }
+
 // ✅ 1.5) Ensure fulfillment row exists (idempotent; do NOT overwrite status)
 const fulfillmentRow = {
   stripe_checkout_session_id: sessionId,

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Redirecting…</title>
+  <style>
+    body { display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; font-family: sans-serif; color: #666; }
+  </style>
+  <script>
+    // SMS links use: karrykraze.com/r/?c={short_code}
+    // This page extracts the code, hits the edge function (logs click), then follows its 302 redirect.
+    (function () {
+      var params = new URLSearchParams(window.location.search);
+      var code = params.get('c') || '';
+      if (!code) {
+        window.location.href = '/';
+        return;
+      }
+      window.location.replace(
+        'https://yxdzvzscufkvewecvagq.supabase.co/functions/v1/sms-redirect?code=' + encodeURIComponent(code)
+      );
+    })();
+  </script>
+</head>
+<body>
+  <p>Redirecting…</p>
+</body>
+</html>
