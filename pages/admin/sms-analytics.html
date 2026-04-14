@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#f58f86" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/imgs/icons/favicon-32x32.png" />
+  <title>Admin · SMS Analytics</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { colors: { kkpink: '#ff6b9d' } } }
+    }
+  </script>
+
+  <link rel="stylesheet" href="/css/theme/base.css" />
+  <link rel="stylesheet" href="/css/theme/components.css" />
+
+  <style>
+    .kpi-card {
+      background: white;
+      border-radius: 1rem;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.06);
+      border: 1px solid #e5e7eb;
+      padding: 1.25rem;
+      text-align: center;
+    }
+    .kpi-value {
+      font-size: 2rem;
+      font-weight: 900;
+      line-height: 1;
+      margin-bottom: 0.25rem;
+    }
+    .kpi-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #6b7280;
+    }
+    .section-card {
+      background: white;
+      border-radius: 1rem;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.06);
+      border: 1px solid #e5e7eb;
+      padding: 1.5rem;
+    }
+    .section-title {
+      font-size: 0.7rem;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: #ff6b9d;
+      margin-bottom: 1rem;
+    }
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid #f3f4f6;
+    }
+    .stat-row:last-child { border-bottom: none; }
+    .stat-label { font-size: 0.85rem; color: #374151; }
+    .stat-value { font-size: 0.85rem; font-weight: 700; color: #111; }
+    .stat-value.green { color: #059669; }
+    .stat-value.red { color: #dc2626; }
+    .stat-value.blue { color: #2563eb; }
+    .stat-value.pink { color: #ff6b9d; }
+    table.analytics-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8rem;
+    }
+    table.analytics-table th {
+      text-align: left;
+      font-weight: 800;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #6b7280;
+      padding: 0.5rem 0.75rem;
+      border-bottom: 2px solid #e5e7eb;
+    }
+    table.analytics-table td {
+      padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid #f3f4f6;
+    }
+    table.analytics-table tr:hover td {
+      background: #fdf2f8;
+    }
+    .refresh-btn {
+      border: 2px solid #000;
+      border-radius: 0.5rem;
+      padding: 0.4rem 0.8rem;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 0.7rem;
+      background: white;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .refresh-btn:hover {
+      background: #ff6b9d;
+      color: white;
+      border-color: #ff6b9d;
+    }
+    .badge {
+      display: inline-block;
+      font-size: 0.6rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 0.15rem 0.5rem;
+      border-radius: 9999px;
+    }
+  </style>
+</head>
+
+<body class="bg-gray-50 min-h-screen hidden">
+  <div id="kkAdminNavMount"></div>
+
+  <main class="max-w-7xl mx-auto px-4 py-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <div class="text-xs font-black uppercase tracking-widest text-pink-500">SMS</div>
+        <h1 class="text-2xl sm:text-3xl font-black tracking-tight">Analytics</h1>
+      </div>
+      <div class="flex items-center gap-3">
+        <span id="lastRefresh" class="text-xs text-gray-400"></span>
+        <button id="btnRefresh" class="refresh-btn">↻ Refresh</button>
+      </div>
+    </div>
+
+    <!-- Loading -->
+    <div id="loading" class="section-card text-center py-12">
+      <div class="text-sm text-gray-500">Loading analytics…</div>
+    </div>
+
+    <!-- Dashboard content (hidden until loaded) -->
+    <div id="dashboard" class="hidden space-y-6">
+
+      <!-- ── KPI Strip ──────────────────────────────────────── -->
+      <section id="kpiStrip" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3"></section>
+
+      <!-- ── Flow Performance ────────────────────────────────── -->
+      <section class="section-card">
+        <div class="section-title">Flow Performance — Profit per SMS</div>
+        <div class="overflow-x-auto">
+          <table class="analytics-table" id="flowTable">
+            <thead>
+              <tr>
+                <th>Flow</th>
+                <th>Sends</th>
+                <th>Clicks</th>
+                <th>Conversions</th>
+                <th>Revenue</th>
+                <th>Cost</th>
+                <th>Profit</th>
+                <th>Profit/SMS</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ── Two-Column: Abandoned Cart + Coupon Cohorts ──── -->
+      <div class="grid md:grid-cols-2 gap-6">
+
+        <!-- Abandoned Cart Funnel -->
+        <section class="section-card">
+          <div class="section-title">Abandoned Cart Funnel</div>
+          <div id="abandonedCartStats"></div>
+        </section>
+
+        <!-- Coupon Cohorts -->
+        <section class="section-card">
+          <div class="section-title">Coupon Cohorts — Profit by Offer</div>
+          <div class="overflow-x-auto">
+            <table class="analytics-table" id="couponTable">
+              <thead>
+                <tr>
+                  <th>Cohort</th>
+                  <th>Issued</th>
+                  <th>Redeemed</th>
+                  <th>Rate</th>
+                  <th>Avg AOV</th>
+                  <th>Profit</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <!-- ── Two-Column: Subscriber Funnel + Fatigue ──────── -->
+      <div class="grid md:grid-cols-2 gap-6">
+
+        <!-- Subscriber Funnel -->
+        <section class="section-card">
+          <div class="section-title">Subscriber Funnel</div>
+          <div id="funnelStats"></div>
+        </section>
+
+        <!-- Fatigue Monitor -->
+        <section class="section-card">
+          <div class="section-title">Fatigue Monitor</div>
+          <div id="fatigueStats"></div>
+        </section>
+      </div>
+
+      <!-- ── Click to Purchase Timing ─────────────────────── -->
+      <section class="section-card">
+        <div class="section-title">Click → Purchase Timing</div>
+        <div class="overflow-x-auto">
+          <table class="analytics-table" id="clickTable">
+            <thead>
+              <tr>
+                <th>Flow</th>
+                <th>Orders</th>
+                <th>Avg Hours</th>
+                <th>Within 24h</th>
+                <th>Within 48h</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <div id="kkFooterMount"></div>
+
+  <script type="module" src="/js/admin/smsAnalytics/index.js"></script>
+</body>
+</html>
