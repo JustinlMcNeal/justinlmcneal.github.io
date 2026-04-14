@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#f58f86" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="apple-touch-icon" href="/imgs/icons/apple-touch-icon.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/imgs/icons/favicon-32x32.png" />
+  <title>Exclusive Offer · Karry Kraze</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: { kkpink: '#ff69b4', kkpeach: '#f6dcc6' }
+        }
+      }
+    }
+  </script>
+
+  <link rel="stylesheet" href="/css/theme/base.css">
+  <link rel="stylesheet" href="/css/theme/components.css">
+
+  <style>
+    @keyframes fade-up { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+    .fade-up { animation: fade-up .5s ease-out forwards; }
+    @keyframes shake { 0%,100%{ transform:translateX(0); } 20%,60%{ transform:translateX(-6px); } 40%,80%{ transform:translateX(6px); } }
+    .shake { animation: shake .4s ease-in-out; }
+  </style>
+</head>
+
+<body class="kk-page bg-gray-50 min-h-screen flex flex-col">
+  <div id="kkNavbarMount"></div>
+
+  <main class="flex-1 flex items-center justify-center px-4 py-12">
+    <div class="w-full max-w-md">
+
+      <!-- ═══ FORM STATE ═══ -->
+      <div id="smsForm" class="bg-white rounded-2xl shadow-lg p-8 fade-up">
+        <!-- Headline -->
+        <div class="text-center mb-6">
+          <span class="inline-block bg-kkpink/10 text-kkpink text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full mb-3">
+            Exclusive Offer
+          </span>
+          <h1 class="text-2xl font-bold text-gray-900">Get <span id="discountLabel">15% Off</span></h1>
+          <p class="text-gray-500 mt-1" id="minOrderLabel">on orders $40+</p>
+          <p class="text-sm text-gray-400 mt-2">We'll text you a one-time coupon code.</p>
+        </div>
+
+        <!-- Phone input -->
+        <div class="mb-4">
+          <label for="phone" class="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+          <div class="flex items-center border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-kkpink focus-within:border-kkpink overflow-hidden">
+            <span class="pl-3 pr-1 text-gray-400 text-sm select-none">+1</span>
+            <input
+              id="phone"
+              type="tel"
+              inputmode="numeric"
+              maxlength="14"
+              placeholder="(555) 123-4567"
+              autocomplete="tel-national"
+              class="flex-1 py-3 pr-3 outline-none text-gray-900 placeholder-gray-400"
+            />
+          </div>
+          <p id="phoneError" class="text-red-500 text-xs mt-1 hidden"></p>
+        </div>
+
+        <!-- Email (optional) -->
+        <div class="mb-4">
+          <label for="email" class="block text-sm font-medium text-gray-700 mb-1">Email <span class="text-gray-400">(optional)</span></label>
+          <input
+            id="email"
+            type="email"
+            placeholder="you@example.com"
+            autocomplete="email"
+            class="w-full border border-gray-300 rounded-lg py-3 px-3 outline-none focus:ring-2 focus:ring-kkpink focus:border-kkpink text-gray-900 placeholder-gray-400"
+          />
+        </div>
+
+        <!-- Consent checkbox -->
+        <label class="flex items-start gap-2 mb-6 cursor-pointer">
+          <input id="consent" type="checkbox" class="mt-1 accent-kkpink" />
+          <span id="consentText" class="text-xs text-gray-500 leading-snug">
+            I agree to receive marketing text messages from Karry Kraze at this number. Message &amp; data rates may apply. Reply STOP to opt out.
+          </span>
+        </label>
+
+        <!-- Submit -->
+        <button
+          id="btnSubmit"
+          type="button"
+          class="w-full bg-kkpink hover:bg-pink-500 text-white font-semibold py-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Get My Coupon
+        </button>
+
+        <!-- Error banner -->
+        <p id="formError" class="text-red-500 text-sm text-center mt-3 hidden"></p>
+      </div>
+
+      <!-- ═══ SUCCESS STATE ═══ -->
+      <div id="smsSuccess" class="bg-white rounded-2xl shadow-lg p-8 text-center hidden fade-up">
+        <div class="text-4xl mb-3">🎉</div>
+        <h2 class="text-xl font-bold text-gray-900 mb-1">You're In!</h2>
+        <p class="text-gray-500 text-sm mb-4">Check your phone — your coupon is on its way.</p>
+
+        <div class="bg-gray-50 rounded-lg py-4 px-6 mb-4">
+          <p class="text-xs text-gray-400 uppercase tracking-wider mb-1">Your Code</p>
+          <p id="couponDisplay" class="text-2xl font-mono font-bold text-kkpink tracking-widest select-all"></p>
+        </div>
+
+        <a href="/" class="inline-block bg-kkpink hover:bg-pink-500 text-white font-semibold py-3 px-8 rounded-lg transition-colors">
+          Start Shopping
+        </a>
+      </div>
+
+    </div>
+  </main>
+
+  <div id="kkFooterMount"></div>
+
+  <script type="module" src="/js/sms-signup/index.js"></script>
+  <script type="module" src="/js/shared/pwa.js"></script>
+</body>
+</html>
