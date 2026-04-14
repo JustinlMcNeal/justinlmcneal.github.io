@@ -302,6 +302,30 @@ Enforced in `send-sms` edge function (the reusable send wrapper):
 - `last_sms_sent_at` updated on every marketing send
 - Logs to `sms_sends` for analytics tracking
 
+### ✅ SQL Analytics Views — COMPLETE (Apr 14, 2026)
+7 database views deployed for immediate visibility into SMS system performance.
+Migration: `supabase/migrations/20260414_sms_analytics_views.sql`
+
+| View | Purpose |
+|------|---------|
+| `sms_v_flow_performance` | Sends, deliveries, clicks, conversions, revenue, profit per flow/campaign/intent |
+| `sms_v_coupon_cohorts` | 15% initial vs 20% escalation — redemption rate, AOV, profit by cohort |
+| `sms_v_outcome_aging` | pending/converted/not_converted counts by flow + avg time to resolve |
+| `sms_v_click_to_purchase` | Per-order click-to-purchase lag in hours, validates 48hr attribution window |
+| `sms_v_subscriber_funnel` | Subscribed → clicked → redeemed → purchased with funnel conversion rates |
+| `sms_v_fatigue_monitor` | Aggregate: STOP rate, bounce rate, fatigue buckets (low/med/high), avg sends per contact |
+| `sms_v_contact_fatigue` | Per-contact: sends, clicks, conversions, fatigue score for drilling into individual health |
+
+**Key queries:**
+```sql
+SELECT * FROM sms_v_flow_performance;        -- Which flows generate profit?
+SELECT * FROM sms_v_coupon_cohorts;           -- Is the 20% escalation worth it?
+SELECT * FROM sms_v_click_to_purchase;        -- How fast do SMS users buy?
+SELECT * FROM sms_v_subscriber_funnel;        -- Where do subscribers drop off?
+SELECT * FROM sms_v_fatigue_monitor;          -- Are we over-messaging?
+SELECT * FROM sms_v_contact_fatigue;          -- Who's at risk of STOP?
+```
+
 ### Also Planned
 - **Order confirmation SMS** — Triggered by Stripe webhook on successful payment
 - **Shipping update SMS** — When shipping_status changes
