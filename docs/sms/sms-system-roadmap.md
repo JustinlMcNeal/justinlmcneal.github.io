@@ -302,6 +302,17 @@ Production-grade improvements based on advisor audit.
 - Added columns: `cart_hash TEXT`, `abandoned_at TIMESTAMPTZ`, `step_1_sent_at TIMESTAMPTZ`, `step_2_sent_at TIMESTAMPTZ`, `step_3_sent_at TIMESTAMPTZ`, `abandon_count INT DEFAULT 0`
 - Added index: `idx_saved_carts_phone_status` on `(phone, status)`
 
+**Tuning watchlist (post-data):**
+- Monitor whether `abandon_count >= 3` suppression is too aggressive — may shift to "message only on high-value carts" or "one final reactivation" if data shows late converters
+- Validate Step 2 scarcity copy stays brand-safe and grounded
+- Compare profit per recovered cart across 15% vs $5-off flows (profit matters more than recovery rate)
+- Check whether `abandon_count` predicts low-quality traffic
+
+**Next optimization pass (once volume exists):**
+1. Query `sms_v_abandoned_cart` + `sms_v_flow_performance` + `sms_v_coupon_cohorts`
+2. Review: recovery by step, profit by offer type, recovery by cart value band
+3. Then tune the 24-hour offer based on real signal
+
 ### ✅ Coupon Escalation Flow — COMPLETE (Apr 14, 2026)
 When initial coupon expires unused, auto-upgrade to a better deal (one-time only):
 1. **Day 0** → Sign up → 15% off $40+, 2-day expiry
