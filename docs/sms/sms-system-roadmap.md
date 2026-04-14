@@ -244,18 +244,20 @@ Cart persistence required — save cart state to Supabase for logged-in users or
 - Track `abandoned_cart_id` in sms_messages for attribution
 - Stop sequence immediately if user completes purchase
 
-### Priority #2: Coupon Escalation Flow
-When initial coupon expires unused, offer a better deal (one-time only):
+### ✅ Coupon Escalation Flow — COMPLETE (Apr 14, 2026)
+When initial coupon expires unused, auto-upgrade to a better deal (one-time only):
 1. **Day 0** → Sign up → 15% off $40+, 2-day expiry
 2. **Day 1** → Reminder SMS ("don't forget your 15%!") — already built
 3. **Day 2** → Coupon expires → "We upgraded you to 20% — 48hrs only!"
 4. **Day 4** → Expires, no more offers. Ever.
 
-- Limit to **one escalation per phone, lifetime** (prevent gaming)
-- Fits into existing `sms-coupon-reminder` function as new flow
-- Track via `sms_sends.flow = 'coupon_escalation'`
+- Lifetime limit: **one escalation per phone, ever** (prevents gaming)
+- Built into `sms-coupon-reminder` function (Pass 2: escalation)
+- Tracked via `sms_sends.flow = 'coupon_escalation'`
+- Old coupon deactivated, new 20% coupon created, contact updated
+- Tested: escalation sends correctly, lifetime limit prevents repeats
 
-### Priority #3: Dynamic Coupon Logic
+### Priority #2: Dynamic Coupon Logic
 Replace static `site_settings.sms_coupon` with context-aware offers:
 
 | Scenario | Offer | Why |
@@ -281,24 +283,24 @@ Instead, offer:
 
 👉 Big discounts devalue the brand for your best customers and train them to wait for deals
 
-### Priority #4: Welcome Series (Upgraded)
+### Priority #3: Welcome Series (Upgraded)
 Delay the discount, escalate over time:
 1. **Day 0** → "Welcome to Karry Kraze! Here's what's trending 🔥" (no discount)
 2. **Day 2** → "Our best sellers this week" + product link
 3. **Day 5** → "Still thinking about it? Here's 10% off" (earned discount)
 
-### Priority #5: Frequency Caps (Enforced at DB Level)
-Prevent spam complaints, unsubscribes, and Twilio risk flags.
+### ✅ Frequency Caps — COMPLETE (Apr 14, 2026)
+Enforced in `send-sms` edge function (the reusable send wrapper):
 
-- Add `last_sms_sent_at` column on `customer_contacts`
-- **Rules enforced in every send function (marketing intent only):**
-  - Max **1 marketing SMS per day**
-  - Max **4 marketing SMS per week**
-  - Minimum **6 hours** between marketing messages
-  - **Quiet hours: no marketing SMS before 9 AM / after 9 PM**
-- Edge functions check `last_sms_sent_at` + `intent` before sending, skip/queue if restricted
+- **Quiet hours**: No marketing SMS before 9 AM / after 9 PM ET
+- **Consent check**: Verifies contact is active + opted in
+- **6-hour gap**: Min 6 hours between marketing SMS per contact
+- **Daily cap**: Max 1 marketing SMS per day per phone
+- **Weekly cap**: Max 4 marketing SMS per week per phone
 - Transactional + system messages bypass all caps and quiet hours
-- `sms_sends.intent` column is the enforcement key
+- `skip_caps` option for callers that pre-check (e.g. sms-subscribe first-message)
+- `last_sms_sent_at` updated on every marketing send
+- Logs to `sms_sends` for analytics tracking
 
 ### Also Planned
 - **Order confirmation SMS** — Triggered by Stripe webhook on successful payment
