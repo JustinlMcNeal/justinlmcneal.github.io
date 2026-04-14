@@ -88,9 +88,9 @@ The system should:
 
 ---
 
-## 🔜 Phase 2: Automation Flows + Event Tracking — NEXT
+## ✅ Phase 2: Click Tracking, Attribution & Hardening — COMPLETE (Apr 14, 2026)
 
-### Architecture Upgrades (Before Building Flows)
+### Architecture Upgrades (Built)
 
 #### 1. `sms_sends` Table (Separation of Concerns)
 Split send orchestration from delivery logging:
@@ -177,20 +177,8 @@ fatigue_score = (SMS sent in last 7 days) - (time decay factor)
 - This prevents burnout while prioritizing engaged users
 - Replaces hard caps at scale (caps remain as safety net)
 
-### Priority #1: Abandoned Cart SMS Flow (TOP REVENUE DRIVER)
-Cart persistence required — save cart state to Supabase for logged-in users or via phone lookup.
-
-**Flow (3-touch escalation):**
-1. **30 min** → "You left something behind 👀" (no discount, just reminder)
-2. **6 hours** → Social proof / urgency ("Only 2 left!" or "X people bought this today")
-3. **24 hours** → Discount offer (this is where the 15% coupon lives, not upfront)
-
-- Edge function: `sms-abandoned-cart` triggered by pg_cron
-- Track `abandoned_cart_id` in sms_messages for attribution
-- Stop sequence immediately if user completes purchase
-
-### Priority #2: Click Tracking + Event System
-Without this, we're blind on ROI.
+### ✅ Click Tracking + Event System — COMPLETE
+Built as Phase 2 Priority #1 (before abandoned cart, which needs cart persistence).
 
 #### Click Infrastructure (Unique Link Per Message)
 Every SMS gets a trackable short link:
@@ -212,11 +200,60 @@ karrykraze.com/r/{sms_message_id}
 - New table: `sms_events` (event_type, phone, metadata jsonb, sms_message_id, created_at)
 - Hook into existing `create-checkout-session` to tag SMS-attributed orders
 
-#### Attribution Window
-Don't over-credit SMS. An order is SMS-attributed only if:
-- Purchase happens **within 24–72 hours** of last SMS click
-- Or coupon code from SMS is used (direct attribution, no window needed)
-- Without a window, organic purchases get falsely credited to SMS
+#### Attribution Window — IMPLEMENTED
+- Purchase within **48 hours** of last SMS click → attributed
+- Or coupon code starting with `SMS-` used → direct attribution (no window needed)
+- Updated in `stripe-webhook`: sets `sms_attributed`, `sms_send_id`, `sms_click_at` on `orders_raw`
+- Logs `order_attributed` and `coupon_redeemed` events to `sms_events`
+- Updates `sms_sends.outcome` to `converted`
+
+### ✅ Coupon Reminder SMS — COMPLETE
+- Edge function: `sms-coupon-reminder` (deployed)
+- pg_cron job runs every hour at :30 (`SETUP_SMS_CRON.sql` — job ID 9)
+- Finds contacts subscribed 24-48hrs ago with unused coupons
+- Enforces quiet hours (9 AM–9 PM ET)
+- Checks no reminder already sent (via sms_sends flow='coupon_reminder')
+- 6hr frequency cap between marketing messages
+- Sends reminder with tracked link
+
+### ✅ Coupon Abuse Prevention — COMPLETE
+- Re-subscribing with used coupon: **no new coupon issued**, welcome-back message
+- Re-subscribing with valid coupon: **reuses existing coupon**, no new one
+- Re-subscribing with expired unused coupon: new coupon allowed (fair)
+- Opted-out users shown "text START to (888) 392-5295" message
+- IP rate limiting: 3 signups/hour/IP
+
+### ✅ Urgency Messaging — COMPLETE
+- SMS body includes "Expires in 48hrs" before the shop link
+- Success screen shows expiry warning: "⏰ Expires in 48 hours — use it before it's gone!"
+- Already-subscribed users see: "You already have a coupon — use it before it expires!"
+
+---
+
+## 🔜 Phase 3: Automation Flows + Dynamic Coupons — NEXT
+
+### Priority #1: Abandoned Cart SMS Flow (TOP REVENUE DRIVER)
+Cart persistence required — save cart state to Supabase for logged-in users or via phone lookup.
+
+**Flow (3-touch escalation):**
+1. **30 min** → "You left something behind 👀" (no discount, just reminder)
+2. **6 hours** → Social proof / urgency ("Only 2 left!" or "X people bought this today")
+3. **24 hours** → Discount offer (this is where the 15% coupon lives, not upfront)
+
+- Edge function: `sms-abandoned-cart` triggered by pg_cron
+- Track `abandoned_cart_id` in sms_messages for attribution
+- Stop sequence immediately if user completes purchase
+
+### Priority #2: Coupon Escalation Flow
+When initial coupon expires unused, offer a better deal (one-time only):
+1. **Day 0** → Sign up → 15% off $40+, 2-day expiry
+2. **Day 1** → Reminder SMS ("don't forget your 15%!") — already built
+3. **Day 2** → Coupon expires → "We upgraded you to 20% — 48hrs only!"
+4. **Day 4** → Expires, no more offers. Ever.
+
+- Limit to **one escalation per phone, lifetime** (prevent gaming)
+- Fits into existing `sms-coupon-reminder` function as new flow
+- Track via `sms_sends.flow = 'coupon_escalation'`
 
 ### Priority #3: Dynamic Coupon Logic
 Replace static `site_settings.sms_coupon` with context-aware offers:
@@ -244,19 +281,13 @@ Instead, offer:
 
 👉 Big discounts devalue the brand for your best customers and train them to wait for deals
 
-### Priority #4: Coupon Reminder SMS
-- pg_cron job: find unused coupons after 24h
-- Edge function sends reminder via `send-sms`
-- Max 1 reminder per subscriber
-- Track as campaign `coupon_reminder`
-
-### Priority #5: Welcome Series (Upgraded)
+### Priority #4: Welcome Series (Upgraded)
 Delay the discount, escalate over time:
 1. **Day 0** → "Welcome to Karry Kraze! Here's what's trending 🔥" (no discount)
 2. **Day 2** → "Our best sellers this week" + product link
 3. **Day 5** → "Still thinking about it? Here's 10% off" (earned discount)
 
-### Priority #6: Frequency Caps (Enforced at DB Level)
+### Priority #5: Frequency Caps (Enforced at DB Level)
 Prevent spam complaints, unsubscribes, and Twilio risk flags.
 
 - Add `last_sms_sent_at` column on `customer_contacts`
@@ -275,7 +306,7 @@ Prevent spam complaints, unsubscribes, and Twilio risk flags.
 
 ---
 
-## 📊 Phase 3: Campaign System
+## 📊 Phase 4: Campaign System
 
 ### Campaign Builder (Admin UI)
 - Compose + preview SMS messages
@@ -306,7 +337,7 @@ Prevent spam complaints, unsubscribes, and Twilio risk flags.
 
 ---
 
-## 🧠 Phase 4: Analytics Dashboard — THE EDGE
+## 🧠 Phase 5: Analytics Dashboard — THE EDGE
 
 This is where data turns into decisions.
 
@@ -338,7 +369,7 @@ This is where data turns into decisions.
 
 ---
 
-## 🔮 Phase 5: Behavior-Based Trigger System
+## 🔮 Phase 6: Behavior-Based Trigger System
 
 ### Strategic Shift
 Move from "send campaigns to everyone" to "use SMS as a behavior-based trigger system."
