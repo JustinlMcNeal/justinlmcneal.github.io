@@ -2861,7 +2861,8 @@ async function schedulePost() {
         pinterest_board_id: platform === "pinterest" ? state.uploadData.boardId : null,
         scheduled_for: scheduledFor,
         status: autoApprove ? "queued" : "draft",
-        requires_approval: !autoApprove
+        requires_approval: !autoApprove,
+        image_url: variation.image_path ? getPublicUrl(variation.image_path) : null
       });
     }
     
