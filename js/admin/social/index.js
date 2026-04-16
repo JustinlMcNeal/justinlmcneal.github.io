@@ -6224,6 +6224,24 @@ async function openPostAnalytics(postId) {
     // Store current post ID for refresh
     modal.dataset.postId = postId;
     
+    // Auto-load saved analysis or run it if post has engagement data
+    if (post.engagement_updated_at) {
+      // Check for saved analysis first
+      const { data: savedAnalysis } = await getClient()
+        .from("post_performance_analysis")
+        .select("*")
+        .eq("post_id", postId)
+        .single();
+      
+      if (savedAnalysis) {
+        // Display the saved analysis
+        displayAnalysis(savedAnalysis);
+      } else {
+        // Run analysis for the first time
+        runDeepPostAnalysis(postId);
+      }
+    }
+    
   } catch (err) {
     console.error("Error opening post analytics:", err);
   }
@@ -6232,6 +6250,147 @@ async function openPostAnalytics(postId) {
 // ============================================
 // Deep Post Analysis
 // ============================================
+
+function displayAnalysis(analysis) {
+  if (!analysis) return;
+
+  // Update score section
+  const scoreSection = document.getElementById("postAnalyticsScoreSection");
+  if (scoreSection) {
+    const overallScore = Math.round(analysis.overall_score || 50);
+    const scoreEl = document.getElementById("postAnalyticsScore");
+    if (scoreEl) scoreEl.textContent = overallScore + "/100";
+    
+    // Update sub-scores
+    const setScore = (id, score) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = Math.round(score || 0) + "/100";
+    };
+    
+    setScore("postAnalyticsTimingScore", analysis.timing_score);
+    setScore("postAnalyticsCaptionScore", analysis.caption_score);
+    setScore("postAnalyticsHashtagScore", analysis.hashtag_score);
+    setScore("postAnalyticsVisualScore", analysis.visual_score || 70);
+    
+    // Color the score section based on performance
+    if (overallScore >= 70) {
+      scoreSection.className = "bg-gradient-to-r from-emerald-500 to-teal-500 rounded-xl p-4 text-white";
+    } else if (overallScore >= 50) {
+      scoreSection.className = "bg-gradient-to-r from-yellow-500 to-orange-500 rounded-xl p-4 text-white";
+    } else {
+      scoreSection.className = "bg-gradient-to-r from-red-500 to-pink-500 rounded-xl p-4 text-white";
+    }
+  }
+  
+  // Update comparison section
+  const formatComparison = (value) => {
+    const numVal = parseFloat(value) || 0;
+    if (numVal > 0) return `<span class="text-green-600">+${numVal.toFixed(0)}%</span>`;
+    if (numVal < 0) return `<span class="text-red-600">${numVal.toFixed(0)}%</span>`;
+    return `<span class="text-gray-600">0%</span>`;
+  };
+  
+  const setComp = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = formatComparison(val);
+  };
+  
+  setComp("postAnalyticsVsAvgEng", analysis.vs_avg_engagement_rate);
+  setComp("postAnalyticsVsAvgLikes", analysis.vs_avg_likes);
+  setComp("postAnalyticsVsAvgComments", analysis.vs_avg_comments);
+  setComp("postAnalyticsVsAvgSaves", analysis.vs_avg_saves);
+  
+  // Update strengths
+  const strengthsEl = document.getElementById("postAnalyticsStrengths");
+  const strengthsSection = document.getElementById("postAnalyticsStrengthsSection");
+  if (strengthsEl && analysis.strengths?.length > 0) {
+    strengthsSection.classList.remove("hidden");
+    strengthsEl.innerHTML = analysis.strengths.map(s => `
+      <div class="flex items-start gap-2">
+        <span>✅</span>
+        <span>${s}</span>
+      </div>
+    `).join("");
+  } else if (strengthsSection) {
+    strengthsSection.classList.add("hidden");
+  }
+  
+  // Update weaknesses
+  const weaknessesEl = document.getElementById("postAnalyticsWeaknesses");
+  const weaknessesSection = document.getElementById("postAnalyticsWeaknessesSection");
+  if (weaknessesEl && analysis.weaknesses?.length > 0) {
+    weaknessesSection.classList.remove("hidden");
+    weaknessesEl.innerHTML = analysis.weaknesses.map(w => `
+      <div class="flex items-start gap-2">
+        <span>❌</span>
+        <span>${w}</span>
+      </div>
+    `).join("");
+  } else if (weaknessesSection) {
+    weaknessesSection.classList.add("hidden");
+  }
+  
+  // Update recommendations
+  const recsEl = document.getElementById("postAnalyticsRecs");
+  const recsSection = document.getElementById("postAnalyticsRecsSection");
+  if (recsEl && analysis.recommendations?.length > 0) {
+    recsSection.classList.remove("hidden");
+    recsEl.innerHTML = analysis.recommendations.map(r => `
+      <div class="flex items-start gap-2">
+        <span>💡</span>
+        <span>${r}</span>
+      </div>
+    `).join("");
+  } else if (recsSection) {
+    recsSection.classList.add("hidden");
+  }
+  
+  // Update hashtag advice
+  const hashtagAdviceEl = document.getElementById("postAnalyticsHashtagAdvice");
+  if (hashtagAdviceEl && analysis.hashtagAdvice) {
+    hashtagAdviceEl.innerHTML = `<strong>📌 Tip:</strong> ${analysis.hashtagAdvice}`;
+  }
+  
+  // Update AI Analysis section (if available)
+  const aiSection = document.getElementById("postAnalyticsAISection");
+  if (aiSection) {
+    if (analysis.ai_analysis || analysis.ai_recommendations?.length > 0 || analysis.ai_learnings?.length > 0) {
+      aiSection.classList.remove("hidden");
+      
+      // AI Score
+      const aiScoreEl = document.getElementById("postAnalyticsAIScore");
+      if (aiScoreEl && analysis.ai_overall_score) {
+        aiScoreEl.innerHTML = `<span class="text-2xl font-bold">${analysis.ai_overall_score}</span>/100 <span class="text-sm">(${analysis.ai_performance_tier || 'analyzed'})</span>`;
+      }
+      
+      // AI Recommendations
+      const aiRecsEl = document.getElementById("postAnalyticsAIRecs");
+      if (aiRecsEl && analysis.ai_recommendations?.length > 0) {
+        aiRecsEl.innerHTML = analysis.ai_recommendations.map(r => `
+          <div class="flex items-start gap-2 text-sm">
+            <span>🤖</span>
+            <span>${r}</span>
+          </div>
+        `).join("");
+      }
+      
+      // AI Learnings
+      const aiLearningsEl = document.getElementById("postAnalyticsAILearnings");
+      if (aiLearningsEl && analysis.ai_learnings?.length > 0) {
+        aiLearningsEl.innerHTML = analysis.ai_learnings.map(l => `
+          <div class="bg-purple-50 rounded-lg p-2 text-sm">
+            <div class="font-medium text-purple-800">📚 ${l.pattern}</div>
+            ${l.apply_to_future ? `<div class="text-purple-600 text-xs mt-1">→ ${l.apply_to_future}</div>` : ''}
+          </div>
+        `).join("");
+        
+        showToast(`🧠 AI learned ${analysis.ai_learnings.length} pattern(s) for future posts!`, "success");
+      }
+    } else {
+      aiSection.classList.add("hidden");
+    }
+  }
+}
 
 async function runDeepPostAnalysis(postId) {
   const modal = document.getElementById("postAnalyticsModal");
@@ -6245,149 +6404,7 @@ async function runDeepPostAnalysis(postId) {
   
   try {
     const analysis = await analyzePost(postId);
-    
-    if (!analysis) {
-      console.warn("No analysis returned for post");
-      return;
-    }
-    
-    // Update score section
-    const scoreSection = document.getElementById("postAnalyticsScoreSection");
-    if (scoreSection) {
-      const overallScore = Math.round(analysis.overall_score || 50);
-      const scoreEl = document.getElementById("postAnalyticsScore");
-      if (scoreEl) scoreEl.textContent = overallScore + "/100";
-      
-      // Update sub-scores
-      const setScore = (id, score) => {
-        const el = document.getElementById(id);
-        if (el) el.textContent = Math.round(score || 0) + "/100";
-      };
-      
-      setScore("postAnalyticsTimingScore", analysis.timing_score);
-      setScore("postAnalyticsCaptionScore", analysis.caption_score);
-      setScore("postAnalyticsHashtagScore", analysis.hashtag_score);
-      setScore("postAnalyticsVisualScore", analysis.visual_score || 70);
-      
-      // Color the score section based on performance
-      if (overallScore >= 70) {
-        scoreSection.className = "bg-gradient-to-r from-emerald-500 to-teal-500 rounded-xl p-4 text-white";
-      } else if (overallScore >= 50) {
-        scoreSection.className = "bg-gradient-to-r from-yellow-500 to-orange-500 rounded-xl p-4 text-white";
-      } else {
-        scoreSection.className = "bg-gradient-to-r from-red-500 to-pink-500 rounded-xl p-4 text-white";
-      }
-    }
-    
-    // Update comparison section
-    const formatComparison = (value) => {
-      const numVal = parseFloat(value) || 0;
-      if (numVal > 0) return `<span class="text-green-600">+${numVal.toFixed(0)}%</span>`;
-      if (numVal < 0) return `<span class="text-red-600">${numVal.toFixed(0)}%</span>`;
-      return `<span class="text-gray-600">0%</span>`;
-    };
-    
-    const setComp = (id, val) => {
-      const el = document.getElementById(id);
-      if (el) el.innerHTML = formatComparison(val);
-    };
-    
-    setComp("postAnalyticsVsAvgEng", analysis.vs_avg_engagement_rate);
-    setComp("postAnalyticsVsAvgLikes", analysis.vs_avg_likes);
-    setComp("postAnalyticsVsAvgComments", analysis.vs_avg_comments);
-    setComp("postAnalyticsVsAvgSaves", analysis.vs_avg_saves);
-    
-    // Update strengths
-    const strengthsEl = document.getElementById("postAnalyticsStrengths");
-    const strengthsSection = document.getElementById("postAnalyticsStrengthsSection");
-    if (strengthsEl && analysis.strengths?.length > 0) {
-      strengthsSection.classList.remove("hidden");
-      strengthsEl.innerHTML = analysis.strengths.map(s => `
-        <div class="flex items-start gap-2">
-          <span>✅</span>
-          <span>${s}</span>
-        </div>
-      `).join("");
-    } else if (strengthsSection) {
-      strengthsSection.classList.add("hidden");
-    }
-    
-    // Update weaknesses
-    const weaknessesEl = document.getElementById("postAnalyticsWeaknesses");
-    const weaknessesSection = document.getElementById("postAnalyticsWeaknessesSection");
-    if (weaknessesEl && analysis.weaknesses?.length > 0) {
-      weaknessesSection.classList.remove("hidden");
-      weaknessesEl.innerHTML = analysis.weaknesses.map(w => `
-        <div class="flex items-start gap-2">
-          <span>❌</span>
-          <span>${w}</span>
-        </div>
-      `).join("");
-    } else if (weaknessesSection) {
-      weaknessesSection.classList.add("hidden");
-    }
-    
-    // Update recommendations
-    const recsEl = document.getElementById("postAnalyticsRecs");
-    const recsSection = document.getElementById("postAnalyticsRecsSection");
-    if (recsEl && analysis.recommendations?.length > 0) {
-      recsSection.classList.remove("hidden");
-      recsEl.innerHTML = analysis.recommendations.map(r => `
-        <div class="flex items-start gap-2">
-          <span>💡</span>
-          <span>${r}</span>
-        </div>
-      `).join("");
-    } else if (recsSection) {
-      recsSection.classList.add("hidden");
-    }
-    
-    // Update hashtag advice
-    const hashtagAdviceEl = document.getElementById("postAnalyticsHashtagAdvice");
-    if (hashtagAdviceEl && analysis.hashtagAdvice) {
-      hashtagAdviceEl.innerHTML = `<strong>📌 Tip:</strong> ${analysis.hashtagAdvice}`;
-    }
-    
-    // Update AI Analysis section (if available)
-    const aiSection = document.getElementById("postAnalyticsAISection");
-    if (aiSection) {
-      if (analysis.ai_analysis || analysis.ai_recommendations?.length > 0 || analysis.ai_learnings?.length > 0) {
-        aiSection.classList.remove("hidden");
-        
-        // AI Score
-        const aiScoreEl = document.getElementById("postAnalyticsAIScore");
-        if (aiScoreEl && analysis.ai_overall_score) {
-          aiScoreEl.innerHTML = `<span class="text-2xl font-bold">${analysis.ai_overall_score}</span>/100 <span class="text-sm">(${analysis.ai_performance_tier || 'analyzed'})</span>`;
-        }
-        
-        // AI Recommendations
-        const aiRecsEl = document.getElementById("postAnalyticsAIRecs");
-        if (aiRecsEl && analysis.ai_recommendations?.length > 0) {
-          aiRecsEl.innerHTML = analysis.ai_recommendations.map(r => `
-            <div class="flex items-start gap-2 text-sm">
-              <span>🤖</span>
-              <span>${r}</span>
-            </div>
-          `).join("");
-        }
-        
-        // AI Learnings
-        const aiLearningsEl = document.getElementById("postAnalyticsAILearnings");
-        if (aiLearningsEl && analysis.ai_learnings?.length > 0) {
-          aiLearningsEl.innerHTML = analysis.ai_learnings.map(l => `
-            <div class="bg-purple-50 rounded-lg p-2 text-sm">
-              <div class="font-medium text-purple-800">📚 ${l.pattern}</div>
-              ${l.apply_to_future ? `<div class="text-purple-600 text-xs mt-1">→ ${l.apply_to_future}</div>` : ''}
-            </div>
-          `).join("");
-          
-          showToast(`🧠 AI learned ${analysis.ai_learnings.length} pattern(s) for future posts!`, "success");
-        }
-      } else {
-        aiSection.classList.add("hidden");
-      }
-    }
-    
+    displayAnalysis(analysis);
   } catch (err) {
     console.error("Error running deep analysis:", err);
   } finally {
