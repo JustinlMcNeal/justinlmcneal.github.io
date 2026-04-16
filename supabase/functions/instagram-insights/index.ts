@@ -351,10 +351,10 @@ serve(async (req) => {
         results.updated++;
         console.log(`Updated post ${post.id}: ${likes} likes, ${comments} comments, ${saves} saves, ${impressions} impressions, ${reach} reach`);
 
-      } catch (err) {
+      } catch (err: unknown) {
         console.error(`Error processing post ${post.id}:`, err);
         results.failed++;
-        results.errors.push(`${post.id}: ${err.message || "Unknown error"}`);
+        results.errors.push(`${post.id}: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
 
@@ -367,10 +367,10 @@ serve(async (req) => {
       { headers: corsHeaders }
     );
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Instagram insights error:", error);
     return new Response(
-      JSON.stringify({ success: false, error: error.message || "Failed to fetch insights" }),
+      JSON.stringify({ success: false, error: error instanceof Error ? error.message : String(error) }),
       { headers: corsHeaders, status: 500 }
     );
   }

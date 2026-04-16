@@ -131,7 +131,8 @@
       <button data-tab="assets" class="tab-btn px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-black transition-colors whitespace-nowrap">
         🖼️ Assets
       </button>
-      <button data-tab="templates" class="tab-btn px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-black transition-colors whitespace-nowrap">
+      <!-- Templates tab hidden from UI — kept as internal fallback + A/B baseline -->
+      <button data-tab="templates" class="tab-btn hidden px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-black transition-colors whitespace-nowrap">
         ✏️ Templates
       </button>
       <button data-tab="boards" class="tab-btn px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-black transition-colors whitespace-nowrap">
@@ -145,9 +146,6 @@
       </button>
       <button data-tab="carousel" class="tab-btn px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-black transition-colors whitespace-nowrap">
         🎠 Carousel
-      </button>
-      <button data-tab="images" class="tab-btn px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-black transition-colors whitespace-nowrap">
-        🎨 AI Images
       </button>
     </div>
 
@@ -1347,157 +1345,6 @@
         </div>
       </div>
 
-      <!-- AI Images: Review Queue + Blacklist -->
-      <div id="tab-images" class="tab-panel hidden">
-        <div class="grid gap-6">
-
-          <!-- Header -->
-          <div class="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-xl p-6 text-white">
-            <div class="flex items-center gap-4">
-              <div class="p-3 bg-white/20 rounded-xl">
-                <svg class="w-8 h-8" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z"/>
-                </svg>
-              </div>
-              <div class="flex-1">
-                <h2 class="text-xl font-black">🎨 AI Image Pipeline</h2>
-                <p class="text-white/90 text-sm">Review AI-generated images, manage blacklisted product photos</p>
-              </div>
-              <button id="btnGenerateImages" class="px-4 py-2 bg-white text-purple-600 font-bold rounded-lg text-sm hover:bg-white/90 transition-colors">
-                + Generate Images
-              </button>
-            </div>
-          </div>
-
-          <!-- Stats Cards -->
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div class="bg-white rounded-xl border p-4 text-center">
-              <p id="imgStatPending" class="text-2xl font-black text-yellow-500">0</p>
-              <p class="text-xs text-gray-500 mt-1">Pending Review</p>
-            </div>
-            <div class="bg-white rounded-xl border p-4 text-center">
-              <p id="imgStatApproved" class="text-2xl font-black text-green-500">0</p>
-              <p class="text-xs text-gray-500 mt-1">Approved</p>
-            </div>
-            <div class="bg-white rounded-xl border p-4 text-center">
-              <p id="imgStatRejected" class="text-2xl font-black text-red-500">0</p>
-              <p class="text-xs text-gray-500 mt-1">Rejected</p>
-            </div>
-            <div class="bg-white rounded-xl border p-4 text-center">
-              <p id="imgStatBlacklisted" class="text-2xl font-black text-gray-500">0</p>
-              <p class="text-xs text-gray-500 mt-1">Blacklisted</p>
-            </div>
-          </div>
-
-          <!-- Sub-tabs: Review Queue / Blacklist -->
-          <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
-            <div class="flex border-b">
-              <button id="imgSubReview" class="flex-1 py-3 text-sm font-medium text-center border-b-2 border-black text-black" onclick="switchImageSubTab('review')">
-                ⏳ Review Queue (<span id="reviewCount">0</span>)
-              </button>
-              <button id="imgSubApproved" class="flex-1 py-3 text-sm font-medium text-center border-b-2 border-transparent text-gray-500 hover:text-black" onclick="switchImageSubTab('approved')">
-                ✅ Approved
-              </button>
-              <button id="imgSubBlacklist" class="flex-1 py-3 text-sm font-medium text-center border-b-2 border-transparent text-gray-500 hover:text-black" onclick="switchImageSubTab('blacklist')">
-                🚫 Blacklist
-              </button>
-            </div>
-
-            <!-- Review Queue Panel -->
-            <div id="imgPanelReview" class="p-4">
-              <div id="reviewQueueGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                <!-- Populated by JS -->
-              </div>
-              <div id="reviewQueueEmpty" class="hidden p-8 text-center text-gray-400">
-                <svg class="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
-                <p class="font-medium">All caught up!</p>
-                <p class="text-xs mt-1">No images waiting for review</p>
-              </div>
-            </div>
-
-            <!-- Approved Images Panel -->
-            <div id="imgPanelApproved" class="p-4 hidden">
-              <div id="approvedGrid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                <!-- Populated by JS -->
-              </div>
-              <div id="approvedEmpty" class="hidden p-8 text-center text-gray-400">
-                <p>No approved AI images yet</p>
-              </div>
-            </div>
-
-            <!-- Blacklist Panel -->
-            <div id="imgPanelBlacklist" class="p-4 hidden">
-              <div class="mb-4 flex items-center justify-between">
-                <p class="text-sm text-gray-600">Images marked as unsuitable for social media posting</p>
-                <button id="btnAddBlacklist" class="text-xs font-medium text-red-600 hover:text-red-800 px-3 py-1.5 bg-red-50 rounded-lg border border-red-200 hover:border-red-300 transition-colors">
-                  + Blacklist Image
-                </button>
-              </div>
-              <div id="blacklistGrid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                <!-- Populated by JS -->
-              </div>
-              <div id="blacklistEmpty" class="hidden p-8 text-center text-gray-400">
-                <p>No blacklisted images</p>
-                <p class="text-xs mt-1">Product images will be used for auto-posting until blacklisted</p>
-              </div>
-            </div>
-          </div>
-
-          <!-- Generation Settings Card -->
-          <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
-            <div class="p-4 border-b flex items-center justify-between">
-              <h3 class="font-bold">⚙️ Pipeline Settings</h3>
-              <button id="btnSavePipelineSettings" class="px-4 py-1.5 text-sm font-bold bg-black text-white rounded-lg hover:bg-gray-800 transition-colors">
-                Save
-              </button>
-            </div>
-            <div class="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">AI Model</label>
-                <select id="pipelineModel" class="w-full border rounded-lg px-3 py-2 text-sm">
-                  <option value="gpt-image-1">GPT Image-1 (img2img)</option>
-                  <option value="dall-e-3">DALL-E 3 (text only)</option>
-                </select>
-                <p class="text-xs text-gray-400 mt-1">img2img always uses GPT Image-1 regardless</p>
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Quality</label>
-                <select id="pipelineQuality" class="w-full border rounded-lg px-3 py-2 text-sm">
-                  <option value="high">High ($0.08/image)</option>
-                  <option value="medium">Medium ($0.05/image)</option>
-                  <option value="low">Standard ($0.04/image)</option>
-                </select>
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Max Generations/Day</label>
-                <input type="number" id="pipelineMaxDaily" value="50" min="1" max="200" class="w-full border rounded-lg px-3 py-2 text-sm">
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Default Style</label>
-                <select id="pipelineStyle" class="w-full border rounded-lg px-3 py-2 text-sm">
-                  <option value="lifestyle">Lifestyle</option>
-                  <option value="flat_lay">Flat Lay</option>
-                  <option value="close_up">Close Up</option>
-                  <option value="on_model">On Model</option>
-                  <option value="seasonal">Seasonal</option>
-                </select>
-              </div>
-              <div class="flex items-center gap-3">
-                <input type="checkbox" id="pipelineEnabled" class="w-4 h-4 rounded border-gray-300">
-                <label for="pipelineEnabled" class="text-sm font-medium text-gray-700">Enable auto-generation in autopilot</label>
-              </div>
-              <div class="flex items-center gap-3">
-                <input type="checkbox" id="pipelineRequireReview" checked class="w-4 h-4 rounded border-gray-300">
-                <label for="pipelineRequireReview" class="text-sm font-medium text-gray-700">Require manual review</label>
-              </div>
-            </div>
-          </div>
-
-        </div>
-      </div>
-
     </div>
 
   </main>
@@ -2394,102 +2241,6 @@
       <img id="carouselPreviewImage" class="max-w-full max-h-[85vh] object-contain rounded-lg" src="" alt="Preview">
       <div class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/60 text-white px-4 py-2 rounded-full text-sm font-medium">
         <span id="carouselPreviewIndex">1</span> of <span id="carouselPreviewTotal">1</span>
-      </div>
-    </div>
-  </div>
-
-  <!-- Generate Images Modal -->
-  <div id="generateImagesModal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-2 sm:p-4">
-    <div class="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-      <div class="flex items-center justify-between p-4 border-b sticky top-0 bg-white z-10">
-        <h2 class="text-lg font-bold">🎨 Generate AI Images</h2>
-        <button id="btnCloseGenerate" class="p-2 hover:bg-gray-100 rounded-lg" onclick="document.getElementById('generateImagesModal').classList.add('hidden')">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
-          </svg>
-        </button>
-      </div>
-      <div class="p-4 space-y-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2">Select Product</label>
-          <select id="genProductSelect" class="w-full border rounded-lg px-3 py-2 text-sm">
-            <option value="">-- Choose a product --</option>
-            <option value="__all__">All Products (batch)</option>
-          </select>
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2">Style <span class="text-xs text-gray-400">(select one or more)</span></label>
-          <div class="flex flex-wrap gap-2" id="genStyleButtons">
-            <button data-style="lifestyle" class="gen-style-btn py-2 px-3 border rounded-lg text-sm font-medium bg-purple-100 border-purple-300">🏠 Lifestyle</button>
-            <button data-style="flat_lay" class="gen-style-btn py-2 px-3 border rounded-lg text-sm font-medium hover:bg-gray-50">📐 Flat Lay</button>
-            <button data-style="close_up" class="gen-style-btn py-2 px-3 border rounded-lg text-sm font-medium hover:bg-gray-50">🔍 Close Up</button>
-            <button data-style="on_model" class="gen-style-btn py-2 px-3 border rounded-lg text-sm font-medium hover:bg-gray-50">👤 On Model</button>
-            <button data-style="seasonal" class="gen-style-btn py-2 px-3 border rounded-lg text-sm font-medium hover:bg-gray-50">🌸 Seasonal</button>
-          </div>
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2">Images per product</label>
-          <select id="genCount" class="w-full border rounded-lg px-3 py-2 text-sm">
-            <option value="1">1 image</option>
-            <option value="2">2 images</option>
-            <option value="3">3 images</option>
-            <option value="4">4 images</option>
-          </select>
-        </div>
-        <div class="bg-purple-50 border border-purple-200 rounded-lg p-3">
-          <p class="text-sm text-purple-800">💰 Estimated cost: <strong id="genCostEstimate">$0.08</strong></p>
-          <p class="text-xs text-purple-600 mt-1">Based on HD quality @ $0.08/image</p>
-        </div>
-      </div>
-      <div class="p-4 border-t flex justify-end gap-3">
-        <button onclick="document.getElementById('generateImagesModal').classList.add('hidden')" class="px-4 py-2 text-sm font-medium border rounded-lg hover:bg-gray-50">Cancel</button>
-        <button id="btnRunGenerate" class="px-6 py-2 text-sm font-bold bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg hover:opacity-90 transition-opacity">
-          Generate
-        </button>
-      </div>
-      <div id="genProgress" class="hidden p-4 border-t">
-        <div class="flex items-center gap-3">
-          <span class="inline-block w-5 h-5 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></span>
-          <span id="genProgressText" class="text-sm text-gray-600">Generating images...</span>
-        </div>
-      </div>
-      <!-- Results preview (populated by JS after generation) -->
-      <div id="genResults" class="hidden p-4 border-t bg-gray-50">
-      </div>
-    </div>
-  </div>
-
-  <!-- Blacklist Image Modal -->
-  <div id="blacklistModal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-2 sm:p-4">
-    <div class="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-      <div class="flex items-center justify-between p-4 border-b">
-        <h2 class="text-lg font-bold">🚫 Blacklist Product Image</h2>
-        <button onclick="document.getElementById('blacklistModal').classList.add('hidden')" class="p-2 hover:bg-gray-100 rounded-lg">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
-          </svg>
-        </button>
-      </div>
-      <div class="p-4 space-y-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2">Select Product</label>
-          <select id="blProductSelect" class="w-full border rounded-lg px-3 py-2 text-sm">
-            <option value="">-- Choose a product --</option>
-          </select>
-        </div>
-        <div id="blImageGrid" class="grid grid-cols-3 gap-3 hidden">
-          <!-- Product images will be loaded here -->
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2">Reason (optional)</label>
-          <input type="text" id="blReason" placeholder="e.g. low quality, bad background" class="w-full border rounded-lg px-3 py-2 text-sm">
-        </div>
-      </div>
-      <div class="p-4 border-t flex justify-end gap-3">
-        <button onclick="document.getElementById('blacklistModal').classList.add('hidden')" class="px-4 py-2 text-sm font-medium border rounded-lg hover:bg-gray-50">Cancel</button>
-        <button id="btnConfirmBlacklist" class="px-6 py-2 text-sm font-bold bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors" disabled>
-          Blacklist Selected
-        </button>
       </div>
     </div>
   </div>

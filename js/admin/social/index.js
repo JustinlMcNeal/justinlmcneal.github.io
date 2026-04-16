@@ -67,10 +67,6 @@ import {
   getAllCategoryInsights,
   getCategoryInsights
 } from "./postLearning.js";
-import {
-  loadImagePipelineData,
-  setupImagePipeline,
-} from "./imagePipeline.js";
 
 // ============================================
 // State
@@ -631,7 +627,6 @@ async function init() {
     setupAutopilot();
     setupAnalytics();
     setupCarouselBuilder();
-    setupImagePipeline(state.products);
     
     // Show calendar tab by default
     switchTab("calendar");
@@ -851,9 +846,6 @@ function switchTab(tab) {
       break;
     case "carousel":
       loadRecentCarousels();
-      break;
-    case "images":
-      loadImagePipelineData();
       break;
   }
 }

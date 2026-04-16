@@ -1,7 +1,7 @@
 # Social Media Page Revamp — pSocial_001
 
 > **Created**: 2026-04-16  
-> **Status**: Planning  
+> **Status**: Sprint 1 Complete ✅ — Sprint 2 next  
 > **Scope**: Full audit & revamp of `/pages/admin/social.html` and all supporting JS/edge functions
 
 ---
@@ -455,13 +455,20 @@ Daily cron triggers autopilot-fill:
 
 **Sprint grouping**:
 
-### Sprint 1 — Fix + Clean
+### Sprint 1 — Fix + Clean ✅ COMPLETE (2026-04-17)
 > Get real data flowing, remove dead weight
 
-- Fix insights sync (CRITICAL — everything downstream depends on real data)
-- Fix autopilot cron
-- Remove AI Images tab
-- Hide Templates tab
+- ✅ Fix insights sync — **Root cause**: no cron job existed. Created `SETUP_INSIGHTS_CRON.sql`, deployed every-6-hours cron (jobid 12). Fixed edge function error handling. Tested: 6 posts updated with real engagement data (likes, saves, reach, engagement_rate).
+- ✅ Fix autopilot cron — **Root cause**: `autopilot-fill` edge function crashed due to Deno strict mode (`catch (err)` without type annotation). Cron job existed (jobid 7, daily 2AM UTC) but function silently errored. Fixed error handling. Tested: successfully generated 12 posts.
+- ✅ Clean up `process-scheduled-posts` — removed excessive debug logging (was dumping entire social_posts/variations/assets tables every minute). Fixed error handling.
+- ✅ Remove AI Images tab — removed tab button, `#tab-images` panel (~150 lines), Generate Images modal, Blacklist Image modal, `imagePipeline.js` import/setup from index.js. Deleted `imagePipeline.js` (800+ lines).
+- ✅ Hide Templates tab — added `hidden` class to tab button. All template JS/DB intact as internal fallback.
+- ✅ Audit Facebook posting — **all FB posts FAILED** ("Facebook Page not connected" / 502 errors). Disabled Facebook from autopilot platforms (`["instagram","facebook"]` → `["instagram"]`). Full fix deferred.
+
+**Edge functions deployed**: `instagram-insights`, `autopilot-fill`, `process-scheduled-posts`  
+**Cron jobs**: insights sync created (jobid 12), autopilot confirmed working (jobid 7)  
+**Files removed**: `js/admin/social/imagePipeline.js`  
+**Files modified**: `pages/admin/social.html`, `js/admin/social/index.js`, 3 edge functions
 
 ### Sprint 2 — Image Pool
 > New content input pipeline
@@ -543,3 +550,47 @@ Daily cron triggers autopilot-fill:
 3. **Reels/Video**: Any interest in video content (Reels) in the future? Would need a different pipeline.
 4. **Cross-posting strategy**: Should AI vary captions per platform (IG caption vs Pinterest description vs FB post) or use the same?
 5. **Image pool storage**: Keep using Supabase Storage `social-media` bucket, or consider a CDN for faster delivery?
+
+1. Pinterest production
+Do not make this part of Sprint 1. Treat it as a gated expansion item after Instagram autopilot and analytics are healthy. Right now Pinterest adds surface area without solving your core bottleneck. Decision rule: move Pinterest to production only after the revamp proves stable on Instagram for a few weeks and the Image Pool + autopilot are working end-to-end. Until then, keep Boards as-is and document the exact app review requirements as a later checklist.
+
+Recommendation: defer. Add a note like: “Pinterest production begins only after Sprint 3 is stable.”
+
+2. Facebook posting
+This should not stay an open question for long because it affects architecture and token handling right now. Since it likely shares the same token refresh chain as Instagram, audit it during Sprint 1 while you are already fixing insights sync and autopilot. You do not need to fully optimize Facebook yet, but you do need to know whether it is healthy, partially broken, or fully broken.
+
+Recommendation: convert this from an open question into a Sprint 1 audit task:
+
+verify token refresh
+verify publish success
+verify insights fetch
+verify stored media IDs
+decide “supported now” vs “temporarily disabled”
+
+If it’s broken, I’d temporarily disable FB autoposting in the UI/config rather than let it silently fail.
+
+3. Reels/Video
+Do not build for video now. Keep it explicitly out of scope for this revamp. Reels need a different pipeline, different asset prep, and likely different learning signals than static posts and carousels. Mention it as a future branch of the system, not an extension of the current one.
+
+Recommendation: mark as “not in pSocial_001 scope.” Revisit only after static image autopilot is proven.
+
+4. Cross-posting strategy
+Do not use the exact same caption everywhere long term, but also do not overcomplicate this in v1. Best path is hybrid:
+
+v1: one core generated message, then lightweight platform transforms
+Instagram: hook + CTA + hashtags
+Facebook: cleaner, less hashtag-heavy
+Pinterest: title/description style, search-friendly, product-forward
+
+That gives you platform adaptation without requiring three completely separate generators yet. This fits your “hybrid AI first” principle better than either extreme.
+
+Recommendation: answer the question with: “AI should vary captions per platform in lightweight ways, using a shared core message.”
+
+5. Image pool storage
+Keep using Supabase Storage for now. Do not introduce CDN work yet unless you have a real delivery bottleneck. Your current revamp is about system reliability and learning, not edge delivery optimization. A CDN can come later if:
+
+admin uploads become slow
+image delivery becomes noticeably laggy
+you start serving lots of public traffic from those same assets
+
+Recommendation: stay on social-media bucket for pSocial_001. Reassess after volume grows.

@@ -107,7 +107,8 @@ Deno.serve(async (req) => {
     const result = await response.json();
 
     if (!response.ok) {
-      throw new Error(result.error || "Failed to generate posts");
+      console.error("[autopilot] auto-queue failed:", result);
+      throw new Error(result.error || `auto-queue returned ${response.status}`);
     }
 
     console.log(`[autopilot] Generated ${result.generated} posts`);
@@ -134,11 +135,11 @@ Deno.serve(async (req) => {
       posts: result.posts,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-  } catch (err) {
+  } catch (err: unknown) {
     console.error("[autopilot] Error:", err);
     return new Response(JSON.stringify({
       success: false,
-      error: err.message,
+      error: err instanceof Error ? err.message : String(err),
     }), { 
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" } 

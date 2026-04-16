@@ -35,13 +35,6 @@ serve(async (req) => {
     const now = new Date().toISOString();
     console.log("[process-scheduled-posts] Current time:", now);
     
-    // First, let's see ALL posts in the table for debugging
-    const { data: allPosts, error: allPostsError } = await supabase
-      .from("social_posts")
-      .select("id, status, scheduled_for, platform, error_message, variation_id");
-    
-    console.log("[process-scheduled-posts] All posts in table:", JSON.stringify(allPosts), "Error:", allPostsError?.message);
-    
     const { data: duePosts, error: fetchError } = await supabase
       .from("social_posts")
       .select(`
@@ -58,25 +51,14 @@ serve(async (req) => {
     if (fetchError) {
       console.error("[process-scheduled-posts] Error fetching posts:", fetchError);
       return new Response(
-        JSON.stringify({ success: false, error: fetchError.message, allPosts, now }),
+        JSON.stringify({ success: false, error: fetchError.message }),
         { headers: corsHeaders, status: 500 }
       );
     }
 
     if (!duePosts || duePosts.length === 0) {
-      console.log("[process-scheduled-posts] No posts due for processing");
-      
-      // Also get variations for debugging
-      const { data: variations } = await supabase
-        .from("social_variations")
-        .select("id, image_path, asset_id");
-      
-      const { data: assets } = await supabase
-        .from("social_assets")
-        .select("id, original_image_path");
-      
       return new Response(
-        JSON.stringify({ success: true, processed: 0, message: "No posts due", allPosts, variations, assets, now }),
+        JSON.stringify({ success: true, processed: 0, message: "No posts due" }),
         { headers: corsHeaders }
       );
     }
@@ -101,10 +83,6 @@ serve(async (req) => {
         const variation = post.variation;
         const asset = variation?.asset;
         const product = asset?.product;
-        
-        console.log(`[process-scheduled-posts] Variation: image_path=${variation?.image_path}`);
-        console.log(`[process-scheduled-posts] Asset: original_image_path=${asset?.original_image_path}`);
-        console.log(`[process-scheduled-posts] Product: catalog_image_url=${product?.catalog_image_url}`);
 
         // Get image URL - priority: post.image_url > variation > asset > product catalog
         // post.image_url is set by auto-queue with the best resolved image (AI-generated preferred)
@@ -290,8 +268,8 @@ serve(async (req) => {
           throw new Error(`Unknown platform: ${post.platform}`);
         }
 
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : "Unknown error";
+      } catch (err: unknown) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
         console.error(`[process-scheduled-posts] Failed to process post ${post.id}:`, errorMessage);
 
         // Mark as failed
@@ -308,15 +286,7 @@ serve(async (req) => {
           postId: post.id, 
           platform: post.platform, 
           success: false, 
-          error: errorMessage,
-          debug: {
-            variation_id: post.variation_id,
-            variation: post.variation,
-            imageUrlUsed: imageUrl,
-            postCaption: post.caption,
-            variationCaption: post.variation?.caption,
-            rawResponse: igRawResponse
-          }
+          error: errorMessage
         });
       }
     }
@@ -337,8 +307,8 @@ serve(async (req) => {
       { headers: corsHeaders }
     );
 
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : "Unknown error";
+  } catch (err: unknown) {
+    const errorMessage = err instanceof Error ? err.message : String(err);
     console.error("[process-scheduled-posts] Fatal error:", errorMessage);
     return new Response(
       JSON.stringify({ success: false, error: errorMessage }),
