@@ -255,7 +255,7 @@ async function handleBatch(
   // Get orders from the appropriate time window
   const { data: orders, error: ordErr } = await sb
     .from("orders_raw")
-    .select("stripe_checkout_session_id, email, first_name, phone, order_date")
+    .select("stripe_checkout_session_id, email, first_name, phone_number, order_date")
     .lte("order_date", cutoffNormal.toISOString().split("T")[0])
     .order("order_date", { ascending: false })
     .limit(100);
@@ -269,17 +269,8 @@ async function handleBatch(
   const errors: string[] = [];
 
   for (const order of orders) {
-    // Need a phone number — check sms_subscribers if order doesn't have phone
-    let phone = order.phone;
-    if (!phone) {
-      const { data: sub } = await sb
-        .from("sms_subscribers")
-        .select("phone")
-        .eq("email", order.email)
-        .eq("status", "active")
-        .single();
-      if (sub) phone = sub.phone;
-    }
+    // Need a phone number from the order
+    const phone = order.phone_number;
 
     if (!phone) {
       totalSkipped++;
