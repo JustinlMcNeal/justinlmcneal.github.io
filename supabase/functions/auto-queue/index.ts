@@ -700,10 +700,33 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Resolve final shot_type after diversity guard
+      const finalAsset = imageResult.poolAssetId
+        ? poolMap[product.id]?.find((a: any) => a.id === imageResult.poolAssetId)
+        : null;
+      const chosenShotType = finalAsset?.shot_type || null;
+
       // Sprint 2 guardrail: log when no pool images for this product
       if (!poolMap[product.id]?.length) {
         console.log(`[auto-queue] No Image Pool assets for "${product.name}" — using fallback`);
       }
+
+      // Build selection metadata for observability
+      const selectionMeta = {
+        priority_score: product._priority,
+        score_breakdown: {
+          recency: product._recency,
+          category_perf: product._catPerf,
+          image_freshness: product._imgFresh,
+          reserved: 10,
+        },
+        shot_type: chosenShotType,
+        is_resurfaced: false,
+        caption_attempts: Math.min(MAX_CAPTION_ATTEMPTS, bestScore >= 70 ? 1 : bestScore >= 50 ? 2 : 3),
+        caption_confidence: bestScore,
+        caption_status: captionStatus,
+        caption_tone: bestTone,
+      };
 
       // Create post for EACH selected platform
       for (const plat of platformList) {
@@ -745,6 +768,7 @@ Deno.serve(async (req) => {
           link_url: `https://karrykraze.com/pages/product.html?slug=${product.slug}`,
           scheduled_for: postingTimes[i].toISOString(),
           tone: bestTone,
+          selection_metadata: selectionMeta,
         });
       }
     }
@@ -817,6 +841,19 @@ Deno.serve(async (req) => {
               scheduled_for: generatedPosts[lastIdx].scheduled_for,
               tone: freshTone,
               resurfaced_from: hit.id,
+              selection_metadata: {
+                priority_score: null,
+                score_breakdown: null,
+                shot_type: null,
+                is_resurfaced: true,
+                resurfaced_from_post_id: hit.id,
+                original_engagement_rate: hit.engagement_rate,
+                median_engagement_rate: medianRate,
+                caption_attempts: 1,
+                caption_confidence: 100,
+                caption_status: "accepted",
+                caption_tone: freshTone,
+              },
             };
 
             console.log(`[auto-queue] Auto-resurface: "${resurfaceProduct.name}" (original engagement: ${hit.engagement_rate}%, median: ${medianRate}%)`);
@@ -982,6 +1019,7 @@ Deno.serve(async (req) => {
           generated_image_id: finalGeneratedImageId,
           image_url: resolvedImageUrl,
           source_asset_id: post.pool_asset_id || null,
+          selection_metadata: post.selection_metadata || null,
         };
 
         // Add carousel fields if this is a carousel post

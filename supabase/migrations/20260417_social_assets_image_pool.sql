@@ -14,3 +14,7 @@ CREATE INDEX IF NOT EXISTS idx_social_assets_shot_type ON social_assets(shot_typ
 ALTER TABLE social_posts
   ADD COLUMN IF NOT EXISTS source_asset_id UUID REFERENCES social_assets(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_social_posts_source_asset ON social_posts(source_asset_id);
+
+-- Sprint 3: Selection metadata — stores why each post was selected (priority scores, shot_type, caption info)
+ALTER TABLE social_posts
+  ADD COLUMN IF NOT EXISTS selection_metadata JSONB DEFAULT NULL;
