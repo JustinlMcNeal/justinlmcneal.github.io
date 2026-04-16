@@ -6,6 +6,8 @@ import {
   fetchReviews, updateReview, deleteReview, insertReview,
   fetchCoupons, fetchProducts,
 } from "./api.js";
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from "/js/config/env.js";
+import { getSupabaseClient } from "/js/shared/supabaseClient.js";
 
 /* ── Helpers ── */
 const $ = (id) => document.getElementById(id);
@@ -362,6 +364,73 @@ async function deleteModal() {
   }
 }
 
+/* ── SMS Review Requests ── */
+async function sendReviewRequests() {
+  const btn = $("btnSendReviewRequests");
+  const msg = $("reviewRequestMsg");
+  btn.disabled = true;
+  btn.textContent = "Sending…";
+  msg.classList.add("hidden");
+
+  try {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/send-review-request`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${(await getSupabaseClient().auth.getSession()).data.session?.access_token}`,
+      },
+      body: JSON.stringify({ batch: true }),
+    });
+
+    const data = await res.json();
+
+    msg.classList.remove("hidden");
+    if (data.success) {
+      msg.textContent = `Done! Sent ${data.sent} review requests (${data.skipped || 0} skipped).`;
+      msg.className = "text-xs font-bold text-green-600 mt-3";
+    } else {
+      msg.textContent = data.error || "Failed to send requests.";
+      msg.className = "text-xs font-bold text-red-600 mt-3";
+    }
+
+    loadReviewRequestStats();
+  } catch (err) {
+    console.error("[admin reviews] send requests error:", err);
+    msg.classList.remove("hidden");
+    msg.textContent = "Network error.";
+    msg.className = "text-xs font-bold text-red-600 mt-3";
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "📱 Send Review Requests";
+  }
+}
+
+async function loadReviewRequestStats() {
+  try {
+    const sb = getSupabaseClient();
+    const { data, error } = await sb
+      .from("review_requests")
+      .select("status");
+
+    if (error) throw error;
+    if (!data?.length) return;
+
+    const counts = { sent: 0, clicked: 0, completed: 0 };
+    for (const row of data) {
+      if (counts[row.status] !== undefined) counts[row.status]++;
+    }
+
+    $("rrTotal").textContent = data.length;
+    $("rrSent").textContent = counts.sent;
+    $("rrClicked").textContent = counts.clicked;
+    $("rrCompleted").textContent = counts.completed;
+    $("reviewRequestStats")?.classList.remove("hidden");
+  } catch (err) {
+    console.warn("[admin reviews] review request stats error:", err);
+  }
+}
+
 /* ── Boot ── */
 document.addEventListener("DOMContentLoaded", async () => {
   await initAdminNav("Reviews");
@@ -391,5 +460,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Load all
   allProducts = await fetchProducts();
   productMap = Object.fromEntries(allProducts.map((p) => [p.code, p]));
-  await Promise.all([loadSettings(), loadReviews(), loadCoupons(), loadAnalytics()]);
+  await Promise.all([loadSettings(), loadReviews(), loadCoupons(), loadAnalytics(), loadReviewRequestStats()]);
+
+  // SMS review requests
+  $("btnSendReviewRequests")?.addEventListener("click", sendReviewRequests);
 });

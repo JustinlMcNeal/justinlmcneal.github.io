@@ -364,3 +364,13 @@ entrypoint = "./functions/pinterest-post/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/share-product/index.ts"
+
+[functions.verify-review-token]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/verify-review-token/index.ts"
+
+[functions.send-review-request]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/send-review-request/index.ts"

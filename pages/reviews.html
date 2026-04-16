@@ -24,14 +24,8 @@
   <link rel="stylesheet" href="/css/theme/components.css">
 
   <style>
-    .star-btn { transition: transform .15s, color .15s; cursor: pointer; }
-    .star-btn:hover { transform: scale(1.2); }
-    .star-btn.active { color: #facc15; }
-    .star-btn.inactive { color: #d1d5db; }
     @keyframes slide-up { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
     .slide-up { animation: slide-up .4s ease-out forwards; }
-    @keyframes pulse-border { 0%,100%{ border-color:#e5e7eb; } 50%{ border-color:#ff69b4; } }
-    .pulse-border { animation: pulse-border 2s ease-in-out infinite; }
   </style>
 </head>
 
@@ -39,208 +33,41 @@
   <div id="kkNavbarMount"></div>
 
   <main class="flex-1 px-4 py-8 sm:py-12">
-    <div class="max-w-2xl mx-auto">
+    <div class="max-w-3xl mx-auto">
 
-      <!-- Page Header -->
-      <div class="text-center mb-8">
+      <!-- Hero Section -->
+      <div class="text-center mb-10">
         <div class="inline-block bg-black text-white px-3 py-1 text-[10px] font-black uppercase tracking-[.25em] mb-3">
           Customer Reviews
         </div>
-        <h1 class="text-3xl sm:text-4xl font-black tracking-tight">Leave a Review</h1>
-        <p class="text-gray-500 text-sm mt-2">
-          Share your experience and get a reward coupon!
-        </p>
+        <h1 class="text-3xl sm:text-4xl font-black tracking-tight">What Our Customers Say</h1>
+        <p class="text-gray-500 text-sm mt-2">Real reviews from verified buyers</p>
+
+        <!-- Aggregate Stats -->
+        <div id="aggregateStats" class="hidden mt-6 inline-flex items-center gap-4 bg-white border-4 border-black px-6 py-4 shadow-[4px_4px_0_0_rgba(0,0,0,.08)]">
+          <div class="text-4xl font-black" id="avgRating">—</div>
+          <div class="text-left">
+            <div id="avgStars" class="flex gap-0.5 text-amber-400"></div>
+            <div class="text-xs text-gray-500 mt-0.5"><span id="totalCount">0</span> verified reviews</div>
+          </div>
+        </div>
       </div>
 
-      <!-- ======== STEP 1: Order Lookup ======== -->
-      <section id="step1" class="bg-white border-4 border-black p-5 sm:p-8 shadow-[6px_6px_0_0_rgba(0,0,0,.08)]">
-        <div class="text-[11px] font-black uppercase tracking-[.25em] flex items-center gap-2 mb-1">
-          <span class="w-6 h-6 bg-black text-white text-[11px] flex items-center justify-center">1</span>
-          Find Your Order
+      <!-- Photo Gallery Strip -->
+      <div id="photoGallery" class="hidden mb-8">
+        <div class="text-[10px] font-black uppercase tracking-widest text-black/40 mb-2">Customer Photos</div>
+        <div id="photoStrip" class="flex gap-2 overflow-x-auto pb-2
+                    [&::-webkit-scrollbar]:h-[4px]
+                    [&::-webkit-scrollbar-track]:bg-gray-100
+                    [&::-webkit-scrollbar-thumb]:bg-black/30"
+             style="scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.3) #f3f4f6;">
         </div>
-        <p class="text-xs text-gray-500 mb-5">
-          Enter the email you used at checkout and your Karry Kraze order number (e.g. KKO-123456).
-        </p>
+      </div>
 
-        <div class="space-y-3">
-          <div>
-            <label for="lookupEmail" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
-              Email Address
-            </label>
-            <input id="lookupEmail" type="email"
-              class="w-full border-4 border-black px-3 py-2.5 text-sm outline-none focus:border-kkpink transition-colors"
-              placeholder="you@example.com" />
-          </div>
-          <div>
-            <label for="lookupOrderId" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
-              Order Number
-            </label>
-            <input id="lookupOrderId" type="text"
-              class="w-full border-4 border-black px-3 py-2.5 text-sm outline-none focus:border-kkpink transition-colors uppercase"
-              placeholder="KKO-123456" />
-          </div>
-          <div id="step1Error" class="hidden text-sm text-red-600 font-bold bg-red-50 border border-red-200 p-3 rounded"></div>
-          <button id="btnLookup" type="button"
-            class="w-full border-4 border-black bg-black text-white px-6 py-3 font-black uppercase tracking-[.12em] text-sm
-                   hover:bg-kkpink hover:border-kkpink hover:text-black transition-all
-                   disabled:opacity-50 disabled:cursor-not-allowed">
-            Find My Order
-          </button>
-          <div class="text-center mt-3">
-            <a href="/pages/my-orders.html" class="text-xs text-kkpink font-bold hover:underline">
-              Don't know your order number? Look it up here →
-            </a>
-          </div>
-        </div>
-      </section>
-
-      <!-- ======== STEP 2: Pick Product ======== -->
-      <section id="step2" class="hidden mt-6 slide-up">
-        <div class="bg-white border-4 border-black p-5 sm:p-8 shadow-[6px_6px_0_0_rgba(0,0,0,.08)]">
-          <div class="text-[11px] font-black uppercase tracking-[.25em] flex items-center gap-2 mb-1">
-            <span class="w-6 h-6 bg-black text-white text-[11px] flex items-center justify-center">2</span>
-            Select a Product to Review
-          </div>
-          <p class="text-xs text-gray-500 mb-4">
-            Hi <strong id="orderGreeting"></strong>! Here are the items from order <strong id="orderNumber"></strong>.
-          </p>
-          <div id="productList" class="space-y-2"></div>
-        </div>
-      </section>
-
-      <!-- ======== STEP 3: Write Review ======== -->
-      <section id="step3" class="hidden mt-6 slide-up">
-        <div class="bg-white border-4 border-black p-5 sm:p-8 shadow-[6px_6px_0_0_rgba(0,0,0,.08)]">
-          <div class="text-[11px] font-black uppercase tracking-[.25em] flex items-center gap-2 mb-1">
-            <span class="w-6 h-6 bg-black text-white text-[11px] flex items-center justify-center">3</span>
-            Write Your Review
-          </div>
-          <p class="text-xs text-gray-500 mb-4">
-            Reviewing: <strong id="reviewingProduct"></strong>
-          </p>
-
-          <!-- Star Rating -->
-          <div class="mb-4">
-            <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-2 text-black/70">Rating *</label>
-            <div id="starRating" class="flex gap-1 text-3xl">
-              <span class="star-btn inactive" data-star="1">★</span>
-              <span class="star-btn inactive" data-star="2">★</span>
-              <span class="star-btn inactive" data-star="3">★</span>
-              <span class="star-btn inactive" data-star="4">★</span>
-              <span class="star-btn inactive" data-star="5">★</span>
-            </div>
-            <input type="hidden" id="ratingValue" value="0" />
-          </div>
-
-          <!-- Name -->
-          <div class="mb-3">
-            <label for="reviewerName" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
-              Your Name (shown publicly)
-            </label>
-            <input id="reviewerName" type="text"
-              class="w-full border-4 border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors"
-              placeholder="Jane D." />
-          </div>
-
-          <!-- Title -->
-          <div class="mb-3">
-            <label for="reviewTitle" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
-              Review Title
-            </label>
-            <input id="reviewTitle" type="text"
-              class="w-full border-4 border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors"
-              placeholder="Love it!" />
-          </div>
-
-          <!-- Body -->
-          <div class="mb-3">
-            <label for="reviewBody" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
-              Your Review *
-            </label>
-            <textarea id="reviewBody" rows="4"
-              class="w-full border-4 border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors resize-none"
-              placeholder="What did you love about this product?"></textarea>
-          </div>
-
-          <!-- Photo -->
-          <div class="mb-4">
-            <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
-              Add a Photo (optional)
-            </label>
-            <label class="cursor-pointer inline-block">
-              <input type="file" id="reviewPhoto" accept="image/*" class="hidden" />
-              <div class="border-2 border-dashed border-gray-300 px-4 py-3 text-center hover:border-black transition-colors">
-                <span id="photoLabel" class="text-xs text-gray-500">📷 Click to upload a photo</span>
-              </div>
-            </label>
-            <div id="photoPreview" class="hidden mt-2 relative inline-block">
-              <img id="photoPreviewImg" class="w-20 h-20 object-cover border-2 border-black" />
-              <button type="button" id="removePhoto"
-                class="absolute -top-1 -right-1 w-5 h-5 bg-black text-white text-xs flex items-center justify-center rounded-full">×</button>
-            </div>
-          </div>
-
-          <div id="step3Error" class="hidden text-sm text-red-600 font-bold bg-red-50 border border-red-200 p-3 rounded mb-3"></div>
-
-          <button id="btnSubmitReview" type="button"
-            class="w-full border-4 border-black bg-black text-white px-6 py-3 font-black uppercase tracking-[.12em] text-sm
-                   hover:bg-kkpink hover:border-kkpink hover:text-black transition-all
-                   disabled:opacity-50 disabled:cursor-not-allowed">
-            Submit Review
-          </button>
-        </div>
-      </section>
-
-      <!-- ======== STEP 4: Thank You + Coupon ======== -->
-      <section id="step4" class="hidden mt-6 slide-up">
-        <div class="bg-white border-4 border-black p-5 sm:p-8 shadow-[6px_6px_0_0_rgba(0,0,0,.08)] text-center">
-          <div class="text-5xl mb-4">🎉</div>
-          <h2 class="text-2xl font-black tracking-tight mb-2" id="thankYouTitle">Thank You!</h2>
-          <p class="text-gray-600 text-sm mb-6" id="thankYouMsg"></p>
-
-          <!-- Coupon Display -->
-          <div id="couponBox" class="hidden bg-gradient-to-r from-kkpink/10 to-purple-100/50 border-4 border-kkpink p-6 mb-6 pulse-border">
-            <div class="text-[10px] font-black uppercase tracking-[.25em] text-kkpink mb-2">Your Reward Coupon</div>
-            <div id="couponCodeDisplay" class="text-3xl font-black tracking-wider mb-2"></div>
-            <div id="couponDetailDisplay" class="text-sm text-gray-600 mb-3"></div>
-            <button id="btnCopyCoupon" type="button"
-              class="border-2 border-black bg-black text-white px-4 py-2 text-xs font-black uppercase tracking-wider
-                     hover:bg-kkpink hover:border-kkpink hover:text-black transition-colors">
-              📋 Copy Code
-            </button>
-          </div>
-
-          <!-- Pending message -->
-          <div id="couponPending" class="hidden bg-yellow-50 border-2 border-yellow-300 p-4 mb-6 text-left">
-            <div class="text-sm font-bold text-yellow-700">⏳ Review Pending Approval</div>
-            <div class="text-xs text-yellow-600 mt-1">
-              Once your review is approved, your reward coupon will be displayed. Check back soon!
-            </div>
-          </div>
-
-          <div class="flex flex-col sm:flex-row gap-3 justify-center">
-            <button id="btnReviewAnother" type="button"
-              class="border-4 border-black bg-white text-black px-6 py-3 font-black uppercase tracking-[.12em] text-xs
-                     hover:bg-gray-100 transition-colors">
-              Review Another Item
-            </button>
-            <a href="/pages/catalog.html"
-              class="border-4 border-black bg-black text-white px-6 py-3 font-black uppercase tracking-[.12em] text-xs text-center
-                     hover:bg-kkpink hover:border-kkpink hover:text-black transition-all">
-              Continue Shopping
-            </a>
-          </div>
-        </div>
-      </section>
-
-      <!-- ======== Approved Reviews Feed ======== -->
-      <section class="mt-12">
-        <div class="text-center mb-6">
-          <h2 class="text-xl sm:text-2xl font-black tracking-tight">What Customers Say</h2>
-          <p class="text-xs text-gray-500 mt-1">Recent reviews from verified buyers</p>
-        </div>
-
-        <div class="flex justify-center gap-2 mb-4 flex-wrap">
+      <!-- Filter / Sort Bar -->
+      <div class="flex flex-wrap items-center gap-3 mb-6">
+        <!-- Star Filter -->
+        <div class="flex gap-1.5 flex-wrap">
           <button data-filter="all" class="review-filter-btn border-2 border-black bg-black text-white px-3 py-1 text-[10px] font-black uppercase">All</button>
           <button data-filter="5" class="review-filter-btn border-2 border-black bg-white text-black px-3 py-1 text-[10px] font-black uppercase">5★</button>
           <button data-filter="4" class="review-filter-btn border-2 border-black bg-white text-black px-3 py-1 text-[10px] font-black uppercase">4★</button>
@@ -249,17 +76,58 @@
           <button data-filter="1" class="review-filter-btn border-2 border-black bg-white text-black px-3 py-1 text-[10px] font-black uppercase">1★</button>
         </div>
 
-        <div id="reviewsFeed" class="space-y-3">
-          <div class="text-center text-sm text-gray-400 py-8">Loading reviews…</div>
-        </div>
-      </section>
+        <!-- Sort -->
+        <select id="reviewSort" class="ml-auto border-2 border-black px-2 py-1 text-[10px] font-black uppercase bg-white outline-none cursor-pointer">
+          <option value="newest">Newest</option>
+          <option value="highest">Highest Rated</option>
+          <option value="lowest">Lowest Rated</option>
+        </select>
+      </div>
+
+      <!-- Search by Product -->
+      <div class="mb-6">
+        <input id="reviewSearch" type="search" placeholder="Search by product name…"
+          class="w-full border-2 border-black/20 px-4 py-2.5 text-sm outline-none focus:border-black transition-colors bg-white"
+          style="font-size: 16px;" />
+      </div>
+
+      <!-- Reviews Feed -->
+      <div id="reviewsFeed" class="space-y-4">
+        <div class="text-center text-sm text-gray-400 py-8">Loading reviews…</div>
+      </div>
+
+      <!-- Load More -->
+      <div id="loadMoreWrap" class="hidden mt-8 text-center">
+        <button id="btnLoadMore"
+          class="border-2 border-black px-8 py-3 text-xs font-black uppercase tracking-wider hover:bg-black hover:text-white transition-all">
+          Load More Reviews
+        </button>
+      </div>
+
+      <!-- CTA Banner -->
+      <div class="mt-12 bg-white border-4 border-black p-6 sm:p-8 text-center shadow-[6px_6px_0_0_rgba(0,0,0,.08)]">
+        <div class="text-2xl mb-2">💖</div>
+        <h2 class="text-xl font-black tracking-tight mb-2">Love your purchase?</h2>
+        <p class="text-sm text-gray-500 mb-4">Share your experience and get a reward coupon!</p>
+        <a href="/pages/leave-review.html"
+          class="inline-block border-4 border-black bg-black text-white px-6 py-3 font-black uppercase tracking-[.12em] text-sm
+                 hover:bg-kkpink hover:border-kkpink hover:text-black transition-all">
+          Leave a Review
+        </a>
+      </div>
 
     </div>
   </main>
 
+  <!-- Photo Lightbox -->
+  <div id="reviewPhotoLightbox" class="fixed inset-0 z-[9999] hidden items-center justify-center bg-black/80 backdrop-blur-sm">
+    <button class="absolute top-4 right-4 w-10 h-10 flex items-center justify-center bg-white/20 hover:bg-white/40 rounded-full text-white text-xl font-bold transition-colors z-10" id="lightboxClose">&times;</button>
+    <img id="lightboxImg" src="" alt="Review photo" class="max-w-[90vw] max-h-[85vh] object-contain rounded-lg shadow-2xl" />
+  </div>
+
   <div id="kkFooterMount"></div>
 
-  <script type="module" src="/js/reviews/index.js"></script>
-<script type="module" src="/js/shared/pwa.js"></script>
+  <script type="module" src="/js/reviews/browse.js"></script>
+  <script type="module" src="/js/shared/pwa.js"></script>
 </body>
 </html>

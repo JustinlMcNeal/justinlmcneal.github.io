@@ -183,6 +183,7 @@ export async function initProductReviewSection(productCode, mountEl) {
             <div class="text-4xl mb-3">📝</div>
             <p class="font-bold text-black/40 uppercase tracking-wider text-sm">No reviews yet</p>
             <p class="text-sm text-black/30 mt-1">Be the first to share your thoughts!</p>
+            <a href="/pages/leave-review.html" class="inline-block mt-4 border-2 border-black px-5 py-2 text-xs font-black uppercase tracking-wider hover:bg-black hover:text-white transition-all">Leave a Review</a>
           </div>
         </section>
       `;

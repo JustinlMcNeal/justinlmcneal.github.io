@@ -218,7 +218,7 @@ function showOrderDetail(order) {
   // Set the review link to include order ID
   const reviewLink = $("btnLeaveReview");
   if (reviewLink) {
-    reviewLink.href = `/pages/reviews.html?oid=${encodeURIComponent(order.kk_order_id)}`;
+    reviewLink.href = `/pages/leave-review.html?oid=${encodeURIComponent(order.kk_order_id)}`;
   }
 
   hide($("resultsSection"));
