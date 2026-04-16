@@ -359,3 +359,8 @@ entrypoint = "./functions/instagram-post/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/pinterest-post/index.ts"
+
+[functions.share-product]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/share-product/index.ts"

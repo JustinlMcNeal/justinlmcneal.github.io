@@ -433,6 +433,43 @@ async function initProductPage() {
       };
     }
 
+    // Share button
+    const shareBtn = document.getElementById("btnShare");
+    const shareLabel = document.getElementById("btnShareLabel");
+    if (shareBtn) {
+      const shareUrl = `https://yxdzvzscufkvewecvagq.supabase.co/functions/v1/share-product/${encodeURIComponent(product.slug)}`;
+      const shareTitle = product.name || "Check this out!";
+      const shareText = `${shareTitle} — $${Number(product.price || 0).toFixed(2)}`;
+
+      shareBtn.onclick = async () => {
+        if (navigator.share) {
+          try {
+            await navigator.share({ title: shareTitle, text: shareText, url: shareUrl });
+          } catch (e) {
+            if (e.name !== "AbortError") console.warn("Share failed:", e);
+          }
+        } else {
+          try {
+            await navigator.clipboard.writeText(shareUrl);
+            if (shareLabel) shareLabel.textContent = "Link Copied!";
+            setTimeout(() => { if (shareLabel) shareLabel.textContent = "Share"; }, 2000);
+          } catch {
+            // Fallback for older browsers
+            const ta = document.createElement("textarea");
+            ta.value = shareUrl;
+            ta.style.position = "fixed";
+            ta.style.opacity = "0";
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand("copy");
+            document.body.removeChild(ta);
+            if (shareLabel) shareLabel.textContent = "Link Copied!";
+            setTimeout(() => { if (shareLabel) shareLabel.textContent = "Share"; }, 2000);
+          }
+        }
+      };
+    }
+
     // ✅ Pairs well with (same category carousel)
     try {
       const paired = await fetchProductsByCategory(product.category_id, {
