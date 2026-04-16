@@ -53,21 +53,87 @@ export async function fetchCategories() {
 }
 
 // ============================================
-// Social Assets
+// Social Assets (Image Pool)
 // ============================================
 
-export async function fetchAssets() {
-  const { data, error } = await sb()
+export async function fetchAssets({ filter = "all", search = "", productId = null } = {}) {
+  let query = sb()
     .from("social_assets")
     .select(`
       *,
       product:products(id, name, slug, category_id)
     `)
-    .eq("is_active", true)
-    .order("created_at", { ascending: false });
-  
+    .eq("is_active", true);
+
+  if (filter === "unused") {
+    query = query.eq("used_count", 0);
+  } else if (filter === "used") {
+    query = query.gt("used_count", 0);
+  }
+
+  if (productId) {
+    query = query.eq("product_id", productId);
+  }
+
+  // Unused-first, then oldest unused first
+  query = query
+    .order("used_count", { ascending: true })
+    .order("last_used_at", { ascending: true, nullsFirst: true })
+    .order("created_at", { ascending: true });
+
+  const { data, error } = await query;
   if (error) throw error;
-  return data || [];
+
+  let results = data || [];
+
+  // Client-side search by product name (Supabase doesn't support nested field filtering easily)
+  if (search) {
+    const q = search.toLowerCase();
+    results = results.filter(a =>
+      a.product?.name?.toLowerCase().includes(q) ||
+      a.original_filename?.toLowerCase().includes(q) ||
+      a.shot_type?.toLowerCase().includes(q)
+    );
+  }
+
+  return results;
+}
+
+export async function uploadAssets(files, productId = null) {
+  const results = [];
+  for (const file of files) {
+    const ext = file.name.split(".").pop();
+    const path = `assets/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+
+    const storagePath = await uploadImage(file, path);
+
+    const asset = await createAsset({
+      original_image_path: storagePath,
+      original_filename: file.name,
+      product_id: productId,
+      used_count: 0
+    });
+
+    results.push(asset);
+  }
+  return results;
+}
+
+export async function updateAssetTags(assetId, { shot_type, product_id, quality_score }) {
+  const updates = { updated_at: new Date().toISOString() };
+  if (shot_type !== undefined) updates.shot_type = shot_type;
+  if (product_id !== undefined) updates.product_id = product_id;
+  if (quality_score !== undefined) updates.quality_score = quality_score;
+
+  const { data, error } = await sb()
+    .from("social_assets")
+    .update(updates)
+    .eq("id", assetId)
+    .select(`*, product:products(id, name, slug, category_id)`)
+    .single();
+
+  if (error) throw error;
+  return data;
 }
 
 export async function createAsset(asset) {

@@ -129,7 +129,7 @@
         📋 Queue
       </button>
       <button data-tab="assets" class="tab-btn px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-black transition-colors whitespace-nowrap">
-        🖼️ Assets
+        🖼️ Image Pool
       </button>
       <!-- Templates tab hidden from UI — kept as internal fallback + A/B baseline -->
       <button data-tab="templates" class="tab-btn hidden px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-black transition-colors whitespace-nowrap">
@@ -210,17 +210,111 @@
         </div>
       </div>
 
-      <!-- Assets View -->
+      <!-- Image Pool (was Assets) -->
       <div id="tab-assets" class="tab-panel hidden">
         <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
-          <div class="p-4 border-b flex items-center justify-between">
-            <h2 class="font-bold">Uploaded Assets</h2>
-            <input id="assetSearch" type="text" placeholder="Search..." class="text-sm border rounded-lg px-3 py-2 w-48">
+          <!-- Header: title + upload button -->
+          <div class="p-4 border-b flex flex-col sm:flex-row sm:items-center gap-3">
+            <h2 class="font-bold text-lg">Image Pool</h2>
+            <div class="flex items-center gap-2 sm:ml-auto flex-wrap">
+              <!-- Filter buttons -->
+              <div id="poolFilterBtns" class="flex rounded-lg border overflow-hidden text-xs font-medium">
+                <button data-filter="all" class="pool-filter-btn px-3 py-1.5 bg-black text-white">All</button>
+                <button data-filter="unused" class="pool-filter-btn px-3 py-1.5 hover:bg-gray-100">Unused</button>
+                <button data-filter="used" class="pool-filter-btn px-3 py-1.5 hover:bg-gray-100">Used</button>
+              </div>
+              <!-- Search -->
+              <input id="assetSearch" type="text" placeholder="Search product..." class="text-sm border rounded-lg px-3 py-1.5 w-36 sm:w-44">
+              <!-- Upload button -->
+              <button id="btnPoolUpload" class="bg-black text-white text-sm font-medium px-4 py-1.5 rounded-lg hover:bg-gray-800 transition-colors flex items-center gap-1">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                Upload
+              </button>
+            </div>
           </div>
+
+          <!-- Drop zone (hidden by default, shows on drag or click upload) -->
+          <div id="poolDropZone" class="pool-drop-zone hidden m-4 p-8 border-2 border-dashed border-gray-300 rounded-xl text-center cursor-pointer hover:border-black hover:bg-gray-50 transition-colors">
+            <svg class="w-10 h-10 mx-auto text-gray-400 mb-2" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
+            <p class="text-sm font-medium text-gray-600">Drag & drop images here</p>
+            <p class="text-xs text-gray-400 mt-1">or click to browse • PNG, JPG, WebP</p>
+            <input id="poolFileInput" type="file" multiple accept="image/png,image/jpeg,image/webp" class="hidden">
+          </div>
+
+          <!-- Upload progress -->
+          <div id="poolUploadProgress" class="hidden px-4 pb-4">
+            <div class="flex items-center gap-2 text-sm text-gray-600">
+              <svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+              <span id="poolUploadStatus">Uploading...</span>
+            </div>
+          </div>
+
+          <!-- Asset grid -->
           <div id="assetGrid" class="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-            <!-- Populated by JS -->
             <div class="col-span-full p-8 text-center text-gray-400">
-              <p>No assets uploaded yet</p>
+              <p>No images yet — upload to get started</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tagging Modal -->
+      <div id="tagModal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-2xl w-full max-w-md shadow-xl">
+          <div class="p-5 border-b flex items-center justify-between">
+            <h3 class="font-bold text-lg">Tag Image</h3>
+            <button id="tagModalClose" class="p-1 hover:bg-gray-100 rounded-lg">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <div class="p-5 space-y-4">
+            <!-- Preview -->
+            <div class="flex justify-center">
+              <img id="tagPreviewImg" src="/imgs/placeholder.jpg" class="w-32 h-32 rounded-xl object-cover border">
+            </div>
+            <!-- Shot Type -->
+            <div>
+              <label class="block text-sm font-medium mb-1">Shot Type</label>
+              <select id="tagShotType" class="w-full border rounded-lg px-3 py-2 text-sm">
+                <option value="">— Select —</option>
+                <option value="close-up">Close-up / Detail</option>
+                <option value="model">Model / Lifestyle</option>
+                <option value="flat-lay">Flat Lay</option>
+                <option value="wide">Wide / Scene</option>
+                <option value="packaging">Packaging</option>
+                <option value="promo">Promo / Graphic</option>
+              </select>
+            </div>
+            <!-- Product -->
+            <div>
+              <label class="block text-sm font-medium mb-1">Product</label>
+              <div class="relative">
+                <input id="tagProductSearch" type="text" placeholder="Search products..." class="w-full border rounded-lg px-3 py-2 text-sm">
+                <div id="tagProductDropdown" class="absolute left-0 right-0 top-full mt-1 bg-white border rounded-lg shadow-lg max-h-48 overflow-y-auto hidden z-10"></div>
+                <div id="tagSelectedProduct" class="hidden mt-1 flex items-center gap-2 bg-gray-100 rounded-lg px-3 py-2 text-sm">
+                  <span id="tagSelectedProductName" class="flex-1"></span>
+                  <button id="tagClearProduct" class="text-gray-400 hover:text-black">&times;</button>
+                </div>
+              </div>
+              <input id="tagProductId" type="hidden" value="">
+            </div>
+            <!-- Quality Score -->
+            <div>
+              <label class="block text-sm font-medium mb-1">Quality <span id="tagQualityLabel" class="text-gray-400">(3/5)</span></label>
+              <div id="tagQualityStars" class="flex gap-1">
+                <button data-score="1" class="star-btn text-2xl text-gray-300 hover:text-yellow-400 transition-colors">★</button>
+                <button data-score="2" class="star-btn text-2xl text-gray-300 hover:text-yellow-400 transition-colors">★</button>
+                <button data-score="3" class="star-btn text-2xl text-yellow-400 transition-colors">★</button>
+                <button data-score="4" class="star-btn text-2xl text-gray-300 hover:text-yellow-400 transition-colors">★</button>
+                <button data-score="5" class="star-btn text-2xl text-gray-300 hover:text-yellow-400 transition-colors">★</button>
+              </div>
+            </div>
+          </div>
+          <div class="p-5 border-t flex justify-between items-center">
+            <button id="tagDeleteBtn" class="text-sm text-red-500 hover:text-red-700 font-medium">Delete Image</button>
+            <div class="flex gap-2">
+              <button id="tagCancelBtn" class="px-4 py-2 text-sm border rounded-lg hover:bg-gray-50">Cancel</button>
+              <button id="tagSaveBtn" class="px-4 py-2 text-sm bg-black text-white rounded-lg hover:bg-gray-800 font-medium">Save Tags</button>
             </div>
           </div>
         </div>

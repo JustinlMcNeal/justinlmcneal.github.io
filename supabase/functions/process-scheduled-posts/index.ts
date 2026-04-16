@@ -268,6 +268,20 @@ serve(async (req) => {
           throw new Error(`Unknown platform: ${post.platform}`);
         }
 
+        // Sprint 2: Increment used_count on the asset after successful post
+        if (asset?.id) {
+          const { error: usageErr } = await supabase
+            .from("social_assets")
+            .update({
+              used_count: (asset.used_count || 0) + 1,
+              last_used_at: new Date().toISOString()
+            })
+            .eq("id", asset.id);
+          if (!usageErr) {
+            console.log(`[process-scheduled-posts] Incremented used_count for asset ${asset.id}`);
+          }
+        }
+
       } catch (err: unknown) {
         const errorMessage = err instanceof Error ? err.message : String(err);
         console.error(`[process-scheduled-posts] Failed to process post ${post.id}:`, errorMessage);

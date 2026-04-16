@@ -350,6 +350,57 @@
   font-size: 11px;
 }
 
+/* Image Pool - used count badge */
+.asset-used-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: rgba(0,0,0,0.7);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 6px;
+  z-index: 2;
+}
+
+.asset-used-badge.unused {
+  background: #16a34a;
+}
+
+/* Image Pool - shot type pill */
+.asset-shot-pill {
+  display: inline-block;
+  background: rgba(255,255,255,0.85);
+  color: #374151;
+  font-size: 9px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 4px;
+  margin-top: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+/* Image Pool - drop zone */
+.pool-drop-zone.drag-over {
+  border-color: #000;
+  background: #f9fafb;
+}
+
+/* Image Pool - filter buttons */
+.pool-filter-btn.active {
+  background: #000;
+  color: #fff;
+}
+
+/* Image Pool - quality stars in grid */
+.asset-quality-stars {
+  color: #facc15;
+  font-size: 9px;
+  letter-spacing: -1px;
+}
+
 /* Template list items */
 .template-item {
   display: flex;

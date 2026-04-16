@@ -1,7 +1,7 @@
 # Social Media Page Revamp — pSocial_001
 
 > **Created**: 2026-04-16  
-> **Status**: Sprint 1 Complete ✅ — Sprint 2 next  
+> **Status**: Sprint 2 Complete ✅ — Sprint 3 next  
 > **Scope**: Full audit & revamp of `/pages/admin/social.html` and all supporting JS/edge functions
 
 ---
@@ -470,12 +470,19 @@ Daily cron triggers autopilot-fill:
 **Files removed**: `js/admin/social/imagePipeline.js`  
 **Files modified**: `pages/admin/social.html`, `js/admin/social/index.js`, 3 edge functions
 
-### Sprint 2 — Image Pool
+### Sprint 2 — Image Pool ✅ COMPLETE (2026-04-16)
 > New content input pipeline
 
-- Upload system (drag & drop, multi-file)
-- Basic tagging v1 (`shot_type` + `product_id` only)
-- Unused-first sorting + used/unused filter
+- ✅ DB migration: added `shot_type`, `quality_score`, `used_count`, `last_used_at` columns to `social_assets` (migration `20260417_social_assets_image_pool.sql`). Indexes on `used_count` and `shot_type`.
+- ✅ API layer: `fetchAssets()` now supports filter (all/unused/used), search (product name/filename/shot_type), and unused-first sorting. Added `uploadAssets(files[])` for multi-file upload, `updateAssetTags()` for tagging, `deleteAsset()` now imported in index.js.
+- ✅ Image Pool UI: Revamped Assets tab → Image Pool with drag & drop upload zone, filter buttons (All/Unused/Used), search by product name, upload button. Grid shows used_count badge (NEW/×N), shot_type pill, quality stars, product name (yellow warning if unlinked).
+- ✅ Tagging modal: Click any image → modal with shot_type dropdown (close-up, model, flat-lay, wide, packaging, promo), searchable product selector, 1-5 star quality score, save/delete. Fast UX — no friction.
+- ✅ Sorting: `ORDER BY used_count ASC, last_used_at NULLS FIRST, created_at ASC` — unused images always surface first.
+- ✅ Autopilot guardrails: `auto-queue` now prefers Image Pool assets (Priority 0), logs when no pool images exist for a product, passes `poolAssetId` through pipeline. `process-scheduled-posts` increments `used_count` and sets `last_used_at` after successful post (not on queue creation). Fixed `catch (err: unknown)` in auto-queue.
+- ✅ Edge functions deployed: `auto-queue`, `process-scheduled-posts`
+
+**Files modified**: `js/admin/social/api.js`, `js/admin/social/index.js`, `pages/admin/social.html`, `css/pages/admin/social.css`, `supabase/functions/auto-queue/index.ts`, `supabase/functions/process-scheduled-posts/index.ts`  
+**Files created**: `supabase/migrations/20260417_social_assets_image_pool.sql`
 
 ### Sprint 3 — Autopilot Upgrade
 > Data-driven automated posting

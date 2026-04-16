@@ -257,8 +257,30 @@ Deno.serve(async (req) => {
 
     console.log(`[auto-queue] Found ${products.length} products to post`);
 
+    // ── IMAGE POOL: Load tagged assets (Sprint 2 guardrail) ──
+    const productIds = products.map((p: any) => p.id);
+
+    // Check Image Pool for assets with product_id set (unused-first)
+    const { data: poolAssets } = await supabase
+      .from("social_assets")
+      .select("id, product_id, original_image_path, shot_type, used_count, last_used_at")
+      .eq("is_active", true)
+      .not("product_id", "is", null)
+      .in("product_id", productIds)
+      .order("used_count", { ascending: true })
+      .order("last_used_at", { ascending: true, nullsFirst: true });
+
+    const poolMap: Record<string, any[]> = {};
+    (poolAssets || []).forEach((row: any) => {
+      if (!poolMap[row.product_id]) poolMap[row.product_id] = [];
+      poolMap[row.product_id].push(row);
+    });
+
+    // Count total tagged assets across all products
+    const totalTaggedAssets = (poolAssets || []).length;
+    console.log(`[auto-queue] Image Pool: ${totalTaggedAssets} tagged assets across ${Object.keys(poolMap).length} products`);
+
     // ── IMAGE PIPELINE: Load blacklist + approved AI images + gallery images ──
-    const productIds = products.map(p => p.id);
 
     // Load blacklisted images
     const { data: blacklistRows } = await supabase
@@ -338,8 +360,23 @@ Deno.serve(async (req) => {
       imageSource: string;
       generatedImageId: string | null;
       needsGeneration: boolean;
+      poolAssetId: string | null;
     } {
       const blacklisted = blacklistMap[productId] || new Set();
+
+      // Priority 0 (Sprint 2): Image Pool — tagged assets, unused-first
+      const poolImages = poolMap[productId];
+      if (poolImages?.length) {
+        // Already sorted by used_count ASC, last_used_at ASC NULLS FIRST
+        const pick = poolImages[0];
+        return {
+          imageUrl: pick.original_image_path,
+          imageSource: "image_pool",
+          generatedImageId: null,
+          needsGeneration: false,
+          poolAssetId: pick.id,
+        };
+      }
 
       // Priority 1: Approved AI-generated image (ALWAYS preferred for social)
       const aiImages = aiImageMap[productId];
@@ -350,6 +387,7 @@ Deno.serve(async (req) => {
           imageSource: "ai_generated",
           generatedImageId: pick.id,
           needsGeneration: false,
+          poolAssetId: null,
         };
       }
 
@@ -365,6 +403,7 @@ Deno.serve(async (req) => {
           imageSource: "catalog",
           generatedImageId: null,
           needsGeneration: true,
+          poolAssetId: null,
         };
       }
 
@@ -376,6 +415,7 @@ Deno.serve(async (req) => {
           imageSource: "gallery",
           generatedImageId: null,
           needsGeneration: false,
+          poolAssetId: null,
         };
       }
 
@@ -384,6 +424,7 @@ Deno.serve(async (req) => {
         imageSource: "catalog",
         generatedImageId: null,
         needsGeneration: false,
+        poolAssetId: null,
       };
     }
 
@@ -426,6 +467,11 @@ Deno.serve(async (req) => {
       // ── Resolve best image via pipeline ──
       const imageResult = resolveImage(product.id, product.catalog_image_url);
 
+      // Sprint 2 guardrail: log when no pool images for this product
+      if (!poolMap[product.id]?.length) {
+        console.log(`[auto-queue] No Image Pool assets for "${product.name}" — using fallback`);
+      }
+
       // Create post for EACH selected platform
       for (const plat of platformList) {
         // Platform-specific caption (IG gets no URLs, FB keeps them)
@@ -446,6 +492,7 @@ Deno.serve(async (req) => {
           resolved_image_url: imageResult.imageUrl,
           image_source: carouselResult.isCarousel ? "ai_carousel" : imageResult.imageSource,
           generated_image_id: imageResult.generatedImageId,
+          pool_asset_id: imageResult.poolAssetId,
           needs_generation: imageResult.needsGeneration,
           is_carousel: carouselResult.isCarousel,
           carousel_urls: carouselResult.carouselUrls,
@@ -653,8 +700,9 @@ Deno.serve(async (req) => {
         });
 
         console.log(`[auto-queue] Created ${post.platform} post ${newPost.id} for ${post.product_name}`);
-      } catch (err) {
-        console.error(`[auto-queue] Error processing ${post.product_name}:`, err);
+      } catch (err: unknown) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        console.error(`[auto-queue] Error processing ${post.product_name}:`, errMsg);
       }
     }
 
@@ -676,11 +724,12 @@ Deno.serve(async (req) => {
       posts: createdPosts,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-  } catch (err) {
-    console.error("[auto-queue] Error:", err);
+  } catch (err: unknown) {
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    console.error("[auto-queue] Error:", errorMessage);
     return new Response(JSON.stringify({
       success: false,
-      error: err.message,
+      error: errorMessage,
     }), { 
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" } 

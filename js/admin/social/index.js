@@ -9,6 +9,9 @@ import {
   fetchProductGalleryImages,
   fetchCategories,
   fetchAssets,
+  uploadAssets,
+  updateAssetTags,
+  deleteAsset,
   fetchPosts,
   fetchTemplates,
   fetchBoards,
@@ -96,6 +99,13 @@ const state = {
   },
   editingPost: null,
   autoQueuePreview: null,
+  // Image Pool state
+  poolFilter: "all",
+  poolSearch: "",
+  poolAssets: [],
+  tagEditAsset: null,   // asset being edited in tag modal
+  tagQualityScore: 3,
+  tagProductIdValue: null,
   // Carousel state
   carousel: {
     images: [],       // Array of { file, previewUrl, uploadedUrl, productGalleryUrl }
@@ -449,9 +459,32 @@ const els = {
   queueList: $("queueList"),
   queueFilter: $("queueFilter"),
   
-  // Assets
+  // Assets / Image Pool
   assetGrid: $("assetGrid"),
   assetSearch: $("assetSearch"),
+  poolDropZone: $("poolDropZone"),
+  poolFileInput: $("poolFileInput"),
+  poolUploadProgress: $("poolUploadProgress"),
+  poolUploadStatus: $("poolUploadStatus"),
+  btnPoolUpload: $("btnPoolUpload"),
+  poolFilterBtns: $("poolFilterBtns"),
+
+  // Tagging modal
+  tagModal: $("tagModal"),
+  tagModalClose: $("tagModalClose"),
+  tagPreviewImg: $("tagPreviewImg"),
+  tagShotType: $("tagShotType"),
+  tagProductSearch: $("tagProductSearch"),
+  tagProductDropdown: $("tagProductDropdown"),
+  tagSelectedProduct: $("tagSelectedProduct"),
+  tagSelectedProductName: $("tagSelectedProductName"),
+  tagClearProduct: $("tagClearProduct"),
+  tagProductId: $("tagProductId"),
+  tagQualityStars: $("tagQualityStars"),
+  tagQualityLabel: $("tagQualityLabel"),
+  tagDeleteBtn: $("tagDeleteBtn"),
+  tagCancelBtn: $("tagCancelBtn"),
+  tagSaveBtn: $("tagSaveBtn"),
   
   // Templates
   templateList: $("templateList"),
@@ -621,6 +654,7 @@ async function init() {
     setupPostDetailModal();
     setupCalendar();
     setupQueueFilter();
+    setupImagePool();
     setupTemplates();
     setupBoards();
     setupAutoQueue();
@@ -781,8 +815,16 @@ async function loadQueuePosts() {
 }
 
 async function loadAssets() {
-  const assets = await fetchAssets();
-  renderAssetGrid(assets);
+  try {
+    state.poolAssets = await fetchAssets({
+      filter: state.poolFilter,
+      search: state.poolSearch
+    });
+    renderAssetGrid(state.poolAssets);
+  } catch (err) {
+    console.error("[Image Pool] Load failed:", err);
+    showToast("Failed to load images", "error");
+  }
 }
 
 async function loadTemplates() {
@@ -935,51 +977,304 @@ function renderQueueList(posts) {
 }
 
 // ============================================
-// Assets
+// Image Pool (was Assets)
 // ============================================
+
+function setupImagePool() {
+  // Upload button toggles drop zone
+  els.btnPoolUpload?.addEventListener("click", () => {
+    els.poolDropZone.classList.toggle("hidden");
+  });
+
+  // Drop zone click → file picker
+  els.poolDropZone?.addEventListener("click", () => {
+    els.poolFileInput?.click();
+  });
+
+  // File input change
+  els.poolFileInput?.addEventListener("change", (e) => {
+    if (e.target.files.length) handlePoolUpload(Array.from(e.target.files));
+  });
+
+  // Drag & drop
+  els.poolDropZone?.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    els.poolDropZone.classList.add("drag-over");
+  });
+  els.poolDropZone?.addEventListener("dragleave", () => {
+    els.poolDropZone.classList.remove("drag-over");
+  });
+  els.poolDropZone?.addEventListener("drop", (e) => {
+    e.preventDefault();
+    els.poolDropZone.classList.remove("drag-over");
+    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/"));
+    if (files.length) handlePoolUpload(files);
+  });
+
+  // Filter buttons
+  els.poolFilterBtns?.addEventListener("click", (e) => {
+    const btn = e.target.closest(".pool-filter-btn");
+    if (!btn) return;
+    state.poolFilter = btn.dataset.filter;
+    els.poolFilterBtns.querySelectorAll(".pool-filter-btn").forEach(b => {
+      b.classList.toggle("active", b === btn);
+      b.classList.toggle("bg-black", b === btn);
+      b.classList.toggle("text-white", b === btn);
+    });
+    loadAssets();
+  });
+
+  // Search with debounce
+  let searchTimer;
+  els.assetSearch?.addEventListener("input", (e) => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      state.poolSearch = e.target.value.trim();
+      loadAssets();
+    }, 300);
+  });
+
+  // Setup tagging modal
+  setupTagModal();
+}
+
+async function handlePoolUpload(files) {
+  els.poolDropZone.classList.add("hidden");
+  els.poolUploadProgress.classList.remove("hidden");
+  els.poolUploadStatus.textContent = `Uploading ${files.length} image${files.length > 1 ? "s" : ""}...`;
+
+  try {
+    const uploaded = await uploadAssets(files);
+    els.poolUploadStatus.textContent = `Uploaded ${uploaded.length} image${uploaded.length > 1 ? "s" : ""}!`;
+    setTimeout(() => {
+      els.poolUploadProgress.classList.add("hidden");
+    }, 2000);
+
+    // Open tag modal for each uploaded image
+    if (uploaded.length === 1) {
+      loadAssets();
+      openTagModal(uploaded[0]);
+    } else {
+      // For bulk, reload grid and open tag modal for first one
+      await loadAssets();
+      if (uploaded[0]) openTagModal(uploaded[0]);
+    }
+    showToast(`${uploaded.length} image${uploaded.length > 1 ? "s" : ""} uploaded`, "success");
+  } catch (err) {
+    console.error("[Image Pool] Upload failed:", err);
+    els.poolUploadProgress.classList.add("hidden");
+    showToast("Upload failed: " + (err.message || err), "error");
+  }
+}
 
 function renderAssetGrid(assets) {
   if (!assets.length) {
+    const emptyMsg = state.poolFilter !== "all" || state.poolSearch
+      ? "No images match your filters"
+      : "No images yet — upload to get started";
     els.assetGrid.innerHTML = `
       <div class="col-span-full p-8 text-center text-gray-400">
-        <p>No assets uploaded yet</p>
+        <p>${emptyMsg}</p>
       </div>
     `;
     return;
   }
-  
+
   els.assetGrid.innerHTML = assets.map(asset => {
-    console.log("[renderAssetGrid] Asset:", asset.id, "path:", asset.original_image_path);
-    const imageUrl = asset.original_image_path 
+    const imageUrl = asset.original_image_path
       ? getPublicUrl(asset.original_image_path)
       : "/imgs/placeholder.jpg";
-    console.log("[renderAssetGrid] Generated URL:", imageUrl);
-    
-    const productName = asset.product?.name || "No product linked";
-    
+    const productName = asset.product?.name || "";
+    const usedCount = asset.used_count || 0;
+    const shotType = asset.shot_type || "";
+    const quality = asset.quality_score || 3;
+
+    // Badge
+    const badgeClass = usedCount === 0 ? "unused" : "";
+    const badgeText = usedCount === 0 ? "NEW" : `×${usedCount}`;
+
+    // Quality stars
+    const stars = "★".repeat(quality) + "☆".repeat(5 - quality);
+
     return `
-      <div class="asset-card cursor-pointer hover:ring-2 hover:ring-black transition-all" data-asset-id="${asset.id}">
-        <img src="${imageUrl}" alt="${productName}" loading="lazy" onerror="this.src='/imgs/placeholder.jpg'; console.error('Image failed to load:', '${imageUrl}')">
+      <div class="asset-card" data-asset-id="${asset.id}">
+        <span class="asset-used-badge ${badgeClass}">${badgeText}</span>
+        <img src="${imageUrl}" alt="${productName}" loading="lazy" onerror="this.src='/imgs/placeholder.jpg'">
         <div class="asset-card-overlay">
           <div class="asset-card-info">
-            <div class="font-medium">${productName}</div>
-            <div class="text-xs opacity-75">Click to create post</div>
+            ${productName ? `<div class="font-medium">${productName}</div>` : `<div class="font-medium text-yellow-300">⚠ No product</div>`}
+            ${shotType ? `<span class="asset-shot-pill">${shotType}</span>` : ""}
+            <div class="asset-quality-stars">${stars}</div>
           </div>
         </div>
       </div>
     `;
   }).join("");
-  
-  // Add click handlers to asset cards
+
+  // Click → open tag modal
   els.assetGrid.querySelectorAll(".asset-card").forEach(card => {
     card.addEventListener("click", () => {
       const assetId = card.dataset.assetId;
       const asset = assets.find(a => a.id === assetId);
-      if (asset) {
-        openUploadModalWithAsset(asset);
-      }
+      if (asset) openTagModal(asset);
     });
   });
+}
+
+// ============================================
+// Tagging Modal
+// ============================================
+
+function setupTagModal() {
+  els.tagModalClose?.addEventListener("click", closeTagModal);
+  els.tagCancelBtn?.addEventListener("click", closeTagModal);
+  els.tagModal?.addEventListener("click", (e) => {
+    if (e.target === els.tagModal) closeTagModal();
+  });
+
+  // Quality stars
+  els.tagQualityStars?.addEventListener("click", (e) => {
+    const btn = e.target.closest(".star-btn");
+    if (!btn) return;
+    const score = parseInt(btn.dataset.score);
+    state.tagQualityScore = score;
+    renderTagStars(score);
+  });
+
+  // Product search
+  let productSearchTimer;
+  els.tagProductSearch?.addEventListener("input", (e) => {
+    clearTimeout(productSearchTimer);
+    productSearchTimer = setTimeout(() => {
+      const q = e.target.value.trim().toLowerCase();
+      if (q.length < 2) {
+        els.tagProductDropdown.classList.add("hidden");
+        return;
+      }
+      const matches = state.products.filter(p => p.name.toLowerCase().includes(q)).slice(0, 8);
+      if (!matches.length) {
+        els.tagProductDropdown.classList.add("hidden");
+        return;
+      }
+      els.tagProductDropdown.innerHTML = matches.map(p => `
+        <div class="tag-product-option px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm" data-id="${p.id}">${p.name}</div>
+      `).join("");
+      els.tagProductDropdown.classList.remove("hidden");
+
+      els.tagProductDropdown.querySelectorAll(".tag-product-option").forEach(opt => {
+        opt.addEventListener("click", () => {
+          selectTagProduct(opt.dataset.id, opt.textContent);
+        });
+      });
+    }, 200);
+  });
+
+  // Clear product
+  els.tagClearProduct?.addEventListener("click", () => {
+    state.tagProductIdValue = null;
+    els.tagProductId.value = "";
+    els.tagSelectedProduct.classList.add("hidden");
+    els.tagProductSearch.classList.remove("hidden");
+    els.tagProductSearch.value = "";
+  });
+
+  // Save
+  els.tagSaveBtn?.addEventListener("click", saveTagModal);
+
+  // Delete
+  els.tagDeleteBtn?.addEventListener("click", async () => {
+    if (!state.tagEditAsset) return;
+    if (!confirm("Delete this image from the pool?")) return;
+    try {
+      await deleteAsset(state.tagEditAsset.id);
+      closeTagModal();
+      showToast("Image deleted", "success");
+      loadAssets();
+    } catch (err) {
+      showToast("Delete failed", "error");
+    }
+  });
+}
+
+function selectTagProduct(id, name) {
+  state.tagProductIdValue = id;
+  els.tagProductId.value = id;
+  els.tagProductSearch.classList.add("hidden");
+  els.tagProductDropdown.classList.add("hidden");
+  els.tagSelectedProduct.classList.remove("hidden");
+  els.tagSelectedProductName.textContent = name;
+}
+
+function renderTagStars(score) {
+  els.tagQualityLabel.textContent = `(${score}/5)`;
+  els.tagQualityStars.querySelectorAll(".star-btn").forEach(btn => {
+    const s = parseInt(btn.dataset.score);
+    btn.classList.toggle("text-yellow-400", s <= score);
+    btn.classList.toggle("text-gray-300", s > score);
+  });
+}
+
+function openTagModal(asset) {
+  state.tagEditAsset = asset;
+
+  // Populate fields
+  const imageUrl = asset.original_image_path
+    ? getPublicUrl(asset.original_image_path)
+    : "/imgs/placeholder.jpg";
+  els.tagPreviewImg.src = imageUrl;
+
+  els.tagShotType.value = asset.shot_type || "";
+
+  const quality = asset.quality_score || 3;
+  state.tagQualityScore = quality;
+  renderTagStars(quality);
+
+  // Product
+  if (asset.product_id && asset.product) {
+    selectTagProduct(asset.product_id, asset.product.name);
+  } else {
+    state.tagProductIdValue = null;
+    els.tagProductId.value = "";
+    els.tagSelectedProduct.classList.add("hidden");
+    els.tagProductSearch.classList.remove("hidden");
+    els.tagProductSearch.value = "";
+    els.tagProductDropdown.classList.add("hidden");
+  }
+
+  els.tagModal.classList.remove("hidden");
+  els.tagModal.classList.add("flex");
+}
+
+function closeTagModal() {
+  els.tagModal.classList.add("hidden");
+  els.tagModal.classList.remove("flex");
+  state.tagEditAsset = null;
+}
+
+async function saveTagModal() {
+  if (!state.tagEditAsset) return;
+
+  const tags = {
+    shot_type: els.tagShotType.value || null,
+    product_id: state.tagProductIdValue || null,
+    quality_score: state.tagQualityScore
+  };
+
+  els.tagSaveBtn.disabled = true;
+  els.tagSaveBtn.textContent = "Saving...";
+
+  try {
+    await updateAssetTags(state.tagEditAsset.id, tags);
+    closeTagModal();
+    showToast("Tags saved", "success");
+    loadAssets();
+  } catch (err) {
+    console.error("[Tag Modal] Save failed:", err);
+    showToast("Failed to save tags", "error");
+  } finally {
+    els.tagSaveBtn.disabled = false;
+    els.tagSaveBtn.textContent = "Save Tags";
+  }
 }
 
 // Open upload modal pre-populated with an existing asset
