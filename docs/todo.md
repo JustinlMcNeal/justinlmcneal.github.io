@@ -112,7 +112,7 @@
 ## Admin
 
 - [ ] **Access admin pages via mobile/app** — ensure admin routes work on phone
-- [ ] **Product search bar fix** — the ✕ clear button in the admin product search is broken
+- [x] **Product search bar fix** — the ✕ clear button in the admin product search is broken
 - [ ] **Expense report duplicate prevention** — detect and block duplicate entries on import
 - [ ] **Expenses page sorting & filtering** — add sort controls and a spending graph
 

@@ -179,7 +179,20 @@ async function boot() {
   });
 
   // 7) Wire UI
-  els.searchInput?.addEventListener("input", refreshTable);
+  els.searchInput?.addEventListener("input", () => {
+    const hasValue = (els.searchInput.value.length > 0);
+    document.getElementById("searchClear")?.classList.toggle("hidden", !hasValue);
+    document.getElementById("searchIcon")?.classList.toggle("hidden", hasValue);
+    refreshTable();
+  });
+
+  document.getElementById("searchClear")?.addEventListener("click", () => {
+    if (els.searchInput) {
+      els.searchInput.value = "";
+      els.searchInput.dispatchEvent(new Event("input"));
+      els.searchInput.focus();
+    }
+  });
 
   els.btnNew?.addEventListener("click", () => {
     modal.openNew();
