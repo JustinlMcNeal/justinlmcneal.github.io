@@ -447,6 +447,50 @@ export async function analyzePost(postId) {
     }
   }
   
+  // Persist analysis to post_performance_analysis table
+  try {
+    const { error: insertErr } = await supabase
+      .from("post_performance_analysis")
+      .upsert({
+        post_id: postId,
+        overall_score: analysis.overall_score,
+        timing_score: analysis.timing_score,
+        caption_score: analysis.caption_score,
+        hashtag_score: analysis.hashtag_score,
+        visual_score: analysis.visual_score,
+        engagement_velocity_score: analysis.engagement_velocity_score,
+        posted_hour: analysis.posted_hour,
+        posted_day_of_week: analysis.posted_day_of_week,
+        posted_day_name: analysis.posted_day_name,
+        is_weekend: analysis.is_weekend,
+        caption_length: analysis.caption_length,
+        has_cta: analysis.has_cta,
+        has_emoji: analysis.has_emoji,
+        emoji_count: analysis.emoji_count,
+        has_question: analysis.has_question,
+        sentiment: analysis.sentiment || null,
+        hashtag_count: analysis.hashtag_count,
+        branded_hashtag_used: analysis.branded_hashtag_used,
+        category_hashtags_used: analysis.category_hashtags_used || [],
+        vs_avg_engagement_rate: parseFloat(analysis.vs_avg_engagement_rate) || 0,
+        vs_avg_likes: parseFloat(analysis.vs_avg_likes) || 0,
+        vs_avg_comments: parseFloat(analysis.vs_avg_comments) || 0,
+        vs_avg_saves: parseFloat(analysis.vs_avg_saves) || 0,
+        strengths: analysis.strengths || [],
+        weaknesses: analysis.weaknesses || [],
+        recommendations: analysis.recommendations || [],
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "post_id" });
+
+    if (insertErr) {
+      console.warn("Failed to persist analysis:", insertErr.message);
+    } else {
+      console.log("✅ Analysis persisted to post_performance_analysis for post", postId);
+    }
+  } catch (err) {
+    console.warn("Error persisting analysis:", err);
+  }
+  
   return analysis;
 }
 

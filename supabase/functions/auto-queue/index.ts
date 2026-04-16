@@ -234,6 +234,122 @@ function getNextPostingTimes(
   return result;
 }
 
+// ============================================
+// LEARNING AGGREGATION (runs after post creation)
+// Updates hashtag, timing, and caption performance tables
+// so autopilot always uses fresh data on the next cycle
+// ============================================
+
+async function runLearningAggregation(supabase: any): Promise<void> {
+  // Fetch all posted IG posts with engagement data
+  const { data: posts, error } = await supabase
+    .from("social_posts")
+    .select("id, hashtags, likes, comments, saves, reach, engagement_rate, posted_at, caption")
+    .eq("status", "posted")
+    .eq("platform", "instagram");
+
+  if (error || !posts || posts.length === 0) {
+    console.log("[learning] No posted Instagram data to learn from");
+    return;
+  }
+
+  // ── 1. Hashtag Performance ──
+  const hashtagStats: Record<string, any> = {};
+  for (const post of posts) {
+    for (const tag of (post.hashtags || [])) {
+      const t = tag.toLowerCase().replace("#", "");
+      if (!hashtagStats[t]) {
+        hashtagStats[t] = { times_used: 0, total_reach: 0, total_likes: 0, total_comments: 0, total_saves: 0, rates: [], bestId: null, bestRate: 0, worstId: null, worstRate: Infinity };
+      }
+      const s = hashtagStats[t];
+      s.times_used++;
+      s.total_reach += post.reach || 0;
+      s.total_likes += post.likes || 0;
+      s.total_comments += post.comments || 0;
+      s.total_saves += post.saves || 0;
+      s.rates.push(post.engagement_rate || 0);
+      if ((post.engagement_rate || 0) > s.bestRate) { s.bestId = post.id; s.bestRate = post.engagement_rate || 0; }
+      if ((post.engagement_rate || 0) < s.worstRate) { s.worstId = post.id; s.worstRate = post.engagement_rate || 0; }
+    }
+  }
+  for (const [tag, s] of Object.entries(hashtagStats) as [string, any][]) {
+    const avg = s.rates.length > 0 ? s.rates.reduce((a: number, b: number) => a + b, 0) / s.rates.length : 0;
+    await supabase.from("hashtag_performance").upsert({
+      hashtag: tag, times_used: s.times_used, total_reach: s.total_reach,
+      total_likes: s.total_likes, total_comments: s.total_comments, total_saves: s.total_saves,
+      avg_engagement_rate: parseFloat(avg.toFixed(2)),
+      best_performing_post_id: s.bestId, worst_performing_post_id: s.worstRate < Infinity ? s.worstId : null,
+      category: tag === "karrykraze" ? "branded" : "general",
+      is_recommended: avg >= 2.0 && s.times_used >= 3,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "hashtag" });
+  }
+  console.log(`[learning] Updated ${Object.keys(hashtagStats).length} hashtags`);
+
+  // ── 2. Timing Performance ──
+  const timeStats: Record<string, any> = {};
+  for (const post of posts) {
+    if (!post.posted_at) continue;
+    const d = new Date(post.posted_at);
+    const key = `${d.getHours()}-${d.getDay()}`;
+    if (!timeStats[key]) {
+      timeStats[key] = { hour_of_day: d.getHours(), day_of_week: d.getDay(), total_posts: 0, total_reach: 0, total_engagement: 0, rates: [] };
+    }
+    const s = timeStats[key];
+    s.total_posts++;
+    s.total_reach += post.reach || 0;
+    s.total_engagement += (post.likes || 0) + (post.comments || 0) + (post.saves || 0);
+    s.rates.push(post.engagement_rate || 0);
+  }
+  const allAvgs = Object.values(timeStats).map((s: any) => s.rates.length > 0 ? s.rates.reduce((a: number, b: number) => a + b, 0) / s.rates.length : 0);
+  const overallAvg = allAvgs.length > 0 ? allAvgs.reduce((a, b) => a + b, 0) / allAvgs.length : 0;
+  for (const s of Object.values(timeStats) as any[]) {
+    const avg = s.rates.length > 0 ? s.rates.reduce((a: number, b: number) => a + b, 0) / s.rates.length : 0;
+    await supabase.from("posting_time_performance").upsert({
+      hour_of_day: s.hour_of_day, day_of_week: s.day_of_week,
+      total_posts: s.total_posts, total_reach: s.total_reach, total_engagement: s.total_engagement,
+      avg_engagement_rate: parseFloat(avg.toFixed(2)),
+      is_peak_time: avg > overallAvg * 1.2,
+    }, { onConflict: "hour_of_day,day_of_week" });
+  }
+  console.log(`[learning] Updated ${Object.keys(timeStats).length} time slots`);
+
+  // ── 3. Caption Element Performance ──
+  const captionElements: Record<string, { type: string; value: string; count: number; rates: number[] }> = {};
+  for (const post of posts) {
+    if (!post.caption || !post.engagement_rate) continue;
+    const rate = post.engagement_rate;
+    const len = post.caption.length;
+    const lengthRange = len > 300 ? "long" : len > 125 ? "medium" : "short";
+    const hasCta = /shop now|link in bio|tap|click|get yours|buy now|order now|limited/i.test(post.caption);
+    const hasQuestion = /\?/.test(post.caption);
+    const hasEmoji = /[\u{1F300}-\u{1F9FF}]/u.test(post.caption);
+
+    const elements = [
+      { type: "length_range", value: lengthRange, match: true },
+      { type: "cta", value: "has_cta", match: hasCta },
+      { type: "question", value: "has_question", match: hasQuestion },
+      { type: "emoji", value: "has_emoji", match: hasEmoji },
+    ];
+    for (const el of elements) {
+      if (!el.match) continue;
+      const key = `${el.type}:${el.value}`;
+      if (!captionElements[key]) captionElements[key] = { type: el.type, value: el.value, count: 0, rates: [] };
+      captionElements[key].count++;
+      captionElements[key].rates.push(rate);
+    }
+  }
+  for (const el of Object.values(captionElements)) {
+    const avg = el.rates.reduce((a, b) => a + b, 0) / el.rates.length;
+    await supabase.from("caption_element_performance").upsert({
+      element_type: el.type, element_value: el.value,
+      times_used: el.count, avg_engagement_rate: parseFloat(avg.toFixed(2)),
+      is_recommended: avg >= 2.0 && el.count >= 3,
+    }, { onConflict: "element_type,element_value" });
+  }
+  console.log(`[learning] Updated ${Object.keys(captionElements).length} caption elements`);
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
@@ -1072,6 +1188,23 @@ Deno.serve(async (req) => {
     const platformSummary = Object.entries(byPlatform)
       .map(([plat, count]) => `${count} ${plat}`)
       .join(", ");
+
+    // ── LEARNING AGGREGATION ──
+    // After queuing posts, run learning so autopilot always uses fresh data
+    try {
+      console.log("[auto-queue] Running learning aggregation...");
+      await runLearningAggregation(supabase);
+      console.log("[auto-queue] ✅ Learning aggregation complete");
+    } catch (learnErr: unknown) {
+      const learnMsg = learnErr instanceof Error ? learnErr.message : String(learnErr);
+      console.error("[auto-queue] Learning aggregation failed (non-fatal):", learnMsg);
+    }
+
+    // Update autopilot_last_run setting
+    await supabase.from("social_settings").upsert({
+      setting_key: "autopilot_last_run",
+      setting_value: { ran_at: new Date().toISOString(), posts_created: createdPosts.length },
+    }, { onConflict: "setting_key" });
 
     return new Response(JSON.stringify({
       success: true,
