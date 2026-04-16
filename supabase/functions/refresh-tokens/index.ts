@@ -156,8 +156,8 @@ Deno.serve(async (req) => {
 
         if (refreshTokenData?.token) {
           // Pinterest tokens are shorter-lived — always try to refresh if we have a refresh token
-          const appId = Deno.env.get("PINTEREST_APP_ID") || "";
-          const appSecret = Deno.env.get("PINTEREST_APP_SECRET") || "";
+          const appId = Deno.env.get("PINTEREST_CLIENT_ID") || "";
+          const appSecret = Deno.env.get("PINTEREST_CLIENT_SECRET") || "";
           const basicAuth = btoa(`${appId}:${appSecret}`);
 
           // Use production API if available, fall back to sandbox

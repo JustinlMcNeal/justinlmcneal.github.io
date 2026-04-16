@@ -24,8 +24,7 @@ serve(async (req) => {
   const basicAuth = btoa(`${client_id}:${client_secret}`);
 
   // Exchange code for access token
-  // Use sandbox API for Trial access apps
-  const resp = await fetch("https://api-sandbox.pinterest.com/v5/oauth/token", {
+  const resp = await fetch("https://api.pinterest.com/v5/oauth/token", {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
