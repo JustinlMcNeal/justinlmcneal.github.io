@@ -69,7 +69,40 @@
 
 - [ ] **Share button on product pages** — native share for iMessage, Discord, etc. with OG image embed
 - [ ] **Referral share link** — sharer gets a unique link; referee gets 5% off at checkout; sharer earns 10% off when the referee completes a purchase
-- [ ] **Catalog search on mobile** — fix broken/clipped search bar behavior
+- [x] **Catalog search on mobile** — fix auto-zoom and remove redundant predictive dropdown
+
+  <details>
+  <summary><strong>Implementation Plan</strong></summary>
+
+  #### Problem
+
+  1. **Auto-zoom on focus** — iOS Safari auto-zooms the page when the user taps the search input because its `font-size` is below 16px. This shifts the entire viewport and is jarring.
+  2. **Redundant predictive dropdown** — A `#predictiveResults` dropdown appears with up to 5 matching product links, but the catalog grid already live-filters as the user types. The dropdown just covers the results the user is already seeing.
+
+  #### Current System
+
+  | Piece | What it does | Location |
+  |-------|-------------|----------|
+  | `#catalogSearch` input | `type="search"`, font-size ~12px via Tailwind `text-xs` | `pages/catalog.html` |
+  | `#predictiveResults` div | Absolutely-positioned dropdown, shows top 5 matches with thumbnails | `pages/catalog.html` |
+  | Predictive JS | On `input` event: filters `allProducts`, renders matches into `#predictiveResults`, AND calls `resetAndRenderGrid()` | `js/catalog/index.js` (~line 488–540) |
+  | Grid filtering | `filterProducts()` already uses `els.search.value` to filter the entire catalog grid in real-time | `js/catalog/index.js` (~line 183) |
+
+  #### Fix
+
+  1. **Prevent iOS auto-zoom** — Add a CSS rule in `css/theme/components.css` that sets `font-size: 16px` on `#catalogSearch` at mobile breakpoints. 16px is the threshold below which iOS Safari triggers auto-zoom. Adjust the Tailwind classes on the input so desktop stays at the current smaller size.
+
+  2. **Remove predictive dropdown** — In `js/catalog/index.js`, strip out the entire predictive search block (~lines 488–540): the `els.search input` listener that renders into `els.predictive`, the click-outside listener, and the focus listener. Replace with a simple input listener that just calls `resetAndRenderGrid()`. Optionally hide or remove the `#predictiveResults` div in the HTML.
+
+  #### Files touched
+
+  | File | Change |
+  |------|--------|
+  | `css/theme/components.css` | Add `@media (max-width: 767px) { #catalogSearch { font-size: 16px; } }` |
+  | `js/catalog/index.js` | Remove predictive dropdown rendering; keep only `resetAndRenderGrid()` on input |
+  | `pages/catalog.html` | Remove or hide `#predictiveResults` div |
+
+  </details>
 - [ ] **Product size/variant support** — enable size options per product
 - [ ] **Revamp Reviews page** — split into two pages: one for browsing reviews, one for leaving a review
 - [ ] **Homepage banner** — improve visuals, add more dynamic or promotional content

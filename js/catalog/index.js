@@ -24,7 +24,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   const els = {
     search: document.getElementById("catalogSearch"),
-    predictive: document.getElementById("predictiveResults"),
+
     chips: document.getElementById("categoryChips"),
     grid: document.getElementById("productGrid"),
     count: document.getElementById("catalogCount"),
@@ -476,62 +476,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
 
-  // --- Predictive Search ---
-  if (els.search && els.predictive) {
-     els.search.addEventListener("input", (e) => {
-        const val = e.target.value.trim().toLowerCase();
-        
-        // Live update grid too
-        // Debounce slightly if heavy? For now direct
-        
-        // Update predictive dropdown
-        if (val.length < 2) {
-           els.predictive.classList.add("hidden");
-           resetAndRenderGrid(); // Restore grid if cleared
-           return;
-        }
-
-        // Search in all products (limit 5)
-        const matches = allProducts.filter(p => 
-           (p.name || "").toLowerCase().includes(val) ||
-           (p.slug || "").toLowerCase().includes(val)
-        ).slice(0, 5);
-
-        if (matches.length > 0) {
-           els.predictive.innerHTML = matches.map(p => {
-              const img = p.catalog_image_url || p.primary_image_url || "";
-              return `
-                 <a href="/pages/product.html?slug=${encodeURIComponent(p.slug)}" class="predictive-item flex items-center gap-3 p-3 hover:bg-neutral-50 transition-colors border-b last:border-0 border-neutral-100">
-                    <img src="${img}" class="w-10 h-10 object-cover bg-neutral-100" alt="">
-                    <div>
-                       <div class="font-bold text-xs uppercase leading-tight">${p.name}</div>
-                       <div class="text-[10px] text-neutral-500 font-mono">${money(p.price)}</div>
-                    </div>
-                 </a>
-              `;
-           }).join("");
-           els.predictive.classList.remove("hidden");
-        } else {
-           els.predictive.innerHTML = `<div class="p-4 text-xs font-bold text-neutral-400 uppercase text-center">No matches</div>`;
-           els.predictive.classList.remove("hidden");
-        }
-        
-        // Also update regular grid
+  // --- Live Search (grid-only, no dropdown) ---
+  if (els.search) {
+     els.search.addEventListener("input", () => {
         resetAndRenderGrid();
-     });
-
-     // Hide predictive when clicking outside
-     document.addEventListener("click", (e) => {
-        if (!els.search.contains(e.target) && !els.predictive.contains(e.target)) {
-           els.predictive.classList.add("hidden");
-        }
-     });
-     
-     // Focus in shows it again if value exists
-     els.search.addEventListener("focus", () => {
-        if (els.search.value.trim().length >= 2) {
-           els.predictive.classList.remove("hidden");
-        }
      });
   }
 
