@@ -723,7 +723,19 @@ async function loadCategories() {
 }
 
 async function loadBoards() {
-  // Fetch boards from Pinterest API instead of local database
+  // Only fetch boards if Pinterest is connected (avoid 401 errors when token is expired)
+  const client = getSupabaseClient();
+  const { data: pinData } = await client
+    .from("social_settings")
+    .select("setting_value")
+    .eq("setting_key", "pinterest_connected")
+    .single();
+  
+  if (!pinData?.setting_value?.connected) {
+    state.boards = [];
+    return;
+  }
+  
   state.boards = await fetchPinterestBoards();
   await populateBoardSelect();
 }
