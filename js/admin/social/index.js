@@ -5688,7 +5688,14 @@ async function loadEngagementMetrics() {
     if (error) throw error;
     
     // Double filter to ensure no deleted posts slip through
-    const allPosts = (posts || []).filter(p => p.status === "posted");
+    const allPosts = (posts || []).filter(p => {
+      if (p.status !== "posted") return false;
+      // Resolve relative storage paths to full URLs
+      if (p.image_url && !p.image_url.startsWith("http")) {
+        p.image_url = getPublicUrl(p.image_url);
+      }
+      return true;
+    });
     
     console.log(`Engagement metrics: Found ${posts?.length || 0} posts, filtered to ${allPosts.length} (excluding deleted)`);
     
