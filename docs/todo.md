@@ -69,7 +69,7 @@
 
 - [ ] **Share button on product pages** — native share for iMessage, Discord, etc. with OG image embed
 - [ ] **Referral share link** — sharer gets a unique link; referee gets 5% off at checkout; sharer earns 10% off when the referee completes a purchase
-- [ ] **Catalog search on mobile** — fix auto-zoom and remove redundant predictive dropdown
+- [x] **Catalog search on mobile** — iOS auto-zoom fixed (16px base font), predictive dropdown removed
 
   <details>
   <summary><strong>Implementation Plan</strong></summary>

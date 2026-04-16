@@ -467,12 +467,6 @@ document.addEventListener("DOMContentLoaded", async () => {
        e.stopPropagation();
        handleQuickAdd(qaBtn);
     }
-    
-    // Predictive Result Link
-    const pLink = e.target.closest(".predictive-item");
-    if (pLink) {
-       // Navigation happens naturally via href, but we can track click here
-    }
   });
 
 
