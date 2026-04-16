@@ -1044,22 +1044,29 @@ async function handlePoolUpload(files) {
   els.poolUploadStatus.textContent = `Uploading ${files.length} image${files.length > 1 ? "s" : ""}...`;
 
   try {
-    const uploaded = await uploadAssets(files);
-    els.poolUploadStatus.textContent = `Uploaded ${uploaded.length} image${uploaded.length > 1 ? "s" : ""}!`;
+    const { succeeded, failed } = await uploadAssets(files);
+
+    // Show result
+    if (failed.length === 0) {
+      els.poolUploadStatus.textContent = `Uploaded ${succeeded.length} image${succeeded.length > 1 ? "s" : ""}!`;
+      showToast(`${succeeded.length} image${succeeded.length > 1 ? "s" : ""} uploaded`, "success");
+    } else if (succeeded.length === 0) {
+      els.poolUploadStatus.textContent = `All ${failed.length} uploads failed`;
+      showToast(`Upload failed: ${failed.map(f => f.name).join(", ")}`, "error");
+    } else {
+      els.poolUploadStatus.textContent = `${succeeded.length} uploaded, ${failed.length} failed`;
+      showToast(`${succeeded.length} uploaded, ${failed.length} failed: ${failed.map(f => f.name).join(", ")}`, "error");
+    }
+
     setTimeout(() => {
       els.poolUploadProgress.classList.add("hidden");
-    }, 2000);
+    }, 3000);
 
-    // Open tag modal for each uploaded image
-    if (uploaded.length === 1) {
-      loadAssets();
-      openTagModal(uploaded[0]);
-    } else {
-      // For bulk, reload grid and open tag modal for first one
-      await loadAssets();
-      if (uploaded[0]) openTagModal(uploaded[0]);
+    // Reload grid + open tag modal only for first succeeded image
+    await loadAssets();
+    if (succeeded.length > 0) {
+      openTagModal(succeeded[0]);
     }
-    showToast(`${uploaded.length} image${uploaded.length > 1 ? "s" : ""} uploaded`, "success");
   } catch (err) {
     console.error("[Image Pool] Upload failed:", err);
     els.poolUploadProgress.classList.add("hidden");
@@ -1089,6 +1096,9 @@ function renderAssetGrid(assets) {
     const shotType = asset.shot_type || "";
     const quality = asset.quality_score || 3;
 
+    // Ready = has product_id AND shot_type
+    const isReady = !!(asset.product_id && asset.shot_type);
+
     // Badge
     const badgeClass = usedCount === 0 ? "unused" : "";
     const badgeText = usedCount === 0 ? "NEW" : `×${usedCount}`;
@@ -1096,14 +1106,21 @@ function renderAssetGrid(assets) {
     // Quality stars
     const stars = "★".repeat(quality) + "☆".repeat(5 - quality);
 
+    // Ready/incomplete border
+    const borderClass = isReady ? "" : "asset-incomplete";
+    const readyIndicator = isReady
+      ? `<span class="asset-ready-dot" title="Ready for autopilot">✓</span>`
+      : `<span class="asset-incomplete-dot" title="Needs product + shot type">!</span>`;
+
     return `
-      <div class="asset-card" data-asset-id="${asset.id}">
+      <div class="asset-card ${borderClass}" data-asset-id="${asset.id}">
+        ${readyIndicator}
         <span class="asset-used-badge ${badgeClass}">${badgeText}</span>
         <img src="${imageUrl}" alt="${productName}" loading="lazy" onerror="this.src='/imgs/placeholder.jpg'">
         <div class="asset-card-overlay">
           <div class="asset-card-info">
             ${productName ? `<div class="font-medium">${productName}</div>` : `<div class="font-medium text-yellow-300">⚠ No product</div>`}
-            ${shotType ? `<span class="asset-shot-pill">${shotType}</span>` : ""}
+            ${shotType ? `<span class="asset-shot-pill">${shotType}</span>` : `<span class="asset-shot-pill" style="background:rgba(239,68,68,0.85);color:#fff">needs tag</span>`}
             <div class="asset-quality-stars">${stars}</div>
           </div>
         </div>

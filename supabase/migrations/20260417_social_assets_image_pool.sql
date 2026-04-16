@@ -9,3 +9,8 @@ ALTER TABLE social_assets
 
 CREATE INDEX IF NOT EXISTS idx_social_assets_used ON social_assets(used_count);
 CREATE INDEX IF NOT EXISTS idx_social_assets_shot_type ON social_assets(shot_type);
+
+-- Track which pool asset was used per post (for learning + repost control)
+ALTER TABLE social_posts
+  ADD COLUMN IF NOT EXISTS source_asset_id UUID REFERENCES social_assets(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_social_posts_source_asset ON social_posts(source_asset_id);

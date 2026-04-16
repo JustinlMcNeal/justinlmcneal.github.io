@@ -1,7 +1,7 @@
 # Social Media Page Revamp — pSocial_001
 
 > **Created**: 2026-04-16  
-> **Status**: Sprint 2 Complete ✅ — Sprint 3 next  
+> **Status**: Sprint 3 Complete ✅ — Sprint 4 next  
 > **Scope**: Full audit & revamp of `/pages/admin/social.html` and all supporting JS/edge functions
 
 ---
@@ -484,14 +484,23 @@ Daily cron triggers autopilot-fill:
 **Files modified**: `js/admin/social/api.js`, `js/admin/social/index.js`, `pages/admin/social.html`, `css/pages/admin/social.css`, `supabase/functions/auto-queue/index.ts`, `supabase/functions/process-scheduled-posts/index.ts`  
 **Files created**: `supabase/migrations/20260417_social_assets_image_pool.sql`
 
-### Sprint 3 — Autopilot Upgrade
+### Sprint 3 — Autopilot Upgrade ✅ COMPLETE (2026-04-16)
 > Data-driven automated posting
 
-- Product priority scoring
-- Use Image Pool as image source
-- Use `posting_time_performance` for scheduling
-- Hybrid AI captions (constrained generation + template fallback)
-- Automate resurface old hits
+- ✅ **Product priority scoring**: Replaced simple "least recently posted" selection with weighted scoring: recency (40%) + category performance (30%) + fresh images (20%) + reserved (10%). Products sorted by score DESC, top N selected. Logged per-product scores.
+- ✅ **3-day cooldown**: Products posted within 3 days are excluded from selection at queue-fill time. Manual "Post Now" bypasses this.
+- ✅ **Data-driven posting times**: Queries `posting_time_performance` table. If ≥20 total samples, uses top-6 peak hours from real data. Otherwise falls back to default schedule (9am/12pm/6pm). Transition is automatic as data accumulates.
+- ✅ **Caption confidence check**: Each caption scored on length (30%), CTA presence (40%), structure (30%). Tries up to 3 templates, picks best score. ≥70% accepted, 50-69% flagged, <50% falls back to minimalist template. Score + status logged per post.
+- ✅ **Content diversity guard**: Checks `shot_type` of last 2 queued posts. If candidate image matches both, swaps to next pool image with a different `shot_type`. Prevents 3+ same shot_type in a row.
+- ✅ **Auto-resurface old hits**: Every 4th post slot, checks for posts older than 30 days with engagement_rate above median. If found, replaces last post slot with a repost using fresh caption. Logs original engagement rate vs median.
+- ✅ **Sprint 2 tightening** (applied alongside Sprint 3):
+  - Hard validation: autopilot skips assets missing `product_id` OR `shot_type`
+  - Ready/incomplete visual state: green ✓ dot (ready) / amber ! dot (incomplete) on pool images
+  - `source_asset_id` on `social_posts`: tracks which pool asset was used per post
+  - Multi-upload partial failure handling: per-file try/catch, shows which files succeeded/failed
+
+**Edge functions deployed**: `auto-queue`  
+**Files modified**: `supabase/functions/auto-queue/index.ts`, `js/admin/social/index.js`, `js/admin/social/api.js`, `css/pages/admin/social.css`, `supabase/migrations/20260417_social_assets_image_pool.sql`
 
 ### Sprint 4 — Smart Features
 > Advanced automation + polish

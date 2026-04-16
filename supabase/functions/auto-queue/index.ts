@@ -153,36 +153,82 @@ function generateCaption(
   return caption;
 }
 
-// Get next available posting times
+// ── SPRINT 3: CAPTION CONFIDENCE SCORING ──
+// Score a caption on length (30%), CTA presence (40%), structure (30%)
+// Returns 0-100
+function scoreCaptionConfidence(caption: string): number {
+  let score = 0;
+
+  // Length check (30%): ideal 80-300 chars for IG
+  const len = caption.length;
+  if (len >= 80 && len <= 300) score += 30;
+  else if (len >= 50 && len <= 400) score += 20;
+  else if (len >= 30) score += 10;
+
+  // CTA presence (40%): look for action words
+  const ctaPatterns = /shop|buy|get|grab|order|link|comment|tag|check out|tap|click|discover|explore/i;
+  if (ctaPatterns.test(caption)) score += 40;
+  else score += 5; // minimal credit for having text at all
+
+  // Structure (30%): has emoji, has line breaks, doesn't repeat itself
+  const hasEmoji = /[\u{1F300}-\u{1FAFF}]/u.test(caption);
+  const hasLineBreaks = caption.includes("\n");
+  const words = caption.toLowerCase().split(/\s+/);
+  const uniqueRatio = new Set(words).size / (words.length || 1);
+  
+  if (hasEmoji) score += 10;
+  if (hasLineBreaks) score += 10;
+  if (uniqueRatio > 0.6) score += 10;
+
+  return score;
+}
+
+// Get next available posting times — data-driven when possible
 function getNextPostingTimes(
-  timesPerDay: string[],
+  peakHours: number[],
+  fallbackTimes: string[],
   startDate: Date,
-  count: number
+  count: number,
+  useDataDriven: boolean
 ): Date[] {
   const result: Date[] = [];
-  const times = timesPerDay.map(t => {
-    const [h, m] = t.split(":").map(Number);
-    return { hours: h, minutes: m };
-  });
   
   let currentDate = new Date(startDate);
   currentDate.setSeconds(0, 0);
   
-  while (result.length < count) {
-    for (const time of times) {
-      if (result.length >= count) break;
-      
-      const postTime = new Date(currentDate);
-      postTime.setHours(time.hours, time.minutes, 0, 0);
-      
-      // Only add if in the future
-      if (postTime > startDate) {
-        result.push(postTime);
+  if (useDataDriven) {
+    // Use peak hours from posting_time_performance
+    const sortedHours = [...peakHours].sort((a, b) => a - b);
+    while (result.length < count) {
+      for (const hour of sortedHours) {
+        if (result.length >= count) break;
+        const postTime = new Date(currentDate);
+        postTime.setHours(hour, 0, 0, 0);
+        if (postTime > startDate) {
+          result.push(postTime);
+        }
       }
+      currentDate.setDate(currentDate.getDate() + 1);
+      currentDate.setHours(0, 0, 0, 0);
     }
-    // Move to next day
-    currentDate.setDate(currentDate.getDate() + 1);
-    currentDate.setHours(0, 0, 0, 0);
+  } else {
+    // Legacy: use settings posting_times
+    const times = fallbackTimes.map(t => {
+      const [h, m] = t.split(":").map(Number);
+      return { hours: h, minutes: m };
+    });
+    while (result.length < count) {
+      for (const time of times) {
+        if (result.length >= count) break;
+        const postTime = new Date(currentDate);
+        postTime.setHours(time.hours, time.minutes, 0, 0);
+        if (postTime > startDate) {
+          result.push(postTime);
+        }
+      }
+      currentDate.setDate(currentDate.getDate() + 1);
+      currentDate.setHours(0, 0, 0, 0);
+    }
   }
   
   return result;
@@ -212,7 +258,7 @@ Deno.serve(async (req) => {
 
     console.log(`[auto-queue] Generating ${count} posts for ${platformList.join(", ")}, preview=${preview}`);
 
-    // 1. Get auto_queue settings
+    // 2. Get auto_queue settings
     const { data: settingsRow } = await supabase
       .from("social_settings")
       .select("setting_value")
@@ -224,8 +270,24 @@ Deno.serve(async (req) => {
       caption_tones: ["casual", "urgency"],
     };
 
-    // 2. Get products that need posts (ordered by last_social_post_at, nulls first)
-    const { data: products, error: prodError } = await supabase
+    // ── SPRINT 3: DATA-DRIVEN POSTING TIMES ──
+    const { data: timeData } = await supabase
+      .from("posting_time_performance")
+      .select("hour_of_day, day_of_week, avg_engagement_rate, total_posts")
+      .gt("total_posts", 0)
+      .order("avg_engagement_rate", { ascending: false });
+
+    const totalTimeSamples = (timeData || []).reduce((sum: number, r: any) => sum + (r.total_posts || 0), 0);
+    const useDataDrivenTimes = totalTimeSamples >= 20;
+    const peakHours = useDataDrivenTimes
+      ? [...new Set((timeData || []).slice(0, 6).map((r: any) => r.hour_of_day as number))]
+      : [9, 12, 18];
+
+    console.log(`[auto-queue] Posting times: ${useDataDrivenTimes ? "data-driven" : "default"} (${totalTimeSamples} samples), peak hours: ${peakHours.join(",")}`);
+
+    // ── SPRINT 3: PRODUCT PRIORITY SCORING + COOLDOWN ──
+    // Fetch ALL active products
+    const { data: allProducts, error: prodError } = await supabase
       .from("products")
       .select(`
         id,
@@ -238,16 +300,14 @@ Deno.serve(async (req) => {
         category:categories(id, name)
       `)
       .eq("is_active", true)
-      .not("catalog_image_url", "is", null)
-      .order("last_social_post_at", { ascending: true, nullsFirst: true })
-      .limit(count);
+      .not("catalog_image_url", "is", null);
 
     if (prodError) {
       console.error("[auto-queue] Error fetching products:", prodError);
       throw prodError;
     }
 
-    if (!products?.length) {
+    if (!allProducts?.length) {
       return new Response(JSON.stringify({
         success: true,
         message: "No products available for posting",
@@ -255,17 +315,104 @@ Deno.serve(async (req) => {
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    console.log(`[auto-queue] Found ${products.length} products to post`);
+    // 3-day cooldown: exclude recently posted products
+    const cooldownMs = 3 * 24 * 60 * 60 * 1000;
+    const cooldownCutoff = new Date(Date.now() - cooldownMs).toISOString();
+    const cooledProducts = allProducts.filter((p: any) =>
+      !p.last_social_post_at || p.last_social_post_at < cooldownCutoff
+    );
 
-    // ── IMAGE POOL: Load tagged assets (Sprint 2 guardrail) ──
-    const productIds = products.map((p: any) => p.id);
+    console.log(`[auto-queue] Products: ${allProducts.length} total, ${allProducts.length - cooledProducts.length} on cooldown, ${cooledProducts.length} eligible`);
 
-    // Check Image Pool for assets with product_id set (unused-first)
-    const { data: poolAssets } = await supabase
+    if (!cooledProducts.length) {
+      return new Response(JSON.stringify({
+        success: true,
+        message: "All products are on cooldown (posted within 3 days)",
+        generated: 0,
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // Load category engagement data for scoring
+    const { data: categoryPerf } = await supabase
+      .from("post_learning_patterns")
+      .select("pattern_key, pattern_value, sample_size")
+      .eq("pattern_type", "category_performance");
+
+    const categoryEngMap: Record<string, number> = {};
+    let maxCatEng = 0;
+    (categoryPerf || []).forEach((row: any) => {
+      if (row.sample_size >= 3 && row.pattern_value?.avg_engagement_rate) {
+        const rate = Number(row.pattern_value.avg_engagement_rate) || 0;
+        categoryEngMap[row.pattern_key] = rate;
+        if (rate > maxCatEng) maxCatEng = rate;
+      }
+    });
+
+    // Load ready pool assets per product for image freshness scoring
+    const allProductIds = cooledProducts.map((p: any) => p.id);
+
+    const { data: allPoolAssets } = await supabase
       .from("social_assets")
-      .select("id, product_id, original_image_path, shot_type, used_count, last_used_at")
+      .select("id, product_id, used_count")
       .eq("is_active", true)
       .not("product_id", "is", null)
+      .not("shot_type", "is", null)
+      .in("product_id", allProductIds);
+
+    const freshImageCount: Record<string, number> = {};
+    (allPoolAssets || []).forEach((a: any) => {
+      if ((a.used_count || 0) === 0) {
+        freshImageCount[a.product_id] = (freshImageCount[a.product_id] || 0) + 1;
+      }
+    });
+
+    // ── Compute priority score for each product ──
+    // Recency 40% + Category performance 30% + Fresh images 20% + Reserved 10%
+    const now = Date.now();
+    const scoredProducts = cooledProducts.map((p: any) => {
+      // Recency score (40%): how long since last post — longer = higher
+      let recencyScore = 40; // max if never posted
+      if (p.last_social_post_at) {
+        const daysSincePost = (now - new Date(p.last_social_post_at).getTime()) / (1000 * 60 * 60 * 24);
+        recencyScore = Math.min(40, (daysSincePost / 30) * 40); // 30+ days = full 40
+      }
+
+      // Category performance score (30%): how well this category performs
+      const catName = p.category?.name || "";
+      const catEng = categoryEngMap[catName] || 0;
+      const categoryScore = maxCatEng > 0 ? (catEng / maxCatEng) * 30 : 15; // default to mid if no data
+
+      // Fresh images score (20%): unused pool images available
+      const freshCount = freshImageCount[p.id] || 0;
+      const imageScore = Math.min(20, freshCount * 5); // each fresh image = 5 pts, cap at 20
+
+      // Reserved (10%): flat bonus — future use for manual boost / seasonal priority
+      const reservedScore = 10;
+
+      const totalScore = recencyScore + categoryScore + imageScore + reservedScore;
+
+      return { ...p, _priority: totalScore, _recency: recencyScore, _catPerf: categoryScore, _imgFresh: imageScore };
+    });
+
+    // Sort by priority descending, take top `count`
+    scoredProducts.sort((a: any, b: any) => b._priority - a._priority);
+    const products = scoredProducts.slice(0, count);
+
+    console.log(`[auto-queue] Top ${products.length} products by priority:`);
+    products.forEach((p: any) => {
+      console.log(`  ${p.name}: score=${p._priority.toFixed(1)} (recency=${p._recency.toFixed(1)} cat=${p._catPerf.toFixed(1)} img=${p._imgFresh.toFixed(1)})`);
+    });
+
+    // ── IMAGE POOL: Load ready assets (must have product_id AND shot_type) ──
+    const productIds = products.map((p: any) => p.id);
+
+    // Only "ready" assets qualify for autopilot — both product_id and shot_type required
+    const { data: poolAssets } = await supabase
+      .from("social_assets")
+      .select("id, product_id, original_image_path, shot_type, used_count, last_used_at, quality_score")
+      .eq("is_active", true)
+      .not("product_id", "is", null)
+      .not("shot_type", "is", null)
       .in("product_id", productIds)
       .order("used_count", { ascending: true })
       .order("last_used_at", { ascending: true, nullsFirst: true });
@@ -276,9 +423,9 @@ Deno.serve(async (req) => {
       poolMap[row.product_id].push(row);
     });
 
-    // Count total tagged assets across all products
+    // Count total ready assets across all products
     const totalTaggedAssets = (poolAssets || []).length;
-    console.log(`[auto-queue] Image Pool: ${totalTaggedAssets} tagged assets across ${Object.keys(poolMap).length} products`);
+    console.log(`[auto-queue] Image Pool: ${totalTaggedAssets} ready assets (product+shot_type) across ${Object.keys(poolMap).length} products`);
 
     // ── IMAGE PIPELINE: Load blacklist + approved AI images + gallery images ──
 
@@ -439,33 +586,119 @@ Deno.serve(async (req) => {
     });
     const globalHashtags = hashtagMap["_global"] || ["#karrykraze"];
 
-    // 4. Get posting times
+    // 4. Get posting times (Sprint 3: data-driven when enough data)
     const postingTimes = getNextPostingTimes(
+      peakHours,
       settings.posting_times || ["10:00", "18:00"],
       new Date(),
-      products.length
+      products.length,
+      useDataDrivenTimes
     );
 
     // 5. Generate posts for each product
     const generatedPosts: any[] = [];
     const tones = settings.caption_tones || ["casual", "urgency"];
+    const recentShotTypes: string[] = []; // Track for diversity guard
+
+    // ── SPRINT 3: Load last 2 queued posts' shot_types for diversity guard ──
+    const { data: recentQueuedPosts } = await supabase
+      .from("social_posts")
+      .select("source_asset_id")
+      .in("status", ["queued", "posted"])
+      .order("scheduled_for", { ascending: false })
+      .limit(2);
+
+    if (recentQueuedPosts?.length) {
+      const recentAssetIds = recentQueuedPosts
+        .map((p: any) => p.source_asset_id)
+        .filter(Boolean);
+      if (recentAssetIds.length) {
+        const { data: recentAssets } = await supabase
+          .from("social_assets")
+          .select("shot_type")
+          .in("id", recentAssetIds);
+        (recentAssets || []).forEach((a: any) => {
+          if (a.shot_type) recentShotTypes.push(a.shot_type);
+        });
+      }
+    }
 
     for (let i = 0; i < products.length; i++) {
       const product = products[i];
       const categoryName = product.category?.name || "item";
-      const tone = pickRandom(tones);
-      const template = pickRandom(CAPTION_TEMPLATES[tone] || CAPTION_TEMPLATES.casual);
       
       // Get hashtags for this category
       const categoryHashtags = hashtagMap[categoryName.toLowerCase()] || globalHashtags;
-      
-      // Ensure #karrykraze is always included
       const hashtags = categoryHashtags.includes("#karrykraze") 
         ? categoryHashtags 
         : ["#karrykraze", ...categoryHashtags];
 
+      // ── SPRINT 3: CAPTION CONFIDENCE CHECK ──
+      // Try up to 3 templates, pick the one with best confidence
+      let bestCaption = "";
+      let bestScore = 0;
+      let bestTone = "";
+      const MAX_CAPTION_ATTEMPTS = 3;
+
+      for (let attempt = 0; attempt < MAX_CAPTION_ATTEMPTS; attempt++) {
+        const tone = pickRandom(tones);
+        const template = pickRandom(CAPTION_TEMPLATES[tone] || CAPTION_TEMPLATES.casual);
+        const candidate = generateCaption(template, {
+          name: product.name,
+          category_name: categoryName,
+          slug: product.slug,
+        }, platformList[0]);
+
+        const score = scoreCaptionConfidence(candidate);
+        if (score > bestScore) {
+          bestScore = score;
+          bestCaption = candidate;
+          bestTone = tone;
+        }
+        // ≥70% is good enough
+        if (score >= 70) break;
+      }
+
+      const captionStatus = bestScore >= 70 ? "accepted" : bestScore >= 50 ? "flagged" : "fallback";
+      if (captionStatus === "fallback") {
+        // Use a safe minimalist template
+        bestCaption = generateCaption(
+          pickRandom(CAPTION_TEMPLATES.minimalist),
+          { name: product.name, category_name: categoryName, slug: product.slug },
+          platformList[0]
+        );
+        bestTone = "minimalist";
+      }
+
+      console.log(`[auto-queue] Caption for "${product.name}": score=${bestScore} status=${captionStatus} tone=${bestTone}`);
+
       // ── Resolve best image via pipeline ──
       const imageResult = resolveImage(product.id, product.catalog_image_url);
+
+      // ── SPRINT 3: CONTENT DIVERSITY GUARD ──
+      // If we're using a pool asset, check shot_type against last 2
+      if (imageResult.poolAssetId && poolMap[product.id]?.length > 1) {
+        const chosenAsset = poolMap[product.id].find((a: any) => a.id === imageResult.poolAssetId);
+        if (chosenAsset?.shot_type && recentShotTypes.length >= 2) {
+          const allSame = recentShotTypes.every((st: string) => st === chosenAsset.shot_type);
+          if (allSame) {
+            // Try to find a different shot_type
+            const alternative = poolMap[product.id].find(
+              (a: any) => a.id !== imageResult.poolAssetId && a.shot_type !== chosenAsset.shot_type
+            );
+            if (alternative) {
+              console.log(`[auto-queue] Diversity guard: swapped ${chosenAsset.shot_type} → ${alternative.shot_type} for "${product.name}"`);
+              imageResult.imageUrl = alternative.original_image_path;
+              imageResult.poolAssetId = alternative.id;
+            }
+          }
+        }
+        // Track this shot_type for next iteration
+        if (chosenAsset?.shot_type) {
+          recentShotTypes.push(chosenAsset.shot_type);
+          if (recentShotTypes.length > 2) recentShotTypes.shift();
+        }
+      }
 
       // Sprint 2 guardrail: log when no pool images for this product
       if (!poolMap[product.id]?.length) {
@@ -474,12 +707,19 @@ Deno.serve(async (req) => {
 
       // Create post for EACH selected platform
       for (const plat of platformList) {
-        // Platform-specific caption (IG gets no URLs, FB keeps them)
-        const caption = generateCaption(template, {
-          name: product.name,
-          category_name: categoryName,
-          slug: product.slug,
-        }, plat);
+        // Re-generate caption for this specific platform if needed (IG vs FB)
+        let platformCaption = bestCaption;
+        if (plat !== platformList[0]) {
+          // Regenerate with platform-specific link handling
+          const tone = bestTone;
+          const toneTemplates = CAPTION_TEMPLATES[tone] || CAPTION_TEMPLATES.casual;
+          const tmpl = pickRandom(toneTemplates);
+          platformCaption = generateCaption(tmpl, {
+            name: product.name,
+            category_name: categoryName,
+            slug: product.slug,
+          }, plat);
+        }
 
         // Check if this should be a carousel post
         const carouselResult = shouldUseCarousel(product.id, plat);
@@ -498,12 +738,90 @@ Deno.serve(async (req) => {
           carousel_urls: carouselResult.carouselUrls,
           category_name: categoryName,
           platform: plat,
-          caption,
+          caption: platformCaption,
+          caption_confidence: bestScore,
+          caption_status: captionStatus,
           hashtags,
           link_url: `https://karrykraze.com/pages/product.html?slug=${product.slug}`,
           scheduled_for: postingTimes[i].toISOString(),
-          tone,
+          tone: bestTone,
         });
+      }
+    }
+
+    // ── SPRINT 3: AUTO-RESURFACE OLD HITS ──
+    // Every 4th post slot: find old posts (30+ days) with above-median engagement
+    if (generatedPosts.length >= 4) {
+      // Get median engagement rate
+      const { data: engagementData } = await supabase
+        .from("social_posts")
+        .select("engagement_rate")
+        .eq("status", "posted")
+        .not("engagement_rate", "is", null)
+        .gt("engagement_rate", 0);
+
+      if (engagementData?.length >= 5) {
+        const rates = engagementData.map((r: any) => r.engagement_rate).sort((a: number, b: number) => a - b);
+        const medianRate = rates[Math.floor(rates.length / 2)];
+
+        // Find old hits: posted 30+ days ago, above-median engagement
+        const resurfaceCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+        const { data: oldHits } = await supabase
+          .from("social_posts")
+          .select("id, product_id, image_url, platform, engagement_rate, caption, hashtags, link_url")
+          .eq("status", "posted")
+          .lt("scheduled_for", resurfaceCutoff)
+          .gt("engagement_rate", medianRate)
+          .order("engagement_rate", { ascending: false })
+          .limit(3);
+
+        if (oldHits?.length) {
+          // Pick one old hit and make it the 4th slot (replace the last generated post)
+          const hit = oldHits[0];
+          const resurfaceProduct = allProducts.find((p: any) => p.id === hit.product_id);
+          
+          if (resurfaceProduct) {
+            // Generate a fresh caption for the resurface
+            const freshTone = pickRandom(tones);
+            const freshTemplate = pickRandom(CAPTION_TEMPLATES[freshTone] || CAPTION_TEMPLATES.casual);
+            const freshCaption = generateCaption(freshTemplate, {
+              name: resurfaceProduct.name,
+              category_name: resurfaceProduct.category?.name || "item",
+              slug: resurfaceProduct.slug,
+            }, platformList[0]);
+
+            const categoryHashtags = hashtagMap[(resurfaceProduct.category?.name || "").toLowerCase()] || globalHashtags;
+            const hashtags = categoryHashtags.includes("#karrykraze") ? categoryHashtags : ["#karrykraze", ...categoryHashtags];
+
+            // Replace the last post slot with the resurfaced post
+            const lastIdx = generatedPosts.length - 1;
+            generatedPosts[lastIdx] = {
+              product_id: hit.product_id,
+              product_name: resurfaceProduct.name,
+              product_slug: resurfaceProduct.slug,
+              catalog_image_url: resurfaceProduct.catalog_image_url,
+              resolved_image_url: hit.image_url,
+              image_source: "resurface",
+              generated_image_id: null,
+              pool_asset_id: null,
+              needs_generation: false,
+              is_carousel: false,
+              carousel_urls: [],
+              category_name: resurfaceProduct.category?.name || "item",
+              platform: hit.platform || platformList[0],
+              caption: freshCaption,
+              caption_confidence: 100,
+              caption_status: "accepted",
+              hashtags,
+              link_url: hit.link_url || `https://karrykraze.com/pages/product.html?slug=${resurfaceProduct.slug}`,
+              scheduled_for: generatedPosts[lastIdx].scheduled_for,
+              tone: freshTone,
+              resurfaced_from: hit.id,
+            };
+
+            console.log(`[auto-queue] Auto-resurface: "${resurfaceProduct.name}" (original engagement: ${hit.engagement_rate}%, median: ${medianRate}%)`);
+          }
+        }
       }
     }
 
@@ -662,7 +980,8 @@ Deno.serve(async (req) => {
           requires_approval: postStatus === "pending_review",
           image_source: post.image_source,
           generated_image_id: finalGeneratedImageId,
-          image_url: resolvedImageUrl, // Always set the image URL on the post
+          image_url: resolvedImageUrl,
+          source_asset_id: post.pool_asset_id || null,
         };
 
         // Add carousel fields if this is a carousel post

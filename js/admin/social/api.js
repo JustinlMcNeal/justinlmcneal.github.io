@@ -100,23 +100,28 @@ export async function fetchAssets({ filter = "all", search = "", productId = nul
 }
 
 export async function uploadAssets(files, productId = null) {
-  const results = [];
+  const succeeded = [];
+  const failed = [];
   for (const file of files) {
-    const ext = file.name.split(".").pop();
-    const path = `assets/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    try {
+      const ext = file.name.split(".").pop();
+      const path = `assets/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
 
-    const storagePath = await uploadImage(file, path);
+      const storagePath = await uploadImage(file, path);
 
-    const asset = await createAsset({
-      original_image_path: storagePath,
-      original_filename: file.name,
-      product_id: productId,
-      used_count: 0
-    });
+      const asset = await createAsset({
+        original_image_path: storagePath,
+        original_filename: file.name,
+        product_id: productId,
+        used_count: 0
+      });
 
-    results.push(asset);
+      succeeded.push(asset);
+    } catch (err) {
+      failed.push({ name: file.name, error: err.message || String(err) });
+    }
   }
-  return results;
+  return { succeeded, failed };
 }
 
 export async function updateAssetTags(assetId, { shot_type, product_id, quality_score }) {
