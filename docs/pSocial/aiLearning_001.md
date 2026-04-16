@@ -1,5 +1,7 @@
 # AI Learning Pipeline — Full Audit
 
+> **System Mode**: 🟢 Observation (Learning Active, No Feature Changes)
+
 > **Created**: 2026-04-16  
 > **Reviewed**: 2026-04-16 (Advisor feedback applied)  
 > **Sprint 3.5 Completed**: 2026-04-16 (commit `32da813`)  
