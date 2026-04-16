@@ -437,7 +437,7 @@ async function initProductPage() {
     const shareBtn = document.getElementById("btnShare");
     const shareLabel = document.getElementById("btnShareLabel");
     if (shareBtn) {
-      const shareUrl = `https://yxdzvzscufkvewecvagq.supabase.co/functions/v1/share-product/${encodeURIComponent(product.slug)}`;
+      const shareUrl = `https://karrykraze.com/s/${encodeURIComponent(product.slug)}`;
       const shareTitle = product.name || "Check this out!";
       const shareText = `${shareTitle} — $${Number(product.price || 0).toFixed(2)}`;
 
