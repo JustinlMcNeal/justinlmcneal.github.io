@@ -279,6 +279,28 @@ Instead of simple "least recently posted" product selection, add a **priority sc
 
 Priority score is calculated at queue-fill time. Top-scoring products get posted first.
 
+#### Product Cooldown
+
+Hard rule on top of priority scoring — prevents overexposure even if a product scores highest:
+
+| Rule | Detail |
+|------|--------|
+| **Minimum gap** | Do not post the same product within 3 days of its last post |
+| **Implementation** | At queue-fill time, exclude products where `last_social_post_at > now() - interval '3 days'` |
+| **Override** | Manual "Post Now" bypasses cooldown (admin intent > automation rules) |
+
+This prevents a high-priority product from dominating the feed even when it has the most fresh images and best category performance.
+
+#### Content Diversity Guard
+
+Keeps the feed visually interesting by preventing repetitive shot types:
+
+| Rule | Detail |
+|------|--------|
+| **No 3 in a row** | The last 3 scheduled posts must not share the same `shot_type` |
+| **Implementation** | Before scheduling, check `shot_type` of the 2 most recent queued posts. If both match the candidate image's `shot_type`, pick the next-best image with a different `shot_type` |
+| **Fallback** | If only one shot type exists for that product, allow it — diversity guard yields to "content exists" |
+
 #### Hybrid AI Captions (Not Full AI Immediately)
 
 AI generates captions but with constraints to keep quality consistent:
@@ -290,6 +312,22 @@ AI generates captions but with constraints to keep quality consistent:
 | **CTA required** | Every caption must end with a call-to-action (shop link, comment prompt, etc.) |
 | **Brand voice** | Fed from existing templates as voice examples (this is why we keep them) |
 | **Fallback** | If AI generation fails or scores below threshold → use template-based caption |
+
+**Caption Confidence Check** (scored before posting):
+
+Every AI-generated caption is scored on 3 axes before it's accepted:
+
+| Check | Pass Condition | Weight |
+|-------|---------------|--------|
+| **Length** | 150–300 chars (sweet spot for engagement) | 30% |
+| **CTA present** | Contains a link, question, or action verb ("shop", "grab", "comment") | 40% |
+| **Structure match** | Follows hook → value → CTA pattern (detected via simple regex/keyword scan) | 30% |
+
+- Score ≥ 70% → accept caption
+- Score 50–69% → accept but flag for review in queue
+- Score < 50% → reject, use template fallback
+
+This is lightweight — no ML needed, just rule-based scoring. Prevents low-quality AI outputs from slipping through.
 
 This prevents weird/off-brand outputs while still leveraging learned patterns. Full AI autonomy comes after enough data validates caption quality.
 
@@ -322,13 +360,17 @@ Daily cron triggers autopilot-fill:
         - recency (40%) + category perf (30%) + fresh images (20%) + reserved (10%)
      b. Sort products by priority score DESC
      c. For each product (highest priority first):
+        - COOLDOWN CHECK: if last_social_post_at < 3 days ago → skip
         - Pick best image by freshness_score from Image Pool
           (factors: days since last use, used_count penalty, quality_score boost)
+        - DIVERSITY CHECK: if last 2 queued posts share this image's shot_type → pick next-best image with different shot_type
         - If no images for this product → skip, try next product
         - AI generates caption (hybrid mode):
           → check data thresholds first (enough samples?)
           → if YES: learned patterns + constrained by length/structure/CTA
           → if NO or AI fails: fallback to template
+        - CAPTION CONFIDENCE: score caption (length + CTA + structure)
+          → ≥ 70%: accept | 50-69%: accept + flag | < 50%: use template
         - Schedule at peak time from posting_time_performance
           → if < 20 data points: use default schedule (9am/12pm/6pm EST)
      d. Every 4th post: check for resurfaceable old hits
