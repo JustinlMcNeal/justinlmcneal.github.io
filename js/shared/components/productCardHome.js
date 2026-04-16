@@ -51,7 +51,7 @@ export function renderHomeCard(product, variants = [], opts = {}) {
     return `
       <button 
         type="button"
-        class="swatch-trigger w-7 h-5 border border-black/20 bg-white inline-block shrink-0 cursor-pointer hover:border-black hover:scale-110 transition-all ${borderClass} ${oos ? "opacity-40 relative after:content-[''] after:absolute after:inset-0 after:border-t after:border-black/50 after:-rotate-45" : ""}" 
+        class="swatch-trigger w-7 h-5 border border-black/20 bg-white inline-block shrink-0 cursor-pointer hover:border-black hover:scale-110 transition-all ${borderClass} ${oos ? "opacity-40 relative overflow-hidden after:content-[''] after:absolute after:top-1/2 after:left-1/2 after:w-[140%] after:h-px after:bg-black/60 after:-translate-x-1/2 after:-translate-y-1/2 after:-rotate-45" : ""}" 
         title="${esc(v.option_value)}" 
         data-variant-img="${esc(vImg)}"
         ${style}>
