@@ -113,7 +113,26 @@
 
 - [ ] **Access admin pages via mobile/app** — ensure admin routes work on phone
 - [x] **Product search bar fix** — the ✕ clear button in the admin product search is broken
-- [ ] **Expense report duplicate prevention** — detect and block duplicate entries on import
+- [x] **Expense report duplicate prevention** — detect and block duplicate entries on import
+
+  <details>
+  <summary><strong>Root Cause & Fix</strong></summary>
+
+  #### Root Cause
+
+  Both `findExistingAmazonExpenses` and `findExistingEbayExpenses` queried the `description` column looking for ref IDs like `amz_sub_2026-02-16`. But those ref IDs are stored in the `notes` column (e.g., `Ref: amz_sub_2026-02-16`), not in `description`. The check always returned empty → every re-import inserted fresh rows without skipping existing ones.
+
+  #### Fixes
+
+  | File | Change |
+  |------|--------|
+  | `js/admin/expenses/importAmazonTxn.js` | `findExistingAmazonExpenses` — search `notes` column instead of `description` |
+  | `js/admin/expenses/importEbayTransactions.js` | `findExistingEbayExpenses` — same fix |
+  | `pages/admin/expenses.html` | Fix overlapping magnifier/clear icons (same issue as products search bar) |
+  | `js/admin/expenses/dom.js` | Wire up custom clear button for `#searchExpense` |
+  | `supabase/migrations/20260416_dedupe_auto_imported_expenses.sql` | Delete existing duplicate auto-imported rows, keeping earliest insert per unique `notes` ref |
+
+  </details>
 - [ ] **Expenses page sorting & filtering** — add sort controls and a spending graph
 
 ---

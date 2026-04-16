@@ -124,11 +124,22 @@ export function getEls() {
 }
 
 export function bindUI(els, handlers) {
-  // Search (debounced)
+  // Search (debounced) + clear button toggle
   let t = null;
   els.searchExpense?.addEventListener("input", () => {
     clearTimeout(t);
+    const hasValue = els.searchExpense.value.length > 0;
+    document.getElementById("expenseSearchClear")?.classList.toggle("hidden", !hasValue);
+    document.getElementById("expenseSearchIcon")?.classList.toggle("hidden", hasValue);
     t = setTimeout(() => handlers.onSearch?.(els.searchExpense.value.trim()), 350);
+  });
+
+  document.getElementById("expenseSearchClear")?.addEventListener("click", () => {
+    if (els.searchExpense) {
+      els.searchExpense.value = "";
+      els.searchExpense.dispatchEvent(new Event("input"));
+      els.searchExpense.focus();
+    }
   });
 
   // Category filter

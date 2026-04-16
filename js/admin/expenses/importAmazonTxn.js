@@ -181,10 +181,11 @@ export async function updateAmazonShippingCosts(shippingLabels) {
 export async function findExistingAmazonExpenses(referenceIds) {
   if (!referenceIds.length) return new Set();
 
-  const orFilters = referenceIds.map(id => `description.ilike.%${id}%`).join(",");
+  // Ref IDs are stored in the `notes` field, e.g. "Ref: amz_sub_2026-02-16"
+  const orFilters = referenceIds.map(id => `notes.ilike.%${id}%`).join(",");
   const { data, error } = await supabase
     .from("expenses")
-    .select("description")
+    .select("notes")
     .or(orFilters);
 
   if (error) throw error;
@@ -192,7 +193,7 @@ export async function findExistingAmazonExpenses(referenceIds) {
   const existing = new Set();
   for (const row of (data || [])) {
     for (const id of referenceIds) {
-      if (row.description && row.description.includes(id)) {
+      if (row.notes && row.notes.includes(id)) {
         existing.add(id);
       }
     }

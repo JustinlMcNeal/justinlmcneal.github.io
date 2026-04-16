@@ -233,10 +233,11 @@ export async function updateOrderShippingCosts(shippingLabels) {
 export async function findExistingEbayExpenses(referenceIds) {
   if (!referenceIds.length) return new Set();
 
-  const orFilters = referenceIds.map(id => `description.ilike.%${id}%`).join(",");
+  // Ref IDs are stored in the `notes` field, e.g. "Ref: ebay_fee_2026-01-10_..."
+  const orFilters = referenceIds.map(id => `notes.ilike.%${id}%`).join(",");
   const { data, error } = await supabase
     .from("expenses")
-    .select("description")
+    .select("notes")
     .or(orFilters);
 
   if (error) throw error;
@@ -244,7 +245,7 @@ export async function findExistingEbayExpenses(referenceIds) {
   const existing = new Set();
   for (const row of (data || [])) {
     for (const id of referenceIds) {
-      if (row.description && row.description.includes(id)) {
+      if (row.notes && row.notes.includes(id)) {
         existing.add(id);
       }
     }
