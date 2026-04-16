@@ -200,20 +200,28 @@
 
 ---
 
-### Cleanup (do first)
-- [ ] Remove unused **Assets** section from the social media page
-- [ ] Remove **Caption Assets** section — unused
-- [ ] Remove **AI image generation** from the social media page
+## Social Media — Full Revamp
 
-### Manual Posting
-- [ ] **Image selection per product** — when creating a new post, allow selecting which product images to include
-- [ ] **Manual upload** — allow uploading custom images to attach to a post (not just product images)
+> **Detailed plan**: [`docs/pSocial/pSocial_001.md`](pSocial/pSocial_001.md)
 
-### AI Automation (future)
-- [ ] **Auto-queue system** — AI picks which product to post next based on posting history; selects the best image; auto-generates caption and pinned comment
-- [ ] **Data-driven scheduling** — posting times and hashtags chosen based on historical performance analytics
-- [ ] **Per-post analytics tracking** — track engagement per post to surface what times, tags, and formats perform best
-- [ ] **Carousel auto-posting** — carousels included in the queue with a lower weight than single-image posts (single images post more frequently)
+### Sprint 1: Fix Broken + Remove Dead Code
+- [ ] **Fix post analytics showing 0** — debug insights sync, verify `instagram_media_id` is saved on publish, fix edge function write-back
+- [ ] **Fix autopilot cron not running** — verify/recreate pg_cron job, fix `variation_id NOT NULL` constraint, test `autopilot-fill` function
+- [ ] **Remove Templates tab** — AI generates captions from learned patterns, static templates are limiting
+- [ ] **Remove AI Images tab** — images generated externally via GPT chat, uploaded to Image Pool instead
+
+### Sprint 2: UI Restructure + Image Pool
+- [ ] **Remove Queue tab** — merge into Calendar as a list-view toggle (📅 Grid | 📋 List)
+- [ ] **Revamp Assets → Image Pool** — primary upload destination for curated images; show unused first; add used/unused filter
+- [ ] **Add image tagging system** — tag images with shot type (close-up, model, lifestyle, etc.), mood, and platform preference for smart carousel assembly
+
+### Sprint 3: Autopilot Revamp
+- [ ] **Make autopilot fully data-driven** — remove manual posting time/caption tone selection; AI reads from `posting_time_performance` and `caption_element_performance`
+- [ ] **Automate resurface old hits** — autopilot auto-reposts top content from 30+ days ago at ~1:4 ratio with fresh AI captions
+
+### Sprint 4: Carousel + Analytics Polish
+- [ ] **Smart carousel assembly** — AI auto-picks 3-5 images with diverse shot types from tagged Image Pool
+- [ ] **Analytics improvements** — fix hardcoded scores in learning engine, add "What's Working" summary card, feed image tags into learning loop
 
 ---
 
