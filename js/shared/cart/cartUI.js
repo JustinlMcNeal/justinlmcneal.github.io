@@ -92,6 +92,18 @@ export function renderCartItems(items = [], totals = {}, els = {}) {
     el.textContent = String(totalCount);
   });
 
+  // Animate desktop cart button on count change
+  const cartBtn = document.querySelector("[data-kk-open='cart']");
+  if (cartBtn) {
+    cartBtn.classList.remove("kk-cart-animate");
+    // Force reflow so re-adding the class restarts the animation
+    void cartBtn.offsetWidth;
+    cartBtn.classList.add("kk-cart-animate");
+    cartBtn.addEventListener("animationend", () => {
+      cartBtn.classList.remove("kk-cart-animate");
+    }, { once: true });
+  }
+
   // Totals text
   if (els.subtotalEl) els.subtotalEl.textContent = money(subtotal);
   if (els.totalEl) els.totalEl.textContent = money(total);

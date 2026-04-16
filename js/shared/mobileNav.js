@@ -121,6 +121,17 @@ function updateMobileCartCount() {
   
   countEl.textContent = String(total);
   countEl.style.display = total > 0 ? "flex" : "none";
+
+  // Animate mobile cart button on count change
+  const cartBtn = document.getElementById("kkMobileCartBtn");
+  if (cartBtn) {
+    cartBtn.classList.remove("kk-cart-animate");
+    void cartBtn.offsetWidth;
+    cartBtn.classList.add("kk-cart-animate");
+    cartBtn.addEventListener("animationend", () => {
+      cartBtn.classList.remove("kk-cart-animate");
+    }, { once: true });
+  }
 }
 
 // Re-check on resize
