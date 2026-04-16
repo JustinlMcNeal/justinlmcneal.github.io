@@ -467,7 +467,18 @@ const els = {
   poolUploadProgress: $("poolUploadProgress"),
   poolUploadStatus: $("poolUploadStatus"),
   btnPoolUpload: $("btnPoolUpload"),
+  btnBrowseCatalog: $("btnBrowseCatalog"),
   poolFilterBtns: $("poolFilterBtns"),
+
+  // Catalog Browser modal
+  catalogBrowseModal: $("catalogBrowseModal"),
+  catalogBrowseClose: $("catalogBrowseClose"),
+  catalogSearchInput: $("catalogSearchInput"),
+  catalogCategoryFilter: $("catalogCategoryFilter"),
+  catalogBrowseGrid: $("catalogBrowseGrid"),
+  catalogSelectedCount: $("catalogSelectedCount"),
+  catalogBrowseCancel: $("catalogBrowseCancel"),
+  catalogBrowseImport: $("catalogBrowseImport"),
 
   // Tagging modal
   tagModal: $("tagModal"),
@@ -1036,6 +1047,211 @@ function setupImagePool() {
 
   // Setup tagging modal
   setupTagModal();
+
+  // Browse Catalog button
+  els.btnBrowseCatalog?.addEventListener("click", openCatalogBrowser);
+}
+
+// ── Catalog Browser ──
+const catalogState = { selected: new Set(), allImages: [] };
+
+async function openCatalogBrowser() {
+  const modal = els.catalogBrowseModal;
+  if (!modal) return;
+  modal.style.display = "flex";
+  modal.classList.remove("hidden");
+  catalogState.selected.clear();
+  updateCatalogSelectedCount();
+
+  // Populate category filter
+  const cats = state.categories || [];
+  els.catalogCategoryFilter.innerHTML = '<option value="">All Categories</option>' +
+    cats.map(c => `<option value="${c.id}">${c.name}</option>`).join("");
+
+  // Load all products with their images
+  await loadCatalogImages();
+
+  // Wire events (idempotent — remove first)
+  els.catalogBrowseClose.onclick = closeCatalogBrowser;
+  els.catalogBrowseCancel.onclick = closeCatalogBrowser;
+  els.catalogBrowseImport.onclick = importSelectedCatalogImages;
+
+  let searchTimer;
+  els.catalogSearchInput.oninput = () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(renderCatalogGrid, 300);
+  };
+  els.catalogCategoryFilter.onchange = renderCatalogGrid;
+}
+
+function closeCatalogBrowser() {
+  els.catalogBrowseModal.style.display = "none";
+  els.catalogBrowseModal.classList.add("hidden");
+}
+
+async function loadCatalogImages() {
+  els.catalogBrowseGrid.innerHTML = '<p class="col-span-full text-center text-gray-400 py-8">Loading products...</p>';
+
+  // Fetch products
+  const products = state.products?.length ? state.products : await fetchProducts();
+  if (!state.products?.length) state.products = products;
+
+  // Fetch gallery images for all products
+  const sb = getSupabaseClient();
+  const { data: gallery } = await sb
+    .from("product_gallery_images")
+    .select("product_id, url, position")
+    .eq("is_active", true)
+    .order("position", { ascending: true });
+
+  // Check which URLs are already in the pool
+  const { data: existingAssets } = await sb
+    .from("social_assets")
+    .select("original_image_path")
+    .eq("is_active", true);
+  const existingUrls = new Set((existingAssets || []).map(a => a.original_image_path));
+
+  // Build flat image list: catalog image + gallery images per product
+  const images = [];
+  for (const p of products) {
+    if (!p.is_active) continue;
+    const catName = (state.categories || []).find(c => c.id === p.category_id)?.name || "";
+
+    // Catalog image
+    if (p.catalog_image_url) {
+      images.push({
+        url: p.catalog_image_url,
+        product_id: p.id,
+        product_name: p.name,
+        category_id: p.category_id,
+        category_name: catName,
+        type: "catalog",
+        already_in_pool: existingUrls.has(p.catalog_image_url),
+      });
+    }
+
+    // Gallery images
+    const pGallery = (gallery || []).filter(g => g.product_id === p.id);
+    for (const g of pGallery) {
+      if (g.url === p.catalog_image_url) continue; // skip duplicate
+      images.push({
+        url: g.url,
+        product_id: p.id,
+        product_name: p.name,
+        category_id: p.category_id,
+        category_name: catName,
+        type: "gallery",
+        already_in_pool: existingUrls.has(g.url),
+      });
+    }
+  }
+
+  catalogState.allImages = images;
+  renderCatalogGrid();
+}
+
+function renderCatalogGrid() {
+  const search = (els.catalogSearchInput?.value || "").toLowerCase().trim();
+  const catFilter = els.catalogCategoryFilter?.value || "";
+
+  let filtered = catalogState.allImages;
+  if (search) {
+    filtered = filtered.filter(img => img.product_name.toLowerCase().includes(search));
+  }
+  if (catFilter) {
+    filtered = filtered.filter(img => img.category_id === catFilter);
+  }
+
+  if (!filtered.length) {
+    els.catalogBrowseGrid.innerHTML = '<p class="col-span-full text-center text-gray-400 py-8">No images found</p>';
+    return;
+  }
+
+  els.catalogBrowseGrid.innerHTML = filtered.map(img => {
+    const isSelected = catalogState.selected.has(img.url);
+    const inPool = img.already_in_pool;
+    return `
+      <div class="catalog-img-card relative rounded-lg overflow-hidden border-2 cursor-pointer transition-all
+        ${inPool ? "opacity-50 border-gray-200" : isSelected ? "border-indigo-500 ring-2 ring-indigo-200" : "border-gray-200 hover:border-gray-400"}"
+        data-url="${img.url}" data-product-id="${img.product_id}" data-product-name="${img.product_name}"
+        ${inPool ? 'title="Already in Image Pool"' : ""}>
+        <img src="${img.url}" class="w-full aspect-square object-cover" loading="lazy"
+          onerror="this.src='/imgs/placeholder.jpg'">
+        <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 p-2">
+          <p class="text-white text-xs font-medium truncate">${img.product_name}</p>
+          <p class="text-white/60 text-[10px]">${img.type}${img.category_name ? " · " + img.category_name : ""}</p>
+        </div>
+        ${inPool ? '<div class="absolute top-2 right-2 bg-green-500 text-white text-[10px] px-1.5 py-0.5 rounded font-bold">IN POOL</div>' : ""}
+        ${isSelected ? '<div class="absolute top-2 left-2 w-6 h-6 bg-indigo-500 rounded-full flex items-center justify-center text-white text-xs font-bold">✓</div>' : ""}
+      </div>`;
+  }).join("");
+
+  // Click handler for selecting images
+  els.catalogBrowseGrid.onclick = (e) => {
+    const card = e.target.closest(".catalog-img-card");
+    if (!card) return;
+    const url = card.dataset.url;
+    // Don't allow selecting images already in pool
+    if (catalogState.allImages.find(i => i.url === url)?.already_in_pool) return;
+
+    if (catalogState.selected.has(url)) {
+      catalogState.selected.delete(url);
+    } else {
+      catalogState.selected.add(url);
+    }
+    renderCatalogGrid();
+    updateCatalogSelectedCount();
+  };
+}
+
+function updateCatalogSelectedCount() {
+  const count = catalogState.selected.size;
+  els.catalogSelectedCount.textContent = `${count} image${count !== 1 ? "s" : ""} selected`;
+  els.catalogBrowseImport.disabled = count === 0;
+}
+
+async function importSelectedCatalogImages() {
+  const urls = Array.from(catalogState.selected);
+  if (!urls.length) return;
+
+  els.catalogBrowseImport.disabled = true;
+  els.catalogBrowseImport.textContent = "Importing...";
+
+  const succeeded = [];
+  const failed = [];
+
+  for (const url of urls) {
+    const imgData = catalogState.allImages.find(i => i.url === url);
+    if (!imgData) continue;
+
+    try {
+      const asset = await createAsset({
+        original_image_path: url,
+        original_filename: url.split("/").pop() || "catalog-image.jpg",
+        product_id: imgData.product_id,
+        product_url: `https://karrykraze.com/pages/product.html?slug=${(state.products || []).find(p => p.id === imgData.product_id)?.slug || ""}`,
+        used_count: 0,
+        is_active: true,
+      });
+      succeeded.push(asset);
+    } catch (err) {
+      failed.push({ name: imgData.product_name, error: err.message || String(err) });
+    }
+  }
+
+  closeCatalogBrowser();
+  els.catalogBrowseImport.textContent = "Import Selected";
+  els.catalogBrowseImport.disabled = false;
+
+  if (succeeded.length) {
+    showToast(`${succeeded.length} image${succeeded.length > 1 ? "s" : ""} added to pool`, "success");
+    await loadAssets();
+    // Open tagging modal for first imported image
+    openTagModal(succeeded[0]);
+  }
+  if (failed.length) {
+    showToast(`${failed.length} failed: ${failed.map(f => f.name).join(", ")}`, "error");
+  }
 }
 
 async function handlePoolUpload(files) {
