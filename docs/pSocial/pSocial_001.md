@@ -10,10 +10,24 @@
 
 The social media page has a solid foundation — Instagram/Facebook posting, a learning engine, analytics, edge functions, and a cron-driven autopilot. But it's grown organically and has redundant sections, broken features, and manual steps that should be automated. The core vision is:
 
-**A fully data-driven, self-improving auto-posting system** where the admin only needs to:
+**An autonomous content engine** — not just a posting tool, scheduler, or dashboard. A self-optimizing system where **content is the input, not decisions**.
+
+The admin's role shifts from scheduler/caption writer/post planner → **content curator**.
+
+The admin only needs to:
 1. Upload curated images (generated externally via GPT chat)
-2. Optionally tag images with metadata (close-up, model shot, lifestyle, etc.)
+2. Tag images with shot type + product link
 3. Everything else — scheduling, captions, hashtags, carousel assembly, reposting — is automated and learns from past performance.
+
+### Design Principles
+
+| Principle | Rule |
+|-----------|------|
+| **Data before automation** | Fix analytics + insights sync BEFORE building data-driven autopilot |
+| **Hybrid AI first** | AI generates captions but constrained by length, structure, and CTA rules — prevent weird outputs early |
+| **Simple tagging v1** | Start with only `shot_type` + `product_id` — mood/platform tags come in v2 |
+| **Safety nets** | Hide templates, don't delete — keep as internal fallback + A/B baseline |
+| **Priority scoring** | Products get a priority score (recency, category performance, inventory) — autopilot posts smartest picks first |
 
 ---
 
@@ -23,16 +37,16 @@ The social media page has a solid foundation — Instagram/Facebook posting, a l
 |------|---------|--------|
 | **Image source** | AI generates on-site (inconsistent) + product photos | Admin uploads curated images from GPT chat into an image pool |
 | **Posting schedule** | Autopilot broken (last run 2026-01-11) | Autopilot reliably runs daily via cron, fills queue based on data |
-| **Caption generation** | Template-based + AI, but manual tone selection | Fully AI-driven using learned patterns — no manual tone picking |
+| **Caption generation** | Template-based + AI, but manual tone selection | Hybrid AI — generates from learned patterns, constrained by length/structure/CTA rules |
 | **Posting times** | Manual selection from dropdown | Data-driven from `posting_time_performance` table |
 | **Queue tab** | Separate redundant page | Merged into Calendar as a list-view toggle |
 | **Assets tab** | Shows used images, allows re-posting | Becomes the **Image Pool** — the primary place to manage uploadable content |
-| **Templates tab** | Manual template CRUD | Removed — AI generates from learned patterns directly |
+| **Templates tab** | Manual template CRUD | Hidden from UI — kept as internal fallback + A/B baseline |
 | **AI Images tab** | On-site generation pipeline | Removed — replaced by manual upload workflow |
 | **Carousel building** | Manual image selection | AI auto-assembles carousels using image tags (close-up + model + wide, etc.) |
 | **Analytics on posts** | All showing 0 | Fixed — insights sync actually pulls data |
 | **Resurface Old Hits** | Manual trigger | Automated as part of autopilot cycle |
-| **Image tagging** | None | New: tag images with shot type, mood, etc. for smart carousel assembly |
+| **Image tagging** | None | New v1: `shot_type` + `product_id` only (mood/platform tags deferred to v2) |
 
 ---
 
@@ -43,7 +57,7 @@ The social media page has a solid foundation — Instagram/Facebook posting, a l
 | 1 | 📅 **Calendar** | **Keep + Enhance** | Add list/queue view toggle; fix post analytics showing 0 |
 | 2 | 📋 Queue | **Remove** | Merge into Calendar as a view mode |
 | 3 | 🖼️ **Image Pool** (was Assets) | **Revamp** | Primary upload destination; add image tagging; show unused images first |
-| 4 | ✏️ Templates | **Remove** | AI generates from learned data, templates are limiting |
+| 4 | ✏️ Templates | **Hide** | Remove from UI, keep DB table + edge function fallbacks as safety net |
 | 5 | 📌 Boards | **Keep** | Leave as-is until Pinterest goes production |
 | 6 | ⚡ **Autopilot** (was Auto-Queue) | **Revamp** | Fix autopilot, make everything data-driven, automate resurface |
 | 7 | 📊 **Analytics** | **Keep + Fix** | Fix insights sync, fix 0-value analytics |
@@ -111,11 +125,14 @@ The social media page has a solid foundation — Instagram/Facebook posting, a l
   - Grid = current monthly calendar
   - List = chronological list of upcoming scheduled posts (basically what Queue was, but inside Calendar)
 
-### 2B. Remove Templates Tab
-- Delete Templates tab HTML
-- Remove template CRUD JS (`renderTemplates()`, save/delete template handlers)
-- Keep the `social_caption_templates` DB table for now — AI caption generation already uses past data + patterns from `post_learning_patterns`, not static templates
-- The `auto-queue` edge function has 50+ hardcoded fallback templates — leave those as a safety net but prioritize AI-generated captions
+### 2B. Hide Templates Tab (Don't Delete)
+- Remove Templates tab from the visible tab bar in `social.html`
+- Keep all template CRUD JS and DB table intact — acts as:
+  - **Fallback safety net**: if AI caption generation fails or produces garbage, system falls back to templates
+  - **A/B baseline**: compare AI-generated captions against template-based ones in analytics
+  - **Debugging reference**: useful for testing caption quality regression
+- The `auto-queue` edge function's 50+ hardcoded templates remain as the ultimate fallback
+- Caption generation priority: learned patterns → AI generation → template fallback
 
 ### 2C. Remove AI Images Tab
 - Delete AI Images tab HTML (review queue, approved grid, blacklist, generation settings)
@@ -193,6 +210,33 @@ The autopilot system should draw from the Image Pool:
 - **Remove**: manual posting time selection — autopilot reads from `posting_time_performance.is_peak_time`
 - **Remove**: manual caption tone selection — AI picks based on `caption_element_performance` data
 
+#### Product Priority Scoring
+
+Instead of simple "least recently posted" product selection, add a **priority score** per product:
+
+| Factor | Weight | Source |
+|--------|--------|--------|
+| **Recency** | 40% | `products.last_social_post_at` — longer ago = higher score |
+| **Category performance** | 30% | `post_learning_patterns` — categories with higher avg engagement score higher |
+| **Available fresh images** | 20% | `social_assets` — products with more unused images in the pool score higher |
+| **Inventory** (future) | 10% | Reserved for when stock tracking is integrated |
+
+Priority score is calculated at queue-fill time. Top-scoring products get posted first.
+
+#### Hybrid AI Captions (Not Full AI Immediately)
+
+AI generates captions but with constraints to keep quality consistent:
+
+| Constraint | Rule |
+|------------|------|
+| **Max length** | 2200 chars (IG limit), but target 150-300 for engagement |
+| **Structure** | Hook line → value prop → CTA → hashtags |
+| **CTA required** | Every caption must end with a call-to-action (shop link, comment prompt, etc.) |
+| **Brand voice** | Fed from existing templates as voice examples (this is why we keep them) |
+| **Fallback** | If AI generation fails or scores below threshold → use template-based caption |
+
+This prevents weird/off-brand outputs while still leveraging learned patterns. Full AI autonomy comes after enough data validates caption quality.
+
 #### Manual Queue Generation (simplify)
 - Keep as a "Generate Now" button for when you want to force-fill the queue
 - Remove the manual posting time / caption style dropdowns
@@ -213,13 +257,17 @@ Daily cron triggers autopilot-fill:
   1. Check how many posts are queued for the next N days
   2. Calculate deficit (target - current)
   3. If deficit > 0:
-     a. Select products to post (least recently posted first)
-     b. For each product:
+     a. Calculate priority score for all products
+        - recency (40%) + category perf (30%) + fresh images (20%) + reserved (10%)
+     b. Sort products by priority score DESC
+     c. For each product (highest priority first):
         - Pick best unused image from Image Pool (matching product_id)
         - If no unused images, use least-recently-used
-        - AI generates caption using learned patterns from post_learning_patterns
+        - AI generates caption (hybrid mode):
+          → learned patterns + constrained by length/structure/CTA rules
+          → if AI fails or scores < threshold → fallback to template
         - Schedule at peak time from posting_time_performance
-     c. Every 4th post: check for resurfaceable old hits
+     d. Every 4th post: check for resurfaceable old hits
         - If found, insert a repost instead of a new post
   4. Log run result to social_settings or a runs table
 ```
@@ -278,25 +326,56 @@ Daily cron triggers autopilot-fill:
 
 ## Implementation Order
 
+> **Key insight**: Analytics must be fixed BEFORE autopilot revamp. Autopilot decisions depend on data — bad data = bad automation.
+
 | Step | Task | Effort | Priority |
 |------|------|--------|----------|
-| 1 | Fix post analytics showing 0 (insights sync) | Medium | 🔴 High |
-| 2 | Fix autopilot cron not running | Medium | 🔴 High |
-| 3 | Remove Templates tab | Small | 🟢 Quick win |
-| 4 | Remove AI Images tab + `imagePipeline.js` | Small | 🟢 Quick win |
+| 1 | Fix post analytics / insights sync (data comes first) | Medium | 🔴 Critical |
+| 2 | Fix autopilot cron not running | Medium | 🔴 Critical |
+| 3 | Remove AI Images tab + `imagePipeline.js` | Small | 🟢 Quick win |
+| 4 | Hide Templates tab (remove from UI, keep internals) | Small | 🟢 Quick win |
 | 5 | Remove Queue tab, add list view to Calendar | Medium | 🟡 Medium |
 | 6 | Revamp Assets → Image Pool (upload + new UI) | Medium | 🟡 Medium |
-| 7 | Add image tagging system | Medium | 🟡 Medium |
-| 8 | Make autopilot data-driven (remove manual picks) | Large | 🟡 Medium |
-| 9 | Automate resurface old hits | Medium | 🟡 Medium |
-| 10 | Smart carousel assembly from tags | Large | 🟠 Lower |
-| 11 | Analytics improvements + learning loop fixes | Medium | 🟠 Lower |
+| 7 | Add image tagging v1 (`shot_type` + `product_id`) | Medium | 🟡 Medium |
+| 8 | Add product priority scoring to autopilot | Medium | 🟡 Medium |
+| 9 | Make autopilot data-driven + hybrid AI captions | Large | 🟡 Medium |
+| 10 | Automate resurface old hits | Medium | 🟡 Medium |
+| 11 | Smart carousel assembly from tags | Large | 🟠 Lower |
+| 12 | Analytics polish + learning loop fixes | Medium | 🟠 Lower |
 
-**Suggested sprint grouping**:
-- **Sprint 1** (Steps 1-4): Fix broken things + remove dead code — gets the page functional and clean
-- **Sprint 2** (Steps 5-7): UI restructure + Image Pool — new upload workflow
-- **Sprint 3** (Steps 8-9): Autopilot revamp — fully automated posting
-- **Sprint 4** (Steps 10-11): Smart carousels + analytics polish
+**Sprint grouping**:
+
+### Sprint 1 — Fix + Clean
+> Get real data flowing, remove dead weight
+
+- Fix insights sync (CRITICAL — everything downstream depends on real data)
+- Fix autopilot cron
+- Remove AI Images tab
+- Hide Templates tab
+
+### Sprint 2 — Image Pool
+> New content input pipeline
+
+- Upload system (drag & drop, multi-file)
+- Basic tagging v1 (`shot_type` + `product_id` only)
+- Unused-first sorting + used/unused filter
+
+### Sprint 3 — Autopilot Upgrade
+> Data-driven automated posting
+
+- Product priority scoring
+- Use Image Pool as image source
+- Use `posting_time_performance` for scheduling
+- Hybrid AI captions (constrained generation + template fallback)
+- Automate resurface old hits
+
+### Sprint 4 — Smart Features
+> Advanced automation + polish
+
+- Smart carousel assembly from shot_type tags
+- Learning loop improvements (real visual scores, engagement velocity)
+- "What's Working" analytics summary card
+- v2 tagging (mood, platform preference) if data validates v1
 
 ---
 
@@ -306,6 +385,12 @@ Daily cron triggers autopilot-fill:
 | File | Reason |
 |------|--------|
 | `js/admin/social/imagePipeline.js` | AI Images tab removed |
+
+### Hide (Keep Code, Remove UI)
+| File | Change |
+|------|--------|
+| Templates tab HTML in `social.html` | Remove tab button + panel from visible UI |
+| Template CRUD JS in `index.js` | Keep functions, just don't render the tab — templates used internally as fallback |
 
 ### Modify Heavily
 | File | Changes |
@@ -318,7 +403,7 @@ Daily cron triggers autopilot-fill:
 | File | Changes |
 |------|---------|
 | `js/admin/social/calendar.js` | Add list/queue view mode |
-| `js/admin/social/captions.js` | Remove template dependency, lean fully on learned patterns |
+| `js/admin/social/captions.js` | Add hybrid generation mode: AI + constraints + template fallback |
 | `js/admin/social/postLearning.js` | Fix hardcoded scores, add image tag analysis |
 | `css/pages/admin/social.css` | New styles for Image Pool grid, upload zone, tag badges |
 
@@ -326,17 +411,17 @@ Daily cron triggers autopilot-fill:
 | Function | Change |
 |----------|--------|
 | `instagram-insights` | Debug & fix data write-back |
-| `autopilot-fill` | Fix variation_id constraint, add image pool selection, add auto-resurface logic |
+| `autopilot-fill` | Fix variation_id constraint, add image pool selection, add product priority scoring, add auto-resurface logic |
 | `process-scheduled-posts` | Remove excessive debug logging |
-| `auto-queue` | Use data-driven times/tones instead of manual params |
+| `auto-queue` | Use data-driven times, hybrid AI captions, product priority scoring |
 | `generate-social-image` | Leave deployed but unused (can delete later) |
 
 ### Database
 | Change | Details |
 |--------|---------|
-| Add columns to `social_assets` | `tags JSONB DEFAULT '[]'`, `used_count INT DEFAULT 0` |
-| Optional: add `product_id` to `social_assets` | If not already linked via `social_variations` |
-| Social settings | Update autopilot config schema for auto-resurface toggle |
+| Add columns to `social_assets` (v1) | `shot_type TEXT`, `product_id UUID REFERENCES products(id)`, `used_count INT DEFAULT 0` |
+| Add columns to `social_assets` (v2) | `tags JSONB DEFAULT '[]'` for mood/platform/future tags |
+| Social settings | Update autopilot config schema for auto-resurface toggle, caption constraints |
 
 ---
 

@@ -202,26 +202,29 @@
 
 ## Social Media — Full Revamp
 
-> **Detailed plan**: [`docs/pSocial/pSocial_001.md`](pSocial/pSocial_001.md)
+> **Detailed plan**: [`docs/pSocial/pSocial_001.md`](pSocial/pSocial_001.md)  
+> **Core rule**: Fix analytics BEFORE building data-driven autopilot — bad data = bad automation
 
-### Sprint 1: Fix Broken + Remove Dead Code
-- [ ] **Fix post analytics showing 0** — debug insights sync, verify `instagram_media_id` is saved on publish, fix edge function write-back
+### Sprint 1: Fix + Clean
+- [ ] **Fix post analytics / insights sync** — CRITICAL — debug insights sync, verify `instagram_media_id` saved on publish, fix edge function write-back (everything downstream depends on real data)
 - [ ] **Fix autopilot cron not running** — verify/recreate pg_cron job, fix `variation_id NOT NULL` constraint, test `autopilot-fill` function
-- [ ] **Remove Templates tab** — AI generates captions from learned patterns, static templates are limiting
-- [ ] **Remove AI Images tab** — images generated externally via GPT chat, uploaded to Image Pool instead
+- [ ] **Remove AI Images tab** — images generated externally via GPT chat, uploaded to Image Pool instead; delete `imagePipeline.js`
+- [ ] **Hide Templates tab** — remove from UI but keep DB table + JS as internal fallback + A/B baseline (don't delete)
 
-### Sprint 2: UI Restructure + Image Pool
+### Sprint 2: Image Pool
 - [ ] **Remove Queue tab** — merge into Calendar as a list-view toggle (📅 Grid | 📋 List)
-- [ ] **Revamp Assets → Image Pool** — primary upload destination for curated images; show unused first; add used/unused filter
-- [ ] **Add image tagging system** — tag images with shot type (close-up, model, lifestyle, etc.), mood, and platform preference for smart carousel assembly
+- [ ] **Revamp Assets → Image Pool** — primary upload destination for curated images; drag & drop; show unused first; used/unused filter
+- [ ] **Add image tagging v1** — `shot_type` + `product_id` only (mood/platform tags deferred to v2 after data validates)
 
-### Sprint 3: Autopilot Revamp
-- [ ] **Make autopilot fully data-driven** — remove manual posting time/caption tone selection; AI reads from `posting_time_performance` and `caption_element_performance`
+### Sprint 3: Autopilot Upgrade
+- [ ] **Add product priority scoring** — recency (40%) + category performance (30%) + fresh images (20%) + reserved (10%)
+- [ ] **Make autopilot data-driven** — use Image Pool, `posting_time_performance` for scheduling, hybrid AI captions (constrained by length/structure/CTA + template fallback)
 - [ ] **Automate resurface old hits** — autopilot auto-reposts top content from 30+ days ago at ~1:4 ratio with fresh AI captions
 
-### Sprint 4: Carousel + Analytics Polish
-- [ ] **Smart carousel assembly** — AI auto-picks 3-5 images with diverse shot types from tagged Image Pool
-- [ ] **Analytics improvements** — fix hardcoded scores in learning engine, add "What's Working" summary card, feed image tags into learning loop
+### Sprint 4: Smart Features
+- [ ] **Smart carousel assembly** — AI auto-picks 3-5 images with diverse `shot_type` tags from Image Pool
+- [ ] **Analytics polish** — fix hardcoded scores in learning engine, real engagement velocity, "What's Working" summary card
+- [ ] **v2 tagging** — add mood + platform preference tags if data validates v1 approach
 
 ---
 
