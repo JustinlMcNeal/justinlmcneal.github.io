@@ -39,7 +39,8 @@
       button, [role="button"] { min-height: 44px; }
       input, select, textarea { font-size: 16px !important; }
     }
-  </style>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 </head>
 
 <body class="kk-page kk-admin bg-gray-50 min-h-screen">
@@ -142,9 +143,9 @@
 
     <!-- Search & Filters -->
     <section class="bg-white rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4 mb-4 sm:mb-6">
-      <div class="flex flex-col sm:flex-row gap-3 sm:gap-4 items-stretch sm:items-end">
+      <div class="flex flex-col sm:flex-row gap-3 sm:gap-4 items-stretch sm:items-end flex-wrap">
         <!-- Search -->
-        <div class="flex-1">
+        <div class="flex-1 min-w-[180px]">
           <label for="searchExpense"
                  class="block text-[9px] sm:text-[10px] font-black uppercase tracking-[.18em] mb-1 sm:mb-2 text-gray-500">
             Search
@@ -196,6 +197,37 @@
           </select>
         </div>
 
+        <!-- Vendor Filter -->
+        <div class="w-full sm:w-44">
+          <label for="filterVendor"
+                 class="block text-[9px] sm:text-[10px] font-black uppercase tracking-[.18em] mb-1 sm:mb-2 text-gray-500">
+            Vendor
+          </label>
+          <select id="filterVendor" class="w-full border-4 border-black px-3 py-2 sm:py-3 text-sm outline-none bg-white focus:border-kkpink transition-colors">
+            <option value="">All Vendors</option>
+          </select>
+        </div>
+
+        <!-- Date From -->
+        <div class="w-full sm:w-40">
+          <label for="filterDateFrom"
+                 class="block text-[9px] sm:text-[10px] font-black uppercase tracking-[.18em] mb-1 sm:mb-2 text-gray-500">
+            From
+          </label>
+          <input id="filterDateFrom" type="date"
+            class="w-full border-4 border-black px-3 py-2 sm:py-3 text-sm outline-none bg-white focus:border-kkpink transition-colors" />
+        </div>
+
+        <!-- Date To -->
+        <div class="w-full sm:w-40">
+          <label for="filterDateTo"
+                 class="block text-[9px] sm:text-[10px] font-black uppercase tracking-[.18em] mb-1 sm:mb-2 text-gray-500">
+            To
+          </label>
+          <input id="filterDateTo" type="date"
+            class="w-full border-4 border-black px-3 py-2 sm:py-3 text-sm outline-none bg-white focus:border-kkpink transition-colors" />
+        </div>
+
         <!-- Sort -->
         <div class="w-full sm:w-44">
           <label for="sortBy"
@@ -219,6 +251,28 @@
         </div>
       </div>
       <div id="status" class="text-xs text-gray-400 mt-2"></div>
+    </section>
+
+    <!-- Charts Panel -->
+    <section id="chartsPanel" class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
+      <!-- Spending by Category (doughnut) -->
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6">
+        <h2 class="text-[10px] font-black uppercase tracking-[.18em] text-gray-500 mb-3">Spending by Category</h2>
+        <div class="relative" style="max-height:320px;">
+          <canvas id="chartCategory"></canvas>
+        </div>
+      </div>
+      <!-- Monthly Spending (bar) -->
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6">
+        <h2 class="text-[10px] font-black uppercase tracking-[.18em] text-gray-500 mb-3">Monthly Spending</h2>
+        <div class="relative" style="max-height:320px;">
+          <canvas id="chartMonthly"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- Platform Breakdown KPI Row -->
+    <section id="platformKpis" class="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6">
     </section>
 
     <!-- Table -->

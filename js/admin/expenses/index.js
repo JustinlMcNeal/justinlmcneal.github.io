@@ -5,8 +5,9 @@ import { initAdminNav } from "/js/shared/adminNav.js";
 import { initFooter } from "/js/shared/footer.js";
 
 import { initExpensesState } from "./state.js";
-import { getExpensesList, upsertExpense, deleteExpense, getExpenseKpis } from "./api.js";
+import { getExpensesList, upsertExpense, deleteExpense, getExpenseKpis, getDistinctVendors } from "./api.js";
 import { getEls, bindUI } from "./dom.js";
+import { updateCharts, updatePlatformKpis } from "./charts.js";
 import {
   renderExpensesTable,
   renderMobileCards,
@@ -105,6 +106,9 @@ async function loadExpenses({ reset = false } = {}) {
     const res = await getExpensesList({
       q: state.q,
       category: state.category,
+      vendor: state.vendor,
+      dateFrom: state.dateFrom,
+      dateTo: state.dateTo,
       sortBy: state.sortBy,
       limit: state.limit,
       offset: state.offset
@@ -140,6 +144,13 @@ async function loadExpenses({ reset = false } = {}) {
     els.btnLoadMore.disabled = !state.hasMore;
     els.status.textContent = "";
     els.loadMoreStatus.textContent = state.hasMore ? "" : "All expenses loaded.";
+
+    // Update charts with current data
+    updateCharts(
+      { chartCategory: els.chartCategory, chartMonthly: els.chartMonthly },
+      state.rows
+    );
+    updatePlatformKpis(els.platformKpis, state.rows);
   } catch (err) {
     console.error(err);
     els.status.textContent = err?.message || "Failed to load expenses.";
@@ -1039,6 +1050,18 @@ function attachHandlers() {
       state.category = category;
       await loadExpenses({ reset: true });
     },
+    onFilterVendor: async (vendor) => {
+      state.vendor = vendor;
+      await loadExpenses({ reset: true });
+    },
+    onFilterDateFrom: async (dateFrom) => {
+      state.dateFrom = dateFrom;
+      await loadExpenses({ reset: true });
+    },
+    onFilterDateTo: async (dateTo) => {
+      state.dateTo = dateTo;
+      await loadExpenses({ reset: true });
+    },
     onSort: async (sortBy) => {
       state.sortBy = sortBy;
       await loadExpenses({ reset: true });
@@ -1122,8 +1145,25 @@ async function boot() {
   // Initial load
   await Promise.all([
     loadExpenses({ reset: true }),
-    refreshKpis()
+    refreshKpis(),
+    populateVendorDropdown(els)
   ]);
+}
+
+async function populateVendorDropdown(els) {
+  try {
+    const vendors = await getDistinctVendors();
+    if (!els.filterVendor) return;
+    // Keep the "All Vendors" option, append dynamic ones
+    vendors.forEach(v => {
+      const opt = document.createElement("option");
+      opt.value = v;
+      opt.textContent = v;
+      els.filterVendor.appendChild(opt);
+    });
+  } catch (err) {
+    console.warn("Vendor dropdown load failed:", err);
+  }
 }
 
 boot();

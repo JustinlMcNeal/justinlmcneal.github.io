@@ -16,9 +16,9 @@ function normalizeSort(sortBy) {
 }
 
 /**
- * Fetch expenses list with search, category filter, sort, and pagination.
+ * Fetch expenses list with search, category filter, vendor filter, date range, sort, and pagination.
  */
-export async function getExpensesList({ q = "", category = "", sortBy = "date_desc", limit = 50, offset = 0 } = {}) {
+export async function getExpensesList({ q = "", category = "", vendor = "", dateFrom = "", dateTo = "", sortBy = "date_desc", limit = 50, offset = 0 } = {}) {
   const sort = normalizeSort(sortBy);
 
   let query = supabase
@@ -37,6 +37,18 @@ export async function getExpensesList({ q = "", category = "", sortBy = "date_de
 
   if (category) {
     query = query.eq("category", category);
+  }
+
+  if (vendor) {
+    query = query.eq("vendor", vendor);
+  }
+
+  if (dateFrom) {
+    query = query.gte("expense_date", dateFrom);
+  }
+
+  if (dateTo) {
+    query = query.lte("expense_date", dateTo);
   }
 
   query = query
@@ -155,4 +167,21 @@ export async function getExpenseKpis() {
     topCategory,
     totalMiles
   };
+}
+
+/**
+ * Fetch distinct vendor names for the vendor filter dropdown.
+ */
+export async function getDistinctVendors() {
+  const { data, error } = await supabase
+    .from("expenses")
+    .select("vendor")
+    .not("vendor", "is", null)
+    .not("vendor", "eq", "");
+
+  if (error) throw error;
+
+  const unique = [...new Set((data || []).map(r => r.vendor).filter(Boolean))];
+  unique.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  return unique;
 }

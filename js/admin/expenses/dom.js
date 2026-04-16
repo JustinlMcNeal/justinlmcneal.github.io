@@ -10,6 +10,9 @@ export function getEls() {
     // list
     searchExpense: document.getElementById("searchExpense"),
     filterCategory: document.getElementById("filterCategory"),
+    filterVendor: document.getElementById("filterVendor"),
+    filterDateFrom: document.getElementById("filterDateFrom"),
+    filterDateTo: document.getElementById("filterDateTo"),
     sortBy: document.getElementById("sortBy"),
     expensesRows: document.getElementById("expensesRows"),
     mobileExpenseCards: document.getElementById("mobileExpenseCards"),
@@ -19,6 +22,11 @@ export function getEls() {
     loadMoreStatus: document.getElementById("loadMoreStatus"),
     btnAddExpense: document.getElementById("btnAddExpense"),
     emptyState: document.getElementById("emptyState"),
+
+    // charts
+    chartCategory: document.getElementById("chartCategory"),
+    chartMonthly: document.getElementById("chartMonthly"),
+    platformKpis: document.getElementById("platformKpis"),
 
     // modal
     expenseModal: document.getElementById("expenseModal"),
@@ -145,6 +153,19 @@ export function bindUI(els, handlers) {
   // Category filter
   els.filterCategory?.addEventListener("change", () => {
     handlers.onFilterCategory?.(els.filterCategory.value);
+  });
+
+  // Vendor filter
+  els.filterVendor?.addEventListener("change", () => {
+    handlers.onFilterVendor?.(els.filterVendor.value);
+  });
+
+  // Date range filters
+  els.filterDateFrom?.addEventListener("change", () => {
+    handlers.onFilterDateFrom?.(els.filterDateFrom.value);
+  });
+  els.filterDateTo?.addEventListener("change", () => {
+    handlers.onFilterDateTo?.(els.filterDateTo.value);
   });
 
   // Sort
