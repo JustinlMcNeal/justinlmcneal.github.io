@@ -138,7 +138,7 @@
   - Found 1 phantom Amazon row: `amz_selling_fees_2026-03` at $14.78 (stale re-import). Correct value is $8.80 matching actual March 2026 orders — deleted via CLI
 
   </details>
-- [ ] **Expenses page sorting & filtering** — add vendor filter, date range filter, and spending breakdown charts
+- [x] **Expenses page sorting & filtering** — add vendor filter, date range filter, and spending breakdown charts
 
   <details>
   <summary><strong>Implementation Plan</strong></summary>
@@ -196,9 +196,9 @@
 
   </details>
 
----
+- [x] **Expense vendor deduplication** — audited all vendor names, merged typos/variants directly in DB (Baestao/Baestoa → Basetao, Twillio → Twilio, Godaddy.com → GoDaddy, Georgia Corporations Division → GA Secretary of State, Office Depot / Walmart → Office Depot)
 
-## Social Media
+---
 
 ### Cleanup (do first)
 - [ ] Remove unused **Assets** section from the social media page
