@@ -138,7 +138,63 @@
   - Found 1 phantom Amazon row: `amz_selling_fees_2026-03` at $14.78 (stale re-import). Correct value is $8.80 matching actual March 2026 orders — deleted via CLI
 
   </details>
-- [ ] **Expenses page sorting & filtering** — add sort controls and a spending graph
+- [ ] **Expenses page sorting & filtering** — add vendor filter, date range filter, and spending breakdown charts
+
+  <details>
+  <summary><strong>Implementation Plan</strong></summary>
+
+  #### What already exists
+
+  | Feature | Status |
+  |---------|--------|
+  | Search (description, vendor, category, notes) | ✅ done |
+  | Category filter dropdown | ✅ done |
+  | Sort (date, amount, category) | ✅ done |
+  | KPI cards (total, this month, count, top category) | ✅ done |
+  | Pagination / load more | ✅ done |
+  | **Vendor filter** | ❌ missing |
+  | **Date range filter (from / to)** | ❌ missing |
+  | **Spending by category chart** | ❌ missing |
+  | **Spending over time chart** | ❌ missing |
+  | **Platform breakdown** (Amazon vs eBay vs manual) | ❌ missing |
+
+  #### What we'll add
+
+  **1. Vendor filter dropdown** (`pages/admin/expenses.html` + `api.js`)
+  - Add a `<select id="filterVendor">` in the filter bar, dynamically populated from the `vendor` values in the DB (query distinct vendors on load)
+  - Pass `vendor` to `getExpensesList()` → add `.eq("vendor", vendor)` to the Supabase query
+
+  **2. Date range filter** (`pages/admin/expenses.html` + `api.js`)
+  - Add two `<input type="date">` fields: `#filterDateFrom` and `#filterDateTo`
+  - Pass to `getExpensesList()` → add `.gte("expense_date", from)` / `.lte("expense_date", to)` filters
+
+  **3. Spending charts** (new file `js/admin/expenses/charts.js`)
+  - Use **Chart.js via CDN** (no build step needed) — `<script src="https://cdn.jsdelivr.net/npm/chart.js">` in the HTML
+  - Add a collapsible charts panel above the table with two charts:
+
+    | Chart | Type | Data source |
+    |-------|------|-------------|
+    | **Spending by Category** | Doughnut | Aggregate `amount_cents` grouped by `category` from current filtered set |
+    | **Spending Over Time** | Bar (monthly) | Aggregate `amount_cents` grouped by `YYYY-MM` from current filtered set |
+
+  - Charts respond to the current filter state — when you change category/vendor/date range, the charts update the same as the table
+  - A separate RPC or client-side aggregation of the already-fetched rows can power the charts (no extra DB round trip for the visible set)
+
+  **4. Platform breakdown KPI** (`pages/admin/expenses.html`)
+  - Add a "By Platform" row under the existing KPI cards: Amazon total | eBay total | Manual total
+  - Queried by matching `vendor` = "Amazon" / "eBay" / everything else
+
+  #### Files touched
+
+  | File | Change |
+  |------|--------|
+  | `pages/admin/expenses.html` | Add vendor filter, date range inputs, Chart.js CDN, charts panel HTML |
+  | `js/admin/expenses/api.js` | Add `vendor` and `dateFrom`/`dateTo` params to `getExpensesList()` + new `getExpenseChartData()` function |
+  | `js/admin/expenses/charts.js` | New file — `initCharts()`, `updateCharts(rows)` using Chart.js |
+  | `js/admin/expenses/dom.js` | Wire new filter inputs to `onFilterVendor`, `onFilterDateFrom`, `onFilterDateTo` handlers |
+  | `js/admin/expenses/index.js` | Populate vendor dropdown on load, pass new filter state, call `updateCharts()` after each load |
+
+  </details>
 
 ---
 
