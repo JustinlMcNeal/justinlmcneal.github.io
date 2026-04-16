@@ -28,6 +28,8 @@ The admin only needs to:
 | **Simple tagging v1** | Start with only `shot_type` + `product_id` — mood/platform tags come in v2 |
 | **Safety nets** | Hide templates, don't delete — keep as internal fallback + A/B baseline |
 | **Priority scoring** | Products get a priority score (recency, category performance, inventory) — autopilot posts smartest picks first |
+| **Fail-safe first** | Autopilot auto-stops after N consecutive errors — no silent failures |
+| **Minimum data thresholds** | Don't use performance data until enough samples exist — fallback to sane defaults |
 
 ---
 
@@ -164,34 +166,56 @@ The Image Pool becomes the **primary way to add content**. The admin generates i
 - Filter: All | Unused | Used
 - Search by product name or tag
 
-### 3B. Image Tagging System
+### 3B. Image Tagging & Metadata System
 
-When an image is uploaded (or retroactively), the admin can tag it with metadata that helps AI make smart decisions about when/how to use it.
+When an image is uploaded (or retroactively), the admin tags it with metadata that drives AI decisions about when/how to use it.
 
-**Tag categories**:
+#### v1 Tags (Ship Now — Minimum Viable)
 
 | Tag Type | Options | Purpose |
-|----------|---------|---------|
+|----------|---------|----------|
 | **Shot type** | close-up, model, lifestyle, flat-lay, wide, detail, packaging | Carousel assembly — AI picks diverse shot types |
-| **Mood** | casual, luxury, playful, bold, minimal, cozy | Caption tone matching |
 | **Product** | Link to product ID | Which product this image represents |
-| **Platform preference** | any, instagram-only, pinterest-only | Some images work better on specific platforms |
+| **Quality score** | 1–5 (manual, optional) | Human override — multiplier in image selection. A 5-star image gets picked before a 3-star even if both are unused |
 
-**DB changes**:
-- Add columns to `social_assets`: `tags JSONB DEFAULT '[]'`, `product_id UUID REFERENCES products(id)`, `used_count INT DEFAULT 0`
-- Or create a lightweight `social_asset_tags` junction table
+#### v2 Tags (Deferred — Add After Data Validates v1)
 
-**AI auto-tagging** (optional enhancement):
+| Tag Type | Options | Purpose |
+|----------|---------|----------|
+| **Mood** | casual, luxury, playful, bold, minimal, cozy | Caption tone matching |
+| **Platform preference** | any, instagram-only, pinterest-only | Platform-specific content routing |
+
+**DB changes (v1)**:
+- Add columns to `social_assets`:
+  - `shot_type TEXT` — close-up, model, lifestyle, etc.
+  - `product_id UUID REFERENCES products(id)` — which product this represents
+  - `quality_score SMALLINT DEFAULT 3 CHECK (quality_score BETWEEN 1 AND 5)` — manual quality override
+  - `used_count INT DEFAULT 0` — how many times posted
+  - `last_used_at TIMESTAMPTZ` — when it was last posted (for freshness scoring)
+
+**Content freshness scoring** (derived at selection time, not stored):
+```
+freshness_score =
+  (days_since_last_use * 10)     -- reward unused-for-a-while images
+  - (used_count * 15)            -- penalize overused images
+  + (quality_score * 20)         -- boost high-quality images
+```
+Images with `used_count = 0` get a large bonus. Images used yesterday get deprioritized. A 5-star image that hasn't been used in 30 days will always beat a 3-star image used last week.
+
+**AI auto-tagging** (optional v2 enhancement):
 - On upload, send the image to GPT-4o vision via edge function
-- AI returns suggested tags (shot type, mood, dominant colors)
+- AI returns suggested `shot_type` + `quality_score`
 - Admin confirms or adjusts — saves time vs manual tagging
 
 ### 3C. Integration with Autopilot
 
-The autopilot system should draw from the Image Pool:
-1. Query `social_assets` WHERE `used_count = 0` (prefer unused) ORDER BY `created_at ASC`
-2. If no unused images, fall back to least-recently-used
-3. For carousels, select 3-5 images of the same product with diverse `shot_type` tags
+The autopilot system draws from the Image Pool using the **freshness score**:
+1. Query `social_assets` for the target `product_id`
+2. Calculate `freshness_score` for each image
+3. Sort by `freshness_score DESC` — unused + high-quality images surface first
+4. If no images exist for the product, skip it (don't post without content)
+5. For carousels, select 3-5 images of the same product with diverse `shot_type` tags
+6. After posting, increment `used_count` and set `last_used_at = now()`
 
 ---
 
@@ -205,10 +229,42 @@ The autopilot system should draw from the Image Pool:
 
 #### Autopilot Section (keep, fix, enhance)
 - Fix the cron job so it actually runs
-- Display: last run time, next scheduled run, posts in queue, error log
+- Display: last run time, next scheduled run, posts in queue, error log, **consecutive error count**
 - Settings: posts per day, days to fill ahead, platforms (keep these as user controls)
 - **Remove**: manual posting time selection — autopilot reads from `posting_time_performance.is_peak_time`
 - **Remove**: manual caption tone selection — AI picks based on `caption_element_performance` data
+
+#### Autopilot Fail-Safe
+
+Prevents silent failures (like the 3-month outage that already happened):
+
+| Rule | Action |
+|------|--------|
+| **3 consecutive errors** | Autopilot auto-pauses, sends alert (email/webhook) |
+| **Token refresh failure** | Immediately pause posting, log error, surface warning in UI |
+| **0 images in pool** | Skip fill cycle, log "no content available" — don't create imageless posts |
+| **Queue backlog > 2× target** | Pause fill — indicates posts aren't being published (downstream failure) |
+
+Logged state (stored in `social_settings`):
+- `autopilot_last_success_at` — when the last successful fill happened
+- `autopilot_last_error` — most recent error message
+- `autopilot_consecutive_errors` — counter, reset to 0 on success
+- `autopilot_paused_reason` — null when running, string when auto-paused
+
+The UI shows a red warning banner when autopilot is auto-paused with the reason and a "Resume" button.
+
+#### Minimum Data Thresholds
+
+Before using performance data for decisions, verify enough samples exist. Bad early data = bad automation.
+
+| Data Source | Minimum Rows | Fallback If Below Threshold |
+|-------------|-------------|-----------------------------|
+| `posting_time_performance` | 20 posted entries | Default schedule: 9am, 12pm, 6pm EST |
+| `caption_element_performance` | 15 scored captions | Use template-based captions |
+| `post_learning_patterns` | 10 analyzed posts | Skip AI learning, use base templates |
+| `hashtag_performance` | 10 tracked hashtags | Use category default hashtags |
+
+Thresholds are checked at queue-fill time. As data accumulates, the system naturally transitions from defaults to data-driven decisions — no manual switch needed.
 
 #### Product Priority Scoring
 
@@ -254,6 +310,11 @@ This prevents weird/off-brand outputs while still leveraging learned patterns. F
 
 ```
 Daily cron triggers autopilot-fill:
+  0. FAIL-SAFE CHECK:
+     - If autopilot_consecutive_errors >= 3 → abort, stay paused
+     - If queued posts > 2× (days_ahead × posts_per_day) → abort (backlog)
+     - If no images in pool → log "no content", skip cycle
+
   1. Check how many posts are queued for the next N days
   2. Calculate deficit (target - current)
   3. If deficit > 0:
@@ -261,15 +322,21 @@ Daily cron triggers autopilot-fill:
         - recency (40%) + category perf (30%) + fresh images (20%) + reserved (10%)
      b. Sort products by priority score DESC
      c. For each product (highest priority first):
-        - Pick best unused image from Image Pool (matching product_id)
-        - If no unused images, use least-recently-used
+        - Pick best image by freshness_score from Image Pool
+          (factors: days since last use, used_count penalty, quality_score boost)
+        - If no images for this product → skip, try next product
         - AI generates caption (hybrid mode):
-          → learned patterns + constrained by length/structure/CTA rules
-          → if AI fails or scores < threshold → fallback to template
+          → check data thresholds first (enough samples?)
+          → if YES: learned patterns + constrained by length/structure/CTA
+          → if NO or AI fails: fallback to template
         - Schedule at peak time from posting_time_performance
+          → if < 20 data points: use default schedule (9am/12pm/6pm EST)
      d. Every 4th post: check for resurfaceable old hits
         - If found, insert a repost instead of a new post
-  4. Log run result to social_settings or a runs table
+     e. Carousel check: if product has 3+ unused images with diverse shot_types
+        → schedule as carousel (max 1 carousel per day)
+  4. On success: reset autopilot_consecutive_errors = 0, log timestamp
+     On error: increment autopilot_consecutive_errors, log error message
 ```
 
 ---
@@ -296,6 +363,7 @@ Daily cron triggers autopilot-fill:
 - Autopilot decides when to post a carousel vs single image
 - Rule: if a product has 3+ unused images with diverse tags → schedule as carousel
 - Frequency: ~1 carousel per 4 single posts (carousels perform ~1.2x but require more content)
+- **Hard cap**: max 1 carousel per day — prevents content fatigue and overuse of carousel format
 
 ### 5B. Carousel Tab Changes
 - Keep the manual builder for one-off carousels
@@ -419,9 +487,10 @@ Daily cron triggers autopilot-fill:
 ### Database
 | Change | Details |
 |--------|---------|
-| Add columns to `social_assets` (v1) | `shot_type TEXT`, `product_id UUID REFERENCES products(id)`, `used_count INT DEFAULT 0` |
+| Add columns to `social_assets` (v1) | `shot_type TEXT`, `product_id UUID REFERENCES products(id)`, `quality_score SMALLINT DEFAULT 3`, `used_count INT DEFAULT 0`, `last_used_at TIMESTAMPTZ` |
 | Add columns to `social_assets` (v2) | `tags JSONB DEFAULT '[]'` for mood/platform/future tags |
-| Social settings | Update autopilot config schema for auto-resurface toggle, caption constraints |
+| Add autopilot state to `social_settings` | `autopilot_last_success_at`, `autopilot_last_error`, `autopilot_consecutive_errors`, `autopilot_paused_reason` |
+| Social settings | Update autopilot config schema for auto-resurface toggle, caption constraints, data thresholds |
 
 ---
 
