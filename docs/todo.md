@@ -132,6 +132,11 @@
   | `js/admin/expenses/dom.js` | Wire up custom clear button for `#searchExpense` |
   | `supabase/migrations/20260416_dedupe_auto_imported_expenses.sql` | Delete existing duplicate auto-imported rows, keeping earliest insert per unique `notes` ref |
 
+  #### DB Cleanup (ran 2026-04-16)
+
+  - Audited 13 auto-imported rows — no exact duplicates existed in eBay data
+  - Found 1 phantom Amazon row: `amz_selling_fees_2026-03` at $14.78 (stale re-import). Correct value is $8.80 matching actual March 2026 orders — deleted via CLI
+
   </details>
 - [ ] **Expenses page sorting & filtering** — add sort controls and a spending graph
 
