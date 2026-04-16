@@ -451,7 +451,7 @@ export async function analyzePost(postId) {
   try {
     const { error: insertErr } = await supabase
       .from("post_performance_analysis")
-      .upsert({
+      .upsert([{
         post_id: postId,
         overall_score: analysis.overall_score,
         timing_score: analysis.timing_score,
@@ -480,7 +480,7 @@ export async function analyzePost(postId) {
         weaknesses: analysis.weaknesses || [],
         recommendations: analysis.recommendations || [],
         updated_at: new Date().toISOString(),
-      }, { onConflict: "post_id" });
+      }], { onConflict: "post_id" });
 
     if (insertErr) {
       console.warn("Failed to persist analysis:", insertErr.message);

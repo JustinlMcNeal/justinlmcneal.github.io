@@ -6231,7 +6231,7 @@ async function openPostAnalytics(postId) {
         .from("post_performance_analysis")
         .select("*")
         .eq("post_id", postId)
-        .single();
+        .maybeSingle();
       
       if (savedAnalysis) {
         // Display the saved analysis
