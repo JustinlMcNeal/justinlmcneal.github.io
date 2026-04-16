@@ -9,7 +9,7 @@
   - Create order record on success
 - [ ] **Checkout order summary page** — order validation and confirmation info display
 - [ ] **Implement Shippo** into the order fulfillment system
-- [ ] **Fix eBay & Amazon order imports** — correct data mapping; add hotkeys/links to jump directly to the report download pages
+- [x] **Fix eBay & Amazon order imports** — correct data mapping with SKU_MAP; variant extraction working
 
 ---
 
@@ -69,7 +69,7 @@
 
 - [ ] **Share button on product pages** — native share for iMessage, Discord, etc. with OG image embed
 - [ ] **Referral share link** — sharer gets a unique link; referee gets 5% off at checkout; sharer earns 10% off when the referee completes a purchase
-- [x] **Catalog search on mobile** — fix auto-zoom and remove redundant predictive dropdown
+- [ ] **Catalog search on mobile** — fix auto-zoom and remove redundant predictive dropdown
 
   <details>
   <summary><strong>Implementation Plan</strong></summary>
@@ -103,9 +103,9 @@
   | `pages/catalog.html` | Remove or hide `#predictiveResults` div |
 
   </details>
-- [ ] **Product size/variant support** — enable size options per product
+- [x] **Product size/variant support** — size/color variants fully supported via `renderVariantSwatches()`
 - [ ] **Revamp Reviews page** — split into two pages: one for browsing reviews, one for leaving a review
-- [ ] **Homepage banner** — improve visuals, add more dynamic or promotional content
+- [x] **Homepage banner** — dynamic carousel with multiple promotions, countdowns, infinite scroll
 
 ---
 
@@ -206,20 +206,21 @@
 > **Core rule**: Fix analytics BEFORE building data-driven autopilot — bad data = bad automation
 
 ### Sprint 1: Fix + Clean
-- [ ] **Fix post analytics / insights sync** — CRITICAL — debug insights sync, verify `instagram_media_id` saved on publish, fix edge function write-back (everything downstream depends on real data)
-- [ ] **Fix autopilot cron not running** — verify/recreate pg_cron job, fix `variation_id NOT NULL` constraint, test `autopilot-fill` function
-- [ ] **Remove AI Images tab** — images generated externally via GPT chat, uploaded to Image Pool instead; delete `imagePipeline.js`
-- [ ] **Hide Templates tab** — remove from UI but keep DB table + JS as internal fallback + A/B baseline (don't delete)
+- [x] **Fix post analytics / insights sync** — insights sync working, `instagram_media_id` saved, edge function write-back fixed
+- [x] **Fix autopilot cron not running** — pg_cron job recreated, `variation_id` constraint fixed, autopilot running daily
+- [x] **Remove AI Images tab** — removed from UI, `imagePipeline.js` deleted
+- [x] **Hide Templates tab** — hidden from UI, DB/JS retained as fallback
 
 ### Sprint 2: Image Pool
-- [ ] **Remove Queue tab** — merge into Calendar as a list-view toggle (📅 Grid | 📋 List)
-- [ ] **Revamp Assets → Image Pool** — primary upload destination for curated images; drag & drop; show unused first; used/unused filter
-- [ ] **Add image tagging v1** — `shot_type` + `product_id` only (mood/platform tags deferred to v2 after data validates)
+- [x] **Remove Queue tab** — merged into Calendar as list-view toggle
+- [x] **Revamp Assets → Image Pool** — drag & drop upload, unused-first sorting, used/unused filter, tagging modal
+- [x] **Add image tagging v1** — `shot_type` + `product_id` tagging implemented
 
 ### Sprint 3: Autopilot Upgrade
-- [ ] **Add product priority scoring** — recency (40%) + category performance (30%) + fresh images (20%) + reserved (10%)
-- [ ] **Make autopilot data-driven** — use Image Pool, `posting_time_performance` for scheduling, hybrid AI captions (constrained by length/structure/CTA + template fallback)
-- [ ] **Automate resurface old hits** — autopilot auto-reposts top content from 30+ days ago at ~1:4 ratio with fresh AI captions
+- [x] **Add product priority scoring** — recency (40%) + category performance (30%) + fresh images (20%) + reserved (10%)
+- [x] **Make autopilot data-driven** — Image Pool integration, `posting_time_performance` scheduling, hybrid AI captions with template fallback
+- [x] **Automate resurface old hits** — auto-reposts top content 30+ days old at ~1:4 ratio with fresh AI captions
+- [x] **Close learning loop (Sprint 3.5)** — persist deep analysis, automate learning aggregation in autopilot, track `autopilot_last_run`
 
 ### Sprint 4: Smart Features
 - [ ] **Smart carousel assembly** — AI auto-picks 3-5 images with diverse `shot_type` tags from Image Pool
