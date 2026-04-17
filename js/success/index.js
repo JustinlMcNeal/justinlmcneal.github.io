@@ -4,6 +4,7 @@ import { initFooter } from "/js/shared/footer.js";
 import { clearCart } from "/js/shared/cartStore.js";
 import { removeCoupon } from "/js/shared/couponManager.js";
 import { getSupabaseClient } from "/js/shared/supabaseClient.js";
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from "/js/config/env.js";
 
 /* ── Confetti ── */
 function spawnConfetti() {
@@ -135,9 +136,115 @@ async function loadOrderDetails(oid) {
     const section = document.getElementById("orderDetailsSection");
     if (section) section.classList.remove("hidden");
 
+    return order;
+
   } catch (err) {
     console.error("[success] error loading order details:", err);
+    return null;
   }
+}
+
+/* ── SMS Opt-in ── */
+
+function formatPhoneDisplay(phone) {
+  if (!phone) return "";
+  const digits = phone.replace(/\D/g, "");
+  const d = digits.startsWith("1") ? digits.slice(1) : digits;
+  if (d.length === 10) return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
+  return phone;
+}
+
+async function initSmsOptin(order) {
+  const card = document.getElementById("smsOptinCard");
+  const phoneInput = document.getElementById("smsOptinPhone");
+  const consentBox = document.getElementById("smsOptinConsent");
+  const btn = document.getElementById("smsOptinBtn");
+  const statusEl = document.getElementById("smsOptinStatus");
+  if (!card || !phoneInput || !consentBox || !btn || !statusEl) return;
+
+  // Pre-fill phone from order
+  const orderPhone = order?.phone_number || "";
+  if (orderPhone) {
+    phoneInput.value = formatPhoneDisplay(orderPhone);
+  }
+
+  // Check if already subscribed
+  if (orderPhone) {
+    try {
+      const sb = getSupabaseClient();
+      const digits = orderPhone.replace(/\D/g, "");
+      const e164 = digits.length === 10 ? `+1${digits}` : digits.startsWith("1") && digits.length === 11 ? `+${digits}` : null;
+      if (e164) {
+        const { data: contact } = await sb
+          .from("customer_contacts")
+          .select("status")
+          .eq("phone", e164)
+          .maybeSingle();
+        if (contact?.status === "active") {
+          // Already opted in — don't show the card
+          return;
+        }
+      }
+    } catch (_) { /* show card anyway */ }
+  }
+
+  // Show the card
+  card.classList.remove("hidden");
+
+  // Enable button when consent is checked + phone has value
+  function updateBtn() {
+    btn.disabled = !(consentBox.checked && phoneInput.value.trim().length >= 10);
+  }
+  consentBox.addEventListener("change", updateBtn);
+  phoneInput.addEventListener("input", updateBtn);
+  updateBtn();
+
+  // Handle submit
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    btn.textContent = "Sending…";
+    statusEl.classList.add("hidden");
+
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/sms-subscribe`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({
+          phone: phoneInput.value.trim(),
+          email: order?.email || "",
+          consent_text: "By checking this box, you agree to receive recurring automated marketing texts from Karry Kraze at the number provided. Consent is not a condition of purchase. Msg & data rates may apply. Reply STOP to unsubscribe.",
+          page_url: window.location.href,
+          user_agent: navigator.userAgent,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Something went wrong");
+      }
+
+      // Success state
+      const couponCode = data.coupon_code || "";
+      statusEl.innerHTML = couponCode
+        ? `<span class="text-green-600 font-bold">You're in! 🎉 Use code <span class="bg-green-100 px-2 py-0.5 rounded font-black">${couponCode}</span> for 15% off!</span>`
+        : `<span class="text-green-600 font-bold">You're in! 🎉 Check your texts for your coupon.</span>`;
+      statusEl.classList.remove("hidden");
+
+      // Hide the form, keep the status visible
+      phoneInput.closest(".mt-3").classList.add("hidden");
+      consentBox.closest("label").classList.add("hidden");
+      btn.classList.add("hidden");
+    } catch (err) {
+      statusEl.innerHTML = `<span class="text-red-500">${err.message}</span>`;
+      statusEl.classList.remove("hidden");
+      btn.disabled = false;
+      btn.textContent = "Yes, Text Me Deals! 🎉";
+    }
+  });
 }
 
 /* ── Boot ── */
@@ -150,7 +257,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   const oid = getOrderId();
   showOrderId(oid);
   spawnConfetti();
-  loadOrderDetails(oid);
+  const order = await loadOrderDetails(oid);
+
+  // SMS opt-in (uses order phone/email)
+  initSmsOptin(order);
 
   await initFooter();
 });
