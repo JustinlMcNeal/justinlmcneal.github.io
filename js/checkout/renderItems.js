@@ -38,7 +38,7 @@ async function fetchStockLevels(items) {
     const [variantsRes, productsRes] = await Promise.all([
       supabase
         .from("product_variants")
-        .select("product_id, variant_label, stock")
+        .select("product_id, option_value, stock")
         .in("product_id", ids),
       supabase
         .from("products")
@@ -48,7 +48,7 @@ async function fetchStockLevels(items) {
 
     if (variantsRes.data) {
       for (const row of variantsRes.data) {
-        const key = `${row.product_id}::${normVariant(row.variant_label)}`;
+        const key = `${row.product_id}::${normVariant(row.option_value)}`;
         stockMap[key] = row.stock ?? null;
       }
     }
