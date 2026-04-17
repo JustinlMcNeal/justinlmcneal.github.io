@@ -384,7 +384,7 @@ Deno.serve(async (req) => {
           {
             shipping_rate_data: {
               type: "fixed_amount" as const,
-              fixed_amount: { amount: 599, currency: "usd" },
+              fixed_amount: { amount: 895, currency: "usd" },
               display_name: "Standard Shipping",
               delivery_estimate: {
                 minimum: { unit: "business_day" as const, value: 5 },

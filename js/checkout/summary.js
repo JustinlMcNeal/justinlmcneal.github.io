@@ -131,7 +131,7 @@ export async function updateSummary(totals, stockInfo = {}) {
       shippingEl.classList.add("text-green-600");
       shippingEl.classList.remove("text-black/60");
     } else {
-      shippingEl.textContent = "From $5.99";
+      shippingEl.textContent = "From $8.95";
       shippingEl.classList.remove("text-green-600");
       shippingEl.classList.add("text-black/60");
     }
