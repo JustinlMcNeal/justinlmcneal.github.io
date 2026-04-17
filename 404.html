@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Page Not Found — Karry Kraze</title>
+  <script>
+    (function () {
+      var path = window.location.pathname;
+
+      // /s/{slug} → proxy to share-product edge function (rich link previews)
+      if (path.startsWith('/s/')) {
+        var slug = path.replace('/s/', '').replace(/\/+$/, '');
+        if (slug) {
+          window.location.replace(
+            'https://yxdzvzscufkvewecvagq.supabase.co/functions/v1/share-product/' +
+            encodeURIComponent(slug)
+          );
+          return;
+        }
+      }
+    })();
+  </script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #fafafa; color: #333; text-align: center; padding: 2rem;
+    }
+    .wrap { max-width: 420px; }
+    h1 { font-size: 5rem; font-weight: 800; color: #222; line-height: 1; }
+    p  { margin: 1rem 0; color: #666; font-size: 1.05rem; }
+    a  {
+      display: inline-block; margin-top: .5rem; padding: .65rem 1.8rem;
+      background: #222; color: #fff; text-decoration: none; border-radius: 6px;
+      font-weight: 600; font-size: .95rem; transition: background .2s;
+    }
+    a:hover { background: #444; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>404</h1>
+    <p>Sorry, we couldn't find that page.</p>
+    <a href="/">Back to Karry Kraze</a>
+  </div>
+</body>
+</html>
