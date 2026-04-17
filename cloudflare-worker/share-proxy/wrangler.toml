@@ -1,0 +1,8 @@
+name = "share-proxy"
+main = "index.js"
+compatibility_date = "2024-01-01"
+workers_dev = true
+
+routes = [
+  { pattern = "karrykraze.com/s/*", zone_name = "karrykraze.com" }
+]

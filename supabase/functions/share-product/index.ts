@@ -1,7 +1,6 @@
-import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-serve(async (req: Request) => {
+Deno.serve(async (req: Request) => {
   // Extract slug from URL path: /share-product/my-product-slug
   const url = new URL(req.url);
   const slug = url.pathname.split("/").pop() || "";
@@ -34,8 +33,12 @@ serve(async (req: Request) => {
   const price = product.price
     ? `$${Number(product.price).toFixed(2)}`
     : "";
-  const description = `${title}${price ? ` — ${price}` : ""} | Shop at Karry Kraze`;
-  const image = product.catalog_image_url || `${siteUrl}/imgs/brand/logo.png`;
+  const description = `${title}${price ? ` - ${price}` : ""} | Shop at Karry Kraze`;
+  const rawImage = product.catalog_image_url || `${siteUrl}/imgs/brand/logo.png`;
+  // Use Supabase image transform for a smaller preview image for social bots
+  const image = rawImage.includes("/storage/v1/object/public/")
+    ? rawImage.replace("/storage/v1/object/public/", "/storage/v1/render/image/public/") + "?width=600&quality=75"
+    : rawImage;
 
   // Sanitize for HTML attributes
   const esc = (s: string) =>
@@ -46,13 +49,16 @@ serve(async (req: Request) => {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${esc(title)} — Karry Kraze</title>
+  <title>${esc(title)} | Karry Kraze</title>
 
   <!-- Open Graph (iMessage, Discord, Facebook, etc.) -->
   <meta property="og:type" content="product">
   <meta property="og:title" content="${esc(title)}">
   <meta property="og:description" content="${esc(description)}">
   <meta property="og:image" content="${esc(image)}">
+  <meta property="og:image:width" content="600">
+  <meta property="og:image:height" content="600">
+  <meta property="og:image:type" content="image/png">
   <meta property="og:url" content="${esc(productUrl)}">
   <meta property="og:site_name" content="Karry Kraze">
   ${price ? `<meta property="product:price:amount" content="${esc(String(product.price))}">
@@ -69,16 +75,17 @@ serve(async (req: Request) => {
   <link rel="canonical" href="${esc(productUrl)}">
 </head>
 <body>
-  <p>Redirecting to <a href="${esc(productUrl)}">${esc(title)}</a>…</p>
+  <p>Redirecting to <a href="${esc(productUrl)}">${esc(title)}</a>...</p>
   <script>window.location.replace(${JSON.stringify(productUrl)});</script>
 </body>
 </html>`;
 
-  return new Response(html, {
+  const body = new TextEncoder().encode(html);
+  return new Response(body, {
     status: 200,
     headers: {
-      "Content-Type": "text/html; charset=utf-8",
-      "Cache-Control": "public, max-age=3600",
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "public, max-age=3600",
     },
   });
 });
