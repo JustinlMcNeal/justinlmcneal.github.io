@@ -69,9 +69,10 @@ export async function updateSummary(totals, stockInfo = {}) {
     autoDiscount = 0,
   } = totals || {};
 
-  // Detect if any cart item is on backorder (stock <= 0)
-  const { cartItems = [], stockMap = {} } = stockInfo;
+  // Detect if any cart item is on backorder (stock <= 0) or made-to-order
+  const { cartItems = [], stockMap = {}, mtoSet = new Set() } = stockInfo;
   const hasBackorder = cartItems.some((item) => {
+    if (mtoSet.has(item.id)) return true;
     const key = `${item.id}::${(item.variant ?? "").toString().trim()}`;
     const stock = stockMap[key];
     return typeof stock === "number" && stock <= 0;

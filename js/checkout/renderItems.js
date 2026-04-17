@@ -21,26 +21,41 @@ function normVariant(v) {
   return s.length ? s : "";
 }
 
-/* ── Low stock lookup ── */
+/* ── Stock & shipping status lookup ── */
 let stockMap = null;
+let mtoSet = null; // product IDs with shipping_status = 'mto'
 
 async function fetchStockLevels(items) {
   if (stockMap) return stockMap;
   stockMap = {};
+  mtoSet = new Set();
   try {
     const supabase = getSupabaseClient();
     const ids = [...new Set(items.map((it) => it.id).filter(Boolean))];
     if (!ids.length) return stockMap;
 
-    const { data } = await supabase
-      .from("product_variants")
-      .select("product_id, variant_label, stock")
-      .in("product_id", ids);
+    // Fetch stock levels and shipping_status in parallel
+    const [variantsRes, productsRes] = await Promise.all([
+      supabase
+        .from("product_variants")
+        .select("product_id, variant_label, stock")
+        .in("product_id", ids),
+      supabase
+        .from("products")
+        .select("id, shipping_status")
+        .in("id", ids),
+    ]);
 
-    if (data) {
-      for (const row of data) {
+    if (variantsRes.data) {
+      for (const row of variantsRes.data) {
         const key = `${row.product_id}::${normVariant(row.variant_label)}`;
         stockMap[key] = row.stock ?? null;
+      }
+    }
+
+    if (productsRes.data) {
+      for (const row of productsRes.data) {
+        if (row.shipping_status === "mto") mtoSet.add(row.id);
       }
     }
   } catch {
@@ -49,8 +64,12 @@ async function fetchStockLevels(items) {
   return stockMap;
 }
 
+function isMto(productId) {
+  return mtoSet?.has(productId) ?? false;
+}
+
 /* ── Render a single item card ── */
-function renderItemCard(item, stock) {
+function renderItemCard(item, stock, madeToOrder) {
   const id = String(item.id || "");
   const variant = normVariant(item.variant);
   const qty = Math.max(1, Number(item.qty || 1));
@@ -60,8 +79,12 @@ function renderItemCard(item, stock) {
   const lineTotal = unit * qty;
   const slug = item.slug || "";
 
-  const isBackorder = typeof stock === "number" && stock <= 0;
-  const lowStock = typeof stock === "number" && stock > 0 && stock <= 5;
+  const isBackorder = madeToOrder || (typeof stock === "number" && stock <= 0);
+  const badgeLabel = madeToOrder ? "MADE TO ORDER" : "BACKORDER";
+  const shipNote = madeToOrder
+    ? "✂️ Made to order — ships in 3–4 weeks"
+    : "⏳ Backorder — ships in 3–4 weeks";
+  const lowStock = !madeToOrder && typeof stock === "number" && stock > 0 && stock <= 5;
 
   return `
 <article class="bg-white rounded-xl p-4 shadow-sm border border-black/5">
@@ -74,7 +97,7 @@ function renderItemCard(item, stock) {
         alt="${name}"
         loading="lazy"
       />
-      ${isBackorder ? `<span class="absolute top-1 left-1 bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">BACKORDER</span>` : ""}
+      ${isBackorder ? `<span class="absolute top-1 left-1 bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">${badgeLabel}</span>` : ""}
     </a>
 
     <!-- Content -->
@@ -83,7 +106,7 @@ function renderItemCard(item, stock) {
         <div>
           <a href="/pages/product.html?slug=${esc(slug)}" class="font-bold text-sm leading-tight line-clamp-2 hover:underline">${name}</a>
           ${variant ? `<p class="text-xs text-black/50 mt-0.5">${esc(variant)}</p>` : ""}
-          ${isBackorder ? `<p class="text-xs font-bold text-amber-600 mt-1">⏳ Backorder — ships in 3–4 weeks</p>` : ""}
+          ${isBackorder ? `<p class="text-xs font-bold text-amber-600 mt-1">${shipNote}</p>` : ""}
           ${lowStock ? `<p class="text-xs font-bold text-red-500 mt-1">Only ${stock} left!</p>` : ""}
         </div>
 
@@ -169,7 +192,7 @@ export async function renderCheckoutItems(items, container) {
 
   if (!items || !items.length) {
     container.innerHTML = renderEmpty();
-    return {};
+    return { stockMap: {}, mtoSet: new Set() };
   }
 
   // Fetch stock levels in background (non-blocking)
@@ -179,12 +202,12 @@ export async function renderCheckoutItems(items, container) {
     .map((item) => {
       const key = `${item.id}::${normVariant(item.variant)}`;
       const stock = stocks[key] ?? null;
-      return renderItemCard(item, stock);
+      return renderItemCard(item, stock, isMto(item.id));
     })
     .join("");
 
-  // Return stock map so summary can use it for delivery estimates
-  return stocks;
+  // Return stock map + mtoSet so summary can use for delivery estimates
+  return { stockMap: stocks, mtoSet: mtoSet || new Set() };
 }
 
 /* ── Wire delegated click handlers ── */
@@ -226,4 +249,5 @@ export function wireItemControls(container, onCartChange) {
 /* ── Reset stock cache on re-render ── */
 export function resetStockCache() {
   stockMap = null;
+  mtoSet = null;
 }
