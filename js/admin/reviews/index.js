@@ -411,7 +411,8 @@ async function loadReviewRequestStats() {
     const sb = getSupabaseClient();
     const { data, error } = await sb
       .from("review_requests")
-      .select("status");
+      .select("order_session_id, product_id, phone, status, sent_at, clicked_at, reviewed_at")
+      .order("sent_at", { ascending: false });
 
     if (error) throw error;
     if (!data?.length) return;
@@ -426,6 +427,44 @@ async function loadReviewRequestStats() {
     $("rrClicked").textContent = counts.clicked;
     $("rrCompleted").textContent = counts.completed;
     $("reviewRequestStats")?.classList.remove("hidden");
+
+    // Fetch customer names from orders_raw for the log table
+    const orderIds = [...new Set(data.map(r => r.order_session_id))];
+    const { data: orders } = await sb
+      .from("orders_raw")
+      .select("stripe_checkout_session_id, first_name, last_name")
+      .in("stripe_checkout_session_id", orderIds);
+
+    const orderNameMap = {};
+    for (const o of orders || []) {
+      orderNameMap[o.stripe_checkout_session_id] = [o.first_name, o.last_name].filter(Boolean).join(" ") || "—";
+    }
+
+    // Render log table
+    const tbody = $("rrLogRows");
+    const fmtDate = (d) => d ? new Date(d).toLocaleDateString() : "—";
+    const maskPhone = (p) => p ? p.replace(/(\d{3})\d{4}(\d{4})/, "$1****$2") : "—";
+
+    const statusCls = { sent: "bg-green-100 text-green-700", clicked: "bg-blue-100 text-blue-700", completed: "bg-purple-100 text-purple-700", failed: "bg-red-100 text-red-700", expired: "bg-gray-100 text-gray-500" };
+
+    tbody.innerHTML = data.map(r => {
+      const name = orderNameMap[r.order_session_id] || "—";
+      const prod = productMap[r.product_id];
+      const prodName = prod?.name || r.product_id?.slice(0, 8) || "—";
+      const cls = statusCls[r.status] || "bg-gray-100 text-gray-600";
+
+      return `<tr class="border-b border-gray-100 hover:bg-gray-50">
+        <td class="py-2 px-2 text-xs font-medium">${escHtml(name)}</td>
+        <td class="py-2 px-2 text-xs text-gray-500 font-mono">${maskPhone(r.phone)}</td>
+        <td class="py-2 px-2 text-xs max-w-[120px] truncate" title="${escHtml(prod?.name || "")}">${escHtml(prodName)}</td>
+        <td class="py-2 px-2"><span class="${cls} text-[10px] font-bold uppercase px-2 py-0.5 rounded-full">${r.status}</span></td>
+        <td class="py-2 px-2 text-[10px] text-gray-400">${fmtDate(r.sent_at)}</td>
+        <td class="py-2 px-2 text-[10px] text-gray-400 hidden sm:table-cell">${fmtDate(r.clicked_at)}</td>
+        <td class="py-2 px-2 text-[10px] text-gray-400 hidden sm:table-cell">${fmtDate(r.reviewed_at)}</td>
+      </tr>`;
+    }).join("");
+
+    $("rrLogSection")?.classList.remove("hidden");
   } catch (err) {
     console.warn("[admin reviews] review request stats error:", err);
   }

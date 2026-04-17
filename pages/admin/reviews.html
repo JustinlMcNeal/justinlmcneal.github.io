@@ -173,6 +173,35 @@
           <div class="text-[10px] font-bold uppercase tracking-wider text-gray-400 mt-1">Completed</div>
         </div>
       </div>
+
+      <!-- SMS Message Preview -->
+      <div class="mt-4 p-3 bg-gray-50 rounded-xl border border-gray-200">
+        <div class="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-2">SMS Message Template</div>
+        <div class="text-xs text-gray-700 font-mono bg-white p-3 rounded-lg border border-gray-100">
+          Hey <span class="text-kkpink font-bold">{name}</span>! How's your <span class="text-kkpink font-bold">{product}</span>? Leave a review &amp; get <span class="text-kkpink font-bold">{discount}</span> off your next order → <span class="text-blue-500 underline">{link}</span><br><br>Reply STOP to opt out
+        </div>
+      </div>
+
+      <!-- Request Log Table -->
+      <div id="rrLogSection" class="hidden mt-4">
+        <div class="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-2">Request Log</div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b-2 border-black text-left">
+                <th class="py-2 px-2 text-[10px] font-black uppercase tracking-wider">Customer</th>
+                <th class="py-2 px-2 text-[10px] font-black uppercase tracking-wider">Phone</th>
+                <th class="py-2 px-2 text-[10px] font-black uppercase tracking-wider">Product</th>
+                <th class="py-2 px-2 text-[10px] font-black uppercase tracking-wider">Status</th>
+                <th class="py-2 px-2 text-[10px] font-black uppercase tracking-wider">Sent</th>
+                <th class="py-2 px-2 text-[10px] font-black uppercase tracking-wider hidden sm:table-cell">Clicked</th>
+                <th class="py-2 px-2 text-[10px] font-black uppercase tracking-wider hidden sm:table-cell">Reviewed</th>
+              </tr>
+            </thead>
+            <tbody id="rrLogRows"></tbody>
+          </table>
+        </div>
+      </div>
     </section>
 
     <!-- ─── REVIEWS TABLE ─── -->
