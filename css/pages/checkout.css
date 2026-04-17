@@ -99,6 +99,18 @@ html {
   display: none !important;
 }
 
+/* ── Add-to-cart bounce animation ── */
+@keyframes addedBounce {
+  0% { transform: scale(1); }
+  30% { transform: scale(1.08); }
+  60% { transform: scale(0.96); }
+  100% { transform: scale(1); }
+}
+
+.checkout-rec-added {
+  animation: addedBounce 0.35s ease-out;
+}
+
 /* ── Bottom padding for mobile sticky bar ── */
 @media (max-width: 767px) {
   main {
@@ -108,8 +120,8 @@ html {
   /* Bigger qty controls on mobile */
   .checkout-items [data-checkout-qty-minus],
   .checkout-items [data-checkout-qty-plus] {
-    width: 3.25rem;
-    height: 3.25rem;
+    width: 3.5rem;
+    height: 3.5rem;
   }
 
   /* Bigger remove tap target on mobile */

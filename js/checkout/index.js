@@ -299,6 +299,7 @@ async function loadRecommendations(cart, activePromos) {
         btn.textContent = "✓ Added!";
         btn.disabled = true;
         btn.classList.replace("bg-black", "bg-green-600");
+        btn.classList.add("checkout-rec-added");
         refresh();
       });
     });
