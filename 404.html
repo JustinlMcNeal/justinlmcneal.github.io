@@ -8,14 +8,11 @@
     (function () {
       var path = window.location.pathname;
 
-      // /s/{slug} → proxy to share-product edge function (rich link previews)
+      // /s/{slug} → redirect to product page
       if (path.startsWith('/s/')) {
         var slug = path.replace('/s/', '').replace(/\/+$/, '');
         if (slug) {
-          window.location.replace(
-            'https://yxdzvzscufkvewecvagq.supabase.co/functions/v1/share-product/' +
-            encodeURIComponent(slug)
-          );
+          window.location.replace('/pages/product.html?slug=' + encodeURIComponent(slug));
           return;
         }
       }
