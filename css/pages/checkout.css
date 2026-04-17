@@ -40,7 +40,7 @@
   bottom: 0;
   left: 0;
   right: 0;
-  z-index: 40;
+  z-index: 90;
 }
 
 @media (min-width: 768px) {
@@ -86,6 +86,16 @@ html {
 
 /* ── Hide announcement bar on checkout (reduce noise at critical step) ── */
 #kkAnnouncementBar {
+  display: none !important;
+}
+
+/* ── Hide bottom nav on checkout (remove escape routes) ── */
+#kkMobileNav {
+  display: none !important;
+}
+
+/* ── Hide footer on checkout (reduce distraction + exit paths) ── */
+#kkFooterMount {
   display: none !important;
 }
 

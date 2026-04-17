@@ -309,6 +309,26 @@ async function loadRecommendations(cart, activePromos) {
   }
 }
 
+/* ── Coupon section toggle ── */
+function initCouponToggle() {
+  const toggle = document.getElementById("checkoutCouponToggle");
+  const body = document.getElementById("checkoutCouponBody");
+  const chevron = document.getElementById("checkoutCouponChevron");
+  if (!toggle || !body) return;
+
+  // Auto-expand if coupon already applied
+  const existing = getAppliedCoupon();
+  if (existing) {
+    body.classList.remove("hidden");
+    chevron?.classList.add("rotate-180");
+  }
+
+  toggle.addEventListener("click", () => {
+    const isHidden = body.classList.toggle("hidden");
+    chevron?.classList.toggle("rotate-180", !isHidden);
+  });
+}
+
 /* ── Mobile sticky bar visibility ── */
 function initMobileStickyBar() {
   const bar = els.mobileStickyBar();
@@ -370,6 +390,9 @@ async function init() {
 
   payBtn?.addEventListener("click", () => handleCheckout(payBtn));
   mobilePayBtn?.addEventListener("click", () => handleCheckout(mobilePayBtn));
+
+  // Coupon toggle
+  initCouponToggle();
 
   // Mobile sticky bar
   initMobileStickyBar();
