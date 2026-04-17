@@ -8,12 +8,6 @@ import { initCouponUI } from "./couponUI.js";
 import { initAnnouncementBar } from "./announcementBar.js";
 import { initMobileNav } from "./mobileNav.js";
 import { initSwipeToAdd } from "./swipeToAdd.js";
-import {
-  calculateCartTotals,
-  buildCheckoutPromoPayload,
-} from "./cart/cartTotals.js";
-import { getAppliedCoupon } from "./couponManager.js";
-import { checkPromotionApplies } from "./promotions/promoScope.js";
 
 function isAdminPage() {
   const base = getSiteBasePath();
@@ -259,12 +253,12 @@ export async function initNavbar() {
     }
   });
 
-  // Stripe checkout (bind once)
+  // Checkout — navigate to checkout review page (bind once)
   const checkoutBtn = document.querySelector("[data-kk-checkout]");
   if (checkoutBtn && !checkoutBtn.__kkBound) {
     checkoutBtn.__kkBound = true;
 
-    checkoutBtn.addEventListener("click", async (e) => {
+    checkoutBtn.addEventListener("click", (e) => {
       e.preventDefault();
 
       const cart = getCart();
@@ -273,138 +267,9 @@ export async function initNavbar() {
         return;
       }
 
-      try {
-        const supabase = getSupabaseClient();
-
-        // ✅ Use the SAME totals engine as the cart drawer (includes BOGO + coupons)
-        const totals = await calculateCartTotals(cart);
-
-        const subtotal = Number(totals.subtotal || 0);
-        const total = Number(totals.total || 0);
-
-        // Separate auto promo discounts from coupon discounts
-        const autoDiscount = Number(totals.autoDiscount || 0);
-        const couponDiscount = Number(totals.couponDiscount || 0);
-
-        // ✅ Build promo metadata for webhook storage
-        const promo = await buildCheckoutPromoPayload(cart);
-
-        // Calculate cart subtotal for proportional distribution
-        const cartSubtotal =
-          cart.reduce(
-            (sum, item) =>
-              sum +
-              Number(item.price || 0) * Math.max(1, Number(item.qty || 1)),
-            0
-          ) || 1;
-
-        // Determine which items are matched by the coupon's scope
-        const coupon = getAppliedCoupon();
-        const couponScopeType = coupon?.scope_type || "all";
-
-        // Calculate the subtotal of coupon-matching items (for proportional split within scope)
-        let couponMatchSubtotal = 0;
-        const couponMatchFlags = cart.map((item) => {
-          if (!coupon || couponDiscount <= 0) return false;
-          if (couponScopeType === "all") return true;
-          return checkPromotionApplies(coupon, item);
-        });
-
-        couponMatchFlags.forEach((matches, idx) => {
-          if (matches) {
-            const item = cart[idx];
-            const qty = Math.max(1, Number(item.qty || 1));
-            couponMatchSubtotal += Number(item.price || 0) * qty;
-          }
-        });
-        couponMatchSubtotal = couponMatchSubtotal || 1;
-
-        const items = cart.map((item, idx) => {
-          const qty = Math.max(1, Number(item.qty || 1));
-          const unitPrice = Number(item.price || 0);
-          const lineSubtotal = unitPrice * qty;
-
-          // 1) Auto promo discount — distributed proportionally across ALL items
-          const autoWeight = lineSubtotal / cartSubtotal;
-          const lineAutoDiscount = autoDiscount * autoWeight;
-
-          // 2) Coupon discount — distributed ONLY to items matching coupon scope
-          let lineCouponDiscount = 0;
-          if (couponMatchFlags[idx]) {
-            const couponWeight = lineSubtotal / couponMatchSubtotal;
-            lineCouponDiscount = couponDiscount * couponWeight;
-          }
-
-          const lineDiscount = lineAutoDiscount + lineCouponDiscount;
-          const unitDiscount = lineDiscount / qty;
-          const discounted_price = Math.max(0, unitPrice - unitDiscount);
-
-          return {
-            product_id: item.product_id || item.id,
-            name: item.name,
-            variant: item.variant || "",
-            price: unitPrice,
-            discounted_price,
-            qty,
-            image: item.image || "",
-          };
-        });
-
-        // Keep your localhost normalization
-        const origin = location.origin.replace("127.0.0.1", "localhost");
-
-        const res = await supabase.functions.invoke("create-checkout-session", {
-          body: {
-            items,
-            promo,
-            success_url: `${origin}${withBase("/pages/success.html")}`,
-            cancel_url: `${origin}${location.pathname}${location.search}`,
-          },
-        });
-
-        console.log("checkout invoke result:", res);
-
-        if (res.error) {
-          console.error("invoke error:", res.error);
-
-          // Try multiple ways to get the error response
-          const resp = res.error?.context?.response || res.response;
-          if (resp && typeof resp.text === 'function') {
-            const text = await resp.text();
-            console.error("function response body:", text);
-
-            try {
-              const j = JSON.parse(text);
-              const errorMsg = j.error || text;
-              const details = j.details ? `\n\nDetails: ${JSON.stringify(j.details, null, 2)}` : '';
-              alert(`Checkout failed: ${errorMsg}${details}`);
-            } catch {
-              alert(`Checkout failed: ${text}`);
-            }
-          } else {
-            // Fallback: try to get message from error object
-            const msg = res.error?.message || res.error?.toString() || "Unknown error";
-            alert(`Checkout failed: ${msg}`);
-          }
-          return;
-        }
-
-        if (res.data?.error) {
-          console.error("function error:", res.data.error);
-          alert(`Checkout failed: ${res.data.error}`);
-          return;
-        }
-
-        if (!res.data?.url) {
-          alert("Checkout failed: No session URL returned");
-          return;
-        }
-
-        window.location.href = res.data.url;
-      } catch (err) {
-        console.error(err);
-        alert("Checkout failed. Please try again.");
-      }
+      // Navigate to checkout review page
+      const base = getSiteBasePath();
+      window.location.href = `${base}/pages/checkout.html`;
     });
   }
 }

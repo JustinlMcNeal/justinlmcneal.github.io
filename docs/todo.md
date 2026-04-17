@@ -2,12 +2,132 @@
 
 ## Checkout & Orders
 
-- [ ] **Native site checkout form (full control)**
-  - Validate shipping address
-  - Store order in Supabase
-  - Pass to Stripe Checkout
-  - Create order record on success
-- [ ] **Checkout order summary page** — order validation and confirmation info display
+- [ ] **Checkout review page** — on-site order review before Stripe payment
+
+  <details>
+  <summary><strong>Implementation Plan</strong></summary>
+
+  #### Current Flow
+  Cart drawer → clicks "Checkout" → `create-checkout-session` edge function → redirect to Stripe Hosted Checkout → `stripe-webhook` saves order → `success.html`
+
+  #### New Flow
+  Cart drawer → clicks "Checkout" → **`checkout.html` (new review page)** → clicks "Proceed to Payment" → `create-checkout-session` → Stripe → webhook → `success.html`
+
+  #### What the page shows
+
+  **Header**
+  - Breadcrumb: Home → Cart → Checkout
+  - Step indicator: Cart ✓ → Review (current) → Payment
+
+  **Order Review Section (left/main column)**
+  - Each cart item as a card:
+    - Product image (thumbnail)
+    - Product name (links back to product page)
+    - Variant (if any) — e.g. "Size: L / Color: Black"
+    - Unit price (original + discounted if promo applies)
+    - Quantity selector (± buttons, same as cart drawer)
+    - Remove button (trash icon)
+    - Line total
+  - Empty state: "Your cart is empty" with "Continue Shopping" CTA → catalog page
+
+  **Coupon / Promo Section**
+  - Coupon code input + "Apply" button (reuses existing `couponManager` + `promoCoupons`)
+  - Active promo badges: auto-applied promotions shown as green badges (e.g. "🏷️ 20% off Jewelry")
+  - Applied coupon shown with remove button
+  - BOGO indicator if active
+
+  **Order Summary Sidebar (right column / bottom on mobile)**
+  - Subtotal (before discounts)
+  - Auto promo discount line (if any) — e.g. "−$4.00 (20% off Jewelry)"
+  - Coupon discount line (if any) — e.g. "−$5.00 (THANKS-ABCDE)"
+  - Shipping estimate: Free (if over threshold or free_shipping coupon), else Standard $5.99 / Express $12.99
+  - Free shipping progress bar (reuse `freeShippingBar` logic)
+  - **Order Total** (bold, large)
+  - "Proceed to Payment" button (primary CTA, full-width)
+  - "Continue Shopping" link below
+  - Trust badges row: 🔒 Secure Checkout | 📦 Free Shipping $50+ | ↩️ Easy Returns
+  - Accepted payment icons: Visa, MC, Amex, Apple Pay, Google Pay (Stripe handles these)
+
+  **Cross-sell Section (below items)**
+  - "Recently Bought Together" — products from same category or frequently paired items
+  - Clickable from "$X away from free shipping" message → scrolls here
+  - Reuses existing recommendation logic from `cartRecommendations.js`
+
+  **Conversion Boosters (throughout page)**
+  - **Friction reducers** under CTA: ✔ Free returns · ✔ Ships in 2–5 days · ✔ 4.8★ from 200+ customers
+  - **Estimated delivery**: "Arrives by: Apr 22–25" (calculated from current date + 5–8 business days)
+  - **Low stock indicator**: "Only 3 left!" badge on items where `stock < threshold` (fetched from `product_variants`)
+  - **"$X away from free shipping"** dynamic message in summary — clickable, scrolls to recommendations
+  - **"Secured by Stripe"** trust badge with Stripe logo — real trust, not generic lock icon
+  - **Cart snapshot before payment**: save `{ items, totals, coupon_used, timestamp }` to localStorage before Stripe call — debugging, analytics, abandoned cart recovery
+  - **Exit intent tracking**: on `beforeunload` if user hasn't checked out → save `last_checkout_viewed_at` to localStorage for abandoned cart signals
+
+  #### Architecture
+
+  | File | Purpose |
+  |------|---------|
+  | `pages/checkout.html` | **New** — checkout review page HTML (Tailwind, consistent with site theme) |
+  | `js/checkout/index.js` | **New** — entry point: load cart, render items, wire controls, handle checkout CTA, exit intent |
+  | `js/checkout/renderItems.js` | **New** — render cart items as review cards with qty controls + remove + low stock badge |
+  | `js/checkout/summary.js` | **New** — order totals sidebar, promo/coupon lines, shipping estimate, delivery date, free shipping bar |
+  | `js/checkout/recommendations.js` | **New** — "Recently Bought Together" product cards |
+  | `css/pages/checkout.css` | **New** — checkout-specific styles (responsive 2-column layout) |
+
+  #### What we reuse (no changes needed)
+
+  | Module | What it gives us |
+  |--------|-----------------|
+  | `cartStore.js` | `getCart()`, `setQty()`, `removeItem()`, `clearCart()`, `cartSubtotal()` |
+  | `cartTotals.js` | `calculateCartTotals()` — all discount math (auto promos, BOGO, coupons) |
+  | `couponManager.js` | `applyCoupon()`, `removeCoupon()`, `getAppliedCoupon()` |
+  | `promoCoupons.js` | `validateCouponCode()` — server-side validation |
+  | `promoFetch.js` | `fetchActivePromotions()` — loads current auto promos |
+  | `freeShippingBar.js` | Free shipping threshold logic (from `site_settings`) |
+  | `navbar.js` | Existing `[data-kk-checkout]` handler — move to checkout page JS |
+
+  #### Checkout button behavior
+
+  1. Cart drawer "Checkout" button → navigates to `checkout.html` (instead of calling Stripe directly)
+  2. On `checkout.html`, "Proceed to Payment" button:
+     - Saves cart snapshot to localStorage (items, totals, coupon — for debugging + abandoned cart)
+     - Runs `calculateCartTotals()` + `buildCheckoutPromoPayload()`
+     - Calls `create-checkout-session` edge function (same as current navbar handler)
+     - Redirects to Stripe Hosted Checkout URL
+     - Shows loading spinner on button during API call
+     - Disables button to prevent double-clicks
+  3. Empty cart check: if cart is empty on page load → redirect to catalog or show empty state
+
+  #### Mobile layout
+
+  - Single column: items stack vertically → summary section below
+  - Summary becomes sticky bottom bar on scroll (total + "Proceed to Payment" always visible)
+  - Coupon input above summary on mobile
+  - Trust badges collapse to icons-only on small screens
+  - Friction reducers stack vertically under CTA
+
+  #### Edge cases
+
+  - **Cart changes during review**: qty/remove updates recalculate totals in real-time
+  - **Promo expires during review**: `calculateCartTotals()` re-fetches on checkout click, totals reflect latest
+  - **Out of stock**: `create-checkout-session` already validates stock server-side → returns error → show toast
+  - **Empty cart**: redirect to catalog with "Your cart is empty" toast
+  - **Low stock fetch fail**: silently skip badges — don't block checkout
+  - **Exit without purchase**: `beforeunload` saves `last_checkout_viewed_at` for abandoned cart signal
+
+  #### Execution Order
+
+  1. Create `pages/checkout.html` (page shell + Tailwind layout)
+  2. Create `js/checkout/renderItems.js` (item cards with controls + low stock)
+  3. Create `js/checkout/summary.js` (order summary + delivery estimate + free shipping nudge)
+  4. Create `js/checkout/index.js` (entry point, wire everything, exit intent, cart snapshot)
+  5. Create `css/pages/checkout.css` (responsive 2-column layout)
+  6. Update cart drawer "Checkout" button → navigate to `checkout.html`
+  7. Move Stripe checkout logic from `navbar.js` → `checkout/index.js`
+  8. Add "Recently Bought Together" recommendations
+  9. Test full flow: add items → cart → checkout page → Stripe → success
+
+  </details>
+
 - [ ] **Implement Shippo** into the order fulfillment system
 - [x] **Fix eBay & Amazon order imports** — correct data mapping with SKU_MAP; variant extraction working
 
@@ -68,6 +188,36 @@
   </details>
 
 - [x] **Share button on product pages** — native share for iMessage, Discord, etc. with OG image embed
+
+  <details>
+  <summary><strong>Implementation Details (completed)</strong></summary>
+
+  #### What was built
+
+  - **Share button** on product pages using Web Share API (native share sheet on mobile) with clipboard fallback on desktop
+  - **Share links** at `karrykraze.com/s/{slug}` — short, clean URLs for sharing
+  - **Rich previews** (OG meta tags) — product image, title, price shown in iMessage, Discord, Twitter, Facebook previews
+  - **Cloudflare Worker** (`share-proxy`) proxies `/s/{slug}` requests to Supabase `share-product` edge function, fixes `Content-Type: text/html` (Supabase gateway forces `text/plain`)
+  - **Auto-redirect** — bots get OG tags, humans get `<meta http-equiv="refresh">` + `window.location.replace()` redirect to product page
+  - **404.html fallback** — JS redirect for `/s/` paths in case Worker isn't hit
+
+  #### Files
+
+  | File | Purpose |
+  |------|---------|
+  | `supabase/functions/share-product/index.ts` | Edge function: looks up product by slug, returns HTML with OG tags |
+  | `cloudflare-worker/share-proxy/index.js` | Cloudflare Worker: proxies to Supabase, sets correct Content-Type |
+  | `cloudflare-worker/share-proxy/wrangler.toml` | Worker config: route `karrykraze.com/s/*` |
+  | `js/product/render.js` | Share button UI + Web Share API / clipboard fallback |
+  | `404.html` | JS fallback redirect for `/s/` paths |
+
+  #### Key decisions
+
+  - Supabase edge functions gateway forces `Content-Type: text/plain` regardless of function response → solved with Cloudflare Worker proxy
+  - OG image dimensions set to 1200×630 to match Apple/iMessage requirements (same as working SMS signup page)
+  - Direct Supabase storage image URLs (no proxy or transforms needed)
+
+  </details>
 - [ ] **Referral share link** — sharer gets a unique link; referee gets 5% off at checkout; sharer earns 10% off when the referee completes a purchase
 - [x] **Catalog search on mobile** — iOS auto-zoom fixed (16px base font), predictive dropdown removed
 

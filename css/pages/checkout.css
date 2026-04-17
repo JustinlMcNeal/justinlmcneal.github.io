@@ -1,0 +1,92 @@
+/* css/pages/checkout.css */
+/* Responsive 2-column layout for checkout review page */
+
+/* ── Grid layout ── */
+.checkout-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (min-width: 768px) {
+  .checkout-grid {
+    grid-template-columns: 1fr 380px;
+    gap: 2rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .checkout-grid {
+    grid-template-columns: 1fr 400px;
+  }
+}
+
+/* ── Summary sidebar sticky ── */
+.checkout-summary {
+  position: relative;
+}
+
+@media (min-width: 768px) {
+  .checkout-summary > div {
+    position: sticky;
+    top: 5rem; /* below fixed navbar */
+  }
+}
+
+/* ── Mobile sticky bar ── */
+.checkout-mobile-sticky {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
+}
+
+@media (min-width: 768px) {
+  .checkout-mobile-sticky {
+    display: none !important;
+  }
+}
+
+/* ── Item card hover ── */
+.checkout-items article {
+  transition: box-shadow 0.2s ease;
+}
+
+.checkout-items article:hover {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* ── Low stock badge pulse ── */
+@keyframes lowStockPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.checkout-items .text-red-500 {
+  animation: lowStockPulse 2s ease-in-out infinite;
+}
+
+/* ── Ensure coupon line layout ── */
+#checkoutCouponLine {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+#checkoutCouponLine.hidden {
+  display: none;
+}
+
+/* ── Smooth scroll for free shipping nudge ── */
+html {
+  scroll-behavior: smooth;
+}
+
+/* ── Bottom padding for mobile sticky bar ── */
+@media (max-width: 767px) {
+  main {
+    padding-bottom: 5rem;
+  }
+}
