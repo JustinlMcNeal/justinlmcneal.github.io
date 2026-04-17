@@ -1,7 +1,7 @@
 // js/checkout/index.js
 // Checkout review page — entry point
 
-import { getCart } from "../shared/cartStore.js";
+import { getCart, addToCart } from "../shared/cartStore.js";
 import { getSupabaseClient } from "../shared/supabaseClient.js";
 import { initNavbar } from "../shared/navbar.js";
 import { initFooter } from "../shared/footer.js";
@@ -251,21 +251,57 @@ async function loadRecommendations(cart, activePromos) {
         const name = String(p.name || "").replace(/&/g, "&amp;").replace(/</g, "&lt;");
         const price = Number(p.price || 0).toFixed(2);
         const badge = idx === 0 ? `<span class="absolute top-1.5 left-1.5 bg-black text-white text-[9px] font-bold px-2 py-0.5 rounded-full z-10">Most Popular</span>` : "";
+        const pid = String(p.id || "");
 
         return `
-          <a href="/pages/product.html?slug=${slug}" class="block bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5 group">
-            <div class="aspect-square bg-black/5 overflow-hidden relative">
-              ${badge}
-              <img src="${img}" alt="${name}" class="w-full h-full object-cover group-hover:scale-105 transition-transform" loading="lazy" />
+          <div class="bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5 group">
+            <a href="/pages/product.html?slug=${slug}">
+              <div class="aspect-square bg-black/5 overflow-hidden relative">
+                ${badge}
+                <img src="${img}" alt="${name}" class="w-full h-full object-cover group-hover:scale-105 transition-transform" loading="lazy" />
+              </div>
+              <div class="px-2.5 pt-2.5 pb-1">
+                <p class="text-xs font-bold line-clamp-2 leading-tight">${name}</p>
+                <p class="text-xs font-semibold mt-1">$${price}</p>
+              </div>
+            </a>
+            <div class="px-2.5 pb-2.5 pt-1">
+              <button
+                type="button"
+                class="checkout-rec-add w-full py-1.5 text-[11px] font-bold bg-black text-white rounded-lg hover:bg-black/80 transition-colors"
+                data-rec-id="${pid}"
+                data-rec-name="${name}"
+                data-rec-price="${price}"
+                data-rec-image="${img.replace(/"/g, "&quot;")}"
+                data-rec-slug="${slug}"
+                data-rec-catid="${p.category_id || ""}"
+              >+ Add to Cart</button>
             </div>
-            <div class="p-2.5">
-              <p class="text-xs font-bold line-clamp-2 leading-tight">${name}</p>
-              <p class="text-xs font-semibold mt-1">$${price}</p>
-            </div>
-          </a>
+          </div>
         `;
       })
       .join("");
+
+    // Wire "Add to Cart" buttons
+    grid.querySelectorAll(".checkout-rec-add").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        const d = btn.dataset;
+        addToCart({
+          id: d.recId,
+          name: d.recName,
+          price: parseFloat(d.recPrice),
+          image: d.recImage,
+          slug: d.recSlug,
+          category_id: d.recCatid || null,
+          qty: 1,
+        });
+        btn.textContent = "✓ Added!";
+        btn.disabled = true;
+        btn.classList.replace("bg-black", "bg-green-600");
+        refresh();
+      });
+    });
 
     section.classList.remove("hidden");
   } catch {
