@@ -279,20 +279,29 @@ function initMobileStickyBar() {
   const desktopBtn = els.payBtn();
   if (!bar || !desktopBtn) return;
 
+  function updateBar(isCtaVisible) {
+    const cart = getCart();
+    if (!cart.length) { bar.classList.add("hidden"); return; }
+    if (isCtaVisible) {
+      bar.classList.add("hidden");
+    } else {
+      bar.classList.remove("hidden");
+    }
+  }
+
   const observer = new IntersectionObserver(
-    ([entry]) => {
-      // Show sticky bar when desktop CTA is NOT visible (scrolled past)
-      if (entry.isIntersecting) {
-        bar.classList.add("hidden");
-      } else {
-        const cart = getCart();
-        if (cart.length) bar.classList.remove("hidden");
-      }
-    },
+    ([entry]) => updateBar(entry.isIntersecting),
     { threshold: 0 }
   );
 
   observer.observe(desktopBtn);
+
+  // Check initial state after a tick (CTA may already be off-screen on mobile)
+  requestAnimationFrame(() => {
+    const rect = desktopBtn.getBoundingClientRect();
+    const isVisible = rect.top < window.innerHeight && rect.bottom > 0;
+    updateBar(isVisible);
+  });
 }
 
 /* ── Exit intent tracking ── */

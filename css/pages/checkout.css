@@ -84,9 +84,42 @@ html {
   scroll-behavior: smooth;
 }
 
+/* ── Hide announcement bar on checkout (reduce noise at critical step) ── */
+#kkAnnouncementBar {
+  display: none !important;
+}
+
 /* ── Bottom padding for mobile sticky bar ── */
 @media (max-width: 767px) {
   main {
     padding-bottom: 5rem;
+  }
+
+  /* Bigger qty controls on mobile */
+  .checkout-items [data-checkout-qty-minus],
+  .checkout-items [data-checkout-qty-plus] {
+    width: 3.25rem;
+    height: 3.25rem;
+  }
+
+  /* Bigger remove tap target on mobile */
+  .checkout-items [data-checkout-remove] {
+    min-height: 2.75rem;
+    padding: 0.5rem 0.625rem;
+  }
+
+  /* Horizontal scroll upsell on mobile */
+  #checkoutRecsGrid {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    gap: 0.75rem;
+    padding-bottom: 0.5rem;
+  }
+
+  #checkoutRecsGrid > a {
+    flex: 0 0 45%;
+    scroll-snap-align: start;
   }
 }
