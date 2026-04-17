@@ -43,15 +43,16 @@ function starsHtml(rating, size = "text-sm") {
 }
 
 /* ── Token Flow ── */
-async function handleToken(token) {
+async function handleToken(token, code) {
   hide($("step1"));
   show($("tokenLoading"));
 
   try {
+    const payload = code ? { code } : { token };
     const res = await fetch(VERIFY_TOKEN_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY },
-      body: JSON.stringify({ token }),
+      body: JSON.stringify(payload),
     });
 
     const data = await res.json();
@@ -470,9 +471,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (e.key === "Enter") lookupOrder();
   });
 
-  // Check for token (SMS deep link)
+  // Check for short code or token (SMS deep link)
   const params = new URLSearchParams(window.location.search);
+  const code = params.get("r");
   const token = params.get("token");
+  if (code) {
+    handleToken(null, code);
+    return;
+  }
   if (token) {
     handleToken(token);
     return;

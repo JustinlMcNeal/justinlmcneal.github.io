@@ -174,10 +174,13 @@ async function handleSingle(
 
   const tokenHash = await sha256hex(token);
 
+  // Generate short code for clean SMS links
+  const shortCode = crypto.randomUUID().replace(/-/g, "").slice(0, 10);
+
   // Build SMS
   const name = first_name || "there";
   const prodName = product_name || "your purchase";
-  const link = `https://karrykraze.com/pages/leave-review.html?token=${encodeURIComponent(token)}`;
+  const link = `https://karrykraze.com/pages/leave-review.html?r=${shortCode}`;
   const smsBody = `Hey ${name}! How's your ${prodName}? Leave a review & get ${discountText} off your next order → ${link}\n\nReply STOP to opt out`;
 
   // Send SMS
@@ -191,6 +194,7 @@ async function handleSingle(
       product_id,
       phone,
       token_hash: tokenHash,
+      short_code: shortCode,
       sent_at: new Date().toISOString(),
       status: smsResult.ok ? "sent" : "failed",
     });

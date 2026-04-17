@@ -84,41 +84,79 @@ Deno.serve(async (req) => {
     }
 
     const sb = createClient(supabaseUrl, serviceKey);
-    const { token } = await req.json();
+    const body = await req.json();
+    const { token, code } = body;
 
-    if (!token || typeof token !== "string") {
-      return json({ error: "Token is required" }, 400);
+    let orderSessionId: string;
+    let productId: string;
+    let email: string;
+
+    if (code && typeof code === "string") {
+      // ── Short code flow: look up review_requests by short_code ──
+      const { data: reqRow, error: reqErr } = await sb
+        .from("review_requests")
+        .select("order_session_id, product_id, sent_at")
+        .eq("short_code", code)
+        .single();
+
+      if (reqErr || !reqRow) {
+        return json({ success: false, error: "Invalid or expired link" }, 401);
+      }
+
+      // Check 30-day expiry from sent_at
+      const sentAt = new Date(reqRow.sent_at).getTime();
+      const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+      if (Date.now() - sentAt > thirtyDays) {
+        return json({ success: false, error: "Invalid or expired token" }, 401);
+      }
+
+      orderSessionId = reqRow.order_session_id;
+      productId = reqRow.product_id;
+
+      // Get email from orders_raw
+      const { data: orderRow } = await sb
+        .from("orders_raw")
+        .select("email")
+        .eq("stripe_checkout_session_id", orderSessionId)
+        .single();
+      email = orderRow?.email || "";
+
+      // Update clicked_at
+      await sb
+        .from("review_requests")
+        .update({ clicked_at: new Date().toISOString(), status: "clicked" })
+        .eq("short_code", code)
+        .is("clicked_at", null);
+
+    } else if (token && typeof token === "string") {
+      // ── JWT token flow (legacy / backward compat) ──
+      const payload = await verifyJwt(token, reviewSecret);
+      if (!payload) {
+        return json({ success: false, error: "Invalid or expired token" }, 401);
+      }
+
+      orderSessionId = payload.oid as string;
+      productId = payload.pid as string;
+      email = payload.email as string;
+
+      // Update clicked_at via token_hash
+      const tokenHashBuf = await crypto.subtle.digest(
+        "SHA-256",
+        new TextEncoder().encode(token)
+      );
+      const tokenHash = Array.from(new Uint8Array(tokenHashBuf))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+
+      await sb
+        .from("review_requests")
+        .update({ clicked_at: new Date().toISOString(), status: "clicked" })
+        .eq("token_hash", tokenHash)
+        .is("clicked_at", null);
+
+    } else {
+      return json({ error: "Token or code is required" }, 400);
     }
-
-    // Verify JWT
-    const payload = await verifyJwt(token, reviewSecret);
-    if (!payload) {
-      return json({ success: false, error: "Invalid or expired token" }, 401);
-    }
-
-    const orderSessionId = payload.oid as string;
-    const productId = payload.pid as string;
-    const email = payload.email as string;
-
-    if (!orderSessionId || !email) {
-      return json({ success: false, error: "Invalid token payload" }, 400);
-    }
-
-    // Update clicked_at on review_requests (track SMS→click conversion)
-    // Use token_hash to find the row — hash the token for lookup
-    const tokenHashBuf = await crypto.subtle.digest(
-      "SHA-256",
-      new TextEncoder().encode(token)
-    );
-    const tokenHash = Array.from(new Uint8Array(tokenHashBuf))
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("");
-
-    await sb
-      .from("review_requests")
-      .update({ clicked_at: new Date().toISOString(), status: "clicked" })
-      .eq("token_hash", tokenHash)
-      .is("clicked_at", null);
 
     // Check if already reviewed
     const { data: existingReview } = await sb
