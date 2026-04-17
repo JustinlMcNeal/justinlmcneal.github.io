@@ -131,6 +131,25 @@ async function handleSingle(
     return json({ error: "Missing required fields: order_session_id, product_id, phone, email" }, 400);
   }
 
+  // ── SMS consent check ──────────────────────────────────
+  // Only send to customers who opted in AND are still active.
+  // Matches the pattern used by sms-abandoned-cart and sms-welcome-series.
+  const normalizedPhone = phone.replace(/\D/g, "").replace(/^1/, "");
+  const e164Phone = `+1${normalizedPhone}`;
+
+  const { data: contact } = await sb
+    .from("customer_contacts")
+    .select("id, status, sms_consent")
+    .or(`phone.eq.${e164Phone},phone.eq.${normalizedPhone},phone.eq.+1${normalizedPhone}`)
+    .single();
+
+  if (!contact || contact.status !== "active" || !contact.sms_consent) {
+    return json({
+      error: "Customer has not opted in to SMS or has unsubscribed",
+      skipped: true,
+    }, 409);
+  }
+
   // Check if already requested (UNIQUE constraint will also catch this)
   const { data: existing } = await sb
     .from("review_requests")
