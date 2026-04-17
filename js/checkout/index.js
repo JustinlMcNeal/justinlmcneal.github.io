@@ -245,15 +245,17 @@ async function loadRecommendations(cart, activePromos) {
     }
 
     grid.innerHTML = products
-      .map((p) => {
+      .map((p, idx) => {
         const img = p.catalog_image_url || p.image_url || "/imgs/placeholder.png";
         const slug = p.slug || "";
         const name = String(p.name || "").replace(/&/g, "&amp;").replace(/</g, "&lt;");
         const price = Number(p.price || 0).toFixed(2);
+        const badge = idx === 0 ? `<span class="absolute top-1.5 left-1.5 bg-black text-white text-[9px] font-bold px-2 py-0.5 rounded-full z-10">Most Popular</span>` : "";
 
         return `
-          <a href="/pages/product.html?slug=${slug}" class="block bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow group">
-            <div class="aspect-square bg-black/5 overflow-hidden">
+          <a href="/pages/product.html?slug=${slug}" class="block bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5 group">
+            <div class="aspect-square bg-black/5 overflow-hidden relative">
+              ${badge}
               <img src="${img}" alt="${name}" class="w-full h-full object-cover group-hover:scale-105 transition-transform" loading="lazy" />
             </div>
             <div class="p-2.5">
