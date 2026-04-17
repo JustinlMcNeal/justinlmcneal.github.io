@@ -140,7 +140,7 @@ html {
     padding-bottom: 0.5rem;
   }
 
-  #checkoutRecsGrid > a {
+  #checkoutRecsGrid > * {
     flex: 0 0 45%;
     scroll-snap-align: start;
   }
