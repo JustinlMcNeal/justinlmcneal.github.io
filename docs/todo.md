@@ -104,7 +104,158 @@
 
   </details>
 - [x] **Product size/variant support** — size/color variants fully supported via `renderVariantSwatches()`
-- [ ] **Revamp Reviews page** — split into two pages: one for browsing reviews, one for leaving a review
+- [x] **Revamp Reviews page** — split into two pages: one for browsing reviews, one for leaving a review + SMS review requests post-delivery
+
+  <details>
+  <summary><strong>Implementation Plan</strong></summary>
+
+  #### Problem
+
+  The current `pages/reviews.html` has two jobs crammed into one page:
+  1. **Leave a review** — 4-step flow (enter email + order# → pick product → write review → get coupon)
+  2. **Browse reviews** — approved reviews feed with star filter buttons
+
+  These serve different audiences. A customer who just bought something wants to leave a review quickly. A potential customer browsing the site wants social proof — a beautiful, dedicated page showcasing what people think. Combining them dilutes both experiences.
+
+  Additionally, the current flow requires users to manually enter their email and order number to find their order. SMS review requests can eliminate this friction entirely by sending a direct link with the order session ID pre-embedded.
+
+  > **Audit Score: 10 / 10** — This is the second loop system:
+  > `Buy → SMS → Review → Coupon → Buy Again`
+  > When both the content loop and the review loop are running, you have: UGC, social proof, repeat purchases, and automated growth loops.
+  > Later: Reviews (photos) → Image Pool → Autopilot → Better Posts → More Sales → More Reviews — a full growth flywheel.
+
+  #### Architecture: 2 Pages + 1 SMS Flow
+
+  **Page 1: `pages/reviews.html` (Browse Reviews — public showcase)**
+  - Hero section: Overall store rating (avg stars, total count), trust badges
+  - Photo mosaic/gallery strip at top — **only reviews with photos** (`WHERE photo_url IS NOT NULL`), keeps the top section clean and high-quality
+  - Filter bar: star rating buttons (All, 5★, 4★, etc.) + sort (newest, highest, lowest) + search by product name
+  - Review cards: larger format, product thumbnail + name, stars, date, reviewer first name, title, body, photo with lightbox
+  - "✓ Verified Purchase" badge on every order-verified review
+  - Infinite scroll or "Load More" pagination
+  - CTA banner at bottom: "Love your purchase? Leave a review!" → links to leave-review page
+  - No review form on this page — purely a social proof showcase
+  - SEO: aggregate rating structured data (schema.org)
+
+  **Page 2: `pages/leave-review.html` (Submit a Review)**
+  - **Two entry modes:**
+    - **Manual entry** (existing flow): email + order number → verify → pick product → review form → coupon
+    - **SMS deep link** (new): URL like `leave-review.html?token=xxx` → auto-loads order + product, skips Steps 1-2 entirely
+  - Same 4-step UI but Step 1 shows "Welcome back, {name}!" when token is present
+  - Same submit-review edge function, same coupon system — no backend changes needed for the form itself
+  - **Review quality control:** min 20 characters for review body, title encouraged but optional
+  - **Photo prompt:** after text fields, show "Add a photo? (optional)" with clear upload CTA — feeds the browse page gallery + future content engine
+
+  **SMS Review Request Flow (new):**
+  - After a customer's order is delivered (or X days after purchase), send an SMS:
+    > "Hey {first_name}! How's your {product_name}? Leave a review & get {discount}% off your next order → {link}"
+  - The link is `https://karrykraze.com/pages/leave-review.html?token={signed_token}`
+  - The token is a JWT (signed with a **dedicated secret**, NOT the Supabase anon/service key) containing: `{ order_session_id, product_id, email, exp }`
+  - Token expires after 30 days — enough time to try the product
+  - Edge function `send-review-request` generates the JWT, builds SMS body, sends via Twilio
+  - Cron job or manual trigger: runs X days after order, checks `orders_raw` for delivered orders that haven't been review-requested yet
+  - **Dynamic delay from DB:** normal items → 7 days, MTO items (`shipping_status = 'mto'`) → 14 days, configurable via `review_settings`
+
+  #### Token Design (skip-the-lookup magic)
+
+  ```
+  JWT payload:
+  {
+    "oid": "cs_live_abc123",     // order_session_id
+    "pid": "uuid-of-product",    // product_id
+    "email": "buyer@email.com",  // for verification
+    "exp": 1720000000            // 30-day expiry
+  }
+  ```
+
+  **Security:**
+  - Signed with a dedicated `REVIEW_TOKEN_SECRET` (set via `supabase secrets set`), never the Supabase keys
+  - Only the hash of the token is stored in `review_requests.token_hash` — raw token is never persisted
+  - Edge function verifies signature + expiry before returning any data
+
+  **Frontend flow:**
+  - Token present → sends to `verify-review-token` edge function
+  - Edge function verifies JWT → returns order + product data (same shape as `verify-order`)
+  - Edge function updates `review_requests.clicked_at` on successful verification — tracks SMS→click conversion explicitly
+  - Frontend skips Steps 1-2, pre-fills product selection, lands on Step 3 (review form)
+  - **Graceful expiry UX:** if token is expired or invalid → show "This link has expired, but you can still leave a review below!" and fall back to manual entry (keeps conversion alive)
+  - **Already reviewed protection (strict):** if `(order_session_id, product_id)` already has a review → show the existing review + coupon code, disable the form entirely — prevents duplicate reviews and coupon abuse
+
+  #### New Edge Functions
+
+  | Function | Purpose |
+  |----------|---------|
+  | `verify-review-token` | Verify JWT (dedicated secret), return order + product data, check if already reviewed, return existing coupon if so, update `clicked_at` on `review_requests` for funnel tracking |
+  | `send-review-request` | Generate JWT, build SMS body, send via Twilio, log to `sms_sends` with flow=`review_request`, insert `review_requests` row |
+
+  #### Database Changes
+
+  | Change | Details |
+  |--------|---------|
+  | `review_requests` table (new) | `id`, `order_session_id`, `product_id`, `phone`, `token_hash`, `sent_at`, `clicked_at`, `reviewed_at`, `status` (sent/clicked/completed/expired) — tracks the full SMS→click→review funnel |
+  | `review_requests` constraint | `UNIQUE(order_session_id, product_id)` — enforced at DB level, prevents duplicate SMS sends even if cron bugs out or manual trigger is hit twice |
+  | `review_settings` update | Add `sms_request_delay_days` (default: 7), `sms_mto_delay_days` (default: 14), `sms_request_enabled` (boolean) |
+
+  #### Cron Trigger Options
+
+  - **Option A: Supabase Cron** — `pg_cron` job runs daily, queries orders from X days ago that have SMS-subscribed customers + no existing review request → calls `send-review-request` edge function
+  - **Option B: Manual from admin** — Button on admin reviews page: "Send review requests for recent orders" — more control, less automation overhead
+  - **Recommended: Start with Option B**, graduate to Option A once confident in the flow
+
+  #### Files Touched
+
+  | File | Change |
+  |------|--------|
+  | `pages/reviews.html` | Strip review form, rebuild as showcase page (hero, photo gallery, filter bar, review cards, infinite scroll, verified purchase badges) |
+  | `pages/leave-review.html` | **New page** — move review form here, add token-based auto-load logic, graceful expiry fallback, already-reviewed guard, min 20-char validation, photo prompt |
+  | `js/reviews/index.js` | Refactor: split into `js/reviews/browse.js` (showcase) + `js/reviews/leave.js` (form) |
+  | `js/reviews/browse.js` | **New** — load approved reviews, star filter, search, sort, infinite scroll, photo gallery |
+  | `js/reviews/leave.js` | **New** — existing form logic + token detection (`URLSearchParams`), auto-load via `verify-review-token`, graceful fallback on expiry, already-reviewed display |
+  | `supabase/functions/verify-review-token/index.ts` | **New** — JWT verify (dedicated secret), return order+product data, check if already reviewed + return existing coupon |
+  | `supabase/functions/send-review-request/index.ts` | **New** — generate JWT (dedicated secret), build SMS, send via Twilio, log to `sms_sends` + insert `review_requests` |
+  | `supabase/migrations/xxx_review_requests.sql` | **New** — `review_requests` table + UNIQUE constraint + indexes |
+  | `js/admin/reviews/index.js` | Add "Send Review Requests" button for manual trigger |
+  | `js/product/reviewSection.js` | Update "Leave a review" CTA link → `leave-review.html` |
+  | `js/home/reviewsCarousel.js` | Update "See all reviews" link → `reviews.html` (no change if already correct) |
+  | `page_inserts/footer.html` | Ensure reviews link points to browse page |
+  | `supabase/config.toml` | Add new edge functions with `verify_jwt = false` for `verify-review-token` |
+
+  #### Safeguards (from audit)
+
+  1. **Already-reviewed protection** — Strict: if review exists for `(order_session_id, product_id)`, show existing review + coupon, disable form. Prevents duplicate reviews and coupon abuse.
+  2. **SMS rate limiting** — `UNIQUE(order_session_id, product_id)` on `review_requests` table enforced at DB level. Prevents double sends from cron bugs or accidental re-triggers.
+  3. **Token security** — Signed with a dedicated `REVIEW_TOKEN_SECRET`, not Supabase keys. Only `token_hash` stored in DB, never the raw token.
+  4. **Graceful expiry UX** — Expired token shows "This link has expired, but you can still leave a review below!" and falls back to manual entry. Keeps conversion alive instead of dead-ending.
+  5. **Review quality control** — Min 20 characters for review body. Title encouraged but optional. Prevents low-quality spam that weakens social proof.
+  6. **SMS timing safety** — Dynamic delay from DB: 7 days normal, 14 days MTO. Max 1 SMS per product per order. Max 3 products per order. Prevents annoying customers.
+  7. **Coupon cooldown** — Max 1 review coupon per order, even if multiple products are reviewed. `submit-review` checks if any coupon already issued for that `order_session_id` before generating a new one. Prevents coupon farming.
+  8. **Click tracking** — `verify-review-token` updates `review_requests.clicked_at` on first verification. Full funnel is measurable: SMS sent → clicked → reviewed → completed.
+  9. **Review visibility control** — Reviews use existing `status` field (pending/approved/rejected). Even with auto-approve enabled, the moderation layer is always present for future control.
+  10. **Photo-only gallery** — Browse page photo mosaic only includes reviews where `photo_url IS NOT NULL`. Keeps the hero section clean and high-quality.
+
+  #### Recommendations
+
+  1. **Photo-first showcase** — Review photos sell more than text. The browse page should lead with a photo mosaic/strip. Customers trust photos from real buyers.
+  2. **Product-specific filtering** — Add a product name search/filter on the browse page so potential buyers can find reviews for the exact item they're considering.
+  3. **Verified Purchase badge** — Show a "✓ Verified Purchase" badge on reviews that came through the order-verified flow (which is all of them right now, but good to display).
+  4. **One product per SMS** — Send one SMS per product in the order (up to 3 max). Each gets its own review link. Don't overwhelm with a single "review your order" link — it's easier to review one item at a time.
+  5. **SMS ↔ Review coupon stacking** — The SMS brings them in, the review coupon rewards them. It's a double incentive loop: subscribe → buy → review → coupon → buy again → review again.
+  6. **Review → Content Engine bridge (future)** — Best review photos can feed into social autopilot Image Pool. Connects UGC pipeline to content system.
+
+  #### Execution Order
+
+  1. Create `pages/leave-review.html` + `js/reviews/leave.js` (move existing form, add quality controls + photo prompt)
+  2. Rebuild `pages/reviews.html` + `js/reviews/browse.js` (showcase page with photo gallery + verified badges)
+  3. Update all CTAs/links across the site
+  4. Build + deploy `verify-review-token` edge function (dedicated signing secret)
+  5. Build + deploy `send-review-request` edge function
+  6. Create `review_requests` migration + push (UNIQUE constraint)
+  7. Set `REVIEW_TOKEN_SECRET` via `supabase secrets set`
+  8. Add admin trigger button
+  9. Test full flow: manual → SMS → token → review → coupon
+  10. Set up cron (Phase 2, after manual trigger is proven)
+
+  </details>
 - [x] **Homepage banner** — dynamic carousel with multiple promotions, countdowns, infinite scroll
 
 ---
