@@ -48,15 +48,15 @@ async function refresh() {
   // Show coupon section
   els.couponSection()?.classList.remove("hidden");
 
-  // Render items
+  // Render items (returns stock map for delivery estimates)
   resetStockCache();
-  await renderCheckoutItems(cart, container);
+  const stockMap = await renderCheckoutItems(cart, container);
 
   // Calculate totals
   const totals = await calculateCartTotals(cart);
 
-  // Update summary sidebar
-  await updateSummary(totals);
+  // Update summary sidebar (pass stock info for backorder-aware delivery)
+  await updateSummary(totals, { cartItems: cart, stockMap });
 
   // Load recommendations
   loadRecommendations(cart, totals.activePromos);

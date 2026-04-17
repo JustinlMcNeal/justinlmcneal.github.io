@@ -17,31 +17,47 @@ function esc(s) {
 }
 
 /* ── Estimated delivery date ── */
-function getEstimatedDelivery() {
+function addBusinessDays(date, days) {
+  const result = new Date(date);
+  let added = 0;
+  while (added < days) {
+    result.setDate(result.getDate() + 1);
+    const dow = result.getDay();
+    if (dow !== 0 && dow !== 6) added++;
+  }
+  return result;
+}
+
+function getEstimatedDelivery(hasBackorder) {
   const now = new Date();
-  // Add 5-8 business days
-  const addBusinessDays = (date, days) => {
-    const result = new Date(date);
-    let added = 0;
-    while (added < days) {
-      result.setDate(result.getDate() + 1);
-      const dow = result.getDay();
-      if (dow !== 0 && dow !== 6) added++;
-    }
-    return result;
-  };
-
-  const from = addBusinessDays(now, 5);
-  const to = addBusinessDays(now, 8);
-
   const fmt = (d) =>
     d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
+  if (hasBackorder) {
+    // Backorder: 3-4 weeks (15-20 business days)
+    const from = addBusinessDays(now, 15);
+    const to = addBusinessDays(now, 20);
+    return `${fmt(from)} – ${fmt(to)}`;
+  }
+
+  // Normal: 5-8 business days
+  const from = addBusinessDays(now, 5);
+  const to = addBusinessDays(now, 8);
   return `${fmt(from)} – ${fmt(to)}`;
 }
 
+function getShippingTimeText(hasBackorder) {
+  return hasBackorder
+    ? "Ships in 3–4 weeks (backorder)"
+    : "Ships in 2–5 business days";
+}
+
 /* ── Update summary UI ── */
-export async function updateSummary(totals) {
+/**
+ * @param {Object} totals - from calculateCartTotals
+ * @param {Object} [stockInfo] - { cartItems, stockMap } for backorder detection
+ */
+export async function updateSummary(totals, stockInfo = {}) {
   const {
     subtotal = 0,
     total = 0,
@@ -52,6 +68,14 @@ export async function updateSummary(totals) {
     couponMeta = null,
     autoDiscount = 0,
   } = totals || {};
+
+  // Detect if any cart item is on backorder (stock <= 0)
+  const { cartItems = [], stockMap = {} } = stockInfo;
+  const hasBackorder = cartItems.some((item) => {
+    const key = `${item.id}::${(item.variant ?? "").toString().trim()}`;
+    const stock = stockMap[key];
+    return typeof stock === "number" && stock <= 0;
+  });
 
   // Subtotal
   const subtotalEl = document.getElementById("checkoutSubtotal");
@@ -65,9 +89,27 @@ export async function updateSummary(totals) {
   const mobileTotalEl = document.getElementById("mobileStickyTotal");
   if (mobileTotalEl) mobileTotalEl.textContent = money(total);
 
-  // Delivery estimate
+  // Delivery estimate (backorder-aware)
   const deliveryEl = document.getElementById("checkoutDelivery");
-  if (deliveryEl) deliveryEl.textContent = getEstimatedDelivery();
+  if (deliveryEl) {
+    deliveryEl.textContent = getEstimatedDelivery(hasBackorder);
+    if (hasBackorder) {
+      deliveryEl.classList.add("text-amber-600");
+    } else {
+      deliveryEl.classList.remove("text-amber-600");
+    }
+  }
+
+  // Shipping time friction reducer text (backorder-aware)
+  const shipTimeEl = document.getElementById("checkoutShipTime");
+  if (shipTimeEl) {
+    shipTimeEl.textContent = getShippingTimeText(hasBackorder);
+    if (hasBackorder) {
+      shipTimeEl.classList.add("text-amber-600");
+    } else {
+      shipTimeEl.classList.remove("text-amber-600");
+    }
+  }
 
   // Free shipping bar
   const freeShipEl = document.getElementById("checkoutFreeShipping");

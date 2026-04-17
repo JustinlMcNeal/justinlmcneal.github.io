@@ -60,19 +60,21 @@ function renderItemCard(item, stock) {
   const lineTotal = unit * qty;
   const slug = item.slug || "";
 
+  const isBackorder = typeof stock === "number" && stock <= 0;
   const lowStock = typeof stock === "number" && stock > 0 && stock <= 5;
 
   return `
 <article class="bg-white rounded-xl p-4 shadow-sm">
   <div class="flex gap-4">
     <!-- Image -->
-    <a href="/pages/product.html?slug=${esc(slug)}" class="block w-24 h-24 sm:w-28 sm:h-28 rounded-lg overflow-hidden bg-black/5 flex-shrink-0">
+    <a href="/pages/product.html?slug=${esc(slug)}" class="block w-24 h-24 sm:w-28 sm:h-28 rounded-lg overflow-hidden bg-black/5 flex-shrink-0 relative">
       <img
         class="w-full h-full object-cover hover:scale-105 transition-transform"
         src="${esc(img)}"
         alt="${name}"
         loading="lazy"
       />
+      ${isBackorder ? `<span class="absolute top-1 left-1 bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">BACKORDER</span>` : ""}
     </a>
 
     <!-- Content -->
@@ -81,6 +83,7 @@ function renderItemCard(item, stock) {
         <div>
           <a href="/pages/product.html?slug=${esc(slug)}" class="font-bold text-sm leading-tight line-clamp-2 hover:underline">${name}</a>
           ${variant ? `<p class="text-xs text-black/50 mt-0.5">${esc(variant)}</p>` : ""}
+          ${isBackorder ? `<p class="text-xs font-bold text-amber-600 mt-1">⏳ Backorder — ships in 3–4 weeks</p>` : ""}
           ${lowStock ? `<p class="text-xs font-bold text-red-500 mt-1">Only ${stock} left!</p>` : ""}
         </div>
 
@@ -161,11 +164,11 @@ function renderEmpty() {
 
 /* ── Main render function ── */
 export async function renderCheckoutItems(items, container) {
-  if (!container) return;
+  if (!container) return {};
 
   if (!items || !items.length) {
     container.innerHTML = renderEmpty();
-    return;
+    return {};
   }
 
   // Fetch stock levels in background (non-blocking)
@@ -178,6 +181,9 @@ export async function renderCheckoutItems(items, container) {
       return renderItemCard(item, stock);
     })
     .join("");
+
+  // Return stock map so summary can use it for delivery estimates
+  return stocks;
 }
 
 /* ── Wire delegated click handlers ── */
