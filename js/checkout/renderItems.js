@@ -128,10 +128,10 @@ function renderItemCard(item, stock, madeToOrder) {
 
       <div class="flex items-center justify-between mt-3">
         <!-- Qty controls -->
-        <div class="inline-flex items-center bg-black/[0.07] rounded-full">
+        <div class="inline-flex items-center bg-black/[0.08] rounded-full">
           <button
             type="button"
-            class="w-11 h-11 flex items-center justify-center text-black/70 hover:text-black hover:bg-black/10 rounded-full transition-colors"
+            class="w-12 h-12 flex items-center justify-center text-black/70 hover:text-black hover:bg-black/[0.12] rounded-full transition-colors"
             data-checkout-qty-minus
             data-id="${esc(id)}"
             data-variant="${esc(variant)}"
@@ -144,7 +144,7 @@ function renderItemCard(item, stock, madeToOrder) {
           <span class="w-10 text-center text-sm font-bold select-none">${qty}</span>
           <button
             type="button"
-            class="w-11 h-11 flex items-center justify-center text-black/70 hover:text-black hover:bg-black/10 rounded-full transition-colors"
+            class="w-12 h-12 flex items-center justify-center text-black/70 hover:text-black hover:bg-black/[0.12] rounded-full transition-colors"
             data-checkout-qty-plus
             data-id="${esc(id)}"
             data-variant="${esc(variant)}"
