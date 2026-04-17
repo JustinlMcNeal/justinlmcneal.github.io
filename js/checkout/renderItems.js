@@ -64,7 +64,7 @@ function renderItemCard(item, stock) {
   const lowStock = typeof stock === "number" && stock > 0 && stock <= 5;
 
   return `
-<article class="bg-white rounded-xl p-4 shadow-sm">
+<article class="bg-white rounded-xl p-4 shadow-sm border border-black/5">
   <div class="flex gap-4">
     <!-- Image -->
     <a href="/pages/product.html?slug=${esc(slug)}" class="block w-24 h-24 sm:w-28 sm:h-28 rounded-lg overflow-hidden bg-black/5 flex-shrink-0 relative">
@@ -90,7 +90,7 @@ function renderItemCard(item, stock) {
         <!-- Remove -->
         <button
           type="button"
-          class="w-7 h-7 flex items-center justify-center text-black/30 hover:text-red-500 transition-colors rounded-full hover:bg-red-50"
+          class="flex items-center gap-1 text-black/40 hover:text-red-500 transition-colors rounded-full hover:bg-red-50 px-2 py-1"
           data-checkout-remove
           data-id="${esc(id)}"
           data-variant="${esc(variant)}"
@@ -99,6 +99,7 @@ function renderItemCard(item, stock) {
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
           </svg>
+          <span class="text-xs font-medium hidden sm:inline">Remove</span>
         </button>
       </div>
 
@@ -107,7 +108,7 @@ function renderItemCard(item, stock) {
         <div class="inline-flex items-center bg-black/5 rounded-full">
           <button
             type="button"
-            class="w-9 h-9 flex items-center justify-center text-black/60 hover:text-black transition-colors"
+            class="w-10 h-10 flex items-center justify-center text-black/60 hover:text-black transition-colors"
             data-checkout-qty-minus
             data-id="${esc(id)}"
             data-variant="${esc(variant)}"
@@ -117,10 +118,10 @@ function renderItemCard(item, stock) {
               <path stroke-linecap="round" stroke-linejoin="round" d="M20 12H4"/>
             </svg>
           </button>
-          <span class="w-9 text-center text-sm font-bold select-none">${qty}</span>
+          <span class="w-10 text-center text-sm font-bold select-none">${qty}</span>
           <button
             type="button"
-            class="w-9 h-9 flex items-center justify-center text-black/60 hover:text-black transition-colors"
+            class="w-10 h-10 flex items-center justify-center text-black/60 hover:text-black transition-colors"
             data-checkout-qty-plus
             data-id="${esc(id)}"
             data-variant="${esc(variant)}"

@@ -196,6 +196,19 @@ export async function updateSummary(totals, stockInfo = {}) {
       couponLineEl.classList.remove("flex");
     }
   }
+
+  // Savings badge
+  const totalSavings = autoDiscount + couponDiscount;
+  const savingsEl = document.getElementById("checkoutSavings");
+  const savingsAmountEl = document.getElementById("checkoutSavingsAmount");
+  if (savingsEl) {
+    if (totalSavings > 0) {
+      savingsEl.classList.remove("hidden");
+      if (savingsAmountEl) savingsAmountEl.textContent = money(totalSavings);
+    } else {
+      savingsEl.classList.add("hidden");
+    }
+  }
 }
 
 /* ── Free shipping nudge ── */
@@ -283,6 +296,17 @@ export function wireCouponUI(onCartChange) {
       onCartChange();
     }
   });
+
+  // Pre-fill if coupon was applied in cart drawer (persisted via localStorage)
+  const existing = getAppliedCoupon();
+  if (existing && input) {
+    input.value = existing.code || "";
+    if (msgEl) {
+      msgEl.classList.remove("hidden", "text-red-500");
+      msgEl.classList.add("text-green-600");
+      msgEl.textContent = `✓ ${existing.name || existing.code} applied!`;
+    }
+  }
 }
 
 /* ── Review badge (store rating) ── */

@@ -172,16 +172,23 @@
 
           <!-- Free shipping nudge -->
           <div id="checkoutFreeShipNudge" class="hidden mb-4">
-            <a href="#checkoutRecommendations" class="block text-center text-xs font-bold text-kkpink hover:underline">
-              Add <span id="nudgeAmount"></span> more for FREE shipping →
+            <a href="#checkoutRecommendations" class="block text-center text-sm font-bold text-kkpink hover:underline bg-pink-50 rounded-lg py-2 px-3">
+              🎯 Add <span id="nudgeAmount"></span> more for FREE shipping →
             </a>
+          </div>
+
+          <!-- Savings badge -->
+          <div id="checkoutSavings" class="hidden mb-3">
+            <div class="text-center text-sm font-bold text-green-600 bg-green-50 rounded-lg py-2">
+              You saved <span id="checkoutSavingsAmount">$0.00</span> 🎉
+            </div>
           </div>
 
           <!-- CTA -->
           <button
             type="button"
             id="checkoutPayBtn"
-            class="w-full py-3.5 bg-black text-white font-bold text-sm rounded-xl hover:bg-black/85 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            class="w-full py-4 bg-black text-white font-bold text-base rounded-xl hover:bg-black/85 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
@@ -198,17 +205,17 @@
           </div>
 
           <!-- Friction Reducers -->
-          <div class="mt-4 space-y-1.5">
+          <div class="mt-3 space-y-1 border-t border-black/5 pt-3">
             <div class="flex items-center gap-2 text-xs text-black/50">
-              <span class="text-green-500 text-sm">✔</span>
+              <span class="text-green-500">✔</span>
               Free returns within 30 days
             </div>
             <div class="flex items-center gap-2 text-xs text-black/50">
-              <span class="text-green-500 text-sm">✔</span>
+              <span class="text-green-500">✔</span>
               <span id="checkoutShipTime">Ships in 2–5 business days</span>
             </div>
             <div id="checkoutReviewBadge" class="flex items-center gap-2 text-xs text-black/50 hidden">
-              <span class="text-green-500 text-sm">✔</span>
+              <span class="text-green-500">✔</span>
               <span id="checkoutReviewText"></span>
             </div>
           </div>

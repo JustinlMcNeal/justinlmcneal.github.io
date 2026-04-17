@@ -6,8 +6,30 @@
 import { validateCouponCode, checkPromotionApplies } from "./promotionLoader.js";
 import { getCart } from "./cartStore.js";
 
-// Global coupon state
-let appliedCoupon = null;
+// Global coupon state — persisted to localStorage for cross-page navigation
+const COUPON_KEY = "kk_applied_coupon";
+let appliedCoupon = loadPersistedCoupon();
+
+function loadPersistedCoupon() {
+  try {
+    const raw = localStorage.getItem(COUPON_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function persistCoupon(coupon) {
+  try {
+    if (coupon) {
+      localStorage.setItem(COUPON_KEY, JSON.stringify(coupon));
+    } else {
+      localStorage.removeItem(COUPON_KEY);
+    }
+  } catch {
+    // localStorage full — skip
+  }
+}
 
 /**
  * Apply a coupon code
@@ -24,9 +46,11 @@ export async function applyCoupon(code) {
   
   if (result.valid) {
     appliedCoupon = result.promo;
+    persistCoupon(appliedCoupon);
     console.log("[Coupon] Applied:", appliedCoupon.code);
   } else {
     appliedCoupon = null;
+    persistCoupon(null);
   }
 
   return result;
@@ -37,6 +61,7 @@ export async function applyCoupon(code) {
  */
 export function removeCoupon() {
   appliedCoupon = null;
+  persistCoupon(null);
   console.log("[Coupon] Removed");
 }
 

@@ -2,6 +2,7 @@
 import { initNavbar } from "/js/shared/navbar.js";
 import { initFooter } from "/js/shared/footer.js";
 import { clearCart } from "/js/shared/cartStore.js";
+import { removeCoupon } from "/js/shared/couponManager.js";
 import { getSupabaseClient } from "/js/shared/supabaseClient.js";
 
 /* ── Confetti ── */
@@ -142,6 +143,7 @@ async function loadOrderDetails(oid) {
 /* ── Boot ── */
 document.addEventListener("DOMContentLoaded", async () => {
   clearCart();
+  removeCoupon();
 
   await initNavbar();
 
