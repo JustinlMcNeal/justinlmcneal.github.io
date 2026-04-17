@@ -312,32 +312,23 @@ async function loadRecommendations(cart, activePromos) {
 /* ── Mobile sticky bar visibility ── */
 function initMobileStickyBar() {
   const bar = els.mobileStickyBar();
-  const desktopBtn = els.payBtn();
-  if (!bar || !desktopBtn) return;
+  if (!bar) return;
 
-  function updateBar(isCtaVisible) {
+  // On mobile (< 768px), always show the sticky bar when cart has items.
+  // On desktop, the sidebar CTA is always visible (sticky sidebar), so hide bar.
+  function updateBar() {
+    const isMobile = window.innerWidth < 768;
     const cart = getCart();
-    if (!cart.length) { bar.classList.add("hidden"); return; }
-    if (isCtaVisible) {
-      bar.classList.add("hidden");
-    } else {
+    if (isMobile && cart.length) {
       bar.classList.remove("hidden");
+    } else {
+      bar.classList.add("hidden");
     }
   }
 
-  const observer = new IntersectionObserver(
-    ([entry]) => updateBar(entry.isIntersecting),
-    { threshold: 0 }
-  );
-
-  observer.observe(desktopBtn);
-
-  // Check initial state after a tick (CTA may already be off-screen on mobile)
-  requestAnimationFrame(() => {
-    const rect = desktopBtn.getBoundingClientRect();
-    const isVisible = rect.top < window.innerHeight && rect.bottom > 0;
-    updateBar(isVisible);
-  });
+  updateBar();
+  window.addEventListener("resize", updateBar);
+  window.addEventListener("kk-cart-updated", updateBar);
 }
 
 /* ── Exit intent tracking ── */
