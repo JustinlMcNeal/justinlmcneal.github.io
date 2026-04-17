@@ -1,7 +1,26 @@
 export default {
   async fetch(request) {
     const url = new URL(request.url);
-    const slug = url.pathname.replace(/^\/s\//, "").replace(/\/+$/, "");
+    const path = url.pathname;
+
+    // /s/img/* → proxy product images from Supabase storage
+    if (path.startsWith("/s/img/")) {
+      const imagePath = path.replace("/s/img/", "");
+      const imageUrl =
+        "https://yxdzvzscufkvewecvagq.supabase.co/storage/v1/object/public/products/catalog/" +
+        imagePath;
+      const imgRes = await fetch(imageUrl);
+      return new Response(imgRes.body, {
+        status: imgRes.status,
+        headers: {
+          "content-type": imgRes.headers.get("content-type") || "image/png",
+          "cache-control": "public, max-age=86400",
+        },
+      });
+    }
+
+    // /s/{slug} → share page with OG tags
+    const slug = path.replace(/^\/s\//, "").replace(/\/+$/, "");
 
     if (!slug) {
       return Response.redirect("https://karrykraze.com/", 302);

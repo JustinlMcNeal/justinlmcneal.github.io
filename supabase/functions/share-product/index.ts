@@ -34,11 +34,7 @@ Deno.serve(async (req: Request) => {
     ? `$${Number(product.price).toFixed(2)}`
     : "";
   const description = `${title}${price ? ` - ${price}` : ""} | Shop at Karry Kraze`;
-  const rawImage = product.catalog_image_url || `${siteUrl}/imgs/brand/logo.png`;
-  // Use Supabase image transform for a smaller preview image for social bots
-  const image = rawImage.includes("/storage/v1/object/public/")
-    ? rawImage.replace("/storage/v1/object/public/", "/storage/v1/render/image/public/") + "?width=600&quality=75"
-    : rawImage;
+  const image = product.catalog_image_url || `${siteUrl}/imgs/brand/logo.png`;
 
   // Sanitize for HTML attributes
   const esc = (s: string) =>
@@ -56,9 +52,8 @@ Deno.serve(async (req: Request) => {
   <meta property="og:title" content="${esc(title)}">
   <meta property="og:description" content="${esc(description)}">
   <meta property="og:image" content="${esc(image)}">
-  <meta property="og:image:width" content="600">
-  <meta property="og:image:height" content="600">
-  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
   <meta property="og:url" content="${esc(productUrl)}">
   <meta property="og:site_name" content="Karry Kraze">
   ${price ? `<meta property="product:price:amount" content="${esc(String(product.price))}">
