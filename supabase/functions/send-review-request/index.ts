@@ -122,9 +122,10 @@ async function handleSingle(
     email: string;
     first_name?: string;
     product_name?: string;
+    order_date?: string;
   }
 ): Promise<Response> {
-  const { order_session_id, product_id, phone, email, first_name, product_name } = body;
+  const { order_session_id, product_id, phone, email, first_name, product_name, order_date } = body;
 
   if (!order_session_id || !product_id || !phone || !email) {
     return json({ error: "Missing required fields: order_session_id, product_id, phone, email" }, 400);
@@ -181,7 +182,10 @@ async function handleSingle(
   const name = first_name || "there";
   const prodName = product_name || "your purchase";
   const link = `https://karrykraze.com/pages/leave-review.html?r=${shortCode}`;
-  const smsBody = `Hey ${name}! How's your ${prodName}? Leave a review & get ${discountText} off your next order → ${link}\n\nReply STOP to opt out`;
+  const dateLine = order_date
+    ? ` from your ${new Date(order_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })} order`
+    : "";
+  const smsBody = `Karry Kraze: Hi ${name}! How are you liking your ${prodName}${dateLine}? We'd love to hear your thoughts — leave a quick review & get ${discountText} off your next order:\n${link}\n\nReply STOP to opt out`;
 
   // Send SMS
   const smsResult = await sendSms(phone, smsBody);
@@ -301,6 +305,7 @@ async function handleBatch(
           email: order.email,
           first_name: order.first_name,
           product_name: item.product_name,
+          order_date: order.order_date,
         });
 
         const data = await result.json();
