@@ -58,6 +58,16 @@ After shipping Phase 1, let autopilot run **7-14 days untouched**, then check:
 - ✅ Top-performing hashtags begin repeating in new posts
 - Hit **any one** of these → greenlight Phase 2
 
+### Shipped Status
+| Phase | Status | Commit | Notes |
+|-------|--------|--------|-------|
+| 1A — Hashtags + Timing | ✅ SHIPPED | `82ed931` | Smart hashtag merge + timing threshold + learned fallback |
+| 1B — AI Captions + Learning Trigger | ✅ SHIPPED | `838cb72` | AI captions via ai-generate, template fallback, caption_source tracking, insights triggers learning aggregation |
+| 1C — UTM + Pixel + Comment KK | ⬜ NOT STARTED | — | |
+
+### Known Issue: Category Labels in hashtag_performance
+**Discovered during Phase 1A testing.** All hashtags in `hashtag_performance` have `category = "general"` — none have product-category labels (e.g., "bags", "headwear"). This means `topHashtagsByCategory` is always empty and category-biased hashtag selection is a no-op. The merge still works (general tags fill correctly), but category relevance will improve once `runLearningAggregation` writes proper category labels. **Fix after observation window.**
+
 **⚠️ Observation Rule**: Do NOT change hashtag logic, caption logic, or posting times for **at least 7 days** after shipping Phase 1. Tweaking too early kills data quality and makes it impossible to measure impact.
 
 ---
