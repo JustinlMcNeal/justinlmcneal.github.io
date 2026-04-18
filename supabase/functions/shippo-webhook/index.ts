@@ -180,17 +180,13 @@ async function sendTrackingSms(
     return;
   }
 
-  // Check SMS consent
+  // Look up contact if exists (for contact_id logging), but don't require consent
+  // Shipping notifications are transactional — no opt-in required under TCPA
   const { data: contact } = await sb
     .from("customer_contacts")
-    .select("id, sms_consent, status")
+    .select("id")
     .eq("phone", order.phone_number)
-    .single();
-
-  if (!contact || !contact.sms_consent || contact.status !== "active") {
-    console.log("[shippo-webhook] No SMS consent for", order.phone_number);
-    return;
-  }
+    .maybeSingle();
 
   const firstName = (order.customer_name || "").split(" ")[0] || "there";
   const trackUrl = carrier === "USPS"
@@ -211,7 +207,8 @@ async function sendTrackingSms(
     message_type: "shipping_notification",
     intent: "transactional",
     campaign: shippoStatus === "TRANSIT" ? "shipping_shipped" : "shipping_delivered",
-    contact_id: contact.id,
+    contact_id: contact?.id || null,
+    skip_caps: true,
   };
 
   const smsRes = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/send-sms`, {
