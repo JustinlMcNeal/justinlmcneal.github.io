@@ -581,23 +581,20 @@ async function wireLabelButtons(container, order, shipment, row) {
     btn.textContent = "⏳ Loading…";
     try {
       const url = await getSignedLabelUrl(shipment.label_url);
-      // Fetch PDF as blob so we get a same-origin URL for printing
       const pdfRes = await fetch(url);
       const blob = await pdfRes.blob();
       const blobUrl = URL.createObjectURL(blob);
 
-      let iframe = document.getElementById("labelPrintFrame");
-      if (!iframe) {
-        iframe = document.createElement("iframe");
-        iframe.id = "labelPrintFrame";
-        iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:none;";
-        document.body.appendChild(iframe);
-      }
-      iframe.onload = () => {
-        iframe.contentWindow.focus();
-        iframe.contentWindow.print();
-      };
-      iframe.src = blobUrl;
+      // Open a small popup window with the PDF and trigger print
+      const pw = window.open("", "printLabel", "width=500,height=700");
+      if (!pw) { alert("Popup blocked — please allow popups for this site."); return; }
+      pw.document.write(
+        `<!DOCTYPE html><html><head><title>Print Label</title></head>` +
+        `<body style="margin:0"><iframe src="${blobUrl}" style="width:100%;height:100%;border:none"></iframe>` +
+        `<script>setTimeout(function(){window.print();},800);</script>` +
+        `</body></html>`
+      );
+      pw.document.close();
     } catch (err) {
       alert("Failed to get label: " + (err.message || err));
     } finally {
