@@ -6621,24 +6621,7 @@ async function processAllPostsForLearning() {
     let processed = 0;
     for (const post of posts) {
       try {
-        // Update hashtag performance
-        if (post.hashtags && post.hashtags.length > 0) {
-          await updateHashtagPerformance(post.hashtags, post.engagement_rate || 0, post.reach || 0, client);
-        }
-        
-        // Update timing performance
-        if (post.posted_at) {
-          const postedDate = new Date(post.posted_at);
-          await updateTimingPerformance(
-            postedDate.getDay(),
-            postedDate.getHours(),
-            post.engagement_rate || 0,
-            post.reach || 0,
-            client
-          );
-        }
-        
-        // Update caption performance
+        // Update caption performance (per-post upsert)
         if (post.caption) {
           await updateCaptionPerformance(post.caption, post.engagement_rate || 0, post.reach || 0, client);
         }
@@ -6648,6 +6631,10 @@ async function processAllPostsForLearning() {
         console.warn(`Error processing post ${post.id}:`, err);
       }
     }
+    
+    // Bulk aggregations (run once, not per-post)
+    await updateHashtagPerformance();
+    await updateTimingPerformance();
     
     // Generate new recommendations based on all data
     await generateRecommendations(client);
