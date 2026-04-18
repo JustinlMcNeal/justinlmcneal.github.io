@@ -591,13 +591,8 @@ async function wireLabelButtons(container, order, shipment, row) {
       const blob = await pdfRes.blob();
       const blobUrl = URL.createObjectURL(blob);
 
-      pw.document.open();
-      pw.document.write(
-        `<!DOCTYPE html><html><head><title>Print Label</title></head>` +
-        `<body style="margin:0"><iframe src="${blobUrl}" style="width:100%;height:100%;border:none" onload="setTimeout(function(){window.print();},400)"></iframe>` +
-        `</body></html>`
-      );
-      pw.document.close();
+      // Navigate popup directly to the PDF so Edge's PDF viewer handles sizing/printing
+      pw.location.href = blobUrl;
     } catch (err) {
       pw.close();
       alert("Failed to get label: " + (err.message || err));
