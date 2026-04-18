@@ -518,7 +518,7 @@
 #### Observation Window (April 18 – April 25+)
 - [ ] **7-day observation** — no logic changes, let data accumulate
 - [ ] **Phase 1 success check** — engagement ↑20%, reach ↑30%, or top hashtags repeating → greenlight Phase 2
-- [ ] **Fix category labels** — `hashtag_performance` all show `category = "general"`, fix `runLearningAggregation` to write proper labels
+- [x] **Fix category labels** — `hashtag_performance` now uses variation→asset→product→category chain; categories properly labeled (accessories, headwear, jewelry, plushies, bags) — `a11d224`
 
 ### Phase 2: Reach Multiplier (after observation)
 - [ ] **Simple Reels** — Ken Burns test first, then slideshow builder if validated (Sprint 5.1)
