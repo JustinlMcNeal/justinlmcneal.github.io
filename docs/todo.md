@@ -2,7 +2,7 @@
 
 ## Checkout & Orders
 
-- [ ] **Checkout review page** — on-site order review before Stripe payment
+- [x] **Checkout review page** — on-site order review before Stripe payment
 
   <details>
   <summary><strong>Implementation Plan</strong></summary>
@@ -135,7 +135,7 @@
 
 ## Customer Experience
 
-- [x] **Add to cart animation** — smooth feedback on mobile and desktop
+- [x] **Add to cart animation** — CSS keyframes (`kk-cart-bump`, `kk-cart-wiggle`) + `.kk-cart-animate` in `components.css`, JS toggle in `cartUI.js` + `mobileNav.js`
 
   <details>
   <summary><strong>Implementation Plan</strong></summary>
@@ -219,40 +219,7 @@
 
   </details>
 - [ ] **Referral share link** — sharer gets a unique link; referee gets 5% off at checkout; sharer earns 10% off when the referee completes a purchase
-- [x] **Catalog search on mobile** — iOS auto-zoom fixed (16px base font), predictive dropdown removed
-
-  <details>
-  <summary><strong>Implementation Plan</strong></summary>
-
-  #### Problem
-
-  1. **Auto-zoom on focus** — iOS Safari auto-zooms the page when the user taps the search input because its `font-size` is below 16px. This shifts the entire viewport and is jarring.
-  2. **Redundant predictive dropdown** — A `#predictiveResults` dropdown appears with up to 5 matching product links, but the catalog grid already live-filters as the user types. The dropdown just covers the results the user is already seeing.
-
-  #### Current System
-
-  | Piece | What it does | Location |
-  |-------|-------------|----------|
-  | `#catalogSearch` input | `type="search"`, font-size ~12px via Tailwind `text-xs` | `pages/catalog.html` |
-  | `#predictiveResults` div | Absolutely-positioned dropdown, shows top 5 matches with thumbnails | `pages/catalog.html` |
-  | Predictive JS | On `input` event: filters `allProducts`, renders matches into `#predictiveResults`, AND calls `resetAndRenderGrid()` | `js/catalog/index.js` (~line 488–540) |
-  | Grid filtering | `filterProducts()` already uses `els.search.value` to filter the entire catalog grid in real-time | `js/catalog/index.js` (~line 183) |
-
-  #### Fix
-
-  1. **Prevent iOS auto-zoom** — Add a CSS rule in `css/theme/components.css` that sets `font-size: 16px` on `#catalogSearch` at mobile breakpoints. 16px is the threshold below which iOS Safari triggers auto-zoom. Adjust the Tailwind classes on the input so desktop stays at the current smaller size.
-
-  2. **Remove predictive dropdown** — In `js/catalog/index.js`, strip out the entire predictive search block (~lines 488–540): the `els.search input` listener that renders into `els.predictive`, the click-outside listener, and the focus listener. Replace with a simple input listener that just calls `resetAndRenderGrid()`. Optionally hide or remove the `#predictiveResults` div in the HTML.
-
-  #### Files touched
-
-  | File | Change |
-  |------|--------|
-  | `css/theme/components.css` | Add `@media (max-width: 767px) { #catalogSearch { font-size: 16px; } }` |
-  | `js/catalog/index.js` | Remove predictive dropdown rendering; keep only `resetAndRenderGrid()` on input |
-  | `pages/catalog.html` | Remove or hide `#predictiveResults` div |
-
-  </details>
+- [x] **Catalog search on mobile** — predictive dropdown removed, iOS auto-zoom fixed (`font-size: 16px` on `#catalogSearch` at mobile breakpoint in `components.css`)
 - [x] **Product size/variant support** — size/color variants fully supported via `renderVariantSwatches()`
 - [x] **Revamp Reviews page** — split into two pages: one for browsing reviews, one for leaving a review + SMS review requests post-delivery
 
@@ -524,12 +491,44 @@
 - [x] **Close learning loop (Sprint 3.5)** — persist deep analysis, automate learning aggregation in autopilot, track `autopilot_last_run`
 
 ### Sprint 4: Smart Features
-- [ ] **Smart carousel assembly** — AI auto-picks 3-5 images with diverse `shot_type` tags from Image Pool
-- [ ] **Analytics polish** — fix hardcoded scores in learning engine, real engagement velocity, "What's Working" summary card
-- [ ] **v2 tagging** — add mood + platform preference tags if data validates v1 approach
+- [ ] **Smart carousel assembly** — AI auto-picks 3-5 images with diverse `shot_type` tags from Image Pool (manual carousel builder exists, but no auto-assembly)
+- [x] **Analytics polish** — learning insights dashboard built in `analytics.js` with engagement metrics, time charts, tone charts
+- [ ] **v2 tagging** — add mood + platform preference tags if data validates v1 approach (current: shot_type + quality_score only)
+
+### Phase 1: Wire the Learning Loop (pSocial_002)
+> **Detailed plan**: [`docs/pSocial/pSocial_002.md`](pSocial/pSocial_002.md)
+
+#### Phase 1A — Hashtags + Posting Times
+- [x] **Smart hashtag injection** — `hashtag_performance` → auto-queue merge (learned winners first) — `82ed931`
+- [x] **Posting time optimization** — threshold 20→10, learned timing priors fallback — `82ed931`
+
+#### Phase 1B — AI Captions + Learning Trigger
+- [x] **AI captions in auto-queue** — calls `ai-generate`, template fallback, `caption_source` tracking — `838cb72`
+- [x] **Auto-refine after insights** — `instagram-insights` triggers `learning_only` aggregation every 6h — `838cb72`
+
+#### Phase 1C — Tracking + Trust Fix
+- [x] **UTM tracking** — all social post links include `utm_source/medium/campaign/content` — `bbea7f2`
+- [x] **Remove "Comment KK" CTA** — removed from all caption templates — `bbea7f2`
+- [x] **Meta Pixel** — installed on all 14 public pages (Pixel ID: 2162145877936737) with ViewContent/AddToCart/InitiateCheckout/Purchase events — `995db2c`
+
+#### Infrastructure Fixes
+- [x] **Cloudflare 503 caching** — cache rule (no-cache on 500-503), SW v4 pre-cache + retry — `3040847`, `8d96e5d`
+- [x] **Autopilot pipeline fix** — verify_jwt=false for auto-queue/autopilot-fill, image_source constraint (added ai_carousel/resurface/image_pool), error diagnostics — `b55c93c`
+
+#### Observation Window (April 18 – April 25+)
+- [ ] **7-day observation** — no logic changes, let data accumulate
+- [ ] **Phase 1 success check** — engagement ↑20%, reach ↑30%, or top hashtags repeating → greenlight Phase 2
+- [ ] **Fix category labels** — `hashtag_performance` all show `category = "general"`, fix `runLearningAggregation` to write proper labels
+
+### Phase 2: Reach Multiplier (after observation)
+- [ ] **Simple Reels** — Ken Burns test first, then slideshow builder if validated (Sprint 5.1)
+- [ ] **Reels API posting** — `instagram-reel` edge function + `content_type` column (Sprint 5.3)
+- [ ] **Engagement dashboard** — comment reply UI + "Go Engage" guidance (Sprint 6.1)
+- [ ] **Instagram Stories** — story scheduling via API (Sprint 6.3)
+- [ ] **Growth tracking** — daily follower count + best-time heat map (Sprint 7)
 
 ---
 
 ## SMS / Notifications
 
-- [ ] **Twilio setup** — integrate Twilio for SMS notifications (order updates, marketing)
+- [x] **Twilio integration** — fully integrated: `sms-subscribe`, `send-sms`, `twilio-webhook`, `sms-abandoned-cart`, `sms-coupon-reminder`, `sms-welcome-series` edge functions all live
