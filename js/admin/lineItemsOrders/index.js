@@ -576,6 +576,12 @@ async function wireLabelButtons(container, order, shipment, row) {
   const btnReprint = container.querySelector("[data-reprint-label]");
   const handlePrint = async (btn) => {
     if (!shipment?.label_url) return;
+    // Open popup immediately (synchronous) so browser trusts the user gesture
+    const pw = window.open("", "printLabel", "width=500,height=700");
+    if (!pw) { alert("Popup blocked — please allow popups for this site."); return; }
+    pw.document.write("<!DOCTYPE html><html><head><title>Loading label…</title></head><body><p>Loading label…</p></body></html>");
+    pw.document.close();
+
     const origText = btn.textContent;
     btn.disabled = true;
     btn.textContent = "⏳ Loading…";
@@ -585,17 +591,15 @@ async function wireLabelButtons(container, order, shipment, row) {
       const blob = await pdfRes.blob();
       const blobUrl = URL.createObjectURL(blob);
 
-      // Open a small popup window with the PDF and trigger print
-      const pw = window.open("", "printLabel", "width=500,height=700");
-      if (!pw) { alert("Popup blocked — please allow popups for this site."); return; }
+      pw.document.open();
       pw.document.write(
         `<!DOCTYPE html><html><head><title>Print Label</title></head>` +
-        `<body style="margin:0"><iframe src="${blobUrl}" style="width:100%;height:100%;border:none"></iframe>` +
-        `<script>setTimeout(function(){window.print();},800);</script>` +
+        `<body style="margin:0"><iframe src="${blobUrl}" style="width:100%;height:100%;border:none" onload="setTimeout(function(){window.print();},400)"></iframe>` +
         `</body></html>`
       );
       pw.document.close();
     } catch (err) {
+      pw.close();
       alert("Failed to get label: " + (err.message || err));
     } finally {
       btn.disabled = false;
