@@ -134,20 +134,23 @@ function generateCaption(
     .replace(/{product_name}/g, product.name)
     .replace(/{category}/g, product.category_name || "item");
 
+  // ── PHASE 1C: UTM TRACKING ON ALL SOCIAL LINKS ──
+  const utmLink = `https://karrykraze.com/pages/product.html?slug=${product.slug}`
+    + `&utm_source=${platform}`
+    + `&utm_medium=social`
+    + `&utm_campaign=autopilot`
+    + `&utm_content=${product.slug}`;
+
   if (platform === "instagram") {
     // Instagram doesn't hyperlink body text — replace {link} lines with CTA
-    // Remove entire lines that are just a link or "Shop now: {link}" etc.
     caption = caption
       .replace(/\n*.*\{link\}.*/g, "")
       .trim();
-    // Add clean CTA
-    caption += "\n\n🔗 Link in bio! Comment KK for a discount! 💕";
+    // Clean CTA (Comment KK removed — no DM coupon system yet)
+    caption += "\n\n🔗 Link in bio!";
   } else {
-    // Facebook, Pinterest etc. — keep the actual URL
-    caption = caption.replace(
-      /{link}/g,
-      `https://karrykraze.com/pages/product.html?slug=${product.slug}`
-    );
+    // Facebook, Pinterest etc. — keep the actual URL with UTM
+    caption = caption.replace(/{link}/g, utmLink);
   }
 
   return caption;
@@ -1054,7 +1057,7 @@ Deno.serve(async (req) => {
           caption_confidence: bestScore,
           caption_status: captionStatus,
           hashtags,
-          link_url: `https://karrykraze.com/pages/product.html?slug=${product.slug}`,
+          link_url: `https://karrykraze.com/pages/product.html?slug=${product.slug}&utm_source=${plat}&utm_medium=social&utm_campaign=autopilot&utm_content=${product.slug}`,
           scheduled_for: postingTimes[i].toISOString(),
           tone: bestTone,
           selection_metadata: selectionMeta,
@@ -1129,7 +1132,7 @@ Deno.serve(async (req) => {
               caption_confidence: 100,
               caption_status: "accepted",
               hashtags,
-              link_url: hit.link_url || `https://karrykraze.com/pages/product.html?slug=${resurfaceProduct.slug}`,
+              link_url: hit.link_url || `https://karrykraze.com/pages/product.html?slug=${resurfaceProduct.slug}&utm_source=${hit.platform || platformList[0]}&utm_medium=social&utm_campaign=autopilot&utm_content=${resurfaceProduct.slug}`,
               scheduled_for: generatedPosts[lastIdx].scheduled_for,
               tone: freshTone,
               resurfaced_from: hit.id,
