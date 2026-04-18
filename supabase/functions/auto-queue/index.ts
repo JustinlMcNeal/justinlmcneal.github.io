@@ -195,15 +195,33 @@ function getNextPostingTimes(
   
   let currentDate = new Date(startDate);
   currentDate.setSeconds(0, 0);
+
+  /**
+   * Convert an Eastern Time hour on a given date to a UTC Date.
+   * Uses Intl to correctly handle EST/EDT transitions.
+   */
+  function easternHourToUtc(baseDate: Date, estHour: number): Date {
+    // Build a date string in Eastern time
+    const yyyy = baseDate.getUTCFullYear();
+    const mm = String(baseDate.getUTCMonth() + 1).padStart(2, "0");
+    const dd = String(baseDate.getUTCDate()).padStart(2, "0");
+    const hh = String(estHour).padStart(2, "0");
+    // Parse as Eastern time by computing the offset dynamically
+    // Create a reference, get its Eastern representation, compute delta
+    const ref = new Date(`${yyyy}-${mm}-${dd}T${hh}:00:00`);
+    const eastStr = ref.toLocaleString("en-US", { timeZone: "America/New_York" });
+    const eastDate = new Date(eastStr);
+    const offsetMs = ref.getTime() - eastDate.getTime();
+    return new Date(ref.getTime() + offsetMs);
+  }
   
   if (useDataDriven) {
-    // Use peak hours from posting_time_performance
+    // Peak hours are in Eastern Time (from learning aggregation)
     const sortedHours = [...peakHours].sort((a, b) => a - b);
     while (result.length < count) {
       for (const hour of sortedHours) {
         if (result.length >= count) break;
-        const postTime = new Date(currentDate);
-        postTime.setHours(hour, 0, 0, 0);
+        const postTime = easternHourToUtc(currentDate, hour);
         if (postTime > startDate) {
           result.push(postTime);
         }
@@ -212,7 +230,7 @@ function getNextPostingTimes(
       currentDate.setHours(0, 0, 0, 0);
     }
   } else {
-    // Legacy: use settings posting_times
+    // Fallback times are in Eastern Time (from UI settings)
     const times = fallbackTimes.map(t => {
       const [h, m] = t.split(":").map(Number);
       return { hours: h, minutes: m };
@@ -220,8 +238,9 @@ function getNextPostingTimes(
     while (result.length < count) {
       for (const time of times) {
         if (result.length >= count) break;
-        const postTime = new Date(currentDate);
-        postTime.setHours(time.hours, time.minutes, 0, 0);
+        const postTime = easternHourToUtc(currentDate, time.hours);
+        // Add minutes
+        postTime.setMinutes(postTime.getMinutes() + (time.minutes || 0));
         if (postTime > startDate) {
           result.push(postTime);
         }
@@ -239,6 +258,26 @@ function getNextPostingTimes(
 // Updates hashtag, timing, and caption performance tables
 // so autopilot always uses fresh data on the next cycle
 // ============================================
+
+/** Convert UTC Date to EST/EDT hour (handles daylight saving) */
+function toEasternHour(utcDate: Date): number {
+  const eastern = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    hour: "numeric",
+    hour12: false,
+  }).format(utcDate);
+  return parseInt(eastern, 10);
+}
+
+/** Convert UTC Date to EST/EDT day of week (0=Sun) */
+function toEasternDay(utcDate: Date): number {
+  const eastern = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    weekday: "short",
+  }).format(utcDate);
+  const map: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  return map[eastern] ?? utcDate.getDay();
+}
 
 async function runLearningAggregation(supabase: any): Promise<void> {
   // Fetch all posted IG posts with engagement data
@@ -286,14 +325,16 @@ async function runLearningAggregation(supabase: any): Promise<void> {
   }
   console.log(`[learning] Updated ${Object.keys(hashtagStats).length} hashtags`);
 
-  // ── 2. Timing Performance ──
+  // ── 2. Timing Performance (Eastern Time) ──
   const timeStats: Record<string, any> = {};
   for (const post of posts) {
     if (!post.posted_at) continue;
     const d = new Date(post.posted_at);
-    const key = `${d.getHours()}-${d.getDay()}`;
+    const hour = toEasternHour(d);
+    const day = toEasternDay(d);
+    const key = `${hour}-${day}`;
     if (!timeStats[key]) {
-      timeStats[key] = { hour_of_day: d.getHours(), day_of_week: d.getDay(), total_posts: 0, total_reach: 0, total_engagement: 0, rates: [] };
+      timeStats[key] = { hour_of_day: hour, day_of_week: day, total_posts: 0, total_reach: 0, total_engagement: 0, rates: [] };
     }
     const s = timeStats[key];
     s.total_posts++;
@@ -397,9 +438,9 @@ Deno.serve(async (req) => {
     const useDataDrivenTimes = totalTimeSamples >= 20;
     const peakHours = useDataDrivenTimes
       ? [...new Set((timeData || []).slice(0, 6).map((r: any) => r.hour_of_day as number))]
-      : [9, 12, 18];
+      : [10, 14, 18]; // Default peak hours in Eastern Time
 
-    console.log(`[auto-queue] Posting times: ${useDataDrivenTimes ? "data-driven" : "default"} (${totalTimeSamples} samples), peak hours: ${peakHours.join(",")}`);
+    console.log(`[auto-queue] Posting times: ${useDataDrivenTimes ? "data-driven" : "default"} (${totalTimeSamples} samples), peak hours (ET): ${peakHours.join(",")}`);
 
     // ── SPRINT 3: PRODUCT PRIORITY SCORING + COOLDOWN ──
     // Fetch ALL active products

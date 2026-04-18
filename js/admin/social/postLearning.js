@@ -850,19 +850,26 @@ export async function updateTimingPerformance() {
     return;
   }
   
-  // Aggregate by hour and day
+  // Aggregate by hour and day (Eastern Time for US audience)
   const timeStats = {};
   
   posts.forEach(post => {
     const date = new Date(post.posted_at);
-    const hour = date.getHours();
-    const day = date.getDay();
-    const key = `${hour}-${day}`;
+    // Convert UTC to Eastern Time for accurate peak-hour analysis
+    const estHour = parseInt(new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York", hour: "numeric", hour12: false
+    }).format(date), 10);
+    const estDayStr = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York", weekday: "short"
+    }).format(date);
+    const dayMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+    const estDay = dayMap[estDayStr] ?? date.getDay();
+    const key = `${estHour}-${estDay}`;
     
     if (!timeStats[key]) {
       timeStats[key] = {
-        hour_of_day: hour,
-        day_of_week: day,
+        hour_of_day: estHour,
+        day_of_week: estDay,
         total_posts: 0,
         total_reach: 0,
         total_engagement: 0,

@@ -591,7 +591,7 @@ export async function fetchStats() {
     .gte("posted_at", startOfDay)
     .lt("posted_at", endOfDay);
   
-  // Total Instagram posts
+  // Total Instagram posts (status=posted excludes deleted/failed/draft)
   const { count: instagram } = await sb()
     .from("social_posts")
     .select("*", { count: "exact", head: true })

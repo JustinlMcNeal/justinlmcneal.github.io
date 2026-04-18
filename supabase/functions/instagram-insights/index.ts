@@ -39,6 +39,78 @@ interface MediaBasicResponse {
   error?: { message: string; code: number };
 }
 
+/** Convert UTC Date to EST/EDT hour (handles daylight saving) */
+function toEasternHour(utcDate: Date): number {
+  // Use Intl to get the actual Eastern time including DST
+  const eastern = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    hour: "numeric",
+    hour12: false,
+  }).format(utcDate);
+  return parseInt(eastern, 10);
+}
+
+/** Convert UTC Date to EST/EDT day of week (0=Sun) */
+function toEasternDay(utcDate: Date): number {
+  const eastern = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    weekday: "short",
+  }).format(utcDate);
+  const map: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  return map[eastern] ?? utcDate.getDay();
+}
+
+/**
+ * Refresh posting_time_performance from social_posts engagement data.
+ * Uses Eastern Time so peak hours align with the target audience.
+ */
+async function refreshTimingPerformance(supabase: any): Promise<void> {
+  const { data: posts, error } = await supabase
+    .from("social_posts")
+    .select("posted_at, likes, comments, saves, reach, engagement_rate")
+    .eq("status", "posted")
+    .eq("platform", "instagram")
+    .not("posted_at", "is", null);
+
+  if (error || !posts?.length) return;
+
+  const timeStats: Record<string, any> = {};
+  for (const post of posts) {
+    const d = new Date(post.posted_at);
+    const hour = toEasternHour(d);
+    const day = toEasternDay(d);
+    const key = `${hour}-${day}`;
+    if (!timeStats[key]) {
+      timeStats[key] = { hour_of_day: hour, day_of_week: day, total_posts: 0, total_reach: 0, total_engagement: 0, rates: [] as number[] };
+    }
+    const s = timeStats[key];
+    s.total_posts++;
+    s.total_reach += post.reach || 0;
+    s.total_engagement += (post.likes || 0) + (post.comments || 0) + (post.saves || 0);
+    s.rates.push(post.engagement_rate || 0);
+  }
+
+  const allAvgs = Object.values(timeStats).map((s: any) =>
+    s.rates.length > 0 ? s.rates.reduce((a: number, b: number) => a + b, 0) / s.rates.length : 0
+  );
+  const overallAvg = allAvgs.length > 0 ? allAvgs.reduce((a, b) => a + b, 0) / allAvgs.length : 0;
+
+  for (const s of Object.values(timeStats) as any[]) {
+    const avg = s.rates.length > 0 ? s.rates.reduce((a: number, b: number) => a + b, 0) / s.rates.length : 0;
+    await supabase.from("posting_time_performance").upsert({
+      hour_of_day: s.hour_of_day,
+      day_of_week: s.day_of_week,
+      total_posts: s.total_posts,
+      total_reach: s.total_reach,
+      total_engagement: s.total_engagement,
+      avg_engagement_rate: parseFloat(avg.toFixed(2)),
+      is_peak_time: avg > overallAvg * 1.2,
+    }, { onConflict: "hour_of_day,day_of_week" });
+  }
+
+  console.log(`[insights-learning] Updated ${Object.keys(timeStats).length} time slots (Eastern Time), ${posts.length} total samples`);
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -355,6 +427,16 @@ serve(async (req) => {
         console.error(`Error processing post ${post.id}:`, err);
         results.failed++;
         results.errors.push(`${post.id}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+
+    // ── Auto-refresh learning after engagement sync ──
+    if (results.updated > 0) {
+      try {
+        await refreshTimingPerformance(supabase);
+        console.log("[insights] Timing performance refreshed after sync");
+      } catch (learnErr: unknown) {
+        console.warn("[insights] Learning refresh failed:", learnErr instanceof Error ? learnErr.message : String(learnErr));
       }
     }
 
