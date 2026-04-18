@@ -33,7 +33,20 @@ self.addEventListener('install', (event) => {
   console.log('[SW] Installing...');
   event.waitUntil(
     caches.open(STATIC_CACHE)
-      .then((cache) => cache.addAll(PRECACHE_URLS))
+      .then(async (cache) => {
+        // Cache each URL individually — skip any that 503
+        await Promise.all(
+          PRECACHE_URLS.map(async (url) => {
+            try {
+              const resp = await fetch(url);
+              if (resp.ok) await cache.put(url, resp);
+              else console.warn('[SW] Pre-cache skip (not ok):', url, resp.status);
+            } catch (e) {
+              console.warn('[SW] Pre-cache skip (error):', url, e);
+            }
+          })
+        );
+      })
       .then(() => self.skipWaiting())
   );
 });
