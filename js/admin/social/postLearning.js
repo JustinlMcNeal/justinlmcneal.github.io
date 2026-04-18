@@ -1114,7 +1114,7 @@ export async function generateRecommendations() {
         
       const { data: bestTimes } = await supabase
         .from("posting_time_performance")
-        .select("hour, day_of_week, avg_engagement_rate")
+        .select("hour_of_day, day_of_week, avg_engagement_rate")
         .order("avg_engagement_rate", { ascending: false })
         .limit(5);
         
