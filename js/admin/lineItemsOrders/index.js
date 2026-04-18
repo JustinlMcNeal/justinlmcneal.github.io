@@ -581,18 +581,23 @@ async function wireLabelButtons(container, order, shipment, row) {
     btn.textContent = "⏳ Loading…";
     try {
       const url = await getSignedLabelUrl(shipment.label_url);
-      // Load PDF in hidden iframe and auto-trigger print dialog
+      // Fetch PDF as blob so we get a same-origin URL for printing
+      const pdfRes = await fetch(url);
+      const blob = await pdfRes.blob();
+      const blobUrl = URL.createObjectURL(blob);
+
       let iframe = document.getElementById("labelPrintFrame");
       if (!iframe) {
         iframe = document.createElement("iframe");
         iframe.id = "labelPrintFrame";
-        iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:0;height:0;border:none;";
+        iframe.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:none;";
         document.body.appendChild(iframe);
       }
       iframe.onload = () => {
-        try { iframe.contentWindow.print(); } catch { window.open(url, "_blank"); }
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
       };
-      iframe.src = url;
+      iframe.src = blobUrl;
     } catch (err) {
       alert("Failed to get label: " + (err.message || err));
     } finally {
