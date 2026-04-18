@@ -108,6 +108,11 @@ function renderOrdersList(data) {
 
     const reviewedCount = order.items.filter((i) => i.already_reviewed).length;
     const hasReviews = reviewedCount > 0;
+    const shipStatus = order.shipment?.status;
+    const shipBadge = shipStatus === "delivered" ? `<span class="text-[9px] font-bold text-emerald-600 uppercase bg-emerald-50 px-1.5 py-0.5 rounded">✓ Delivered</span>`
+      : shipStatus === "shipped" ? `<span class="text-[9px] font-bold text-blue-600 uppercase bg-blue-50 px-1.5 py-0.5 rounded">🚚 Shipped</span>`
+      : shipStatus === "label_purchased" ? `<span class="text-[9px] font-bold text-amber-600 uppercase bg-amber-50 px-1.5 py-0.5 rounded">📦 Label Created</span>`
+      : "";
 
     const card = document.createElement("div");
     card.className =
@@ -119,6 +124,7 @@ function renderOrdersList(data) {
           <div class="flex items-center gap-2 mb-1">
             <span class="font-black text-sm">${escHtml(order.kk_order_id)}</span>
             ${hasReviews ? `<span class="text-[9px] font-bold text-green-600 uppercase bg-green-50 px-1.5 py-0.5 rounded">✓ ${reviewedCount} reviewed</span>` : ""}
+            ${shipBadge}
           </div>
           <div class="text-xs text-gray-500">${formatDate(order.order_date)}</div>
           <div class="text-xs text-gray-600 mt-1 truncate">${itemNames}${moreCount}</div>
@@ -171,6 +177,51 @@ function showOrderDetail(order) {
   `
     )
     .join("");
+
+  // Render shipment/tracking info
+  const trackingEl = $("detailTracking");
+  if (trackingEl) {
+    const s = order.shipment;
+    if (s && s.status && s.status !== "pending") {
+      const statusLabel = {
+        label_purchased: "Label Created",
+        shipped: "Shipped",
+        delivered: "Delivered",
+        returned: "Returned",
+      }[s.status] || s.status;
+
+      const statusColor = {
+        label_purchased: "text-amber-600",
+        shipped: "text-blue-600",
+        delivered: "text-emerald-600",
+        returned: "text-red-600",
+      }[s.status] || "text-gray-600";
+
+      let trackHtml = `
+        <div class="border-2 border-black p-4 mt-4">
+          <div class="text-[10px] font-bold uppercase text-gray-500 mb-2">📦 Shipping</div>
+          <div class="flex items-center gap-3 mb-2">
+            <span class="font-black uppercase ${statusColor}">${escHtml(statusLabel)}</span>
+            ${s.carrier ? `<span class="text-xs text-gray-500">via ${escHtml(s.carrier)}</span>` : ""}
+          </div>`;
+
+      if (s.tracking_number) {
+        const trackLink = s.tracking_url || (s.carrier === "USPS" ? `https://tools.usps.com/go/TrackConfirmAction?tLabels=${s.tracking_number}` : "#");
+        trackHtml += `<a href="${escHtml(trackLink)}" target="_blank" class="inline-block text-xs font-mono bg-black text-white px-3 py-1.5 hover:bg-kkpink transition-colors">Track Package →</a>`;
+      }
+
+      if (s.shipped_at) trackHtml += `<div class="text-[10px] text-gray-400 mt-2">Shipped: ${formatDate(s.shipped_at)}</div>`;
+      if (s.estimated_delivery && s.status !== "delivered") trackHtml += `<div class="text-[10px] text-gray-400">Est. delivery: ${formatDate(s.estimated_delivery)}</div>`;
+      if (s.delivered_at) trackHtml += `<div class="text-[10px] text-emerald-600 font-bold">Delivered: ${formatDate(s.delivered_at)}</div>`;
+
+      trackHtml += `</div>`;
+      trackingEl.innerHTML = trackHtml;
+      show(trackingEl);
+    } else {
+      trackingEl.innerHTML = "";
+      hide(trackingEl);
+    }
+  }
 
   // Coupon recovery — show coupons for reviewed items
   const reviewedWithCoupon = order.items.filter(

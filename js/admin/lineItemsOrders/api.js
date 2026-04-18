@@ -202,6 +202,10 @@ async function getShipmentsMap(sessionIds) {
         "shippo_transaction_id",
         "label_url",
         "tracking_url",
+        "in_transit_at",
+        "delivered_at",
+        "estimated_delivery",
+        "last_tracking_sync_at",
       ].join(",")
     )
     .in("stripe_checkout_session_id", sessionIds);

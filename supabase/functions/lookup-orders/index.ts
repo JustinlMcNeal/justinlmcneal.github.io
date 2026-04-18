@@ -119,6 +119,17 @@ Deno.serve(async (req) => {
       reviewMap.set(`${r.order_session_id}_${r.product_id}`, r.coupon_code);
     }
 
+    // Fetch shipment/tracking info
+    const { data: shipments } = await sb
+      .from("fulfillment_shipments")
+      .select("stripe_checkout_session_id, label_status, carrier, tracking_number, tracking_url, shipped_at, in_transit_at, delivered_at, estimated_delivery")
+      .in("stripe_checkout_session_id", sessionIds);
+
+    const shipmentMap = new Map<string, any>();
+    for (const s of shipments || []) {
+      shipmentMap.set(s.stripe_checkout_session_id, s);
+    }
+
     // Build enriched order list
     const enrichedOrders = orders.map((o: any) => {
       const items = (itemsBySession.get(o.stripe_checkout_session_id) || []).map(
@@ -134,6 +145,8 @@ Deno.serve(async (req) => {
         }
       );
 
+      const ship = shipmentMap.get(o.stripe_checkout_session_id);
+
       return {
         kk_order_id: o.kk_order_id,
         session_id: o.stripe_checkout_session_id,
@@ -142,6 +155,15 @@ Deno.serve(async (req) => {
         total_items: o.total_items,
         first_name: o.first_name,
         items,
+        shipment: ship ? {
+          status: ship.label_status,
+          carrier: ship.carrier,
+          tracking_number: ship.tracking_number,
+          tracking_url: ship.tracking_url,
+          shipped_at: ship.shipped_at || ship.in_transit_at,
+          delivered_at: ship.delivered_at,
+          estimated_delivery: ship.estimated_delivery,
+        } : null,
       };
     });
 

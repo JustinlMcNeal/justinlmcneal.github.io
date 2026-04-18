@@ -370,6 +370,23 @@ function renderOrderDetailsHtml(order, lineItems, shipment) {
         </div>
       </div>
 
+      ${shipment?.in_transit_at || shipment?.delivered_at || shipment?.estimated_delivery ? `
+      <div class="grid sm:grid-cols-3 gap-4 mt-4">
+        ${shipment.in_transit_at ? `<div class="border-4 border-blue-200 p-4 bg-blue-50">
+          <div class="text-[10px] font-black uppercase tracking-[.18em] text-blue-600/60 mb-1">Shipped</div>
+          <div class="font-black text-sm text-blue-700">${new Date(shipment.in_transit_at).toLocaleDateString()}</div>
+        </div>` : ""}
+        ${shipment.estimated_delivery ? `<div class="border-4 border-amber-200 p-4 bg-amber-50">
+          <div class="text-[10px] font-black uppercase tracking-[.18em] text-amber-600/60 mb-1">ETA</div>
+          <div class="font-black text-sm text-amber-700">${new Date(shipment.estimated_delivery).toLocaleDateString()}</div>
+        </div>` : ""}
+        ${shipment.delivered_at ? `<div class="border-4 border-emerald-200 p-4 bg-emerald-50">
+          <div class="text-[10px] font-black uppercase tracking-[.18em] text-emerald-600/60 mb-1">Delivered</div>
+          <div class="font-black text-sm text-emerald-700">${new Date(shipment.delivered_at).toLocaleDateString()}</div>
+        </div>` : ""}
+      </div>
+      ` : ""}
+
       <!-- Shippo Label Actions -->
       <div class="mt-4 flex flex-wrap gap-3" data-label-actions>
         ${labelStatus === "pending" || labelStatus === "voided" ? `
