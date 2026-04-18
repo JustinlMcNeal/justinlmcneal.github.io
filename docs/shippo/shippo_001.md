@@ -8,20 +8,20 @@
 
 ---
 
-## Current State (What We Have Today)
+## Current State (Updated April 18, 2026)
 
 | Area | Status | Details |
-|------|--------|---------|
+|------|--------|--------|
 | **Order creation** | ✅ Automated | Stripe webhook → `orders_raw` + `line_items_raw` + `fulfillment_shipments` |
 | **Shipping rates** | ⚠️ Hardcoded | Free ($0 over $50), Standard ($8.95), Express ($12.99) — no weight/zone calculation |
-| **Label purchase** | ❌ Manual | Admin exports CSV → Pirate Ship → buys labels → imports tracking back |
-| **Tracking** | ❌ Manual | Admin pastes tracking number into fulfillment modal |
-| **Customer notifications** | ❌ Missing | No shipping confirmation, no delivery updates, no tracking page |
+| **Label purchase** | ✅ Automated | Admin clicks "Buy Label" in order modal → Shippo creates label → stored in Supabase Storage |
+| **Tracking** | ✅ Automated | Shippo webhooks update status automatically (PRE_TRANSIT → TRANSIT → DELIVERED) |
+| **Customer notifications** | ✅ Automated | Transactional SMS on shipped + delivered via Twilio (no opt-in required) |
 | **Address validation** | ❌ None | Whatever Stripe collects goes straight to DB |
-| **Delivery status** | ❌ Manual | Admin manually changes status: pending → shipped → delivered |
+| **Delivery status** | ✅ Automated | Shippo webhooks update `fulfillment_shipments` timestamps + status |
 | **Returns** | ❌ None | No return label generation, no returns workflow |
 
-### Current Fulfillment Workflow (6+ manual steps)
+### Previous Fulfillment Workflow (6+ manual steps — REPLACED)
 
 ```
 1. Admin sees unfulfilled orders on admin/lineItemsOrders.html
@@ -32,6 +32,16 @@
 6. Imports tracking data back via admin UI
 7. Manually updates fulfillment status
 8. Customer has NO idea what's happening
+```
+
+### New Fulfillment Workflow (2 steps)
+
+```
+1. Admin opens order modal → clicks "Buy Label" (preset dropdown) → label purchased + stored
+2. Clicks "Print Label" → popup shows PNG label → auto-print dialog → Munbyn prints
+   → Shippo webhooks handle all tracking updates automatically
+   → Customer gets SMS on shipped + delivered
+   → Review request auto-triggers on delivery
 ```
 
 ### Database Tables Involved
@@ -361,32 +371,56 @@ Shippo may resend the same tracking event (retries, duplicate deliveries). The `
 | Add `shippo_transaction_id` column | To `fulfillment_shipments` for void/refund lookups |
 | Package preset dropdown | Select package size when buying label (or accept default) |
 
-#### Phase 1 Success Criteria ✅
+#### Phase 1 Success Criteria ✅ — COMPLETED (commits 278f5c6 → c6f0f23)
 
-- [ ] Admin can buy one label from the order modal (test mode)
-- [ ] Tracking number saves to `fulfillment_shipments` automatically
-- [ ] Label PDF downloads to Supabase Storage and is accessible
-- [ ] Label prints from admin via Munbyn
-- [ ] Void label works and returns money
-- [ ] Double-click does NOT create duplicate labels (idempotency works)
-- [ ] Switch to live key → first real label purchase succeeds
-- [ ] First real package moves from label purchase → carrier scan (proves the label is valid end-to-end)
+- [x] Admin can buy one label from the order modal (test mode) — tested $5.55 USPS Ground Advantage
+- [x] Tracking number saves to `fulfillment_shipments` automatically
+- [x] Label PNG downloads to Supabase Storage (`labels` bucket, private + RLS)
+- [x] Label prints from admin via Munbyn (popup window + `@page { size: 4in 6in }` + auto-print)
+- [x] Void label works and returns money (tested: Shippo refund API → status PENDING)
+- [x] Double-click does NOT create duplicate labels (idempotency: returns `duplicate: true`)
+- [x] Switch to live key → done (April 18, 2026)
+- [ ] First real package moves from label purchase → carrier scan (awaiting first live shipment)
 
-### Phase 2: Automatic Tracking + SMS
+#### Phase 1 Implementation Details
+
+| Component | File | Notes |
+|-----------|------|-------|
+| Buy label edge function | `supabase/functions/shippo-create-label/index.ts` | Order → shipment → rates → cheapest USPS → PNG label → Storage → DB |
+| Void label edge function | `supabase/functions/shippo-void-label/index.ts` | Shippo refund API → mark voided → cleanup |
+| Admin API functions | `js/admin/lineItemsOrders/api.js` | `buyShippingLabel()`, `voidShippingLabel()`, `getSignedLabelUrl()`, `fetchPackagePresets()` |
+| Admin UI | `js/admin/lineItemsOrders/index.js` | Buy/Print/Reprint/Void buttons, preset dropdown, popup print with `@page` CSS |
+| Label format | PNG (not PDF) | PDF had rendering/sizing issues in Edge; PNG prints perfectly on Munbyn 4x6 thermal |
+| Storage | `labels` bucket (private) | RLS policy `admin_read_labels` for authenticated SELECT; signed URLs for access |
+
+### Phase 2: Automatic Tracking + SMS — COMPLETED (commit fdb3ddf → 8b51bac)
 
 **Goal**: Tracking status updates automatically — no manual status changes, customers get notified.
 
-| Task | Details |
-|------|---------|
-| Create `shippo-webhook` edge function | Receives `track_updated` events → logs to `shippo_webhook_events` → updates `fulfillment_shipments` |
-| Register webhook in Shippo dashboard | Point `track_updated` to our edge function URL |
-| Map Shippo statuses | `PRE_TRANSIT` → label_purchased, `TRANSIT` → shipped, `DELIVERED` → delivered, etc. |
-| Update timestamps | Set `in_transit_at`, `delivered_at`, `returned_at`, `last_tracking_sync_at` on status changes |
-| Trigger SMS on ship | When status changes to `shipped` → send "Your order has shipped!" SMS via Twilio |
-| Trigger SMS on delivery | When status changes to `delivered` → send delivery confirmation SMS |
-| Trigger review request | `DELIVERED` → schedule review request SMS (existing system, just needs the trigger) |
-| Show tracking on my-orders | Display tracking number, status, ETA, "Track Package" link on customer's my-orders page |
-| Pirate Ship cleanup script | One-time: check old tracking numbers via Shippo → update stale statuses to `delivered` |
+| Task | Status | Details |
+|------|--------|---------|
+| Create `shippo-webhook` edge function | ✅ | Receives `track_updated` → logs to `shippo_webhook_events` → updates `fulfillment_shipments` |
+| Register webhook with Shippo | ✅ | Webhook ID `de7121788122467b8962fbd326d89bf4`, event `track_updated`, `verify_jwt = false` |
+| Map Shippo statuses | ✅ | `PRE_TRANSIT` → label_purchased, `TRANSIT` → shipped, `DELIVERED` → delivered, `RETURNED` → returned |
+| Update timestamps | ✅ | `in_transit_at`, `delivered_at`, `returned_at`, `last_tracking_sync_at`, `estimated_delivery` |
+| Trigger SMS on ship | ✅ | Transactional SMS via `send-sms` → "Your order has shipped!" + USPS tracking link |
+| Trigger SMS on delivery | ✅ | "Your order has been delivered!" + review link |
+| Trigger review request | ✅ | Calls `send-review-request` edge function on DELIVERED status |
+| Show tracking on my-orders | ✅ | Status badges on order cards + tracking section in detail view with "Track Package" link |
+| Pirate Ship cleanup script | ❌ | Not yet done — can do as one-time script when ready |
+
+#### Phase 2 Implementation Details
+
+| Component | File | Notes |
+|-----------|------|-------|
+| Webhook edge function | `supabase/functions/shippo-webhook/index.ts` | Logs all events, updates shipments, sends SMS, triggers review requests |
+| Webhook URL | `https://yxdzvzscufkvewecvagq.supabase.co/functions/v1/shippo-webhook` | Registered via Shippo API |
+| SMS consent | **Not required** | Shipping SMS is transactional under TCPA — sent to all customers with phone numbers |
+| SMS content (shipped) | `"Hey {name}! 🎉 Your Karry Kraze order {id} has shipped! Tracking: {usps_link}"` | |
+| SMS content (delivered) | `"Hi {name}! 📦 Your order {id} has been delivered! Leave a review: {link}"` | |
+| Lookup-orders update | `supabase/functions/lookup-orders/index.ts` | Now returns `shipment` object with status, carrier, tracking, dates |
+| My-orders frontend | `js/my-orders/index.js` + `pages/my-orders.html` | Status badges + tracking detail section |
+| Admin fulfillment UI | `js/admin/lineItemsOrders/index.js` | Shows shipped date, ETA, delivered date when available |
 
 ### Phase 3: Batch Labels + Monitoring
 
@@ -417,16 +451,16 @@ Shippo may resend the same tracking event (retries, duplicate deliveries). The `
 
 ---
 
-## Edge Functions Needed
+## Edge Functions
 
-| Function | Method | Purpose | Phase |
-|----------|--------|---------|-------|
-| `shippo-create-label` | POST | Buy a shipping label for one order | 1 |
-| `shippo-void-label` | POST | Void/refund an unused label | 1 |
-| `shippo-webhook` | POST | Receive tracking updates from Shippo | 2 |
-| `shippo-batch-labels` | POST | Buy labels for multiple orders at once | 3 |
-| `shippo-get-rates` | POST | Get live shipping rates for checkout | 4 |
-| `shippo-return-label` | POST | Generate a return label | 4 |
+| Function | Method | Purpose | Phase | Status |
+|----------|--------|---------|-------|--------|
+| `shippo-create-label` | POST | Buy a shipping label for one order | 1 | ✅ Deployed |
+| `shippo-void-label` | POST | Void/refund an unused label | 1 | ✅ Deployed |
+| `shippo-webhook` | POST | Receive tracking updates from Shippo | 2 | ✅ Deployed |
+| `shippo-batch-labels` | POST | Buy labels for multiple orders at once | 3 | ❌ Not started |
+| `shippo-get-rates` | POST | Get live shipping rates for checkout | 4 | ❌ Not started |
+| `shippo-return-label` | POST | Generate a return label | 4 | ❌ Not started |
 
 ## Database Changes Needed
 
@@ -580,20 +614,27 @@ Auto-printing (label purchased → automatically sent to printer) isn't practica
 - **Browser security** — browsers require user interaction to trigger print (no silent `window.print()`)
 - **Would need a local print agent** — a background app that polls for new labels and sends to printer. Overkill for current volume and adds complexity
 
-### Single Label Print
+### Single Label Print (Implemented ✅)
 
 ```
 Admin clicks "Buy Label" on an order
-  → Shippo returns label_url (PDF_4x6 — native Munbyn format)
+  → Shippo returns PNG label (4x6)
+  → PNG stored in Supabase Storage (labels bucket, private)
   → Admin clicks "Print Label"
-  → Opens label PDF in new tab/iframe
-  → Browser print dialog → select Munbyn RW403B → Print
-  → One label prints on one 4x6 sticker
+  → Popup window opens immediately (avoids popup blocker)
+  → Fetches signed URL → renders PNG with @page { size: 4in 6in } CSS
+  → Auto-triggers window.print() after 400ms
+  → Munbyn RW403B pre-selected (set as Windows default)
+  → One Enter press → label prints
 ```
 
-**Implementation**: Simple `window.open(label_url)` + `window.print()` on the opened PDF. The Munbyn is paired via Bluetooth and shows as a standard Windows printer in the browser print dialog. Set it as Windows default for 4x6 media to skip the selection step.
+**Implementation**: Popup opens synchronously on click (before async fetch). Signed URL fetched → HTML page with `<img>` + `@media print` CSS for 4x6 sizing + `onload="setTimeout(window.print, 400)"`. PNG format chosen over PDF because Edge had rendering/sizing issues with PDF in iframes and popup windows.
 
-**Alternative**: Download label PDF on phone and print via existing phone→Munbyn Bluetooth connection.
+**Key learnings**:
+- `window.open()` must be called synchronously (not after `await`) or Edge blocks it as a popup
+- PDF labels in Edge: iframe couldn't print, blob URLs rendered blank in print preview, raw PDF opened but clipped in print
+- PNG labels: render perfectly as `<img>` with `@page { size: 4in 6in }` CSS
+- Munbyn must be set as Windows default printer (uncheck "Let Windows manage my default printer" first)
 
 ### Bulk Print (Recommended Daily Workflow)
 
