@@ -63,7 +63,7 @@ After shipping Phase 1, let autopilot run **7-14 days untouched**, then check:
 |-------|--------|--------|-------|
 | 1A — Hashtags + Timing | ✅ SHIPPED | `82ed931` | Smart hashtag merge + timing threshold + learned fallback |
 | 1B — AI Captions + Learning Trigger | ✅ SHIPPED | `838cb72` | AI captions via ai-generate, template fallback, caption_source tracking, insights triggers learning aggregation |
-| 1C — UTM + Pixel + Comment KK | ⬜ NOT STARTED | — | |
+| 1C — UTM + Comment KK | ✅ SHIPPED | `bbea7f2` | UTM params on all link_urls + captions, "Comment KK" CTA removed, Meta Pixel template created (needs user's Pixel ID) |
 
 ### Known Issue: Category Labels in hashtag_performance
 **Discovered during Phase 1A testing.** All hashtags in `hashtag_performance` have `category = "general"` — none have product-category labels (e.g., "bags", "headwear"). This means `topHashtagsByCategory` is always empty and category-biased hashtag selection is a no-op. The merge still works (general tags fill correctly), but category relevance will improve once `runLearningAggregation` writes proper category labels. **Fix after observation window.**
@@ -1177,9 +1177,9 @@ These ideas are valid but premature. Revisit when monthly:
 **Phase 1C (Day 5): Tracking + Trust**
 | # | Item | Sprint | Effort | Expected Impact |
 |---|------|--------|--------|----------------|
-| 5 | UTM tracking | 4.5.1 | 30 min | Revenue attribution unlocked |
-| 6 | Meta Pixel install | 4.5.2 | 30 min | Audience data collection starts |
-| 7 | Remove or fix "Comment KK" CTA | 6.2 | 5 min | Stop breaking trust |
+| 5 | ✅ UTM tracking | 4.5.1 | 30 min | Revenue attribution unlocked |
+| 6 | ⬜ Meta Pixel install (needs Pixel ID) | 4.5.2 | 30 min | Audience data collection starts |
+| 7 | ✅ Remove "Comment KK" CTA | 6.2 | 5 min | Stop breaking trust |
 
 ### Phase 2 (NEXT) — Reach Multiplier
 | # | Item | Sprint | Effort | Expected Impact |
