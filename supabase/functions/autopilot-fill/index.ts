@@ -53,15 +53,21 @@ Deno.serve(async (req) => {
     console.log("[autopilot] Running with settings:", settings);
 
     // 2. Count posts scheduled for the next X days
+    //    Start from tomorrow so today's posts (which will publish today)
+    //    don't consume the "days ahead" quota
     const now = new Date();
-    const futureDate = new Date();
+    const tomorrowStart = new Date(now);
+    tomorrowStart.setUTCDate(tomorrowStart.getUTCDate() + 1);
+    tomorrowStart.setUTCHours(0, 0, 0, 0);
+    
+    const futureDate = new Date(tomorrowStart);
     futureDate.setDate(futureDate.getDate() + settings.days_ahead);
 
     const { count: scheduledCount } = await supabase
       .from("social_posts")
       .select("*", { count: "exact", head: true })
       .in("status", ["queued", "draft"])
-      .gte("scheduled_for", now.toISOString())
+      .gte("scheduled_for", tomorrowStart.toISOString())
       .lte("scheduled_for", futureDate.toISOString());
 
     const targetCount = settings.days_ahead * settings.posts_per_day * settings.platforms.length;
