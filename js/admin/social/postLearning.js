@@ -449,6 +449,9 @@ export async function analyzePost(postId) {
   
   // Persist analysis to post_performance_analysis table
   try {
+    // Convert JS arrays to Postgres TEXT[] literal format
+    const toPgArray = (arr) => `{${(arr || []).map(s => `"${String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`).join(',')}}`;
+
     const { error: insertErr } = await supabase
       .from("post_performance_analysis")
       .upsert([{
@@ -471,14 +474,14 @@ export async function analyzePost(postId) {
         sentiment: analysis.sentiment || null,
         hashtag_count: analysis.hashtag_count,
         branded_hashtag_used: analysis.branded_hashtag_used,
-        category_hashtags_used: analysis.category_hashtags_used || [],
+        category_hashtags_used: toPgArray(analysis.category_hashtags_used),
         vs_avg_engagement_rate: parseFloat(analysis.vs_avg_engagement_rate) || 0,
         vs_avg_likes: parseFloat(analysis.vs_avg_likes) || 0,
         vs_avg_comments: parseFloat(analysis.vs_avg_comments) || 0,
         vs_avg_saves: parseFloat(analysis.vs_avg_saves) || 0,
-        strengths: analysis.strengths || [],
-        weaknesses: analysis.weaknesses || [],
-        recommendations: analysis.recommendations || [],
+        strengths: toPgArray(analysis.strengths),
+        weaknesses: toPgArray(analysis.weaknesses),
+        recommendations: toPgArray(analysis.recommendations),
         updated_at: new Date().toISOString(),
       }], { onConflict: "post_id" });
 
