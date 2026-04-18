@@ -1,7 +1,7 @@
 # Social Media Page Revamp — pSocial_001
 
 > **Created**: 2026-04-16  
-> **Status**: Sprint 3 Complete ✅ — Sprint 4 next  
+> **Status**: Sprint 3.5 Complete ✅ — Sprint 4 next  
 > **Scope**: Full audit & revamp of `/pages/admin/social.html` and all supporting JS/edge functions
 
 ---
@@ -502,6 +502,36 @@ Daily cron triggers autopilot-fill:
 **Edge functions deployed**: `auto-queue`  
 **Files modified**: `supabase/functions/auto-queue/index.ts`, `js/admin/social/index.js`, `js/admin/social/api.js`, `css/pages/admin/social.css`, `supabase/migrations/20260417_social_assets_image_pool.sql`
 
+### Sprint 3.5 — Code Architecture Refactor ✅ COMPLETE (2026-07-20)
+> Modular decomposition of the monolithic index.js
+
+`js/admin/social/index.js` had grown to ~7000 lines. Refactored into 8 focused modules + a slim orchestrator using ES module imports and dependency injection.
+
+**Architecture**: Each module exports `initXxx(deps)` receiving `{ state, els, showToast, getClient, ...callbacks }`. The orchestrator (`index.js`) wires all dependencies in `init()`.
+
+| Module | Lines | Responsibility |
+|--------|-------|---------------|
+| `index.js` (orchestrator) | ~1000 | State, els, OAuth, platform posting, tabs, calendar, queue, templates, boards, wiring |
+| `uploadModal.js` | ~600 | Upload wizard (3-step), image variations, caption generation, scheduling |
+| `carouselBuilder.js` | ~700 | Carousel assembly, drag-and-drop, engagement scoring (shared functions) |
+| `autoQueue.js` | ~300 | Auto-queue settings, preview, generate, confirm, repost |
+| `autopilot.js` | ~150 | Autopilot toggle, settings, status display |
+| `imagePool.js` | ~450 | Image pool grid, catalog browser, tagging modal, asset upload |
+| `platformSettings.js` | ~300 | Settings modal, Facebook/Instagram profile settings |
+| `postDetail.js` | ~250 | Post detail modal, edit/delete/post-now handlers |
+| `analytics.js` | ~700 | Analytics dashboard, post analytics modal, learning insights, category insights |
+
+**Key design decisions**:
+- `calculateEngagementScore` and `updateEngagementScoreUI` live in `carouselBuilder.js` (shared). `uploadModal.js` receives them via `setScoreFunctions()`.
+- `openPostDetail` exported from `postDetail.js` — used by calendar click and queue click handlers.
+- `loadAssets` exported from `imagePool.js` — called by `switchTab("assets")`.
+- `applySettings` exported from `platformSettings.js` — called after `loadSettings()`.
+- `window.openPostAnalytics` set globally in `analytics.js` for inline onclick handlers in HTML.
+- Cross-module dependencies: `autopilot.js` imports `getAutoQueueSettings` from `autoQueue.js` (one-way, no circular deps).
+
+**Files modified**: `js/admin/social/index.js` (rewritten as orchestrator)  
+**Files created**: `uploadModal.js`, `carouselBuilder.js`, `autoQueue.js`, `autopilot.js`, `imagePool.js`, `platformSettings.js`, `postDetail.js`, `analytics.js`
+
 ### Sprint 4 — Smart Features
 > Advanced automation + polish
 
@@ -529,7 +559,7 @@ Daily cron triggers autopilot-fill:
 | File | Changes |
 |------|---------|
 | `pages/admin/social.html` | Remove 3 tabs (Queue, Templates, AI Images), revamp Assets/Auto-Queue tabs, add calendar list toggle |
-| `js/admin/social/index.js` | Remove queue/template/AI image handlers, add image upload/tagging, revamp autopilot UI |
+| `js/admin/social/index.js` | **Refactored from ~7000 lines to ~1000 line orchestrator** — extracted 8 modules (Sprint 3.5) |
 | `js/admin/social/api.js` | Add image pool queries, tagging CRUD, unused image queries |
 
 ### Modify Lightly

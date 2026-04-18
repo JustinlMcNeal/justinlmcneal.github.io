@@ -76,7 +76,7 @@ The function:
 ### Step 2: Learning Aggregation ("Update Learnings")
 
 **Trigger**: Manual — user clicks "Update Learnings" button in Analytics tab  
-**JS function**: `processAllPostsForLearning()` in `index.js`, which calls functions from `postLearning.js`
+**JS function**: `processAllPostsForLearning()` in `analytics.js`, which calls functions from `postLearning.js`
 
 This runs 4 sub-processes:
 
