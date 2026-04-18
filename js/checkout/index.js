@@ -67,6 +67,17 @@ async function handleCheckout(btn) {
   const cart = getCart();
   if (!cart.length) return;
 
+  // Meta Pixel: InitiateCheckout
+  if (typeof fbq === "function") {
+    const cartValue = cart.reduce((s, i) => s + Number(i.price || 0) * Math.max(1, Number(i.qty || 1)), 0);
+    fbq("track", "InitiateCheckout", {
+      content_type: "product",
+      value: cartValue,
+      currency: "USD",
+      num_items: cart.length,
+    });
+  }
+
   btn.disabled = true;
   const originalText = btn.innerHTML;
   btn.innerHTML = `

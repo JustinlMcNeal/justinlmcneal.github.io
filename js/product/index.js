@@ -430,6 +430,17 @@ async function initProductPage() {
         const payload = buildCartPayload(els, product, tags, selectedVariant);
         emitAddToCart(payload);
         setActionMsg(els, "Added to cart.");
+
+        // Meta Pixel: AddToCart
+        if (typeof fbq === "function") {
+          fbq("track", "AddToCart", {
+            content_name: payload.name,
+            content_ids: [payload.product_id],
+            content_type: "product",
+            value: payload.price,
+            currency: "USD",
+          });
+        }
       };
     }
 
@@ -512,6 +523,17 @@ async function initProductPage() {
 
     show(els.loading, false);
     show(els.wrap, true);
+
+    // Meta Pixel: ViewContent
+    if (typeof fbq === "function") {
+      fbq("track", "ViewContent", {
+        content_name: product.name,
+        content_ids: [product.code],
+        content_type: "product",
+        value: product.price,
+        currency: "USD",
+      });
+    }
   } catch (err) {
     console.error(err);
     show(els.loading, false);

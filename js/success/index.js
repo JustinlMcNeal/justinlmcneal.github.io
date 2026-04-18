@@ -111,6 +111,15 @@ async function loadOrderDetails(oid) {
     if (shippingEl) shippingEl.textContent = order.shipping_paid_cents ? cents(order.shipping_paid_cents) : "Free";
     if (totalEl) totalEl.textContent = cents(order.total_paid_cents);
 
+    // Meta Pixel: Purchase
+    if (typeof fbq === "function") {
+      fbq("track", "Purchase", {
+        content_type: "product",
+        value: (order.total_paid_cents || 0) / 100,
+        currency: "USD",
+      });
+    }
+
     if (order.order_savings_total_cents > 0 && savingsRow && savingsEl) {
       savingsEl.textContent = "-" + cents(order.order_savings_total_cents);
       savingsRow.classList.remove("hidden");
