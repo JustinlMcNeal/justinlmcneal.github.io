@@ -374,3 +374,13 @@ entrypoint = "./functions/verify-review-token/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/send-review-request/index.ts"
+
+[functions.auto-queue]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/auto-queue/index.ts"
+
+[functions.autopilot-fill]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/autopilot-fill/index.ts"

@@ -1168,6 +1168,7 @@ Deno.serve(async (req) => {
 
     // 6. Create assets and variations for each product
     const createdPosts: any[] = [];
+    const skippedErrors: string[] = [];
     
     for (const post of generatedPosts) {
       try {
@@ -1204,6 +1205,7 @@ Deno.serve(async (req) => {
 
           if (assetErr) {
             console.error(`[auto-queue] Failed to create asset for ${post.product_name}:`, assetErr);
+            skippedErrors.push(`asset:${post.product_name}:${assetErr.message}`);
             continue;
           }
           assetId = newAsset.id;
@@ -1244,6 +1246,7 @@ Deno.serve(async (req) => {
 
           if (varErr) {
             console.error(`[auto-queue] Failed to create variation for ${post.product_name}:`, varErr);
+            skippedErrors.push(`variation:${post.product_name}:${varErr.message}`);
             continue;
           }
           variationId = newVariation.id;
@@ -1333,6 +1336,7 @@ Deno.serve(async (req) => {
 
         if (postErr) {
           console.error(`[auto-queue] Failed to create post for ${post.product_name}:`, postErr);
+          skippedErrors.push(`post:${post.product_name}:${postErr.message}`);
           continue;
         }
 
@@ -1355,6 +1359,7 @@ Deno.serve(async (req) => {
       } catch (err: unknown) {
         const errMsg = err instanceof Error ? err.message : String(err);
         console.error(`[auto-queue] Error processing ${post.product_name}:`, errMsg);
+        skippedErrors.push(`catch:${post.product_name}:${errMsg}`);
       }
     }
 
@@ -1391,6 +1396,8 @@ Deno.serve(async (req) => {
       generated: createdPosts.length,
       byPlatform,
       posts: createdPosts,
+      skippedErrors: skippedErrors.length ? skippedErrors : undefined,
+      generatedCount: generatedPosts.length,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
   } catch (err: unknown) {
