@@ -314,7 +314,7 @@ async function runLearningAggregation(supabase: any): Promise<void> {
   // Fetch all posted IG posts with engagement data
   const { data: posts, error } = await supabase
     .from("social_posts")
-    .select("id, hashtags, likes, comments, saves, reach, engagement_rate, posted_at, caption")
+    .select("id, hashtags, likes, comments, saves, reach, engagement_rate, posted_at, caption, variation_id")
     .eq("status", "posted")
     .eq("platform", "instagram");
 
@@ -323,13 +323,29 @@ async function runLearningAggregation(supabase: any): Promise<void> {
     return;
   }
 
+  // ── Build variation → category map (variation_id → social_variations → social_assets → products → categories) ──
+  const variationIds = [...new Set(posts.map((p: any) => p.variation_id).filter(Boolean))];
+  const variationCategoryMap: Record<string, string> = {};
+  if (variationIds.length > 0) {
+    const { data: variants } = await supabase
+      .from("social_variations")
+      .select("id, asset:social_assets(product:products(category:categories(name)))")
+      .in("id", variationIds);
+    for (const v of (variants || [])) {
+      const catName = v.asset?.product?.category?.name?.toLowerCase();
+      if (catName) variationCategoryMap[v.id] = catName;
+    }
+  }
+  console.log(`[learning] Category map: ${Object.keys(variationCategoryMap).length} variations mapped`);
+
   // ── 1. Hashtag Performance ──
   const hashtagStats: Record<string, any> = {};
   for (const post of posts) {
+    const postCategory = post.variation_id ? (variationCategoryMap[post.variation_id] || "general") : "general";
     for (const tag of (post.hashtags || [])) {
       const t = tag.toLowerCase().replace("#", "");
       if (!hashtagStats[t]) {
-        hashtagStats[t] = { times_used: 0, total_reach: 0, total_likes: 0, total_comments: 0, total_saves: 0, rates: [], bestId: null, bestRate: 0, worstId: null, worstRate: Infinity };
+        hashtagStats[t] = { times_used: 0, total_reach: 0, total_likes: 0, total_comments: 0, total_saves: 0, rates: [], bestId: null, bestRate: 0, worstId: null, worstRate: Infinity, categoryCounts: {} };
       }
       const s = hashtagStats[t];
       s.times_used++;
@@ -340,16 +356,30 @@ async function runLearningAggregation(supabase: any): Promise<void> {
       s.rates.push(post.engagement_rate || 0);
       if ((post.engagement_rate || 0) > s.bestRate) { s.bestId = post.id; s.bestRate = post.engagement_rate || 0; }
       if ((post.engagement_rate || 0) < s.worstRate) { s.worstId = post.id; s.worstRate = post.engagement_rate || 0; }
+      // Track category frequency for this hashtag
+      s.categoryCounts[postCategory] = (s.categoryCounts[postCategory] || 0) + 1;
     }
   }
   for (const [tag, s] of Object.entries(hashtagStats) as [string, any][]) {
     const avg = s.rates.length > 0 ? s.rates.reduce((a: number, b: number) => a + b, 0) / s.rates.length : 0;
+    // Determine dominant category (most frequent, not "general" if possible)
+    let dominantCategory = "general";
+    if (tag === "karrykraze") {
+      dominantCategory = "branded";
+    } else {
+      const cats = Object.entries(s.categoryCounts) as [string, number][];
+      // Prefer non-general categories; pick the one with highest count
+      const nonGeneral = cats.filter(([c]) => c !== "general");
+      const pool = nonGeneral.length > 0 ? nonGeneral : cats;
+      pool.sort((a, b) => b[1] - a[1]);
+      if (pool.length > 0) dominantCategory = pool[0][0];
+    }
     await supabase.from("hashtag_performance").upsert({
       hashtag: tag, times_used: s.times_used, total_reach: s.total_reach,
       total_likes: s.total_likes, total_comments: s.total_comments, total_saves: s.total_saves,
       avg_engagement_rate: parseFloat(avg.toFixed(2)),
       best_performing_post_id: s.bestId, worst_performing_post_id: s.worstRate < Infinity ? s.worstId : null,
-      category: tag === "karrykraze" ? "branded" : "general",
+      category: dominantCategory,
       is_recommended: avg >= 2.0 && s.times_used >= 3,
       updated_at: new Date().toISOString(),
     }, { onConflict: "hashtag" });
