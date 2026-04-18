@@ -587,9 +587,12 @@ async function wireLabelButtons(container, order, shipment, row) {
     btn.textContent = "⏳ Loading…";
     try {
       const url = await getSignedLabelUrl(shipment.label_url);
-      // Write an HTML page with the label image + auto-print
-      pw.document.open();
-      pw.document.write(`<!DOCTYPE html><html><head><title>Print Label</title>
+      const isPng = shipment.label_url.endsWith(".png");
+
+      if (isPng) {
+        // PNG label — render as image with auto-print
+        pw.document.open();
+        pw.document.write(`<!DOCTYPE html><html><head><title>Print Label</title>
 <style>
   @page { size: 4in 6in; margin: 0; }
   * { margin: 0; padding: 0; }
@@ -599,7 +602,11 @@ async function wireLabelButtons(container, order, shipment, row) {
 </style></head><body>
 <img src="${url}" onload="setTimeout(function(){window.print();},400)">
 </body></html>`);
-      pw.document.close();
+        pw.document.close();
+      } else {
+        // PDF label (legacy) — navigate directly to PDF
+        pw.location.href = url;
+      }
     } catch (err) {
       pw.close();
       alert("Failed to get label: " + (err.message || err));
