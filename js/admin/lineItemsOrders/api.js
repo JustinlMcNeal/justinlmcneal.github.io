@@ -199,6 +199,9 @@ async function getShipmentsMap(sessionIds) {
         "batch_id",
         "printed_at",
         "label_cost_cents",
+        "shippo_transaction_id",
+        "label_url",
+        "tracking_url",
       ].join(",")
     )
     .in("stripe_checkout_session_id", sessionIds);
@@ -518,6 +521,73 @@ export async function updateRefundReason(stripe_checkout_session_id, refund_reas
     .update({ refund_reason, updated_at: new Date().toISOString() })
     .eq("stripe_checkout_session_id", stripe_checkout_session_id);
   if (error) throw new Error(error.message);
+}
+
+export async function fetchPackagePresets() {
+  const { data, error } = await supabase
+    .from("package_presets")
+    .select("*")
+    .order("sort_order", { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function buyShippingLabel(stripe_checkout_session_id, preset_id = null) {
+  if (!stripe_checkout_session_id) throw new Error("Missing session ID");
+
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+
+  const body = { stripe_checkout_session_id };
+  if (preset_id) body.preset_id = preset_id;
+
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/shippo-create-label`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token || SUPABASE_ANON_KEY}`,
+      "apikey": SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify(body),
+  });
+
+  const result = await res.json();
+  if (!res.ok || result.error) {
+    throw new Error(result.error || `Label purchase failed (${res.status})`);
+  }
+  return result;
+}
+
+export async function voidShippingLabel(stripe_checkout_session_id) {
+  if (!stripe_checkout_session_id) throw new Error("Missing session ID");
+
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/shippo-void-label`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token || SUPABASE_ANON_KEY}`,
+      "apikey": SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify({ stripe_checkout_session_id }),
+  });
+
+  const result = await res.json();
+  if (!res.ok || result.error) {
+    throw new Error(result.error || `Void failed (${res.status})`);
+  }
+  return result;
+}
+
+export async function getSignedLabelUrl(storagePath) {
+  if (!storagePath) throw new Error("No label path");
+  const { data, error } = await supabase.storage
+    .from("labels")
+    .createSignedUrl(storagePath, 300); // 5 min expiry
+  if (error) throw error;
+  return data.signedUrl;
 }
 
 export async function issueRefund(stripe_checkout_session_id, amount_cents = null, refund_reason = null) {

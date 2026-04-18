@@ -3,7 +3,7 @@ import { initAdminNav } from "/js/shared/adminNav.js";
 import { initFooter } from "/js/shared/footer.js";
 import { els, wireDomHelpers, setStatus, setCountLabel, moneyFromCents, showImportResult, showImportPreview, hideImportPreview } from "./dom.js";
 import { state } from "./state.js";
-import { fetchOrderSummaryPage, fetchOrderSummaryAllForExport, fetchOrderKpis, importPirateShipExport, fetchOrderDetails, issueRefund, updateRefundReason } from "./api.js";
+import { fetchOrderSummaryPage, fetchOrderSummaryAllForExport, fetchOrderKpis, importPirateShipExport, fetchOrderDetails, issueRefund, updateRefundReason, buyShippingLabel, voidShippingLabel, fetchPackagePresets, getSignedLabelUrl } from "./api.js";
 import { renderOrdersRows } from "./renderTable.js";
 import { downloadShipReadyCSV } from "./shipReadyCsv.js";
 import { bindEditModal } from "./modalEditor.js";
@@ -69,6 +69,9 @@ function bindViewModal() {
 
       // Wire refund button(s) inside the modal
       wireRefundButtons(viewModalBody, order, row);
+
+      // Wire label action buttons (buy, print, void)
+      wireLabelButtons(viewModalBody, order, shipment, row);
     } catch (err) {
       console.error(err);
       viewModalBody.innerHTML = `<div class="text-red-600 p-4">${err.message || "Failed to load order"}</div>`;
@@ -361,9 +364,44 @@ function renderOrderDetailsHtml(order, lineItems, shipment) {
         </div>
         <div class="border-4 border-black p-4">
           <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">Tracking</div>
-          <div class="font-mono text-sm break-all">${esc(tracking)}</div>
+          ${shipment?.tracking_url
+            ? `<a href="${esc(shipment.tracking_url)}" target="_blank" class="font-mono text-sm break-all text-kkpink hover:underline">${esc(tracking)}</a>`
+            : `<div class="font-mono text-sm break-all">${esc(tracking)}</div>`}
         </div>
       </div>
+
+      <!-- Shippo Label Actions -->
+      <div class="mt-4 flex flex-wrap gap-3" data-label-actions>
+        ${labelStatus === "pending" || labelStatus === "voided" ? `
+          <div class="flex items-center gap-2">
+            <select data-preset-select class="border-4 border-black px-3 py-2 text-xs font-black uppercase focus:border-kkpink outline-none bg-white">
+              <option value="">Loading presets…</option>
+            </select>
+            <button data-buy-label class="px-4 py-2 text-xs font-black uppercase tracking-wider border-4 border-emerald-600 text-emerald-700 hover:bg-emerald-600 hover:text-white transition">
+              🏷️ Buy Label
+            </button>
+          </div>
+        ` : ""}
+
+        ${shipment?.label_url ? `
+          <button data-print-label class="px-4 py-2 text-xs font-black uppercase tracking-wider border-4 border-blue-600 text-blue-700 hover:bg-blue-600 hover:text-white transition">
+            🖨️ Print Label
+          </button>
+          <button data-reprint-label class="px-4 py-2 text-xs font-black uppercase tracking-wider border-4 border-gray-400 text-gray-600 hover:bg-gray-400 hover:text-white transition">
+            🔄 Reprint
+          </button>
+        ` : ""}
+
+        ${shipment?.shippo_transaction_id && labelStatus === "label_purchased" ? `
+          <button data-void-label class="px-4 py-2 text-xs font-black uppercase tracking-wider border-4 border-red-600 text-red-600 hover:bg-red-600 hover:text-white transition">
+            ✕ Void Label
+          </button>
+        ` : ""}
+      </div>
+
+      ${shipment?.label_cost_cents && labelStatus !== "voided" ? `
+        <div class="mt-3 text-xs text-gray-500">Label cost: <strong>$${(shipment.label_cost_cents / 100).toFixed(2)}</strong> · ${esc(shipment.service || "")} · ${esc(shipment.carrier || "")}</div>
+      ` : ""}
     </section>
 
     <!-- Refund Status / Actions -->
@@ -485,6 +523,92 @@ function wireRefundButtons(container, order, row) {
         alert("Refund failed: " + (err.message || err));
         btnPartial.disabled = false;
         btnPartial.textContent = "Partial Refund";
+      }
+    });
+  }
+}
+
+/* -------------------------
+   LABEL ACTION BUTTONS
+-------------------------- */
+async function wireLabelButtons(container, order, shipment, row) {
+  const sessionId = order.stripe_checkout_session_id;
+
+  // Populate package preset dropdown
+  const presetSelect = container.querySelector("[data-preset-select]");
+  if (presetSelect) {
+    try {
+      const presets = await fetchPackagePresets();
+      presetSelect.innerHTML = presets.map(p =>
+        `<option value="${p.id}" ${p.is_default ? "selected" : ""}>${p.name} (${p.length_in}×${p.width_in}${p.height_in ? "×" + p.height_in : ""})</option>`
+      ).join("");
+    } catch (e) {
+      presetSelect.innerHTML = '<option value="">Failed to load</option>';
+    }
+  }
+
+  // Buy Label button
+  const btnBuy = container.querySelector("[data-buy-label]");
+  if (btnBuy) {
+    btnBuy.addEventListener("click", async () => {
+      const presetId = presetSelect?.value || null;
+      btnBuy.disabled = true;
+      btnBuy.textContent = "⏳ Buying…";
+      try {
+        const result = await buyShippingLabel(sessionId, presetId);
+        if (result.duplicate) {
+          alert(`Label already exists!\nTracking: ${result.data.tracking_number}`);
+        } else {
+          alert(`Label purchased!\nTracking: ${result.data.tracking_number}\nCost: $${(result.data.label_cost_cents / 100).toFixed(2)}\nService: ${result.data.service}`);
+        }
+        state.openViewModal(row); // refresh modal
+        await reload({ hard: true }); // refresh table
+      } catch (err) {
+        alert("Label purchase failed: " + (err.message || err));
+        btnBuy.disabled = false;
+        btnBuy.textContent = "🏷️ Buy Label";
+      }
+    });
+  }
+
+  // Print / Reprint Label buttons
+  const btnPrint = container.querySelector("[data-print-label]");
+  const btnReprint = container.querySelector("[data-reprint-label]");
+  const handlePrint = async (btn) => {
+    if (!shipment?.label_url) return;
+    const origText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "⏳ Loading…";
+    try {
+      const url = await getSignedLabelUrl(shipment.label_url);
+      window.open(url, "_blank");
+    } catch (err) {
+      alert("Failed to get label: " + (err.message || err));
+    } finally {
+      btn.disabled = false;
+      btn.textContent = origText;
+    }
+  };
+  if (btnPrint) btnPrint.addEventListener("click", () => handlePrint(btnPrint));
+  if (btnReprint) btnReprint.addEventListener("click", () => handlePrint(btnReprint));
+
+  // Void Label button
+  const btnVoid = container.querySelector("[data-void-label]");
+  if (btnVoid) {
+    btnVoid.addEventListener("click", async () => {
+      if (!confirm(`Void label for order ${order.kk_order_id || sessionId}?\n\nTracking: ${shipment.tracking_number}\n\nThis will request a refund from the carrier.`)) return;
+
+      btnVoid.disabled = true;
+      btnVoid.textContent = "⏳ Voiding…";
+      try {
+        const result = await voidShippingLabel(sessionId);
+        alert(`Label voided!\nRefund status: ${result.data.refund_status}`);
+        state.openViewModal(row);
+        await reload({ hard: true });
+      } catch (err) {
+        alert("Void failed: " + (err.message || err));
+        btnVoid.disabled = false;
+        btnVoid.textContent = "✕ Void Label";
       }
     });
   }
