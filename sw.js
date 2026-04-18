@@ -3,7 +3,7 @@
 // Caching strategy: Network-first for pages, Cache-first for assets
 // ─────────────────────────────────────────────────────────
 
-const CACHE_VERSION = 'kk-v1';
+const CACHE_VERSION = 'kk-v2';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const DYNAMIC_CACHE = `${CACHE_VERSION}-dynamic`;
 const IMAGE_CACHE = `${CACHE_VERSION}-images`;
@@ -178,7 +178,8 @@ async function networkFirst(request) {
 
     // Fallback to offline page for navigation requests
     if (request.headers.get('accept')?.includes('text/html')) {
-      return caches.match('/offline.html');
+      const offline = await caches.match('/offline.html');
+      return offline || new Response('Offline', { status: 503, headers: { 'Content-Type': 'text/html' } });
     }
     return new Response('Offline', { status: 503 });
   }
@@ -217,9 +218,9 @@ async function staleWhileRevalidate(request, cacheName, maxItems) {
       trimCache(cacheName, maxItems);
     }
     return response;
-  }).catch(() => cached);
+  }).catch(() => null);
 
-  return cached || fetchPromise;
+  return cached || await fetchPromise || new Response('Offline', { status: 503 });
 }
 
 // Trim cache to max size (LRU-style: delete oldest)
