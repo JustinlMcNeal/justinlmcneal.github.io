@@ -577,7 +577,7 @@ async function wireLabelButtons(container, order, shipment, row) {
   const handlePrint = async (btn) => {
     if (!shipment?.label_url) return;
     // Open popup immediately (synchronous) so browser trusts the user gesture
-    const pw = window.open("", "printLabel", "width=500,height=700");
+    const pw = window.open("", "printLabel", "width=500,height=750");
     if (!pw) { alert("Popup blocked — please allow popups for this site."); return; }
     pw.document.write("<!DOCTYPE html><html><head><title>Loading label…</title></head><body><p>Loading label…</p></body></html>");
     pw.document.close();
@@ -587,8 +587,19 @@ async function wireLabelButtons(container, order, shipment, row) {
     btn.textContent = "⏳ Loading…";
     try {
       const url = await getSignedLabelUrl(shipment.label_url);
-      // Navigate popup directly to the signed PDF URL — Edge PDF viewer renders 4x6 properly
-      pw.location.href = url;
+      // Write an HTML page with the label image + auto-print
+      pw.document.open();
+      pw.document.write(`<!DOCTYPE html><html><head><title>Print Label</title>
+<style>
+  @page { size: 4in 6in; margin: 0; }
+  * { margin: 0; padding: 0; }
+  body { display: flex; justify-content: center; background: #222; }
+  img { max-width: 100%; height: auto; }
+  @media print { body { background: #fff; } img { width: 4in; height: 6in; object-fit: contain; } }
+</style></head><body>
+<img src="${url}" onload="setTimeout(function(){window.print();},400)">
+</body></html>`);
+      pw.document.close();
     } catch (err) {
       pw.close();
       alert("Failed to get label: " + (err.message || err));

@@ -156,7 +156,7 @@ Deno.serve(async (req) => {
     // ── 7. Purchase the label (transaction) ──
     const transaction = await shippo("/transactions/", "POST", {
       rate: cheapest.object_id,
-      label_file_type: "PDF_4x6",
+      label_file_type: "PNG",
       async: false,
     });
 
@@ -165,16 +165,16 @@ Deno.serve(async (req) => {
       return json({ error: `Label purchase failed: ${msgs || transaction.status}` }, 422);
     }
 
-    // ── 8. Download label PDF → upload to Supabase Storage ──
+    // ── 8. Download label PNG → upload to Supabase Storage ──
     let storagePath: string | null = null;
     try {
-      const pdfRes = await fetch(transaction.label_url);
-      if (pdfRes.ok) {
-        const pdfBlob = await pdfRes.blob();
-        const filePath = `${order.kk_order_id || stripe_checkout_session_id}.pdf`;
+      const pngRes = await fetch(transaction.label_url);
+      if (pngRes.ok) {
+        const pngBlob = await pngRes.blob();
+        const filePath = `${order.kk_order_id || stripe_checkout_session_id}.png`;
         const { error: uploadErr } = await sb.storage
           .from("labels")
-          .upload(filePath, pdfBlob, { contentType: "application/pdf", upsert: true });
+          .upload(filePath, pngBlob, { contentType: "image/png", upsert: true });
 
         if (!uploadErr) storagePath = filePath;
         else console.error("[shippo-create-label] Storage upload error:", uploadErr.message);
