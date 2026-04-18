@@ -3,7 +3,7 @@
 // Caching strategy: Network-first for pages, Cache-first for assets
 // ─────────────────────────────────────────────────────────
 
-const CACHE_VERSION = 'kk-v3';
+const CACHE_VERSION = 'kk-v4';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const DYNAMIC_CACHE = `${CACHE_VERSION}-dynamic`;
 const IMAGE_CACHE = `${CACHE_VERSION}-images`;
@@ -12,10 +12,16 @@ const IMAGE_CACHE = `${CACHE_VERSION}-images`;
 const PRECACHE_URLS = [
   '/',
   '/offline.html',
+  '/manifest.json',
   '/css/theme/base.css',
   '/css/theme/components.css',
   '/imgs/icons/icon-192x192.png',
   '/imgs/brand/logo-bwp.png',
+  '/page_inserts/navbar.html',
+  '/page_inserts/footer.html',
+  '/page_inserts/home/banner.html',
+  '/page_inserts/home/99cent.html',
+  '/page_inserts/home/catalog.html',
 ];
 
 // Max items in dynamic caches
@@ -166,13 +172,18 @@ function isImageRequest(request) {
 // Network first, fallback to cache, then offline page
 async function networkFirst(request) {
   try {
-    const response = await fetch(request);
+    let response = await fetch(request);
+    // Retry once on 503 (Cloudflare transient error)
+    if (response.status === 503) {
+      await new Promise(r => setTimeout(r, 1000));
+      response = await fetch(request);
+    }
     if (response.ok) {
       const cache = await caches.open(DYNAMIC_CACHE);
       cache.put(request, response.clone());
       return response;
     }
-    // Server error (503 from Cloudflare, etc.) — try cache before returning error
+    // Server error — try cache before returning error
     const cached = await caches.match(request);
     if (cached) return cached;
     return response;
