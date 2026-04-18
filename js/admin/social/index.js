@@ -498,13 +498,7 @@ async function init() {
     const { data: { session } } = await client.auth.getSession();
     if (!session) { window.location.href = "/pages/admin/login.html"; return; }
 
-    // Load initial data
-    await Promise.all([
-      loadProducts(), loadCategories(), loadBoards(),
-      loadSettings(), loadStats(), checkConnectionStatus()
-    ]);
-
-    // Wire modules with dependencies
+    // Wire modules with dependencies (before data loading so callbacks are ready)
     const baseDeps = { state, els, showToast, getClient };
 
     initUploadModal({ ...baseDeps, loadStats, switchTab, loadQueuePosts, loadCalendarPosts, populateBoardDropdown });
@@ -523,6 +517,12 @@ async function init() {
       switchTab, populateBoardDropdown
     });
     initAnalytics({ ...baseDeps, loadCalendarPosts, loadQueuePosts });
+
+    // Load initial data (after modules are wired so callbacks like applySettings work)
+    await Promise.all([
+      loadProducts(), loadCategories(), loadBoards(),
+      loadSettings(), loadStats(), checkConnectionStatus()
+    ]);
 
     // Setup UI
     setupTabs();
