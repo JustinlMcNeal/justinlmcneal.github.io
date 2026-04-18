@@ -436,7 +436,17 @@ Deno.serve(async (req) => {
       count = 4,           // How many posts to generate per platform
       platforms = ["instagram"],  // Array of platforms
       preview = false,     // If true, return posts without creating them
+      learning_only = false, // If true, just run learning aggregation and return
     } = body;
+
+    // ── PHASE 1B: LEARNING-ONLY MODE (called by instagram-insights) ──
+    if (learning_only) {
+      await runLearningAggregation(supabase);
+      return new Response(
+        JSON.stringify({ success: true, message: "Learning aggregation complete" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
     
     // Support legacy single platform param
     const platformList = Array.isArray(platforms) ? platforms : [platforms];
@@ -873,30 +883,68 @@ Deno.serve(async (req) => {
         final: hashtags,
       });
 
-      // ── SPRINT 3: CAPTION CONFIDENCE CHECK ──
-      // Try up to 3 templates, pick the one with best confidence
+      // ── PHASE 1B: AI CAPTION WITH TEMPLATE FALLBACK ──
       let bestCaption = "";
       let bestScore = 0;
-      let bestTone = "";
-      const MAX_CAPTION_ATTEMPTS = 3;
+      let bestTone = pickRandom(tones);
+      let captionSource = "template";
 
-      for (let attempt = 0; attempt < MAX_CAPTION_ATTEMPTS; attempt++) {
-        const tone = pickRandom(tones);
-        const template = pickRandom(CAPTION_TEMPLATES[tone] || CAPTION_TEMPLATES.casual);
-        const candidate = generateCaption(template, {
-          name: product.name,
-          category_name: categoryName,
-          slug: product.slug,
-        }, platformList[0]);
-
-        const score = scoreCaptionConfidence(candidate);
-        if (score > bestScore) {
-          bestScore = score;
-          bestCaption = candidate;
-          bestTone = tone;
+      // Step 1: Try AI caption
+      try {
+        const aiUrl = `${supabaseUrl}/functions/v1/ai-generate`;
+        const aiResp = await fetch(aiUrl, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${serviceRoleKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            type: "caption",
+            product: {
+              name: product.name,
+              category: categoryName,
+              price: product.price,
+            },
+            tone: bestTone,
+            platform: platformList[0],
+          }),
+        });
+        if (aiResp.ok) {
+          const aiResult = await aiResp.json();
+          if (aiResult.caption && aiResult.caption.length > 30) {
+            bestCaption = aiResult.caption;
+            bestScore = scoreCaptionConfidence(bestCaption);
+            captionSource = "ai_generated";
+            console.log(`[auto-queue] AI caption for "${product.name}": len=${bestCaption.length} score=${bestScore}`);
+          }
         }
-        // ≥70% is good enough
-        if (score >= 70) break;
+      } catch (aiErr: unknown) {
+        console.log(`[auto-queue] AI caption failed for "${product.name}": ${aiErr instanceof Error ? aiErr.message : String(aiErr)}`);
+      }
+
+      // Step 2: Template fallback if AI failed or produced weak caption
+      if (!bestCaption || bestScore < 50) {
+        captionSource = "template";
+        bestScore = 0;
+        const MAX_CAPTION_ATTEMPTS = 3;
+
+        for (let attempt = 0; attempt < MAX_CAPTION_ATTEMPTS; attempt++) {
+          const tone = pickRandom(tones);
+          const template = pickRandom(CAPTION_TEMPLATES[tone] || CAPTION_TEMPLATES.casual);
+          const candidate = generateCaption(template, {
+            name: product.name,
+            category_name: categoryName,
+            slug: product.slug,
+          }, platformList[0]);
+
+          const score = scoreCaptionConfidence(candidate);
+          if (score > bestScore) {
+            bestScore = score;
+            bestCaption = candidate;
+            bestTone = tone;
+          }
+          if (score >= 70) break;
+        }
       }
 
       const captionStatus = bestScore >= 70 ? "accepted" : bestScore >= 50 ? "flagged" : "fallback";
@@ -908,9 +956,10 @@ Deno.serve(async (req) => {
           platformList[0]
         );
         bestTone = "minimalist";
+        captionSource = "template";
       }
 
-      console.log(`[auto-queue] Caption for "${product.name}": score=${bestScore} status=${captionStatus} tone=${bestTone}`);
+      console.log(`[auto-queue] Caption for "${product.name}": source=${captionSource} score=${bestScore} status=${captionStatus} tone=${bestTone}`);
 
       // ── Resolve best image via pipeline ──
       const imageResult = resolveImage(product.id, product.catalog_image_url);
@@ -962,7 +1011,7 @@ Deno.serve(async (req) => {
         },
         shot_type: chosenShotType,
         is_resurfaced: false,
-        caption_attempts: Math.min(MAX_CAPTION_ATTEMPTS, bestScore >= 70 ? 1 : bestScore >= 50 ? 2 : 3),
+        caption_source: captionSource,
         caption_confidence: bestScore,
         caption_status: captionStatus,
         caption_tone: bestTone,

@@ -438,6 +438,23 @@ serve(async (req) => {
       } catch (learnErr: unknown) {
         console.warn("[insights] Learning refresh failed:", learnErr instanceof Error ? learnErr.message : String(learnErr));
       }
+
+      // ── PHASE 1B: Trigger full learning aggregation (hashtag + caption perf) ──
+      try {
+        const autoQueueUrl = `${supabaseUrl}/functions/v1/auto-queue`;
+        const learnResp = await fetch(autoQueueUrl, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${supabaseServiceKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ learning_only: true }),
+        });
+        const learnResult = await learnResp.json();
+        console.log("[insights] Learning aggregation triggered:", learnResult.message || "done");
+      } catch (aggErr: unknown) {
+        console.warn("[insights] Learning aggregation trigger failed:", aggErr instanceof Error ? aggErr.message : String(aggErr));
+      }
     }
 
     return new Response(
