@@ -79,6 +79,16 @@ After shipping Phase 1, let autopilot run **7-14 days untouched**, then check:
 3. **SW retry** (`3040847`): Retries once after 1s on 503 before falling back to cache
 4. **SW resilient install** (`8d96e5d`): Pre-cache skips files that 503 instead of failing the entire install
 
+### Infrastructure Fix: Autopilot Pipeline
+**Discovered 2026-04-18.** After Phase 1 deployments, autopilot stopped generating new posts. Calendar showed nothing beyond April 19. Two root causes found and fixed in commit `b55c93c`:
+
+1. **verify_jwt 401**: Redeploying `auto-queue` during Phase 1 reset its JWT verification to `true` (Supabase default). `autopilot-fill` calls `auto-queue` with the service role key, but edge runtime rejected it. **Fix**: Added `[functions.auto-queue]` and `[functions.autopilot-fill]` to `config.toml` with `verify_jwt = false`.
+2. **image_source CHECK constraint**: `social_posts.image_source` only allowed `('catalog','gallery','ai_generated','manual')`. Auto-queue now produces `'ai_carousel'`, `'resurface'`, and `'image_pool'` — posts using these values were silently skipped. **Fix**: Migration `20260418_fix_image_source_constraint.sql` updated constraint to include all 7 values.
+3. **Error diagnostics**: Added `skippedErrors` array and `generatedCount` to auto-queue response so future failures are visible instead of silent.
+4. **Stale post cleanup**: Deleted 2 pre-Phase1 posts that still had "Comment KK" text and no UTM params.
+
+**Result**: Autopilot restored — 7 posts queued for April 18-20, all with AI captions, UTM params, and smart hashtags.
+
 ---
 
 ## Part 1: Current System Audit
