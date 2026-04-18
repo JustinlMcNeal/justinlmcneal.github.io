@@ -3,7 +3,7 @@
 // Caching strategy: Network-first for pages, Cache-first for assets
 // ─────────────────────────────────────────────────────────
 
-const CACHE_VERSION = 'kk-v2';
+const CACHE_VERSION = 'kk-v3';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const DYNAMIC_CACHE = `${CACHE_VERSION}-dynamic`;
 const IMAGE_CACHE = `${CACHE_VERSION}-images`;
@@ -170,7 +170,11 @@ async function networkFirst(request) {
     if (response.ok) {
       const cache = await caches.open(DYNAMIC_CACHE);
       cache.put(request, response.clone());
+      return response;
     }
+    // Server error (503 from Cloudflare, etc.) — try cache before returning error
+    const cached = await caches.match(request);
+    if (cached) return cached;
     return response;
   } catch {
     const cached = await caches.match(request);
