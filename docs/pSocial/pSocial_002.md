@@ -70,6 +70,15 @@ After shipping Phase 1, let autopilot run **7-14 days untouched**, then check:
 
 **⚠️ Observation Rule**: Do NOT change hashtag logic, caption logic, or posting times for **at least 7 days** after shipping Phase 1. Tweaking too early kills data quality and makes it impossible to measure impact.
 
+### Infrastructure Fix: Cloudflare 503 Caching
+**Discovered during Phase 1C deployment.** GitHub Pages returns transient 503s during deploy propagation. Cloudflare was caching these error responses and serving them to all visitors until manually purged.
+
+**Fixes applied:**
+1. **Cloudflare cache rule**: Status codes 500-503 → Duration "No cache" (never cache server errors)
+2. **SW v4** (`3040847`): Pre-caches `manifest.json`, `navbar.html`, `footer.html`, home page_inserts so they survive brief outages
+3. **SW retry** (`3040847`): Retries once after 1s on 503 before falling back to cache
+4. **SW resilient install** (`8d96e5d`): Pre-cache skips files that 503 instead of failing the entire install
+
 ---
 
 ## Part 1: Current System Audit
@@ -1165,14 +1174,14 @@ These ideas are valid but premature. Revisit when monthly:
 **Phase 1A (Day 1-2): Data Wiring**
 | # | Item | Sprint | Effort | Expected Impact |
 |---|------|--------|--------|----------------|
-| 1 | Smart hashtag injection | 4.1 | 1-2 hours | +30-50% reach (using proven hashtags) |
-| 2 | Posting time optimization | 4.3 | 30 min | Posts at proven peak times |
+| 1 | ✅ Smart hashtag injection | 4.1 | 1-2 hours | +30-50% reach (using proven hashtags) |
+| 2 | ✅ Posting time optimization | 4.3 | 30 min | Posts at proven peak times |
 
 **Phase 1B (Day 3-4): Smart Content**
 | # | Item | Sprint | Effort | Expected Impact |
 |---|------|--------|--------|----------------|
-| 3 | AI captions in auto-queue | 4.2 | 2-3 hours | Higher quality, varied captions |
-| 4 | Auto-refine after insights | 4.4 | 1 hour | Continuous learning every 6h |
+| 3 | ✅ AI captions in auto-queue | 4.2 | 2-3 hours | Higher quality, varied captions |
+| 4 | ✅ Auto-refine after insights | 4.4 | 1 hour | Continuous learning every 6h |
 
 **Phase 1C (Day 5): Tracking + Trust**
 | # | Item | Sprint | Effort | Expected Impact |
@@ -1205,27 +1214,26 @@ These ideas are valid but premature. Revisit when monthly:
 
 ## Part 4: Quick Wins Checklist (Can Do TODAY)
 
-- [ ] Wire top-performing hashtags into auto-queue (Sprint 4.1)
-- [ ] Lower data-driven time threshold 20 → 10 samples (Sprint 4.3)
-- [ ] Add UTM parameters to social post links (Sprint 4.5.1)
-- [ ] Remove "Comment KK for a discount" from captions OR plan DM flow (Sprint 6.2)
+- [x] Wire top-performing hashtags into auto-queue (Sprint 4.1) — `82ed931`
+- [x] Lower data-driven time threshold 20 → 10 samples (Sprint 4.3) — `82ed931`
+- [x] Add UTM parameters to social post links (Sprint 4.5.1) — `bbea7f2`
+- [x] Remove "Comment KK for a discount" from captions (Sprint 6.2) — `bbea7f2`
 - [ ] Hide Pinterest "Boards" tab (Sprint 12.3)
 - [ ] Add `content_type` column to `social_posts` (prep for Reels) (Sprint 5.3)
-- [ ] Add Meta Pixel to karrykraze.com (Sprint 4.5.2 — requires Meta Business setup first)
+- [x] Add Meta Pixel to karrykraze.com (Sprint 4.5.2) — `995db2c` (Pixel ID: 2162145877936737)
 
 ---
 
 ## Part 5: Execution Timeline
 
 ```
-DAY 1-2:  Phase 1A — Hashtag injection + posting time optimization
-DAY 3-4:  Phase 1B — AI captions in auto-queue + learning trigger after insights
-DAY 5:    Phase 1C — UTM tracking + Meta Pixel + fix "Comment KK"
----------- SHIP IT. Let autopilot run with smart wiring for 1-2 weeks. ----------
+DAY 1-2:  Phase 1A — Hashtag injection + posting time optimization          ✅ DONE (82ed931)
+DAY 3-4:  Phase 1B — AI captions in auto-queue + learning trigger            ✅ DONE (838cb72)
+DAY 5:    Phase 1C — UTM tracking + Meta Pixel + fix "Comment KK"            ✅ DONE (bbea7f2, 995db2c)
+---------- SHIPPED 2026-04-18. Observation window: 7-14 days. ----------
 WEEK 3:   Sprint 5.0 — Test: 1 image → Ken Burns loop → post as Reel (validate reach)
 WEEK 3-4: Sprint 5.1 — If Reels validated, build simple slideshow builder
           Sprint 5.3 — Instagram Reels API + process-scheduled-posts update
-          Sprint 6.2 — Fix "Comment KK" if not done (remove CTA or build DM flow)
 WEEK 4-5: Sprint 6.1 — Engagement dashboard + "Go Engage" guidance
           Sprint 6.3 — Story scheduling
 WEEK 6:   Sprint 7 — Follower tracking + heat map + growth charts
