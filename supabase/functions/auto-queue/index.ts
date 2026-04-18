@@ -253,6 +253,34 @@ function getNextPostingTimes(
   return result;
 }
 
+// ── PHASE 1A: MERGE HASHTAG HELPER ──
+function mergeHashtags(
+  branded: string,
+  learnedForCat: string[],
+  learnedGeneral: string[],
+  categoryHashtags: string[],
+  max = 5
+): string[] {
+  const merged: string[] = [branded];
+
+  for (const tag of learnedForCat) {
+    if (merged.length >= 3) break;
+    if (!merged.includes(tag)) merged.push(tag);
+  }
+
+  for (const tag of learnedGeneral) {
+    if (merged.length >= 4) break;
+    if (!merged.includes(tag)) merged.push(tag);
+  }
+
+  for (const tag of categoryHashtags) {
+    if (merged.length >= max) break;
+    if (!merged.includes(tag)) merged.push(tag);
+  }
+
+  return merged;
+}
+
 // ============================================
 // LEARNING AGGREGATION (runs after post creation)
 // Updates hashtag, timing, and caption performance tables
@@ -435,12 +463,31 @@ Deno.serve(async (req) => {
       .order("avg_engagement_rate", { ascending: false });
 
     const totalTimeSamples = (timeData || []).reduce((sum: number, r: any) => sum + (r.total_posts || 0), 0);
-    const useDataDrivenTimes = totalTimeSamples >= 20;
+    const useDataDrivenTimes = totalTimeSamples >= 10;
     const peakHours = useDataDrivenTimes
       ? [...new Set((timeData || []).slice(0, 6).map((r: any) => r.hour_of_day as number))]
       : [10, 14, 18]; // Default peak hours in Eastern Time
 
-    console.log(`[auto-queue] Posting times: ${useDataDrivenTimes ? "data-driven" : "default"} (${totalTimeSamples} samples), peak hours (ET): ${peakHours.join(",")}`);
+    // ── PHASE 1A: LEARNED TIMING FALLBACK FOR SPARSE DATA ──
+    let peakHoursFinal = peakHours;
+    if (!useDataDrivenTimes) {
+      const { data: timingPatterns } = await supabase
+        .from("post_learning_patterns")
+        .select("pattern_key, pattern_value")
+        .eq("pattern_type", "timing")
+        .in("pattern_key", ["best_general_time", "best_day"]);
+
+      const bestHourPattern = (timingPatterns || []).find(
+        (p: any) => p.pattern_key === "best_general_time"
+      );
+      if (bestHourPattern?.pattern_value?.hour !== undefined) {
+        const bestHour = bestHourPattern.pattern_value.hour;
+        peakHoursFinal = [bestHour, bestHour + 5 > 23 ? bestHour - 5 : bestHour + 5];
+        console.log(`[auto-queue] Using learned timing priors: ${peakHoursFinal.join(",")} ET`);
+      }
+    }
+
+    console.log(`[auto-queue] Posting times: ${useDataDrivenTimes ? "data-driven" : "default"} (${totalTimeSamples} samples), peak hours (ET): ${peakHoursFinal.join(",")}`);
 
     // ── SPRINT 3: PRODUCT PRIORITY SCORING + COOLDOWN ──
     // Fetch ALL active products
@@ -743,9 +790,35 @@ Deno.serve(async (req) => {
     });
     const globalHashtags = hashtagMap["_global"] || ["#karrykraze"];
 
+    // ── PHASE 1A: SMART HASHTAG INJECTION ──
+    // Query learned top-performing hashtags (explicit thresholds, not boolean flag)
+    const { data: topHashtags } = await supabase
+      .from("hashtag_performance")
+      .select("hashtag, avg_engagement_rate, times_used, category")
+      .gte("times_used", 2)
+      .gte("avg_engagement_rate", 2)
+      .order("avg_engagement_rate", { ascending: false })
+      .limit(15);
+
+    const topHashtagsByCategory: Record<string, string[]> = {};
+    const topHashtagsGeneral: string[] = [];
+    (topHashtags || []).forEach((h: any) => {
+      const raw = String(h.hashtag || "").trim().toLowerCase();
+      if (!raw) return;
+      const tag = raw.startsWith("#") ? raw : `#${raw}`;
+      if (h.category && h.category !== "branded" && h.category !== "general") {
+        const catKey = String(h.category).trim().toLowerCase();
+        if (!topHashtagsByCategory[catKey]) topHashtagsByCategory[catKey] = [];
+        topHashtagsByCategory[catKey].push(tag);
+      } else {
+        topHashtagsGeneral.push(tag);
+      }
+    });
+    console.log(`[auto-queue] Learned hashtags: ${(topHashtags || []).length} qualifying (times_used>=2, avg_eng>=2)`);
+
     // 4. Get posting times (Sprint 3: data-driven when enough data)
     const postingTimes = getNextPostingTimes(
-      peakHours,
+      peakHoursFinal,
       settings.posting_times || ["10:00", "18:00"],
       new Date(),
       products.length,
@@ -783,12 +856,22 @@ Deno.serve(async (req) => {
     for (let i = 0; i < products.length; i++) {
       const product = products[i];
       const categoryName = product.category?.name || "item";
+      const categoryKey = String(categoryName || "").trim().toLowerCase();
       
-      // Get hashtags for this category
-      const categoryHashtags = hashtagMap[categoryName.toLowerCase()] || globalHashtags;
-      const hashtags = categoryHashtags.includes("#karrykraze") 
-        ? categoryHashtags 
-        : ["#karrykraze", ...categoryHashtags];
+      // ── PHASE 1A: SMART HASHTAG MERGE ──
+      const categoryHashtags = hashtagMap[categoryKey] || globalHashtags;
+      const learnedForCat = topHashtagsByCategory[categoryKey] || [];
+      const learnedGeneral = topHashtagsGeneral.filter(t => !categoryHashtags.includes(t));
+      const hashtags = mergeHashtags("#karrykraze", learnedForCat, learnedGeneral, categoryHashtags);
+
+      console.log("[auto-queue] hashtag selection", {
+        product: product.name,
+        category: categoryKey,
+        learnedForCat,
+        learnedGeneral: learnedGeneral.slice(0, 3),
+        categoryHashtags,
+        final: hashtags,
+      });
 
       // ── SPRINT 3: CAPTION CONFIDENCE CHECK ──
       // Try up to 3 templates, pick the one with best confidence
@@ -971,8 +1054,11 @@ Deno.serve(async (req) => {
               slug: resurfaceProduct.slug,
             }, platformList[0]);
 
-            const categoryHashtags = hashtagMap[(resurfaceProduct.category?.name || "").toLowerCase()] || globalHashtags;
-            const hashtags = categoryHashtags.includes("#karrykraze") ? categoryHashtags : ["#karrykraze", ...categoryHashtags];
+            const resurfaceCatKey = String(resurfaceProduct.category?.name || "").trim().toLowerCase();
+            const categoryHashtags = hashtagMap[resurfaceCatKey] || globalHashtags;
+            const learnedForCat = topHashtagsByCategory[resurfaceCatKey] || [];
+            const learnedGeneral = topHashtagsGeneral.filter(t => !categoryHashtags.includes(t));
+            const hashtags = mergeHashtags("#karrykraze", learnedForCat, learnedGeneral, categoryHashtags);
 
             // Replace the last post slot with the resurfaced post
             const lastIdx = generatedPosts.length - 1;
