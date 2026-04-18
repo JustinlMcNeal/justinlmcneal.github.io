@@ -587,12 +587,8 @@ async function wireLabelButtons(container, order, shipment, row) {
     btn.textContent = "⏳ Loading…";
     try {
       const url = await getSignedLabelUrl(shipment.label_url);
-      const pdfRes = await fetch(url);
-      const blob = await pdfRes.blob();
-      const blobUrl = URL.createObjectURL(blob);
-
-      // Navigate popup directly to the PDF so Edge's PDF viewer handles sizing/printing
-      pw.location.href = blobUrl;
+      // Navigate popup directly to the signed PDF URL — Edge PDF viewer renders 4x6 properly
+      pw.location.href = url;
     } catch (err) {
       pw.close();
       alert("Failed to get label: " + (err.message || err));
