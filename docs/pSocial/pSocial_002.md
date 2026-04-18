@@ -32,6 +32,17 @@
 - Engagement section upgraded — add directional guidance ("go interact with X"), not just tools
 - Phase 3 low-ROI items flagged: seasonal calendar, YouTube Shorts, X/Twitter are **distractions at this stage**
 
+### Round 3 (GPT-4o) — Score: 9.6 / 10
+**Verdict**: "Ready to execute. Low risk. High upside."
+
+**What improved**: Phase 1 sub-phasing reduces failure risk ~70%. Validation-before-build on Reels is "elite thinking." Engagement is now actionable. Distractions correctly killed.
+
+**Final tightening applied**:
+- Added **Phase 1 success criteria** — concrete metrics to trigger Phase 2
+- Added **observation rule** — no logic changes for 7 days after ship (protect data quality)
+- Reels test tightened — same product, Day 1 image vs Day 2 reel (removes noise)
+- AI caption `angle` parameter added — future A/B leverage without rebuilding
+
 **Revised priority tiers**:
 - 🥇 **Phase 1A (DAY 1-2)**: Hashtags + posting times (wire the learning loop)
 - 🥇 **Phase 1B (DAY 3-4)**: AI captions + learning trigger
@@ -39,6 +50,15 @@
 - 🥈 **Phase 2 (NEXT)**: Simple Reels, light engagement, growth tracking
 - 🥉 **Phase 3 (LATER)**: A/B testing, content pillars, TikTok
 - 🚫 **Phase 4 (NOT YET)**: Full engagement automation, paid ads, competitor scraping
+
+### Phase 1 Success Criteria (gate to Phase 2)
+After shipping Phase 1, let autopilot run **7-14 days untouched**, then check:
+- ✅ Engagement rate ↑ 20%+ (vs. pre-learning-loop baseline)
+- ✅ Reach per post ↑ 30%+
+- ✅ Top-performing hashtags begin repeating in new posts
+- Hit **any one** of these → greenlight Phase 2
+
+**⚠️ Observation Rule**: Do NOT change hashtag logic, caption logic, or posting times for **at least 7 days** after shipping Phase 1. Tweaking too early kills data quality and makes it impossible to measure impact.
 
 ---
 
@@ -109,49 +129,68 @@
 
 **Problem**: Auto-queue uses static `social_category_hashtags` table. The `hashtag_performance` table knows `#bunnybeanie` gets 60% engagement but auto-queue keeps using generic `#fashion #style #accessories`.
 
-**Implementation**:
+**Code Audit (auto-queue/index.ts)**:
+- **Line 736-744**: Queries `social_category_hashtags`, builds `hashtagMap[category] = hashtags[]`
+- **Line 789-793**: Per product: `categoryHashtags = hashtagMap[name]`, ensures `#karrykraze` is present → stored as `hashtags` variable
+- **Line 416-431**: Learning aggregation WRITES to `hashtag_performance` (avg_engagement_rate, is_recommended, times_used)
+- **NEVER reads** `hashtag_performance` for selection → **this is the gap**
 
-File: `supabase/functions/auto-queue/index.ts`
+**Exact Changes**:
 
+**Change 1** — After line 744 (`const globalHashtags = hashtagMap["_global"] || ["#karrykraze"];`), add:
+```ts
+// ── PHASE 1A: SMART HASHTAG INJECTION ──
+const { data: topHashtags } = await supabase
+  .from("hashtag_performance")
+  .select("hashtag, avg_engagement_rate, times_used, category, is_recommended")
+  .eq("is_recommended", true)   // avg >= 2.0 AND times_used >= 3
+  .order("avg_engagement_rate", { ascending: false })
+  .limit(15);
+
+const topHashtagsByCategory: Record<string, string[]> = {};
+const topHashtagsGeneral: string[] = [];
+(topHashtags || []).forEach((h: any) => {
+  const tag = `#${h.hashtag}`;
+  if (h.category && h.category !== "branded" && h.category !== "general") {
+    if (!topHashtagsByCategory[h.category]) topHashtagsByCategory[h.category] = [];
+    topHashtagsByCategory[h.category].push(tag);
+  } else {
+    topHashtagsGeneral.push(tag);
+  }
+});
+console.log(`[auto-queue] Learned hashtags: ${(topHashtags||[]).length} recommended`);
 ```
-Current flow:
-  product → lookup social_category_hashtags → use those hashtags
 
-New flow:
-  product → lookup social_category_hashtags (base set)
-          → query hashtag_performance WHERE category matches AND avg_engagement_rate > overall_avg
-          → merge: 1 branded (#karrykraze) + 2-3 top-performing + 1-2 category defaults
-          → cap at 5 total (learned optimal count, confidence 90%)
+**Change 2** — Replace lines 789-793 (hashtag selection per product):
+```ts
+// Old:
+const categoryHashtags = hashtagMap[categoryName.toLowerCase()] || globalHashtags;
+const hashtags = categoryHashtags.includes("#karrykraze") ? categoryHashtags : ["#karrykraze", ...categoryHashtags];
+
+// New:
+const categoryHashtags = hashtagMap[categoryName.toLowerCase()] || globalHashtags;
+const learnedForCat = topHashtagsByCategory[categoryName.toLowerCase()] || [];
+const learnedGeneral = topHashtagsGeneral.filter(t => !categoryHashtags.includes(t));
+const merged: string[] = ["#karrykraze"];
+for (const tag of [...learnedForCat, ...learnedGeneral]) {
+  if (merged.length >= 3) break;
+  if (!merged.includes(tag)) merged.push(tag);
+}
+for (const tag of categoryHashtags) {
+  if (merged.length >= 5) break;
+  if (!merged.includes(tag)) merged.push(tag);
+}
+const hashtags = merged;
 ```
 
-Steps:
-1. In `auto-queue/index.ts`, after fetching `hashtagRows` from `social_category_hashtags`, add a query:
-   ```sql
-   SELECT hashtag, avg_engagement_rate
-   FROM hashtag_performance
-   WHERE avg_engagement_rate > 15
-     AND times_used >= 2
-   ORDER BY avg_engagement_rate DESC
-   LIMIT 10
-   ```
-2. Build a merge function: `mergeHashtags(categoryHashtags, topPerformers, branded)`
-   - Always include `#karrykraze`
-   - Pick 2-3 from `topPerformers` that relate to the product category
-   - Fill remaining slots from `categoryHashtags`
-   - Cap at 5 total
-3. Add `social_settings` key `hashtag_strategy`:
-   ```json
-   {
-     "use_learning": true,
-     "max_count": 5,
-     "branded_count": 1,
-     "top_performer_count": 2,
-     "category_fill_count": 2
-   }
-   ```
-4. Redeploy: `echo y | npx supabase functions deploy auto-queue --project-ref yxdzvzscufkvewecvagq`
+**Change 3** — Apply same merge logic for resurfaced posts (line ~975-977).
 
-**Test**: Generate a post via auto-queue, verify hashtags include top performers from `hashtag_performance` instead of only generic category tags.
+**Result**:
+- Before: `["#karrykraze", "#bags", "#style", "#fashion", "#accessories"]` (static)
+- After: `["#karrykraze", "#bunnybeanie", "#sanrio", "#bags", "#style"]` (learned winners first)
+
+**Test**: `auto-queue` with `count=1&preview=true`, verify hashtags include `hashtag_performance` entries.
+**Deploy**: `echo y | npx supabase functions deploy auto-queue --project-ref yxdzvzscufkvewecvagq`
 
 ---
 
@@ -232,29 +271,29 @@ Steps:
 
 #### 4.3 — Posting Time Optimization
 
-**Problem**: Data-driven time selection requires 20+ total samples across all time slots. With 43 posts across 18 slots, most individual slots have 1-2 posts — but the *aggregate* pattern is clear (Tuesday 5pm = 50% engagement). The system ignores this and uses hardcoded `["09:00", "17:00"]`.
+**Problem**: Data-driven time selection requires 20+ total samples. With 43 posts, we have enough data but the threshold blocks it.
 
-**Implementation**:
+**Code Audit (auto-queue/index.ts)**:
+- **Line 431-436**: Queries `posting_time_performance` → all slots, ordered by `avg_engagement_rate DESC`
+- **Line 437**: `totalTimeSamples = sum of total_posts` across all time slots (currently = 43)
+- **Line 438**: Gate: `const useDataDrivenTimes = totalTimeSamples >= 20;` → **TRUE with 43 samples**
+- **Line 439-441**: If data-driven, takes top 6 unique hours; else falls back to `[10, 14, 18]`
+- **Line 632-646**: `post_learning_patterns` queried for `category_performance` but **NOT** for timing patterns
+- **Line 748**: `getNextPostingTimes(peakHours, ...)` uses the selected hours
 
-File: `supabase/functions/auto-queue/index.ts`
+**Exact Changes**:
 
-Two changes:
-
-**Change 1: Lower the threshold**
+**Change 1** — Line 438, lower the threshold:
 ```ts
-// Current:
-const useDataDrivenTimes = totalTimeSamples >= 20;
-
-// New:
+// WAS:  const useDataDrivenTimes = totalTimeSamples >= 20;
 const useDataDrivenTimes = totalTimeSamples >= 10;
 ```
+(With 43 posts this already passes at 20, but lowering to 10 ensures it stays data-driven as the system grows and slots spread thinner.)
 
-**Change 2: Use learned patterns as fallback priors**
-
-When `totalTimeSamples < 10`, instead of using hardcoded `[10, 14, 18]`, query `post_learning_patterns` for the `best_general_time` and `best_day` patterns (both have confidence 80-85%):
-
+**Change 2** — After line 441 (the `peakHours` ternary), add learned pattern fallback for when data IS sparse:
 ```ts
-// If not enough raw samples, use learned priors
+// ── PHASE 1A: USE LEARNED TIMING PRIORS WHEN DATA SPARSE ──
+let peakHoursFinal = peakHours;
 if (!useDataDrivenTimes) {
   const { data: timingPatterns } = await supabase
     .from("post_learning_patterns")
@@ -262,18 +301,30 @@ if (!useDataDrivenTimes) {
     .eq("pattern_type", "timing")
     .in("pattern_key", ["best_general_time", "best_day"]);
 
-  const bestHour = timingPatterns?.find(p => p.pattern_key === "best_general_time")
-    ?.pattern_value?.hour;
-  const bestDay = timingPatterns?.find(p => p.pattern_key === "best_day")
-    ?.pattern_value?.day;
-
-  if (bestHour !== undefined) {
-    peakHours = [bestHour, bestHour + 5 > 23 ? bestHour - 5 : bestHour + 5]; // two slots
+  const bestHourPattern = (timingPatterns || []).find(
+    (p: any) => p.pattern_key === "best_general_time"
+  );
+  if (bestHourPattern?.pattern_value?.hour !== undefined) {
+    const bestHour = bestHourPattern.pattern_value.hour;
+    peakHoursFinal = [bestHour, bestHour + 5 > 23 ? bestHour - 5 : bestHour + 5];
+    console.log(`[auto-queue] Using learned timing priors: ${peakHoursFinal.join(",")} ET`);
   }
 }
 ```
 
-**Test**: With current 43 posts, data-driven times should now activate. Verify queued posts schedule at learned peak times instead of 9am/5pm.
+**Change 3** — Line 748, update `getNextPostingTimes` call:
+```ts
+// WAS:  peakHours,
+peakHoursFinal,
+```
+
+**Result**:
+- With 43 posts → `totalTimeSamples = 43 >= 10` → data-driven activates
+- Top hours from `posting_time_performance` used instead of hardcoded 10am/2pm/6pm
+- If data ever drops below 10, learned `best_general_time` (confidence 85%) is the fallback
+
+**Test**: Run auto-queue preview, verify log says `"data-driven"` and scheduled times match top `posting_time_performance` entries.
+**Deploy**: Same deploy as 4.1 (single deploy covers both changes).
 
 ---
 
