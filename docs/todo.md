@@ -379,7 +379,7 @@
 
 ## Admin
 
-- [ ] **Access admin pages via mobile/app** — ensure admin routes work on phone
+- [x] **Access admin pages via mobile/app** — all admin pages have viewport meta tags, Tailwind responsive utilities (`sm:px-6`, `max-w-7xl`), iOS-safe 16px input focus, and `@media (max-width: 640px)` touch target rules
 - [x] **Product search bar fix** — the ✕ clear button in the admin product search is broken
 - [x] **Expense report duplicate prevention** — detect and block duplicate entries on import
 
@@ -420,11 +420,11 @@
   | Sort (date, amount, category) | ✅ done |
   | KPI cards (total, this month, count, top category) | ✅ done |
   | Pagination / load more | ✅ done |
-  | **Vendor filter** | ❌ missing |
-  | **Date range filter (from / to)** | ❌ missing |
-  | **Spending by category chart** | ❌ missing |
-  | **Spending over time chart** | ❌ missing |
-  | **Platform breakdown** (Amazon vs eBay vs manual) | ❌ missing |
+  | **Vendor filter** | ✅ done |
+  | **Date range filter (from / to)** | ✅ done |
+  | **Spending by category chart** | ✅ done (doughnut chart via Chart.js v4 CDN) |
+  | **Spending over time chart** | ✅ done (monthly bar/line chart) |
+  | **Platform breakdown** (Amazon vs eBay vs manual) | ✅ done |
 
   #### What we'll add
 
@@ -536,3 +536,14 @@
 ## SMS / Notifications
 
 - [x] **Twilio integration** — fully integrated: `sms-subscribe`, `send-sms`, `twilio-webhook`, `sms-abandoned-cart`, `sms-coupon-reminder`, `sms-welcome-series` edge functions all live
+
+---
+
+## Inventory & Stock
+
+- [ ] **Inventory stock tracking** — `product_variants.stock` column exists and admin populates it, but frontend/checkout validation not implemented. Full plan in [`docs/implementation/inventory-stock-tracking.md`](implementation/inventory-stock-tracking.md)
+  - [ ] Low stock badges on product page
+  - [ ] Stock validation at checkout (prevent overselling)
+  - [ ] Stock decrement on order completion
+  - [ ] Admin inventory dashboard
+  - [ ] Stock ledger audit trail
