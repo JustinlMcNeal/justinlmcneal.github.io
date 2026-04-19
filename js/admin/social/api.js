@@ -16,7 +16,7 @@ const sb = () => {
 export async function fetchProducts() {
   const { data, error } = await sb()
     .from("products")
-    .select("id, name, slug, category_id, catalog_image_url, price")
+    .select("id, name, slug, category_id, catalog_image_url, price, is_active")
     .eq("is_active", true)
     .order("name");
   
