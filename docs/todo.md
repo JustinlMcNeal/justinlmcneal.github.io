@@ -932,6 +932,210 @@
 
   </details>
 
+- [ ] **Promoted Listings (Marketing API)** — create/manage ad campaigns from admin to boost listing visibility in eBay search results
+
+  <details>
+  <summary><strong>Implementation Plan</strong></summary>
+
+  **Scope:** `sell.marketing` (needs to be added to OAuth consent)
+
+  #### What it does
+  eBay Promoted Listings is a cost-per-sale ad model — you set an ad rate % per listing, eBay boosts it in search results, and you only pay when someone clicks AND buys. Promoted listings get ~30% more visibility on average. Typical ad rates: 2-8%.
+
+  #### API Endpoints
+  | Method | Endpoint | Purpose |
+  |--------|----------|---------|
+  | POST | `/sell/marketing/v1/ad_campaign` | Create a new ad campaign |
+  | POST | `/sell/marketing/v1/ad_campaign/{campaignId}/ad` | Add listing to campaign |
+  | GET | `/sell/marketing/v1/ad_campaign/{campaignId}/ad` | List ads in campaign |
+  | POST | `/sell/marketing/v1/ad_campaign/{campaignId}/ad/{adId}/update_bid` | Change ad rate % |
+  | DELETE | `/sell/marketing/v1/ad_campaign/{campaignId}/ad/{adId}` | Remove listing from campaign |
+  | GET | `/sell/marketing/v1/ad_report` | Performance data: impressions, clicks, sales, ROAS |
+
+  #### Admin UI
+  - Campaign dashboard: active campaigns, total spend, total attributed sales, ROAS
+  - Per-listing toggle: "Promote this listing" with ad rate slider (2-15%)
+  - Performance table: impressions, clicks, conversions, spend per listing
+  - Suggested ad rates based on eBay's recommendations (available via API)
+
+  #### Edge Function
+  `ebay-manage-ads` — unified handler for create campaign, add/remove ads, update bids, pull reports
+
+  </details>
+
+- [ ] **Real-Time Order Notifications** — eBay push webhooks instead of 2-hour polling for instant order processing
+
+  <details>
+  <summary><strong>Implementation Plan</strong></summary>
+
+  #### What it does
+  Instead of polling every 2 hours via cron, eBay pushes event notifications to your edge function the instant something happens (order placed, item shipped, feedback received, etc.).
+
+  #### Setup
+  1. Register notification endpoint via eBay Developer Portal or `POST /commerce/notification/v1/subscription`
+  2. Point to edge function: `https://yxdzvzscufkvewecvagq.supabase.co/functions/v1/ebay-webhook`
+  3. eBay sends a validation challenge (similar to account deletion) — respond with challenge hash
+
+  #### Events to Subscribe To
+  | Event | Trigger | Action |
+  |-------|---------|--------|
+  | `MARKETPLACE_ACCOUNT_DELETION` | Already handled | ✅ Done |
+  | `ItemSold` / `FixedPriceTransaction` | Buyer purchases item | Insert order + line items immediately |
+  | `AskSellerQuestion` | Buyer messages seller | Push notification / email alert |
+  | `FeedbackReceived` | Buyer leaves feedback | Log to reviews or alert admin |
+  | `ItemUnsold` | Listing ends without sale | Update ebay_status to 'ended' |
+
+  #### Benefits
+  - Orders appear in admin within seconds (vs up to 2 hours)
+  - Could trigger instant SMS order confirmation to buyer
+  - Reduces unnecessary API calls from cron polling
+  - Can keep cron as fallback for any missed notifications
+
+  #### Edge Function
+  `ebay-webhook` — receives events, validates signature, routes to appropriate handler (order insert, status update, etc.)
+
+  </details>
+
+- [ ] **Seller Analytics & Traffic Reports (Analytics API)** — per-listing traffic data and seller performance metrics
+
+  <details>
+  <summary><strong>Implementation Plan</strong></summary>
+
+  **Scope:** `sell.analytics` (needs to be added to OAuth consent)
+
+  #### What it does
+  Pull per-listing traffic and conversion data plus seller account health metrics from eBay's Analytics API.
+
+  #### API Endpoints
+  | Method | Endpoint | Purpose |
+  |--------|----------|---------|
+  | GET | `/sell/analytics/v1/traffic_report` | Per-listing: page views, impressions, click-through rate, conversion rate |
+  | GET | `/sell/analytics/v1/seller_standards_profile` | Seller level, defect rate, late shipment rate |
+  | GET | `/sell/analytics/v1/customer_service_metric` | Response time, resolution rate |
+
+  #### Admin UI — eBay Analytics Dashboard
+  - **Traffic table:** listing title, impressions, page views, sales, conversion rate (sortable, filterable)
+  - **Seller health card:** current seller level (Top Rated / Above Standard / Below Standard), defect rate, late shipment %, cases closed without resolution
+  - **Underperformers:** listings with high views but 0 sales (indicates pricing or listing quality issue)
+  - **Trends chart:** weekly impressions + sales over time
+
+  #### Edge Function
+  `ebay-analytics` — pulls traffic report + seller standards, returns combined data
+
+  #### CRON
+  Daily at 7 AM UTC (after finances sync) — store historical snapshots in an `ebay_analytics_snapshots` table for trend tracking
+
+  </details>
+
+- [ ] **Listing Compliance Monitoring (Compliance API)** — proactive violation detection before eBay suppresses listings
+
+  <details>
+  <summary><strong>Implementation Plan</strong></summary>
+
+  **Scope:** `sell.inventory` (already have it)
+
+  #### What it does
+  Fetch active policy violations on your listings before eBay takes action (suppression, removal, account restriction). Get violation type, affected listings, and corrective action needed.
+
+  #### API Endpoint
+  | Method | Endpoint | Purpose |
+  |--------|----------|---------|
+  | GET | `/sell/compliance/v1/listing_violation_summary` | Count of violations by type |
+  | GET | `/sell/compliance/v1/listing_violation?compliance_type={type}` | Detailed violations per listing |
+
+  #### Compliance Types
+  - `PRODUCT_ADOPTION` — listing needs eBay catalog product match
+  - `OUTSIDE_EBAY_BUYING_AND_SELLING` — links/references outside eBay
+  - `HTTPS` — non-HTTPS image URLs
+  - `LISTING_POLICY` — prohibited items, misleading titles, etc.
+
+  #### Admin UI
+  - Compliance health badge on eBay listings page: ✅ Clean / ⚠️ 3 Violations
+  - Violation detail panel: listing title, violation type, eBay's recommended fix
+  - One-click fix for common issues (e.g., update image URLs to HTTPS)
+
+  #### Edge Function
+  `ebay-compliance-check` — pulls violation summary + details, returns actionable list
+
+  #### CRON
+  Weekly check (Sunday 4 AM UTC) — alert if new violations detected
+
+  </details>
+
+- [ ] **Category & Item Specifics Intelligence (Taxonomy API)** — auto-suggest eBay categories and required item specifics
+
+  <details>
+  <summary><strong>Implementation Plan</strong></summary>
+
+  **Scope:** Public API (no seller auth needed — uses application token)
+
+  #### What it does
+  When listing a product on eBay, you need to pick the right category and fill in required "item specifics" (like Brand, Type, Material, etc.). The Taxonomy API tells you exactly what's required and suggests the best category for your product.
+
+  #### API Endpoints
+  | Method | Endpoint | Purpose |
+  |--------|----------|---------|
+  | GET | `/commerce/taxonomy/v1/category_tree/{id}/get_category_suggestions` | Auto-suggest category from product title |
+  | GET | `/commerce/taxonomy/v1/category_tree/{id}/get_item_aspects_for_category` | Required/recommended item specifics for a category |
+  | GET | `/commerce/taxonomy/v1/category_tree/{id}` | Browse full category tree |
+
+  #### Integration with Listing Management
+  When pushing a product to eBay from admin:
+  1. User clicks "List on eBay" → auto-call `get_category_suggestions` with product title
+  2. Show top 3 suggested categories with confidence scores
+  3. Once category selected → fetch required item specifics
+  4. Auto-fill what we can from product data (Brand = "Karry Kraze", Condition = "New")
+  5. Highlight missing required fields for user to fill in
+  6. Cache category → item specifics mapping in DB to avoid repeated API calls
+
+  #### Edge Function
+  `ebay-taxonomy` — wraps category suggestion + item aspects calls. Uses application token (no user auth needed).
+
+  </details>
+
+- [ ] **Competitor Price Tracking (Browse API)** — monitor competing eBay listings and market pricing
+
+  <details>
+  <summary><strong>Implementation Plan</strong></summary>
+
+  **Scope:** Public API (application token only — `api_scope`)
+
+  #### What it does
+  Search eBay for items similar to yours by keyword or category. Pull competing listing prices, shipping costs, seller ratings, and sold counts. Build a price intelligence dashboard.
+
+  #### API Endpoints
+  | Method | Endpoint | Purpose |
+  |--------|----------|---------|
+  | GET | `/buy/browse/v1/item_summary/search` | Search for competing listings by keyword |
+  | GET | `/buy/browse/v1/item/{item_id}` | Full listing details for a competitor |
+
+  #### Admin UI — Price Intelligence Dashboard
+  - **Per-product comparison:** your price vs. average competitor price vs. lowest price
+  - **Market position indicator:** "You're 15% above market average" / "Priced competitively"
+  - **Price alert:** flag when a competitor drops below your price threshold
+  - **Sold data:** how many units competitors are moving (available via `search` with `sold` filter)
+
+  #### Data Flow
+  ```
+  CRON (weekly, Sunday 5 AM UTC)
+    → For each active product with ebay_listing_id:
+      → Search eBay with product keywords + category
+      → Collect top 10-20 competing listings (price, shipping, seller rating, sold count)
+      → Store in ebay_competitor_snapshots table
+      → Calculate: avg_price, min_price, max_price, your_position
+    → Admin dashboard reads from snapshots
+  ```
+
+  #### Edge Function
+  `ebay-competitor-scan` — searches for competitors per product, returns pricing analysis
+
+  #### Database
+  | Table | Columns |
+  |-------|---------|
+  | `ebay_competitor_snapshots` | product_id, snapshot_date, avg_price_cents, min_price_cents, max_price_cents, competitor_count, your_price_cents, your_rank, raw_data (jsonb) |
+
+  </details>
+
 ---
 
 ## Growth & Polish
