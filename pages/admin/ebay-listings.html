@@ -39,6 +39,8 @@
     .img-strip .img-thumb.main { border-color: #ff69b4; }
     .img-strip .img-thumb img { width: 100%; height: 100%; object-fit: cover; }
     .img-strip .img-thumb .img-remove { position: absolute; top: -4px; right: -4px; width: 18px; height: 18px; background: #000; color: #fff; border-radius: 50%; font-size: 11px; line-height: 18px; text-align: center; cursor: pointer; z-index: 2; }
+    .img-strip .img-thumb.picker { border-style: dashed; cursor: pointer; opacity: 0.6; }
+    .img-strip .img-thumb.picker:hover { opacity: 1; border-color: #ff69b4; }
     .ql-container { font-size: 14px; }
     .ql-editor { min-height: 100px; }
   </style>
@@ -172,7 +174,11 @@
             <div>
               <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">Images</label>
               <div id="modalImageStrip" class="img-strip"></div>
-              <p class="text-[10px] text-gray-400 mt-1">Drag to reorder. First image = main photo. Max 24.</p>
+              <div class="flex items-center gap-2 mt-1">
+                <button type="button" id="btnAddImgPush" class="text-[10px] font-bold text-blue-600 hover:text-kkpink">+ Add from Gallery</button>
+                <span class="text-[10px] text-gray-400">Drag to reorder. First = main photo. Max 24.</span>
+              </div>
+              <div id="modalImagePicker" class="img-strip mt-1 hidden"></div>
             </div>
 
             <!-- Category Search -->
@@ -279,7 +285,11 @@
             <div>
               <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">Images</label>
               <div id="editImageStrip" class="img-strip"></div>
-              <p class="text-[10px] text-gray-400 mt-1">Drag to reorder. First image = main photo. Max 24.</p>
+              <div class="flex items-center gap-2 mt-1">
+                <button type="button" id="btnAddImgEdit" class="text-[10px] font-bold text-blue-600 hover:text-kkpink">+ Add from Gallery</button>
+                <span class="text-[10px] text-gray-400">Drag to reorder. First = main photo. Max 24.</span>
+              </div>
+              <div id="editImagePicker" class="img-strip mt-1 hidden"></div>
             </div>
 
             <!-- Item Specifics -->
@@ -486,6 +496,31 @@
       });
     }
 
+    function showGalleryPicker(pickerId, stripId, stateArr, product) {
+      const picker = document.getElementById(pickerId);
+      const allAvailable = buildImageUrls(product);
+      const unused = allAvailable.filter(url => !stateArr.includes(url));
+      if (!unused.length) {
+        picker.innerHTML = '<span class="text-[10px] text-gray-400">No additional images available</span>';
+        picker.classList.remove("hidden");
+        return;
+      }
+      picker.innerHTML = "";
+      unused.forEach(url => {
+        const thumb = document.createElement("div");
+        thumb.className = "img-thumb picker";
+        thumb.innerHTML = `<img src="${esc(url)}" alt="add" />`;
+        thumb.addEventListener("click", () => {
+          if (stateArr.length >= 24) return;
+          stateArr.push(url);
+          renderImageStrip(stripId, stateArr, stateArr);
+          showGalleryPicker(pickerId, stripId, stateArr, product);
+        });
+        picker.appendChild(thumb);
+      });
+      picker.classList.remove("hidden");
+    }
+
     // ── HTML Sanitizer (eBay-safe) ───────────────────────
     function sanitizeForEbay(html) {
       const div = document.createElement("div");
@@ -621,6 +656,7 @@
       // Build image strip
       pushImageUrls = buildImageUrls(currentProduct);
       renderImageStrip("modalImageStrip", pushImageUrls, pushImageUrls);
+      document.getElementById("modalImagePicker").classList.add("hidden");
 
       // Reset aspects
       currentAspects = [];
@@ -650,7 +686,13 @@
 
     document.getElementById("btnCloseModal").addEventListener("click", () => {
       document.getElementById("pushModal").classList.add("hidden");
+      document.getElementById("modalImagePicker").classList.add("hidden");
       currentProduct = null;
+    });
+
+    document.getElementById("btnAddImgPush").addEventListener("click", () => {
+      if (!currentProduct) return;
+      showGalleryPicker("modalImagePicker", "modalImageStrip", pushImageUrls, currentProduct);
     });
 
     // ── Category Search ──────────────────────────────────
@@ -994,7 +1036,13 @@
 
     document.getElementById("btnCloseEdit").addEventListener("click", () => {
       document.getElementById("editModal").classList.add("hidden");
+      document.getElementById("editImagePicker").classList.add("hidden");
       editProduct = null;
+    });
+
+    document.getElementById("btnAddImgEdit").addEventListener("click", () => {
+      if (!editProduct) return;
+      showGalleryPicker("editImagePicker", "editImageStrip", editImageUrls, editProduct);
     });
 
     document.getElementById("btnSaveEdit").addEventListener("click", async () => {
