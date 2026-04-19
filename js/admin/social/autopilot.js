@@ -2,7 +2,6 @@
 // Autopilot Mode — hands-free scheduling
 
 import { getSupabaseClient } from "../../shared/supabaseClient.js";
-import { getAutoQueueSettings } from "./autoQueue.js";
 
 let _state, _els, _showToast, _getClient;
 let _loadStats, _loadQueuePosts;
@@ -60,6 +59,15 @@ export async function loadAutopilotSettings() {
     if (daysSelect) daysSelect.value = settings.days_ahead || 7;
     if (postsSelect) postsSelect.value = settings.posts_per_day || 2;
     
+    // Restore platform checkboxes
+    const platforms = settings.platforms || ["instagram"];
+    const igCb = document.getElementById("autopilotPlatformInstagram");
+    const fbCb = document.getElementById("autopilotPlatformFacebook");
+    const pinCb = document.getElementById("autopilotPlatformPinterest");
+    if (igCb) igCb.checked = platforms.includes("instagram");
+    if (fbCb) fbCb.checked = platforms.includes("facebook");
+    if (pinCb) pinCb.checked = platforms.includes("pinterest");
+    
     if (statusEl) {
       statusEl.textContent = settings.enabled 
         ? `✅ Active - keeping ${settings.days_ahead} days of posts queued`
@@ -91,15 +99,19 @@ async function saveAutopilotSettings() {
     const postsSelect = document.getElementById("autopilotPostsPerDay");
     const statusEl = document.getElementById("autopilotStatus");
     
-    const aqSettings = getAutoQueueSettings();
+    // Read platforms from autopilot's own checkboxes
+    const platforms = [];
+    if (document.getElementById("autopilotPlatformInstagram")?.checked) platforms.push("instagram");
+    if (document.getElementById("autopilotPlatformFacebook")?.checked) platforms.push("facebook");
+    if (document.getElementById("autopilotPlatformPinterest")?.checked) platforms.push("pinterest");
     
     const settings = {
       enabled: toggle?.checked || false,
       days_ahead: parseInt(daysSelect?.value || "7", 10),
       posts_per_day: parseInt(postsSelect?.value || "2", 10),
-      platforms: aqSettings.platforms,
-      tones: aqSettings.captionTones,
-      posting_times: aqSettings.postingTimes,
+      platforms: platforms.length ? platforms : ["instagram"],
+      tones: ["casual", "urgency"],
+      posting_times: ["10:00", "18:00"],
     };
     
     await client
