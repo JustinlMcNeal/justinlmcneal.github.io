@@ -24,7 +24,8 @@ export function initImagePool(deps) {
 }
 
 // ─── Catalog Browser ───
-const catalogState = { selected: new Set(), allImages: [] };
+const catalogState = { selected: new Set(), allImages: [], page: 0 };
+const CATALOG_PAGE_SIZE = 24;
 
 export function setupImagePool() {
   _els.btnPoolUpload?.addEventListener("click", () => {
@@ -99,9 +100,9 @@ async function openCatalogBrowser() {
   let searchTimer;
   _els.catalogSearchInput.oninput = () => {
     clearTimeout(searchTimer);
-    searchTimer = setTimeout(renderCatalogGrid, 300);
+    searchTimer = setTimeout(() => { catalogState.page = 0; renderCatalogGrid(); }, 300);
   };
-  _els.catalogCategoryFilter.onchange = renderCatalogGrid;
+  _els.catalogCategoryFilter.onchange = () => { catalogState.page = 0; renderCatalogGrid(); };
 }
 
 function closeCatalogBrowser() {
@@ -166,10 +167,18 @@ function renderCatalogGrid() {
 
   if (!filtered.length) {
     _els.catalogBrowseGrid.innerHTML = '<p class="col-span-full text-center text-gray-400 py-8">No images found</p>';
+    renderCatalogPagination(0, 0);
     return;
   }
 
-  _els.catalogBrowseGrid.innerHTML = filtered.map(img => {
+  const totalPages = Math.ceil(filtered.length / CATALOG_PAGE_SIZE);
+  if (catalogState.page >= totalPages) catalogState.page = totalPages - 1;
+  if (catalogState.page < 0) catalogState.page = 0;
+
+  const start = catalogState.page * CATALOG_PAGE_SIZE;
+  const pageItems = filtered.slice(start, start + CATALOG_PAGE_SIZE);
+
+  _els.catalogBrowseGrid.innerHTML = pageItems.map(img => {
     const isSelected = catalogState.selected.has(img.url);
     const inPool = img.already_in_pool;
     return `
@@ -188,6 +197,8 @@ function renderCatalogGrid() {
       </div>`;
   }).join("");
 
+  renderCatalogPagination(filtered.length, totalPages);
+
   _els.catalogBrowseGrid.onclick = (e) => {
     const card = e.target.closest(".catalog-img-card");
     if (!card) return;
@@ -197,6 +208,36 @@ function renderCatalogGrid() {
     else catalogState.selected.add(url);
     renderCatalogGrid();
     updateCatalogSelectedCount();
+  };
+}
+
+function renderCatalogPagination(totalItems, totalPages) {
+  let paginationEl = document.getElementById("catalogPagination");
+  if (!paginationEl) {
+    paginationEl = document.createElement("div");
+    paginationEl.id = "catalogPagination";
+    paginationEl.className = "col-span-full flex items-center justify-center gap-3 py-3";
+    _els.catalogBrowseGrid.parentElement.insertBefore(paginationEl, _els.catalogBrowseGrid.nextSibling);
+  }
+
+  if (totalPages <= 1) {
+    paginationEl.innerHTML = totalItems ? `<span class="text-xs text-gray-400">${totalItems} images</span>` : "";
+    return;
+  }
+
+  const page = catalogState.page;
+  paginationEl.innerHTML = `
+    <button class="catalog-page-btn px-3 py-1 text-sm rounded-lg border ${page === 0 ? "opacity-40 cursor-not-allowed" : "hover:bg-gray-100"}" data-page="${page - 1}" ${page === 0 ? "disabled" : ""}>← Prev</button>
+    <span class="text-sm text-gray-600">Page ${page + 1} of ${totalPages} <span class="text-gray-400">(${totalItems} images)</span></span>
+    <button class="catalog-page-btn px-3 py-1 text-sm rounded-lg border ${page >= totalPages - 1 ? "opacity-40 cursor-not-allowed" : "hover:bg-gray-100"}" data-page="${page + 1}" ${page >= totalPages - 1 ? "disabled" : ""}>Next →</button>
+  `;
+
+  paginationEl.onclick = (e) => {
+    const btn = e.target.closest(".catalog-page-btn");
+    if (!btn || btn.disabled) return;
+    catalogState.page = parseInt(btn.dataset.page);
+    renderCatalogGrid();
+    _els.catalogBrowseGrid.scrollTop = 0;
   };
 }
 
