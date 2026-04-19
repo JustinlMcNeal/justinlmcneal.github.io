@@ -11,7 +11,7 @@
 
 | Tier | What | Why |
 |------|------|-----|
-| **Now** | Phase 1 (Listing Management + Taxonomy), thin Phase 2 (Webhooks), SKU/matching cleanup | Operational control over eBay — the core unlock |
+| **Now** | Phase 1b (Enhanced Listing Features), thin Phase 2 (Webhooks) | Full listing parity with eBay Seller Hub + real-time orders |
 | **Next** | Phase 3 (Inventory Sync), lightweight eBay performance reporting | Only after listings are stable and order flow is proven |
 | **Later** | Phase 4 (Promoted Listings), Compliance, Competitor Pricing | Revenue growth & intelligence — gated on eBay volume justifying the investment |
 
@@ -21,6 +21,7 @@
 
 1. [Current System Audit](#1-current-system-audit)
 2. [Phase 1 — Listing Management + Taxonomy](#2-phase-1--listing-management--taxonomy)
+2b. [Phase 1b — Enhanced Listing Features](#2b-phase-1b--enhanced-listing-features)
 3. [Phase 2 — Real-Time Order Webhooks](#3-phase-2--real-time-order-webhooks)
 4. [Phase 3 — Cross-Platform Inventory Sync](#4-phase-3--cross-platform-inventory-sync)
 5. [Phase 4 — Promoted Listings (Marketing API)](#5-phase-4--promoted-listings-marketing-api)
@@ -270,11 +271,13 @@ The Taxonomy API (public, no seller auth needed) provides:
 1. Admin clicks "List on eBay" → auto-call `GET /commerce/taxonomy/v1/category_tree/0/get_category_suggestions?q={productTitle}`
 2. Show top 3 suggested categories with confidence percentages
 3. Admin selects category → fetch `GET /commerce/taxonomy/v1/category_tree/0/get_item_aspects_for_category?category_id={id}`
-4. Auto-fill knowable fields: Brand = "Karry Kraze", Condition = "New"
+4. Auto-fill knowable fields: Brand = "Unbranded", Condition = "New" *(see Brand Rule below)*
 5. Highlight missing required fields for admin to fill in
 6. Cache `categoryId → itemAspects` mapping in `ebay_category_cache` table (refresh monthly)
 
 **Category tree ID:** `0` = eBay US (EBAY_US marketplace)
+
+> **Brand Rule (single source of truth):** Default Brand to **"Unbranded"** on all listings. Karry Kraze is not a registered brand on eBay, so "Unbranded" is the correct eBay-compliant value. The admin can override to a different brand per-listing if reselling a branded item. This applies everywhere: push modal auto-fill, edit modal pre-fill, and aspect validation.
 
 ### 2.5 New Edge Functions
 
@@ -383,7 +386,7 @@ Admin clicks "List on eBay" for KK-0013 (Cherry Bag Charm)
   │
   ├─ 2. Admin picks category → ebay-taxonomy: get_aspects(169291)
   │     → returns: [{ name: "Brand", required: true }, { name: "Material", required: false }, ...]
-  │     → Auto-fill: Brand = "Karry Kraze", Condition = "New"
+  │     → Auto-fill: Brand = "Unbranded", Condition = "New"
   │     → Admin fills remaining required fields
   │
   ├─ 3. ebay-manage-listing: create_item
@@ -436,6 +439,448 @@ Admin clicks "List on eBay" for KK-0013 (Cherry Bag Charm)
 - Listings can be revised up to 250 times per calendar day
 - Batch operations: `bulkCreateOrReplaceInventoryItem` supports up to 25 items at once
 - Rate limit: 5,000 calls/day (generous for our ~55 products)
+
+---
+
+## 2b. Phase 1b — Enhanced Listing Features
+
+> **Priority:** 🟢 NOW — extends Phase 1, no new scopes needed
+> **Prerequisite:** Phase 1 complete (all infrastructure in place)
+> **Scope additions:** None — all features use existing `sell.inventory` + `sell.account` scopes
+> **Goal:** Bring the admin Push/Edit modals to full parity with eBay's "Revise Your Listing" page
+
+### 2b.0 Gap Summary
+
+| Feature | eBay API Field | Current State | Impact |
+|---------|---------------|---------------|--------|
+| Multi-image (up to 24) | `product.imageUrls[]` | Only sends 1 `catalog_image_url` | 🔴 HIGH — multi-image = higher conversion |
+| HTML description | `product.description` | Plain text `<textarea>` | 🔴 HIGH — formatted descriptions look professional |
+| Best Offer / Allow Offers | `offer.listingPolicies.bestOfferTerms` | Not exposed | 🟡 MEDIUM — enables negotiation on higher-priced items |
+| Package weight & dimensions | `inventoryItem.packageWeightAndSize` | Not sent | 🟡 MEDIUM — required for calculated shipping |
+| Policy picker (ship/return/pay) | `offer.listingPolicies.*PolicyId` | Hardcoded to defaults | 🟡 MEDIUM — needed when multiple policies exist |
+| Store category | `offer.storeCategoryNames[]` | Not exposed | 🟢 LOW — organizational, not buyer-facing |
+| International shipping | Via fulfillment policy selection | Not exposed | 🟡 MEDIUM — handled by policy picker |
+| Item location override | `offer.merchantLocationKey` | Hardcoded to "default" | 🟢 LOW — single location currently |
+| Volume pricing | Not in Inventory API | No support | 🟢 LOW — requires Marketing API (`sell.marketing`) |
+
+### 2b.1 Multi-Image Management
+
+**Current problem:** Push/Edit modals send only `[catalog_image_url]` — every eBay listing has exactly 1 image. eBay allows up to 24 and multi-image listings get significantly better placement.
+
+**What we already have:**
+- `product_gallery_images` table with `product_id`, `url`, `position`, `is_active` columns
+- Full admin gallery management in `js/admin/products/modalEditor.js` (drag-and-drop reordering, upload, remove)
+- Products also have `catalog_image_url`, `catalog_hover_url`, `primary_image_url`
+- Supabase Storage bucket `products` with `catalog/` and `gallery/` folders
+- All URLs are HTTPS (Supabase Storage) — eBay requires HTTPS ✅
+
+**Implementation:**
+
+1. **Data layer** — Update `loadProducts()` query to join `product_gallery_images`:
+   ```js
+   const { data } = await supabase
+     .from("products")
+     .select("*, product_gallery_images(url, position, is_active)")
+     .order("code");
+   ```
+
+2. **Push modal** — Build `imageUrls[]` from all available sources:
+   ```
+   Priority order:
+     1. catalog_image_url (main listing image — always position 0, the search-result hero)
+     2. primary_image_url (if different from catalog)
+     3. catalog_hover_url (if different from above)
+     4. product_gallery_images (sorted by position, is_active = true)
+   Dedup by URL, cap at 24
+   ```
+
+   **Dedupe & ordering rule:** After collecting all URLs, deduplicate by exact string match. The resulting array order is the final eBay image order — `imageUrls[0]` is always the search-result hero image (catalog_image_url). Do not re-sort after dedup; preserve the priority-order insertion sequence.
+
+3. **Edit modal** — Show current eBay images from `get_item` response as a thumbnail grid. Allow reordering (drag-and-drop) and toggling individual images on/off. When saving, send the full reordered `imageUrls[]` to `update_item`. First image in the array = eBay main photo (shown in search results).
+
+4. **Image preview section** — Both modals get a visual image strip:
+   ```html
+   <div class="flex gap-2 overflow-x-auto">
+     <!-- 60×60 thumbnails with drag handles and X remove buttons -->
+     <!-- First image = eBay main photo (shown in search results) -->
+   </div>
+   <p class="text-[10px] text-gray-400">Drag to reorder. First image = main photo. Max 24.</p>
+   ```
+
+5. **Edge function** — No changes needed. `create_item` and `update_item` already pass `product.imageUrls` array. Just need UI to build the full array.
+
+**API mapping:**
+```json
+PUT /sell/inventory/v1/inventory_item/{sku}
+{
+  "product": {
+    "imageUrls": [
+      "https://...supabase.co/.../catalog/main.jpg",
+      "https://...supabase.co/.../gallery/angle2.jpg",
+      "https://...supabase.co/.../gallery/detail.jpg"
+    ]
+  }
+}
+```
+
+### 2b.2 HTML Description Editor
+
+**Current problem:** Description field is a plain `<textarea>`. eBay's `product.description` supports full HTML, and most competitive listings use formatted descriptions with headers, bullet points, and styled layouts.
+
+**Approach:** Use [Quill.js](https://cdn.quilljs.com/) — lightweight rich text editor available via CDN (no build step, matches our vanilla JS stack). Outputs clean HTML.
+
+**Implementation:**
+
+1. **CDN includes** — Add to `ebay-listings.html` `<head>`:
+   ```html
+   <link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
+   <script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
+   ```
+
+2. **Push modal** — Replace `<textarea id="modalDescription">` with a Quill container:
+   ```html
+   <div id="modalDescriptionEditor" style="height: 150px;"></div>
+   ```
+   Initialize Quill with a limited toolbar (eBay prohibits JavaScript, iframes, forms, and active content):
+   ```js
+   const quill = new Quill('#modalDescriptionEditor', {
+     theme: 'snow',
+     modules: {
+       toolbar: [
+         ['bold', 'italic', 'underline'],
+         [{ 'header': [2, 3, false] }],
+         [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+         [{ 'color': [] }],
+         ['clean']
+       ]
+     }
+   });
+   ```
+
+3. **Edit modal** — Same Quill editor, pre-filled with existing HTML description from `get_item` response via `quill.root.innerHTML = product.description`.
+
+4. **Collecting value** — When saving, read `quill.root.innerHTML` and pass as `product.description`.
+
+5. **HTML template wrapper** — Wrap the Quill output in a minimal eBay-safe template:
+   ```html
+   <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;">
+     <h2 style="color: #333;">${title}</h2>
+     ${quillHtml}
+     <p style="margin-top: 20px; font-size: 12px; color: #666;">
+       Thank you for shopping with Karry Kraze! 💕
+     </p>
+   </div>
+   ```
+   Store the template wrapper logic client-side. Admin edits the content; wrapper is applied on create/update.
+
+6. **eBay HTML restrictions** — The following are prohibited and must NOT be in descriptions:
+   - `<script>`, `<iframe>`, `<form>`, `<input>` tags
+   - External CSS `@import` or `<link>` tags
+   - JavaScript event handlers (`onclick`, etc.)
+   - Active content of any kind
+   Quill's limited toolbar prevents all of these naturally.
+
+7. **Client-side sanitization** — Even though Quill's toolbar prevents most bad output, sanitize the final HTML before sending to eBay as a safety net:
+   ```js
+   function sanitizeForEbay(html) {
+     const div = document.createElement('div');
+     div.innerHTML = html;
+     // Remove all script, iframe, form, input, link, style tags
+     div.querySelectorAll('script,iframe,form,input,link,style,object,embed,applet')
+        .forEach(el => el.remove());
+     // Remove event handler attributes from all elements
+     div.querySelectorAll('*').forEach(el => {
+       [...el.attributes].forEach(attr => {
+         if (attr.name.startsWith('on')) el.removeAttribute(attr.name);
+       });
+     });
+     return div.innerHTML;
+   }
+   ```
+   Call `sanitizeForEbay(quill.root.innerHTML)` before wrapping in the branded template. This catches edge cases like pasted content that bypasses the toolbar.
+
+**Edge function** — No changes needed. `product.description` already accepts a string; HTML is sent as-is.
+
+### 2b.3 Best Offer / Allow Offers
+
+**Current problem:** No way to enable "Allow Offers" on a listing. Buyers can't negotiate, which hurts conversion on higher-priced items.
+
+**eBay API field:** `offer.listingPolicies.bestOfferTerms`
+
+```json
+{
+  "listingPolicies": {
+    "bestOfferTerms": {
+      "bestOfferEnabled": true,
+      "autoAcceptPrice": { "value": "14.99", "currency": "USD" },
+      "autoDeclinePrice": { "value": "10.00", "currency": "USD" }
+    }
+  }
+}
+```
+
+**Implementation:**
+
+1. **Push modal UI** — Add after the Price/Quantity grid:
+   ```html
+   <div>
+     <label class="flex items-center gap-2 cursor-pointer">
+       <input type="checkbox" id="modalBestOffer" class="accent-kkpink" />
+       <span class="text-[11px] font-black uppercase tracking-[.12em] text-black/70">Allow Offers</span>
+     </label>
+     <div id="bestOfferFields" class="hidden grid grid-cols-2 gap-3 mt-2">
+       <div>
+         <label>Auto Accept ($)</label>
+         <input id="modalAutoAccept" type="number" step="0.01" />
+         <p class="text-[10px] text-gray-400">Offers at or above auto-accepted</p>
+       </div>
+       <div>
+         <label>Minimum Offer ($)</label>
+         <input id="modalAutoDecline" type="number" step="0.01" />
+         <p class="text-[10px] text-gray-400">Offers below auto-declined</p>
+       </div>
+     </div>
+   </div>
+   ```
+   Toggle checkbox shows/hides the price fields.
+
+2. **Edit modal UI** — Same fields, pre-filled from `get_offers` response (`offer.listingPolicies.bestOfferTerms`).
+
+3. **Edge function update** — `create_offer` and `update_offer` actions need to accept and pass `bestOfferTerms`:
+   ```typescript
+   // In create_offer:
+   if (body.bestOfferTerms?.bestOfferEnabled) {
+     offer.listingPolicies.bestOfferTerms = {
+       bestOfferEnabled: true,
+       autoAcceptPrice: { value: body.bestOfferTerms.autoAcceptPrice, currency: "USD" },
+       autoDeclinePrice: { value: body.bestOfferTerms.autoDeclinePrice, currency: "USD" },
+     };
+   }
+
+   // In update_offer — merge into existing offer:
+   if (body.bestOfferTerms !== undefined) {
+     updatedOffer.listingPolicies = {
+       ...(existing.listingPolicies || {}),
+       bestOfferTerms: body.bestOfferTerms.bestOfferEnabled
+         ? { bestOfferEnabled: true, ... }
+         : { bestOfferEnabled: false },
+     };
+   }
+   ```
+
+4. **DB tracking** — No new columns needed. Best offer settings live on eBay's side and are fetched via `get_offers` when editing.
+
+### 2b.4 Package Weight & Dimensions
+
+**Current problem:** No package info sent to eBay. Required for calculated shipping rates. Without it, eBay can't calculate shipping costs and may default to flat rate or free shipping (depending on fulfillment policy).
+
+**eBay API field:** `inventoryItem.packageWeightAndSize`
+
+```json
+{
+  "packageWeightAndSize": {
+    "dimensions": {
+      "height": 1.0,
+      "length": 7.0,
+      "width": 5.0,
+      "unit": "INCH"
+    },
+    "weight": {
+      "value": 5.0,
+      "unit": "OUNCE"
+    },
+    "packageType": "MAILING_OR_SHIPPING"
+  }
+}
+```
+
+**Implementation:**
+
+1. **Push modal UI** — Add a collapsible "Package Details" section:
+   ```html
+   <details>
+     <summary class="text-[11px] font-bold uppercase tracking-wider text-gray-500">
+       📦 Package Weight & Dimensions
+     </summary>
+     <div class="grid grid-cols-4 gap-2 mt-2">
+       <div>
+         <label>Weight (oz)</label>
+         <input id="modalWeightOz" type="number" step="0.1" min="0" />
+       </div>
+       <div>
+         <label>Length (in)</label>
+         <input id="modalDimL" type="number" step="0.1" min="0" />
+       </div>
+       <div>
+         <label>Width (in)</label>
+         <input id="modalDimW" type="number" step="0.1" min="0" />
+       </div>
+       <div>
+         <label>Height (in)</label>
+         <input id="modalDimH" type="number" step="0.1" min="0" />
+       </div>
+     </div>
+   </details>
+   ```
+
+2. **Edit modal UI** — Same fields, pre-filled from `get_item` response (`item.packageWeightAndSize`).
+
+3. **Edge function update** — `create_item` and `update_item` need to accept and pass `packageWeightAndSize`:
+   ```typescript
+   if (product.packageWeightAndSize) {
+     invItem.packageWeightAndSize = product.packageWeightAndSize;
+   }
+   ```
+
+4. **Smart defaults** — Most KK products are lightweight jewelry/accessories. Pre-fill with sensible defaults:
+   - Weight: 4 oz (typical for jewelry/accessories)
+   - Dimensions: 6×4×1 in (small padded envelope)
+   - Package type: `MAILING_OR_SHIPPING`
+
+   > **Future alignment note:** These defaults should eventually align with any Shippo/fulfillment package presets used elsewhere in the system. Not a blocker for Phase 1b, but prevents eBay listing data and actual fulfillment data from drifting apart over time.
+
+### 2b.5 Shipping / Return / Payment Policy Picker
+
+**Current problem:** All listings hardcoded to the 3 default policies stored as Supabase secrets. Can't use different shipping rates for heavier items, different return policies for custom orders, etc.
+
+**What we already have:**
+- `get_policies` action in `ebay-manage-listing` — fetches all 3 policy types
+- Policies displayed in the Setup panel
+
+**Implementation:**
+
+1. **Push modal UI** — Add a collapsible "Policies" section with 3 dropdowns:
+   ```html
+   <details>
+     <summary class="text-[11px] font-bold uppercase tracking-wider text-gray-500">
+       📋 Listing Policies
+     </summary>
+     <div class="space-y-2 mt-2">
+       <select id="modalFulfillmentPolicy"><!-- populated from get_policies --></select>
+       <select id="modalReturnPolicy"><!-- populated --></select>
+       <select id="modalPaymentPolicy"><!-- populated --></select>
+     </div>
+   </details>
+   ```
+   Pre-select the default policy in each dropdown. Populated once on page load (cache the policies).
+
+2. **Edit modal UI** — Same dropdowns, pre-selected based on the offer's current `listingPolicies.*PolicyId` from `get_offers`.
+
+3. **Edge function** — `create_offer` already accepts `policies` object. No edge function changes needed — just need UI to pass selected IDs.
+
+4. **Policy cache** — Fetch policies once on page load, store in a JS variable. The Setup panel already calls `get_policies` — reuse the same call.
+
+5. **International shipping** — This is handled through the fulfillment policy itself. If the admin creates a fulfillment policy with international shipping options (in Seller Hub or via API), it appears in the dropdown. No separate toggle needed — picking a different fulfillment policy = picking different shipping options.
+
+### 2b.6 Store Category
+
+> **Lowest priority in Phase 1b.** If time or scope gets tight, cut this feature first. It's organizational (seller storefront only), not buyer-facing in search results.
+
+**Current problem:** Listings don't assign a store category. Items show up under "Other" in the eBay storefront, making the store look unorganized.
+
+**eBay API field:** `offer.storeCategoryNames[]` — array of category path strings
+
+```json
+{
+  "storeCategoryNames": ["Jewelry", "Accessories"]
+}
+```
+
+> **Note:** Store categories are created/managed in eBay Seller Hub or via the Trading API's `SetStoreCategories`. The `storeCategoryNames` field on the offer references existing store categories by name.
+
+**Implementation:**
+
+1. **Fetch store categories** — Add a new `get_store_categories` action to `ebay-manage-listing` if eBay provides an Inventory API endpoint. Otherwise, hardcode the known store categories as a simple JS array (we know our categories: Headwear, Jewelry, Bags, Accessories, Plushies, Lego, etc.).
+
+2. **Push/Edit modal UI** — Add a dropdown after category selection:
+   ```html
+   <select id="modalStoreCategory">
+     <option value="">— None —</option>
+     <option value="Jewelry">Jewelry</option>
+     <option value="Accessories">Accessories</option>
+     <!-- etc. -->
+   </select>
+   ```
+   Auto-suggest based on the KK product's category.
+
+3. **Edge function** — `create_offer` needs to include `storeCategoryNames` in the offer body.
+
+### 2b.7 Item Location Override
+
+**Current problem:** All listings use `merchantLocationKey = "default"`. Only matters if we add multiple shipping locations in the future.
+
+**Implementation:** Low priority — skip for now. If a second location is ever created, add a location dropdown to the push/edit modals populated from a `list_locations` action. The `create_offer` and `update_offer` calls already pass `merchantLocationKey`.
+
+### 2b.8 Volume Pricing
+
+**Current problem:** No volume pricing support. eBay's "Add volume pricing" feature lets sellers offer tiered discounts (e.g., buy 2 get 5% off).
+
+**Limitation:** The Inventory API **does not support volume pricing tiers directly**. eBay's volume pricing on the listing page uses the Trading API's `DiscountPriceInfo` field or the Marketing API's item promotion endpoints.
+
+**Options:**
+1. **Marketing API approach** — Use `POST /sell/marketing/v1/item_promotion` to create a volume/order discount. Requires `sell.marketing` scope (planned for Phase 4).
+2. **Trading API approach** — Use `ReviseItem` with `DiscountPriceInfo` to add volume pricing to an existing listing. This would require the Trading API XML calls, which we don't currently use.
+3. **Skip for now** — Volume pricing is a conversion optimization, not a listing requirement. Defer to Phase 4 when `sell.marketing` scope is added for Promoted Listings anyway.
+
+**Decision:** Defer to Phase 4. When we add `sell.marketing` scope for Promoted Listings, we'll also add volume pricing via item promotions. No action needed in Phase 1b.
+
+### 2b.9 Implementation Order
+
+Build in three passes. Each pass ends with a verification checkpoint.
+
+**Pass 1 — Listing Quality** (highest buyer impact)
+
+| Step | Feature | Touches | Effort |
+|------|---------|---------|--------|
+| 1 | Multi-image | UI only (push + edit modals, `loadProducts` query) | Medium |
+| 2 | HTML description | UI only (add Quill CDN + replace textarea + sanitize) | Small |
+
+> **Checkpoint:** Revise one live listing with multiple images + HTML description. Verify on eBay before proceeding.
+
+**Pass 2 — Listing Infrastructure**
+
+| Step | Feature | Touches | Effort |
+|------|---------|---------|--------|
+| 3 | Policy picker | UI only (populate dropdowns from cached `get_policies`) | Small |
+| 4 | Package weight/dimensions | UI + edge function (`create_item`, `update_item`) | Small |
+
+**Pass 3 — Nice-to-Have**
+
+| Step | Feature | Touches | Effort |
+|------|---------|---------|--------|
+| 5 | Best Offer | UI + edge function (`create_offer`, `update_offer`) | Medium |
+| 6 | Store category | UI + edge function (`create_offer`) — cut first if time is tight | Small |
+
+**Skipped / Deferred**
+
+| Step | Feature | Reason |
+|------|---------|--------|
+| — | Item location | Single location, no action needed |
+| — | Volume pricing | Deferred to Phase 4 (`sell.marketing` scope) |
+
+### 2b.10 Edge Function Changes Required
+
+**`ebay-manage-listing` updates:**
+
+| Action | Change | Fields Added |
+|--------|--------|-------------|
+| `create_item` / `update_item` | Accept `packageWeightAndSize` | `{ dimensions, weight, packageType }` |
+| `create_offer` | Accept `bestOfferTerms`, `storeCategoryNames` | `{ bestOfferEnabled, autoAcceptPrice, autoDeclinePrice }`, `["category"]` |
+| `update_offer` | Accept `bestOfferTerms`, `storeCategoryNames` | Same as create_offer |
+
+**No new edge functions needed.** All features use existing `ebay-manage-listing` actions — just need to pass additional fields through.
+
+### 2b.11 Success Criteria
+
+Phase 1b is **done** when:
+
+- [ ] Push/Edit modals show all product gallery images and send full `imageUrls[]` to eBay (up to 24)
+- [ ] Description field uses a rich text editor (Quill) that outputs eBay-safe HTML
+- [ ] "Allow Offers" toggle with auto-accept/auto-decline price fields works on create and edit
+- [ ] Package weight + dimensions can be set per listing and are sent to eBay
+- [ ] Admin can pick shipping/return/payment policies from dropdowns (not hardcoded)
+- [ ] Store category can be assigned to listings
+- [ ] At least one listing has been revised with multiple images + HTML description and verified on eBay
 
 ---
 
@@ -1010,6 +1455,16 @@ Phase 1 (DONE — April 19, 2026)
   ├── ✅ Inventory location "default" created
   ├── ✅ OAuth scopes expanded: sell.account, sell.account.readonly
   └── ✅ First listing test: create → offer → publish → withdraw cycle verified
+
+Phase 1b (NOW — Enhanced Listing Features)
+  ├── Multi-image management (gallery images → imageUrls[])
+  ├── HTML description editor (Quill.js CDN)
+  ├── Best Offer / Allow Offers (bestOfferTerms on offer)
+  ├── Package weight & dimensions (packageWeightAndSize on item)
+  ├── Policy picker (ship/return/payment dropdowns)
+  ├── Store category assignment
+  ├── Volume pricing → deferred to Phase 4 (needs sell.marketing)
+  └── Item location override → skipped (single location)
 
 ── NOW ──────────────────────────────────────────
 

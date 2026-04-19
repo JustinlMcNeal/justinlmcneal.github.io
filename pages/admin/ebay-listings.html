@@ -18,6 +18,8 @@
 
   <link rel="stylesheet" href="/css/theme/base.css">
   <link rel="stylesheet" href="/css/theme/components.css">
+  <link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
+  <script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
 
   <style>
     .custom-scrollbar::-webkit-scrollbar { height: 8px; }
@@ -32,6 +34,13 @@
       button, [role="button"] { min-height: 44px; }
       input, select, textarea { font-size: 16px !important; }
     }
+    .img-strip { display: flex; gap: 6px; overflow-x: auto; padding: 4px 0; }
+    .img-strip .img-thumb { position: relative; width: 60px; height: 60px; border: 2px solid #e5e7eb; border-radius: 6px; overflow: hidden; flex-shrink: 0; cursor: grab; }
+    .img-strip .img-thumb.main { border-color: #ff69b4; }
+    .img-strip .img-thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .img-strip .img-thumb .img-remove { position: absolute; top: -4px; right: -4px; width: 18px; height: 18px; background: #000; color: #fff; border-radius: 50%; font-size: 11px; line-height: 18px; text-align: center; cursor: pointer; z-index: 2; }
+    .ql-container { font-size: 14px; }
+    .ql-editor { min-height: 100px; }
   </style>
 </head>
 
@@ -156,7 +165,14 @@
             <!-- Description -->
             <div>
               <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">Description</label>
-              <textarea id="modalDescription" rows="3" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors"></textarea>
+              <div id="modalDescriptionEditor" style="height:150px;"></div>
+            </div>
+
+            <!-- Images -->
+            <div>
+              <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">Images</label>
+              <div id="modalImageStrip" class="img-strip"></div>
+              <p class="text-[10px] text-gray-400 mt-1">Drag to reorder. First image = main photo. Max 24.</p>
             </div>
 
             <!-- Category Search -->
@@ -256,7 +272,14 @@
             <!-- Description -->
             <div>
               <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">Description</label>
-              <textarea id="editDescription" rows="3" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors"></textarea>
+              <div id="editDescriptionEditor" style="height:150px;"></div>
+            </div>
+
+            <!-- Images -->
+            <div>
+              <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">Images</label>
+              <div id="editImageStrip" class="img-strip"></div>
+              <p class="text-[10px] text-gray-400 mt-1">Drag to reorder. First image = main photo. Max 24.</p>
             </div>
 
             <!-- Item Specifics -->
@@ -397,6 +420,10 @@
     let allProducts = [];
     let currentProduct = null; // product being edited in modal
     let currentAspects = [];   // aspects for current category
+    let pushQuill = null;      // Quill editor for push modal
+    let editQuill = null;      // Quill editor for edit modal
+    let pushImageUrls = [];    // ordered image URLs for push modal
+    let editImageUrls = [];    // ordered image URLs for edit modal
 
     // ── Edge Function Helper ─────────────────────────────
     async function callEdge(fnName, body) {
@@ -416,11 +443,82 @@
       bar.classList.remove("hidden");
     }
 
+    // ── Image Helpers ────────────────────────────────────
+    function buildImageUrls(product) {
+      const urls = [];
+      const seen = new Set();
+      function add(url) { if (url && !seen.has(url)) { seen.add(url); urls.push(url); } }
+      add(product.catalog_image_url);
+      add(product.primary_image_url);
+      add(product.catalog_hover_url);
+      const gallery = (product.product_gallery_images || [])
+        .filter(g => g.is_active)
+        .sort((a, b) => (a.position ?? 999) - (b.position ?? 999));
+      gallery.forEach(g => add(g.url));
+      return urls.slice(0, 24);
+    }
+
+    function renderImageStrip(containerId, urls, stateArr) {
+      const container = document.getElementById(containerId);
+      container.innerHTML = "";
+      urls.forEach((url, i) => {
+        const thumb = document.createElement("div");
+        thumb.className = "img-thumb" + (i === 0 ? " main" : "");
+        thumb.draggable = true;
+        thumb.dataset.idx = i;
+        thumb.innerHTML = `<img src="${esc(url)}" alt="img ${i+1}" /><span class="img-remove">&times;</span>`;
+        thumb.querySelector(".img-remove").addEventListener("click", () => {
+          stateArr.splice(i, 1);
+          renderImageStrip(containerId, stateArr, stateArr);
+        });
+        thumb.addEventListener("dragstart", (e) => { e.dataTransfer.setData("text/plain", String(i)); });
+        thumb.addEventListener("dragover", (e) => { e.preventDefault(); });
+        thumb.addEventListener("drop", (e) => {
+          e.preventDefault();
+          const from = parseInt(e.dataTransfer.getData("text/plain"));
+          const to = i;
+          if (from === to) return;
+          const [moved] = stateArr.splice(from, 1);
+          stateArr.splice(to, 0, moved);
+          renderImageStrip(containerId, stateArr, stateArr);
+        });
+        container.appendChild(thumb);
+      });
+    }
+
+    // ── HTML Sanitizer (eBay-safe) ───────────────────────
+    function sanitizeForEbay(html) {
+      const div = document.createElement("div");
+      div.innerHTML = html;
+      div.querySelectorAll("script,iframe,form,input,link,style,object,embed,applet")
+         .forEach(el => el.remove());
+      div.querySelectorAll("*").forEach(el => {
+        [...el.attributes].forEach(attr => {
+          if (attr.name.startsWith("on")) el.removeAttribute(attr.name);
+        });
+      });
+      return div.innerHTML;
+    }
+
+    function wrapDescription(title, quillHtml) {
+      const clean = sanitizeForEbay(quillHtml);
+      return `<div style="font-family:Arial,sans-serif;max-width:800px;margin:0 auto;"><h2 style="color:#333;">${esc(title)}</h2>${clean}<p style="margin-top:20px;font-size:12px;color:#666;">Thank you for shopping with Karry Kraze! 💕</p></div>`;
+    }
+
+    // ── Quill Toolbar Config ─────────────────────────────
+    const quillToolbar = [
+      ["bold", "italic", "underline"],
+      [{ header: [2, 3, false] }],
+      [{ list: "ordered" }, { list: "bullet" }],
+      [{ color: [] }],
+      ["clean"],
+    ];
+
     // ── Load Products ────────────────────────────────────
     async function loadProducts() {
       const { data, error } = await supabase
         .from("products")
-        .select("id, code, name, price, catalog_image_url, is_active, ebay_sku, ebay_offer_id, ebay_listing_id, ebay_status, ebay_category_id, ebay_price_cents")
+        .select("id, code, name, price, catalog_image_url, catalog_hover_url, primary_image_url, is_active, ebay_sku, ebay_offer_id, ebay_listing_id, ebay_status, ebay_category_id, ebay_price_cents, product_gallery_images(url, position, is_active)")
         .order("code");
 
       if (error) {
@@ -507,7 +605,6 @@
       document.getElementById("modalProductCode").textContent = currentProduct.code;
       document.getElementById("modalSku").value = currentProduct.ebay_sku || currentProduct.code;
       document.getElementById("modalTitle").value = currentProduct.name;
-      document.getElementById("modalDescription").value = "";
       document.getElementById("modalPrice").value = currentProduct.price ? Number(currentProduct.price).toFixed(2) : "";
       document.getElementById("modalQuantity").value = "1";
       document.getElementById("modalCondition").value = "NEW";
@@ -515,6 +612,15 @@
       document.getElementById("modalCatSelect").classList.add("hidden");
       document.getElementById("modalCatSelected").classList.add("hidden");
       document.getElementById("modalStatus").textContent = "";
+
+      // Init Quill (destroy previous if exists)
+      const editorEl = document.getElementById("modalDescriptionEditor");
+      editorEl.innerHTML = "";
+      pushQuill = new Quill(editorEl, { theme: "snow", modules: { toolbar: quillToolbar } });
+
+      // Build image strip
+      pushImageUrls = buildImageUrls(currentProduct);
+      renderImageStrip("modalImageStrip", pushImageUrls, pushImageUrls);
 
       // Reset aspects
       currentAspects = [];
@@ -663,7 +769,7 @@
 
       const sku = document.getElementById("modalSku").value.trim();
       const title = document.getElementById("modalTitle").value.trim();
-      const description = document.getElementById("modalDescription").value.trim();
+      const description = wrapDescription(title, pushQuill.root.innerHTML);
       const condition = document.getElementById("modalCondition").value;
       const quantity = parseInt(document.getElementById("modalQuantity").value) || 1;
 
@@ -680,9 +786,8 @@
       // Collect filled aspects
       const aspects = collectAspects();
 
-      // Build image URLs from product
-      const imageUrls = [];
-      if (currentProduct.catalog_image_url) imageUrls.push(currentProduct.catalog_image_url);
+      // Build image URLs from strip
+      const imageUrls = [...pushImageUrls];
 
       try {
         const result = await callEdge("ebay-manage-listing", {
@@ -815,9 +920,19 @@
 
         // Pre-fill fields
         document.getElementById("editTitle").value = product.title || editProduct.name;
-        document.getElementById("editDescription").value = product.description || "";
         document.getElementById("editCondition").value = item.condition || "NEW";
         document.getElementById("editQuantity").value = item.availability?.shipToLocationAvailability?.quantity ?? 1;
+
+        // Init Quill for edit (destroy previous)
+        const editEditorEl = document.getElementById("editDescriptionEditor");
+        editEditorEl.innerHTML = "";
+        editQuill = new Quill(editEditorEl, { theme: "snow", modules: { toolbar: quillToolbar } });
+        if (product.description) editQuill.root.innerHTML = product.description;
+
+        // Build edit image strip from eBay's current image list or local data
+        const ebayImages = product.imageUrls || [];
+        editImageUrls = ebayImages.length ? [...ebayImages] : buildImageUrls(editProduct);
+        renderImageStrip("editImageStrip", editImageUrls, editImageUrls);
 
         const offerPrice = offer.pricingSummary?.price?.value;
         document.getElementById("editPrice").value = offerPrice
@@ -890,7 +1005,7 @@
 
       const sku = editProduct.ebay_sku || editProduct.code;
       const title = document.getElementById("editTitle").value.trim();
-      const description = document.getElementById("editDescription").value.trim();
+      const description = wrapDescription(title, editQuill.root.innerHTML);
       const condition = document.getElementById("editCondition").value;
       const quantity = parseInt(document.getElementById("editQuantity").value) || 1;
       const price = parseFloat(document.getElementById("editPrice").value) || 0;
@@ -915,7 +1030,7 @@
         if (val) aspects[input.dataset.editAspect] = [val];
       });
 
-      const imageUrls = editProduct.catalog_image_url ? [editProduct.catalog_image_url] : [];
+      const imageUrls = [...editImageUrls];
 
       try {
         // Step 1: Update inventory item
