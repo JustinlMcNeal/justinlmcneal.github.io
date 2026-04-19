@@ -148,7 +148,13 @@ export async function createAsset(asset) {
     .select()
     .single();
   
-  if (error) throw error;
+  if (error) {
+    // Handle unique constraint violation (duplicate image)
+    if (error.code === "23505") {
+      throw new Error("This image is already in the pool.");
+    }
+    throw error;
+  }
   return data;
 }
 

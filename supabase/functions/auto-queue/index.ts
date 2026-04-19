@@ -728,24 +728,50 @@ Deno.serve(async (req) => {
 
     console.log(`[auto-queue] Image pipeline enabled=${pipelineSettings.enabled}, blacklisted=${blacklistRows?.length || 0} images, AI approved=${aiImageRows?.length || 0} images`);
 
+    // ── Helper: resolve storage path to full public URL ──
+    function resolveStorageUrl(path: string): string {
+      if (path.startsWith("http")) return path;
+      // Relative path in the social-media storage bucket
+      return `${supabaseUrl}/storage/v1/object/public/social-media/${path}`;
+    }
+
     // ── Helper: decide if this product should get a carousel post ──
-    // Carousel if product has 3+ approved AI images and platform supports it
+    // Carousel if product has 3+ images from pool OR AI and platform supports it
     function shouldUseCarousel(productId: string, platform: string): {
       isCarousel: boolean;
       carouselUrls: string[];
+      carouselSource: string;
     } {
-      if (platform !== "instagram") return { isCarousel: false, carouselUrls: [] };
+      if (platform !== "instagram") return { isCarousel: false, carouselUrls: [], carouselSource: "" };
+
+      // Priority 1: Image Pool — tagged, curated assets
+      const poolImages = poolMap[productId];
+      if (poolImages && poolImages.length >= 3) {
+        // 50% chance of carousel when enough images available (variety of post types)
+        if (Math.random() > 0.5) return { isCarousel: false, carouselUrls: [], carouselSource: "" };
+        const shuffled = [...poolImages].sort(() => Math.random() - 0.5);
+        const carouselCount = Math.min(shuffled.length, Math.floor(Math.random() * 3) + 3); // 3-5
+        return {
+          isCarousel: true,
+          carouselUrls: shuffled.slice(0, carouselCount).map((img: any) => resolveStorageUrl(img.original_image_path)),
+          carouselSource: "image_pool",
+        };
+      }
+
+      // Priority 2: AI-generated images
       const aiImages = aiImageMap[productId];
-      if (!aiImages || aiImages.length < 3) return { isCarousel: false, carouselUrls: [] };
-      // 50% chance of carousel when enough images available (variety of post types)
-      if (Math.random() > 0.5) return { isCarousel: false, carouselUrls: [] };
-      // Pick 3-5 images for the carousel
-      const shuffled = [...aiImages].sort(() => Math.random() - 0.5);
-      const carouselCount = Math.min(shuffled.length, Math.floor(Math.random() * 3) + 3); // 3-5
-      return {
-        isCarousel: true,
-        carouselUrls: shuffled.slice(0, carouselCount).map((img: any) => img.public_url),
-      };
+      if (aiImages && aiImages.length >= 3) {
+        if (Math.random() > 0.5) return { isCarousel: false, carouselUrls: [], carouselSource: "" };
+        const shuffled = [...aiImages].sort(() => Math.random() - 0.5);
+        const carouselCount = Math.min(shuffled.length, Math.floor(Math.random() * 3) + 3);
+        return {
+          isCarousel: true,
+          carouselUrls: shuffled.slice(0, carouselCount).map((img: any) => img.public_url),
+          carouselSource: "ai_carousel",
+        };
+      }
+
+      return { isCarousel: false, carouselUrls: [], carouselSource: "" };
     }
 
     // ── Helper: resolve best image for a product ──
@@ -764,7 +790,7 @@ Deno.serve(async (req) => {
         // Already sorted by used_count ASC, last_used_at ASC NULLS FIRST
         const pick = poolImages[0];
         return {
-          imageUrl: pick.original_image_path,
+          imageUrl: resolveStorageUrl(pick.original_image_path),
           imageSource: "image_pool",
           generatedImageId: null,
           needsGeneration: false,
@@ -1010,7 +1036,7 @@ Deno.serve(async (req) => {
             );
             if (alternative) {
               console.log(`[auto-queue] Diversity guard: swapped ${chosenAsset.shot_type} → ${alternative.shot_type} for "${product.name}"`);
-              imageResult.imageUrl = alternative.original_image_path;
+              imageResult.imageUrl = resolveStorageUrl(alternative.original_image_path);
               imageResult.poolAssetId = alternative.id;
             }
           }
@@ -1075,7 +1101,7 @@ Deno.serve(async (req) => {
           product_slug: product.slug,
           catalog_image_url: product.catalog_image_url,
           resolved_image_url: imageResult.imageUrl,
-          image_source: carouselResult.isCarousel ? "ai_carousel" : imageResult.imageSource,
+          image_source: carouselResult.isCarousel ? carouselResult.carouselSource : imageResult.imageSource,
           generated_image_id: imageResult.generatedImageId,
           pool_asset_id: imageResult.poolAssetId,
           needs_generation: imageResult.needsGeneration,
