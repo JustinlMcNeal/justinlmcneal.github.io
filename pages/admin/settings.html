@@ -377,6 +377,10 @@
                 class="bg-black text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-kkpink hover:text-black transition-all">
                 🔄 Sync Orders
               </button>
+              <button id="btnSyncEbayFinances" type="button"
+                class="bg-black text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-kkpink hover:text-black transition-all">
+                💰 Sync Finances
+              </button>
               <button id="btnRefreshEbayToken" type="button"
                 class="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-gray-100 transition-all">
                 🔑 Refresh Token
@@ -829,6 +833,34 @@
         }
       } catch (e) { status.textContent = "❌ Error: " + e.message; }
       finally { btn.disabled = false; btn.textContent = "🔄 Sync Orders"; }
+    });
+
+    // Sync Finances button
+    document.getElementById("btnSyncEbayFinances")?.addEventListener("click", async () => {
+      const btn = document.getElementById("btnSyncEbayFinances");
+      const status = document.getElementById("ebaySyncStatus");
+      btn.disabled = true;
+      btn.textContent = "Syncing...";
+      status.textContent = "Pulling financial transactions from eBay...";
+
+      try {
+        const resp = await fetch(`${SUPABASE_URL}/functions/v1/ebay-sync-finances`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ days_back: 90 }),
+        });
+        const data = await resp.json();
+        if (data.success) {
+          const parts = [];
+          if (data.fee_months_inserted) parts.push(`${data.fee_months_inserted} fee months`);
+          if (data.non_sale_charges_inserted) parts.push(`${data.non_sale_charges_inserted} charges`);
+          if (data.label_costs_updated) parts.push(`${data.label_costs_updated} label costs`);
+          status.textContent = `✅ ${data.transactions_processed} transactions processed` + (parts.length ? ` — ${parts.join(", ")}` : "");
+        } else {
+          status.textContent = "❌ " + (data.error || "Sync failed");
+        }
+      } catch (e) { status.textContent = "❌ Error: " + e.message; }
+      finally { btn.disabled = false; btn.textContent = "💰 Sync Finances"; }
     });
 
     // Refresh Token button

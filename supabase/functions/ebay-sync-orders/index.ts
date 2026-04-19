@@ -1,4 +1,5 @@
 // ebay-sync-orders — Pull eBay orders via Fulfillment API, upsert to orders_raw + line_items_raw
+// Now includes: product matching (fuzzy title → KK code), fulfillment/tracking capture
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -11,6 +12,59 @@ const corsHeaders = {
 };
 
 const EBAY_API = "https://api.ebay.com";
+
+// ── Product matching (ported from ebayImport.js) ────────────────
+
+interface KKProduct {
+  code: string;
+  name: string;
+}
+
+/** Normalize string for fuzzy matching — lowercase, strip punctuation, collapse whitespace */
+function norm(s: string): string {
+  return (s || "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+/** Crude stemmer: strip common English suffixes */
+function stem(w: string): string {
+  return w.replace(/ies$/, "y").replace(/es$/, "").replace(/s$/, "");
+}
+
+/**
+ * Match an eBay item title to a KK product.
+ * Strategy: exact → bracket-strip → substring → token-overlap (≥2 shared roots)
+ */
+function matchProduct(ebayTitle: string, products: KKProduct[]): string | null {
+  const t = norm(ebayTitle);
+  if (!t) return null;
+
+  const tNoBrackets = norm((ebayTitle || "").replace(/\[[^\]]*\]/g, ""));
+
+  // Pass 1 — exact
+  for (const p of products) {
+    const n = norm(p.name);
+    if (n === t || n === tNoBrackets) return p.code;
+  }
+
+  // Pass 2 — substring
+  for (const p of products) {
+    const n = norm(p.name);
+    if (t.includes(n) || n.includes(t)) return p.code;
+    if (tNoBrackets && (tNoBrackets.includes(n) || n.includes(tNoBrackets))) return p.code;
+  }
+
+  // Pass 3 — token overlap with stemming (≥2 shared tokens)
+  const tTokens = new Set(t.split(" ").filter(w => w.length > 2).map(stem));
+  let bestCode: string | null = null;
+  let bestScore = 1;
+  for (const p of products) {
+    const pTokens = norm(p.name).split(" ").filter(w => w.length > 2).map(stem);
+    let score = 0;
+    for (const w of pTokens) if (tTokens.has(w)) score++;
+    if (score > bestScore) { bestScore = score; bestCode = p.code; }
+  }
+  return bestCode;
+}
 
 /** Ensure we have a valid access token, refreshing if expired */
 async function getAccessToken(supabase: ReturnType<typeof createClient>): Promise<string> {
@@ -117,6 +171,24 @@ function toCents(amount: string | number | undefined): number {
   return Math.round(parseFloat(String(amount)) * 100);
 }
 
+/** Fetch shipping fulfillments (tracking) for a specific order */
+async function fetchOrderFulfillments(
+  accessToken: string,
+  orderId: string
+): Promise<Record<string, unknown>[]> {
+  try {
+    const url = `${EBAY_API}/sell/fulfillment/v1/order/${orderId}/shipping_fulfillment`;
+    const resp = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    return (data.fulfillments || []) as Record<string, unknown>[];
+  } catch {
+    return [];
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -144,8 +216,17 @@ serve(async (req) => {
       );
     }
 
+    // Load all products for fuzzy matching
+    const { data: allProducts } = await supabase
+      .from("products")
+      .select("code, name");
+    const products: KKProduct[] = (allProducts || []) as KKProduct[];
+    console.log(`[ebay-sync] Loaded ${products.length} products for matching`);
+
     let synced = 0;
     let skipped = 0;
+    let matched = 0;
+    let unmatched = 0;
 
     for (const order of ebayOrders as Record<string, unknown>[]) {
       const orderId = order.orderId as string;
@@ -214,13 +295,29 @@ serve(async (req) => {
         continue;
       }
 
-      // Insert line items
+      // Insert line items WITH product matching
       const lineItems = (order.lineItems as Record<string, unknown>[]) || [];
       for (const item of lineItems) {
+        const ebayTitle = (item.title as string) || "Unknown";
+        const productCode = matchProduct(ebayTitle, products);
+        if (productCode) {
+          matched++;
+          console.log(`[ebay-sync] Matched "${ebayTitle}" → ${productCode}`);
+        } else {
+          unmatched++;
+          console.log(`[ebay-sync] Unmatched: "${ebayTitle}"`);
+        }
+
+        // Use the matched product's canonical name if found
+        const matchedProduct = productCode
+          ? products.find(p => p.code === productCode)
+          : null;
+
         const lineItemRow = {
           stripe_checkout_session_id: sessionId,
           stripe_line_item_id: `ebay_li_${item.lineItemId}`,
-          product_name: (item.title as string) || "Unknown",
+          product_id: productCode || null,
+          product_name: matchedProduct?.name || ebayTitle,
           variant: (item.legacyVariationId as string) || null,
           quantity: (item.quantity as number) || 1,
           unit_price_cents: toCents((item.lineItemCost as Record<string, unknown>)?.value as string),
@@ -240,13 +337,65 @@ serve(async (req) => {
         }
       }
 
+      // Extract fulfillment/tracking data from eBay order
+      const orderFulfillmentStatus = order.orderFulfillmentStatus as string || "";
+
+      // Map eBay fulfillment status → our label_status
+      let labelStatus = "pending";
+      if (orderFulfillmentStatus === "FULFILLED") labelStatus = "shipped";
+      else if (orderFulfillmentStatus === "IN_PROGRESS") labelStatus = "label_purchased";
+
+      // Fetch actual tracking info from eBay shipping fulfillments endpoint
+      let carrier: string | null = "eBay";
+      let service: string | null = "eBay Shipping";
+      let trackingNumber: string | null = null;
+      let shippedAt: string | null = null;
+
+      if (orderFulfillmentStatus === "FULFILLED" || orderFulfillmentStatus === "IN_PROGRESS") {
+        const fulfillments = await fetchOrderFulfillments(accessToken, orderId);
+        if (fulfillments.length > 0) {
+          const ff = fulfillments[0];
+          const shipmentItems = (ff.shipmentTrackingNumber as string) || null;
+          trackingNumber = shipmentItems;
+          carrier = (ff.shippingCarrierCode as string) || "eBay";
+          shippedAt = (ff.shippedDate as string) || null;
+          console.log(`[ebay-sync] Tracking for ${orderId}: ${carrier} ${trackingNumber}`);
+        }
+      }
+
+      // Build fulfillment_shipments row
+      const shipmentRow: Record<string, unknown> = {
+        stripe_checkout_session_id: sessionId,
+        kk_order_id: `EBAY-${orderId}`,
+        label_status: labelStatus,
+        label_cost_cents: 0, // Handled by Finances API sync
+        carrier,
+        service,
+        tracking_number: trackingNumber,
+        notes: `eBay order ${orderId}, fulfillment status: ${orderFulfillmentStatus || "UNKNOWN"}`,
+      };
+
+      if (shippedAt) {
+        shipmentRow.shipped_at = shippedAt;
+      } else if (labelStatus === "shipped") {
+        shipmentRow.shipped_at = order.creationDate as string;
+      }
+
+      const { error: shipErr } = await supabase
+        .from("fulfillment_shipments")
+        .upsert(shipmentRow, { onConflict: "stripe_checkout_session_id" });
+
+      if (shipErr) {
+        console.error(`[ebay-sync] Shipment upsert error for ${orderId}:`, shipErr.message);
+      }
+
       synced++;
     }
 
-    console.log(`[ebay-sync] Done: synced=${synced}, skipped=${skipped}`);
+    console.log(`[ebay-sync] Done: synced=${synced}, skipped=${skipped}, matched=${matched}, unmatched=${unmatched}`);
 
     return new Response(
-      JSON.stringify({ success: true, synced, skipped, total: ebayOrders.length }),
+      JSON.stringify({ success: true, synced, skipped, matched, unmatched, total: ebayOrders.length }),
       { headers: corsHeaders }
     );
   } catch (err: unknown) {

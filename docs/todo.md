@@ -777,10 +777,71 @@
 
   </details>
 
-- [ ] **OAuth + listing management** — connect eBay seller account, manage listings from admin
-- [ ] **Order sync to admin panel** — automated daily order pull via Fulfillment API
+- [x] **OAuth + listing management** — eBay seller account connected via OAuth on admin settings page. RuName: `Justin_Mcneal-JustinMc-KarryK-ipqfyelqa`. Marketplace deletion endpoint live. Tokens stored in `marketplace_tokens` table.
+- [x] **Order sync to admin panel** — `ebay-sync-orders` edge function pulls via Fulfillment API, cron runs every 2 hours (`0 */2 * * *`), deduplicates against CSV imports. 4 orders synced on first run. Now includes product matching + fulfillment tracking capture.
+
+  <details>
+  <summary><strong>Product Matching Fix (implemented)</strong></summary>
+
+  **Problem:** eBay API orders stored `product_name` from eBay's SEO-stuffed titles (e.g. "Cherry Bag Charm Keychain Red Glitter Pearl Heart Gold Tone Purse Charm") but left `product_id` null → CPI = $0, profit inflated, no product images on order detail page.
+
+  **Solution:** Ported the `matchProduct()` fuzzy matching algorithm from `ebayImport.js` into the `ebay-sync-orders` edge function (Deno/TypeScript). Runs at insert time for every new order.
+
+  #### Matching Strategy (in order):
+  1. **Exact normalized match** — `norm(ebayTitle) === norm(productName)`
+  2. **Strip bracket text** — `"Mini Tote[Pink]"` → `"mini tote"`, re-check exact
+  3. **Substring** — product name contained in eBay title or vice-versa
+  4. **Token-overlap with stemming** — stems words (`bunnies`→`bunny`), picks product with most shared root words (≥2 required)
+
+  #### Additional Fixes:
+  - Loads all products from `products` table at sync start
+  - Sets `product_id` to matched KK code (e.g. `KK-0013`)
+  - Uses canonical product name instead of eBay title when matched
+  - Creates `fulfillment_shipments` row per order with status mapping:
+    - `FULFILLED` → `shipped`, `IN_PROGRESS` → `label_purchased`, else → `pending`
+  - Fetches actual tracking data from `GET /sell/fulfillment/v1/order/{orderId}/shipping_fulfillment`
+  - Backfilled all 4 existing API orders: Cherry Bag Charm, Heart Clasp Hook, Cherry Necklace, Plush Flower Bouquet
+  </details>
+
+- [x] **Financial transaction sync** — `ebay-sync-finances` edge function pulls fees, shipping labels, and charges from eBay Finances API. Cron runs daily at 6 AM UTC (job #14).
+
+  <details>
+  <summary><strong>Financial Sync Implementation</strong></summary>
+
+  **Edge function:** `ebay-sync-finances` → `GET https://apiz.ebay.com/sell/finances/v1/transaction`
+
+  #### What it syncs:
+  | Transaction Type | Action | Where |
+  |-----------------|--------|-------|
+  | `SALE` | Aggregates marketplace fees (FVF, fixed per-order) per month | `expenses` table — category "Fees", monthly rows |
+  | `NON_SALE_CHARGE` | Inserts individual charges (subscriptions, ad fees) | `expenses` table — category "Software" |
+  | `SHIPPING_LABEL` | Updates label cost per order | `fulfillment_shipments.label_cost_cents` |
+  | `REFUND`, `CREDIT` | Informational — refund tracking handled elsewhere | — |
+
+  #### Deduplication:
+  - Monthly fees: `notes ILIKE '%ebay_api_selling_fees_YYYY-MM%'`
+  - Non-sale charges: `notes ILIKE '%ebay_api_fee_{transactionId}%'`
+  - Label costs: Only updates if `label_cost_cents` is 0 or null
+
+  #### Admin UI:
+  - "💰 Sync Finances" button on admin settings page → pulls last 90 days
+  - Shows: transactions processed, fee months inserted, charges inserted, label costs updated
+
+  #### CRON:
+  ```sql
+  cron.schedule('ebay-sync-finances-daily', '0 6 * * *', ...)
+  -- days_back: 30 (daily overlap for dedup safety)
+  ```
+
+  #### First run results (90 days):
+  - 22 transactions processed
+  - 3 monthly fee aggregates (Feb–Apr 2026)
+  - 3 subscription charges ($4.95/month eBay store fees)
+  - 5 shipping label costs updated on fulfillment_shipments
+  </details>
+
 - [ ] **Inventory sync across platforms** — unified stock levels (website ↔ eBay ↔ Amazon)
-- [ ] **Financial transaction sync** — automated fee/payout data via Finances API (replaces CSV import)
+- [ ] **Listing management from admin** — create/edit eBay listings from admin panel (Inventory API)
 
 ---
 
