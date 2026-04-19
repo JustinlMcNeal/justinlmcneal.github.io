@@ -3,7 +3,7 @@
 // Caching strategy: Network-first for pages, Cache-first for assets
 // ─────────────────────────────────────────────────────────
 
-const CACHE_VERSION = 'kk-v5';
+const CACHE_VERSION = 'kk-v6';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const DYNAMIC_CACHE = `${CACHE_VERSION}-dynamic`;
 const IMAGE_CACHE = `${CACHE_VERSION}-images`;
@@ -94,9 +94,13 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // CSS/JS: stale-while-revalidate
+  // CSS/JS: admin JS uses network-first, rest stale-while-revalidate
   if (url.pathname.endsWith('.css') || url.pathname.endsWith('.js')) {
-    event.respondWith(staleWhileRevalidate(request, DYNAMIC_CACHE, MAX_DYNAMIC));
+    if (url.pathname.includes('/admin/') || url.pathname.includes('/shared/')) {
+      event.respondWith(networkFirst(request));
+    } else {
+      event.respondWith(staleWhileRevalidate(request, DYNAMIC_CACHE, MAX_DYNAMIC));
+    }
     return;
   }
 
