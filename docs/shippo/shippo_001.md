@@ -407,7 +407,7 @@ Shippo may resend the same tracking event (retries, duplicate deliveries). The `
 | Trigger SMS on delivery | ✅ | "Your order has been delivered!" + review link |
 | Trigger review request | ✅ | Calls `send-review-request` edge function on DELIVERED status |
 | Show tracking on my-orders | ✅ | Status badges on order cards + tracking section in detail view with "Track Package" link |
-| Pirate Ship cleanup script | ❌ | Not yet done — can do as one-time script when ready |
+| Pirate Ship cleanup script | ✅ Done | One-time script `cleanup-stale-shipments.mjs`: marked 12 orders shipped >30 days ago as delivered, 2 skipped (<30 days) |
 
 #### Phase 2 Implementation Details
 

@@ -128,7 +128,7 @@
 
   </details>
 
-- [ ] **Implement Shippo** into the order fulfillment system
+- [x] **Implement Shippo** into the order fulfillment system — Phases 0-2 complete (label buying, tracking webhooks, SMS notifications). See [`docs/shippo/shippo_001.md`](shippo/shippo_001.md). Phase 3 (batch labels) next.
 - [x] **Fix eBay & Amazon order imports** — correct data mapping with SKU_MAP; variant extraction working
 
 ---
@@ -491,7 +491,7 @@
 - [x] **Close learning loop (Sprint 3.5)** — persist deep analysis, automate learning aggregation in autopilot, track `autopilot_last_run`
 
 ### Sprint 4: Smart Features
-- [ ] **Smart carousel assembly** — AI auto-picks 3-5 images with diverse `shot_type` tags from Image Pool (manual carousel builder exists, but no auto-assembly)
+- [x] **Smart carousel assembly** — `shouldUseCarousel()` now checks Image Pool first (3+ images → 50% chance), then AI images; `resolveStorageUrl()` converts relative paths to full public URLs; diversity guard ensures shot type variety
 - [x] **Analytics polish** — learning insights dashboard built in `analytics.js` with engagement metrics, time charts, tone charts
 - [ ] **v2 tagging** — add mood + platform preference tags if data validates v1 approach (current: shot_type + quality_score only)
 
@@ -514,6 +514,10 @@
 #### Infrastructure Fixes
 - [x] **Cloudflare 503 caching** — cache rule (no-cache on 500-503), SW v4 pre-cache + retry — `3040847`, `8d96e5d`
 - [x] **Autopilot pipeline fix** — verify_jwt=false for auto-queue/autopilot-fill, image_source constraint (added ai_carousel/resurface/image_pool), error diagnostics — `b55c93c`
+- [x] **Image pool duplicate cleanup** — 30 duplicate `social_assets` entries soft-deleted, unique partial index `uq_social_assets_active_path` on `(original_image_path) WHERE is_active = true`, `createAsset()` handles constraint error 23505 — `09e4a4b`
+- [x] **Relative storage URL fix** — `process-scheduled-posts` and `auto-queue` now resolve relative `originals/...` paths to full public Supabase URLs; fixed Instagram Graph API error "Only photo or video can be accepted as media type" — `a7dd43f`
+- [x] **Calendar carousel indicator** — post pills show 🎠 badge + [CAROUSEL] tooltip for carousel posts — `a7dd43f`
+- [x] **Autopilot over-posting fix** — auto-queue deficit calculation doesn't enforce per-day limits; manually rebalanced Sunday (4→2 posts) and moved extras to Monday — `a7dd43f`
 
 #### Observation Window (April 18 – April 25+)
 - [ ] **7-day observation** — no logic changes, let data accumulate

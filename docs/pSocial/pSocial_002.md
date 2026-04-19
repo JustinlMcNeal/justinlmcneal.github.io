@@ -65,6 +65,18 @@ After shipping Phase 1, let autopilot run **7-14 days untouched**, then check:
 | 1B — AI Captions + Learning Trigger | ✅ SHIPPED | `838cb72` | AI captions via ai-generate, template fallback, caption_source tracking, insights triggers learning aggregation |
 | 1C — UTM + Comment KK + Meta Pixel | ✅ SHIPPED | `bbea7f2`, `995db2c` | UTM params on all link_urls, "Comment KK" removed, Meta Pixel installed on all 14 public pages with ViewContent/AddToCart/InitiateCheckout/Purchase events |
 
+### Infrastructure Fixes Applied (April 18, 2026)
+
+**Image Pool Duplicates**: Found 30 duplicate entries across 6 groups in `social_assets`. Soft-deleted via `is_active=false`. Added unique partial index `uq_social_assets_active_path ON social_assets(original_image_path) WHERE is_active = true`. `createAsset()` in admin API now catches constraint violation error 23505 with user-friendly message.
+
+**Carousel Not Using Image Pool**: `shouldUseCarousel()` only checked AI images — now checks pool images first (priority 1, needs 3+ images) then AI images (priority 2). Added `resolveStorageUrl()` helper to convert relative `originals/...` paths to full public URLs.
+
+**Instagram Post Failures (Relative URLs)**: Posts with `image_url` = `originals/2026/01/...` (relative storage path) failed with `"Only photo or video can be accepted as media type."` because Instagram Graph API can't fetch relative paths. Fixed in both `process-scheduled-posts` (single image + carousel array) and `auto-queue` (resolveImage + diversity guard).
+
+**Calendar UI**: Added 🎠 carousel badge icon to post pills and `[CAROUSEL]` prefix in tooltip.
+
+**Over-Posting Bug**: Auto-queue deficit calculation checks total posts across `days_ahead` window, not per-day limits. This caused 4 posts on one Sunday instead of 2. Manually rebalanced queue.
+
 ### Known Issue: Category Labels in hashtag_performance
 **Discovered during Phase 1A testing.** All hashtags in `hashtag_performance` have `category = "general"` — none have product-category labels (e.g., "bags", "headwear"). This means `topHashtagsByCategory` is always empty and category-biased hashtag selection is a no-op. The merge still works (general tags fill correctly), but category relevance will improve once `runLearningAggregation` writes proper category labels. **Fix after observation window.**
 

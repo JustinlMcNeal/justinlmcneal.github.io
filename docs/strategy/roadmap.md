@@ -87,7 +87,7 @@ Zero social media presence → zero website traffic → minimal sales. Content c
 - [x] Pipeline settings: model, quality, max daily, style presets, require review toggle
 - [x] Category-aware prompts for all 6 product categories (accessories, headwear, bags, jewelry, plushies, lego)
 - [x] Carousel image sets — generates 3-5 images with shared `carousel_set_id`, locked camera style for visual coherence, narrative composition flow (wide → hero → angled → close-up → held)
-- [x] Auto-queue carousel support — `shouldUseCarousel()` triggers 50% of the time when product has 3+ approved AI images on Instagram
+- [x] Auto-queue carousel support — `shouldUseCarousel()` checks Image Pool first (3+ images → 50% chance), then AI images (3+ → 50% chance). `resolveStorageUrl()` converts relative storage paths to full public URLs for Instagram Graph API. Calendar shows 🎠 badge on carousel posts.
 - [x] Supplier image auto-import (`import-product-images` edge function) — downloads external URLs to Supabase Storage, dedup, auto-updates product records. Auto-fires on product save.
 - [x] DB migration: `carousel_set_id` on `social_generated_images`, `imported_product_images` table
 - [~] Text/price overlay generator for promo posts — deferred (low priority)
@@ -184,6 +184,11 @@ Product in DB
 | `generate-social-image` | AI image generation (gpt-image-1 img2img + quality scoring + carousel sets) |
 | `import-product-images` | Download external supplier images to Supabase Storage |
 | `send-push-notification` | Send web push notifications to subscribed browsers |
+| `shippo-create-label` | Buy shipping label for one order via Shippo |
+| `shippo-void-label` | Void/refund unused shipping label |
+| `shippo-webhook` | Receive Shippo tracking updates (PRE_TRANSIT/TRANSIT/DELIVERED) |
+| `send-review-request` | Send SMS review request on delivery |
+| `lookup-orders` | Customer order lookup (returns shipment tracking) |
 
 ### Active CRON Jobs (pg_cron)
 | Job | Schedule | Function |
