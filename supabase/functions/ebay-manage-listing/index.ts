@@ -389,6 +389,7 @@ serve(async (req) => {
     // ── GET FULFILLMENT/RETURN/PAYMENT POLICIES ─────────────
     if (action === "get_policies") {
       const results: Record<string, unknown> = {};
+      const errors: Record<string, unknown> = {};
 
       for (const type of ["fulfillment_policy", "return_policy", "payment_policy"]) {
         const resp = await ebayFetch(
@@ -398,11 +399,84 @@ serve(async (req) => {
         );
         if (resp.ok) {
           results[type] = resp.data;
+        } else {
+          errors[type] = { status: resp.status, data: resp.data };
         }
       }
 
       return new Response(
-        JSON.stringify({ success: true, policies: results }),
+        JSON.stringify({ success: true, policies: results, ...(Object.keys(errors).length ? { errors } : {}) }),
+        { headers: corsHeaders }
+      );
+    }
+
+    // ── OPT IN TO BUSINESS POLICIES ────────────────────────
+    if (action === "opt_in_policies") {
+      const result = await ebayFetch(
+        accessToken,
+        "POST",
+        `${ACCT_API}/program/opt_in`,
+        { programType: "SELLING_POLICY_MANAGEMENT" }
+      );
+      return new Response(
+        JSON.stringify({ success: result.ok, status: result.status, data: result.data }),
+        { headers: corsHeaders }
+      );
+    }
+
+    // ── CREATE DEFAULT BUSINESS POLICIES ─────────────────────
+    if (action === "create_default_policies") {
+      const created: Record<string, unknown> = {};
+      const errs: Record<string, unknown> = {};
+
+      // 1. Fulfillment policy — Economy Shipping via USPS, 1-3 day handling
+      const fulfillment = await ebayFetch(accessToken, "POST", `${ACCT_API}/fulfillment_policy`, {
+        name: "Standard Shipping",
+        description: "Economy shipping via USPS, 1-3 business day handling",
+        marketplaceId: "EBAY_US",
+        handlingTime: { value: 3, unit: "DAY" },
+        shippingOptions: [{
+          optionType: "DOMESTIC",
+          costType: "FLAT_RATE",
+          shippingServices: [{
+            shippingServiceCode: "USPSFirstClass",
+            shippingCost: { value: "0.00", currency: "USD" },
+            additionalShippingCost: { value: "0.00", currency: "USD" },
+            freeShipping: true,
+            sortOrder: 1,
+            buyerResponsibleForShipping: false,
+          }],
+        }],
+      });
+      if (fulfillment.ok) created.fulfillment = fulfillment.data;
+      else errs.fulfillment = { status: fulfillment.status, data: fulfillment.data };
+
+      // 2. Return policy — 30-day returns, buyer pays return shipping
+      const returns = await ebayFetch(accessToken, "POST", `${ACCT_API}/return_policy`, {
+        name: "30-Day Returns",
+        description: "30-day returns accepted, buyer pays return shipping",
+        marketplaceId: "EBAY_US",
+        returnsAccepted: true,
+        returnPeriod: { value: 30, unit: "DAY" },
+        returnShippingCostPayer: "BUYER",
+        refundMethod: "MONEY_BACK",
+      });
+      if (returns.ok) created.returns = returns.data;
+      else errs.returns = { status: returns.status, data: returns.data };
+
+      // 3. Payment policy — immediate payment (eBay managed payments)
+      const payment = await ebayFetch(accessToken, "POST", `${ACCT_API}/payment_policy`, {
+        name: "Immediate Payment",
+        description: "Immediate payment required",
+        marketplaceId: "EBAY_US",
+        categoryTypes: [{ name: "ALL_EXCLUDING_MOTORS_VEHICLES" }],
+        immediatePay: true,
+      });
+      if (payment.ok) created.payment = payment.data;
+      else errs.payment = { status: payment.status, data: payment.data };
+
+      return new Response(
+        JSON.stringify({ success: Object.keys(errs).length === 0, created, ...(Object.keys(errs).length ? { errors: errs } : {}) }),
         { headers: corsHeaders }
       );
     }
