@@ -6,8 +6,8 @@ All project documentation lives here. Organized by category.
 
 | Category | Doc | Description |
 |----------|-----|-------------|
-| Strategy | [Roadmap](strategy/roadmap.md) | Master improvement plan — phases, priorities, action items |
+| Master TODO | [todo.md](todo.md) | All tasks, progress tracking, implementation plans, architecture reference |
 
 ---
 
-*Last updated: March 15, 2026*
+*Last updated: April 18, 2026*
