@@ -569,6 +569,11 @@
     let pushDescMode = "visual"; // "visual" or "html"
     let editDescMode = "visual";
 
+    // Detect if HTML is too complex for Quill (styled divs, grids, etc.)
+    function isComplexHtml(html) {
+      return /<div\s[^>]*style\s*=/i.test(html) || /<table/i.test(html);
+    }
+
     function toggleDescMode(mode, prefix, quillInstance) {
       // Quill transforms the editor div into .ql-container and inserts .ql-toolbar before it
       const qlContainer = document.getElementById(`${prefix}DescriptionEditor`);
@@ -578,8 +583,8 @@
       const btnHtml = document.getElementById(`btn${prefix === "modal" ? "Push" : "Edit"}Html`);
 
       if (mode === "html") {
-        // Sync Quill content to textarea
-        if (quillInstance) {
+        // Sync Quill content to textarea (only if textarea is empty — don't overwrite user HTML)
+        if (quillInstance && !textarea.value.trim()) {
           const html = quillInstance.root.innerHTML;
           textarea.value = html === "<p><br></p>" ? "" : html;
         }
@@ -589,8 +594,11 @@
         btnVisual.classList.remove("active");
         btnHtml.classList.add("active");
       } else {
-        // Sync textarea content back to Quill
-        if (quillInstance && textarea.value.trim()) quillInstance.root.innerHTML = textarea.value;
+        // Only sync simple HTML back into Quill — complex HTML would crash it
+        const val = textarea.value.trim();
+        if (quillInstance && val && !isComplexHtml(val)) {
+          quillInstance.root.innerHTML = val;
+        }
         qlContainer.style.display = "";
         if (qlToolbar?.classList?.contains("ql-toolbar")) qlToolbar.style.display = "";
         textarea.classList.add("hidden");
@@ -1044,13 +1052,26 @@
         const editEditorEl = document.getElementById("editDescriptionEditor");
         editEditorEl.innerHTML = "";
         editQuill = new Quill(editEditorEl, { theme: "snow", modules: { toolbar: quillToolbar } });
-        if (product.description) editQuill.root.innerHTML = product.description;
-        // Reset description mode to visual
-        editDescMode = "visual";
-        document.getElementById("editDescriptionHtml").value = "";
-        document.getElementById("editDescriptionHtml").classList.add("hidden");
-        document.getElementById("btnEditVisual").classList.add("active");
-        document.getElementById("btnEditHtml").classList.remove("active");
+
+        // Detect complex HTML → start in HTML mode; simple → load into Quill
+        const existingDesc = product.description || "";
+        if (existingDesc && isComplexHtml(existingDesc)) {
+          editDescMode = "html";
+          document.getElementById("editDescriptionHtml").value = existingDesc;
+          document.getElementById("editDescriptionHtml").classList.remove("hidden");
+          editEditorEl.style.display = "none";
+          const tb = editEditorEl.previousElementSibling;
+          if (tb?.classList?.contains("ql-toolbar")) tb.style.display = "none";
+          document.getElementById("btnEditVisual").classList.remove("active");
+          document.getElementById("btnEditHtml").classList.add("active");
+        } else {
+          if (existingDesc) editQuill.root.innerHTML = existingDesc;
+          editDescMode = "visual";
+          document.getElementById("editDescriptionHtml").value = "";
+          document.getElementById("editDescriptionHtml").classList.add("hidden");
+          document.getElementById("btnEditVisual").classList.add("active");
+          document.getElementById("btnEditHtml").classList.remove("active");
+        }
 
         // Build edit image strip from eBay's current image list or local data
         const ebayImages = product.imageUrls || [];
