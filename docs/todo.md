@@ -539,6 +539,13 @@
 - [x] **Abandoned cart CRON** — `sms-abandoned-cart-check` runs every 5 minutes, detects incomplete carts, sends SMS via Twilio
 - [x] **Coupon reminder CRON** — `sms-coupon-reminder` runs hourly at :30, sends reminders during 9 AM–9 PM ET window
 - [x] **Welcome series CRON** — `sms-welcome-series` runs hourly at :45, sends Day 2 + Day 5 onboarding SMS
+- [ ] **Order shipped SMS + package insert QR code** — when an order ships, send SMS: "Hey {name}, your order is on the way! Track it here: {tracking_url} — We left a little something special in your package 💜". The "something special" is a **package insert card** with a QR code linking to `leave-review.html?token={signed_token}`. QR code is unique per order, tracks scans for conversion metrics.
+  - SMS trigger: `shippo-webhook` on TRANSIT status → send via Twilio (reuse `send-sms` edge function)
+  - QR code generation: edge function generates QR code image (PNG) with embedded review token URL
+  - QR tracking: `package_insert_qr` table — `id`, `order_session_id`, `product_id`, `qr_url`, `token_hash`, `created_at`, `scanned_at`, `reviewed_at`, `scan_count` — tracks scan → review funnel
+  - Package insert design: printable card template (PDF or HTML) with QR code, brand logo, review CTA text
+  - Metrics dashboard: admin view showing QR scan rate, scan → review conversion, most-scanned products
+  - Reuses existing `REVIEW_TOKEN_SECRET` JWT signing from review request system
 - [ ] **Email notifications** — no email provider integrated yet (Resend.com or SendGrid). Currently SMS + push only *(on hold — revisit later)*
 
   <details>
@@ -695,10 +702,10 @@
 - [ ] **Price alerts** — notify when competitor prices drop below threshold
 
 ### eBay API
-> **Status:** � Pending — Developer Program registered (April 18, 2026), account pending approval (at least 1 business day). Currently CSV import only.
+> **Status:** 🟢 Approved — Developer Program account approved (April 19, 2026). Ready to implement OAuth + API integration.
 
 - [x] **CSV order import** — `import-legacy-orders.mjs` parses eBay Transaction Report CSVs, admin drag-and-drop UI, fee/shipping/selling breakdown modal
-- [x] **Register for eBay Developer Program** — registered April 18, 2026, pending approval
+- [x] **Register for eBay Developer Program** — registered April 18, 2026, approved April 19, 2026
 
   <details>
   <summary><strong>Implementation Plan</strong></summary>

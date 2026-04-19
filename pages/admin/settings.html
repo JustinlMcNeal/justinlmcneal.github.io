@@ -343,6 +343,68 @@
         </div>
       </section>
 
+      <!-- Marketplace Integrations Section -->
+      <section class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6">
+        <h2 class="text-lg font-black uppercase tracking-wider mb-4">🛒 Marketplace Integrations</h2>
+
+        <!-- eBay -->
+        <div class="p-4 bg-gray-50 rounded-xl">
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-lg bg-[#e53238] flex items-center justify-center text-white font-black text-sm">eB</div>
+              <div>
+                <h3 class="font-bold text-sm">eBay</h3>
+                <p id="ebayStatusText" class="text-xs text-gray-500">Checking connection...</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span id="ebayStatusDot" class="w-3 h-3 rounded-full bg-gray-300"></span>
+              <button id="btnConnectEbay" type="button"
+                class="bg-[#e53238] text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-[#c72a30] transition-all">
+                Connect eBay
+              </button>
+            </div>
+          </div>
+
+          <!-- eBay connection details (shown when connected) -->
+          <div id="ebayConnectedPanel" class="hidden mt-3 pt-3 border-t border-gray-200">
+            <div class="flex flex-wrap gap-4 text-xs text-gray-500 mb-3">
+              <span id="ebayTokenExpiry">Token expires: —</span>
+              <span id="ebayLastSync">Last sync: —</span>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button id="btnSyncEbayOrders" type="button"
+                class="bg-black text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-kkpink hover:text-black transition-all">
+                🔄 Sync Orders
+              </button>
+              <button id="btnRefreshEbayToken" type="button"
+                class="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-gray-100 transition-all">
+                🔑 Refresh Token
+              </button>
+              <button id="btnDisconnectEbay" type="button"
+                class="border border-red-300 text-red-600 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-red-50 transition-all">
+                ✕ Disconnect
+              </button>
+            </div>
+            <div id="ebaySyncStatus" class="mt-2 text-xs text-gray-400"></div>
+          </div>
+        </div>
+
+        <!-- Amazon (placeholder) -->
+        <div class="mt-3 p-4 bg-gray-50 rounded-xl opacity-60">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-lg bg-[#ff9900] flex items-center justify-center text-black font-black text-sm">A</div>
+              <div>
+                <h3 class="font-bold text-sm">Amazon SP-API</h3>
+                <p class="text-xs text-gray-500">Blocked — identity verification pending</p>
+              </div>
+            </div>
+            <span class="w-3 h-3 rounded-full bg-yellow-400"></span>
+          </div>
+        </div>
+      </section>
+
       <!-- Save Button -->
       <div class="flex justify-end gap-3">
         <button
@@ -659,6 +721,153 @@
 
     // Load stats on page load
     loadPushStats();
+
+    // ─── eBay Marketplace Integration ───────────────────────
+    const EBAY_CLIENT_ID = "JustinMc-KarryKra-PRD-e6c1164ac-5c2cbd4a";
+    const EBAY_REDIRECT_URI = encodeURIComponent("https://karrykraze.com/pages/admin/settings.html");
+    const EBAY_SCOPES = encodeURIComponent([
+      "https://api.ebay.com/oauth/api_scope",
+      "https://api.ebay.com/oauth/api_scope/sell.fulfillment",
+      "https://api.ebay.com/oauth/api_scope/sell.inventory",
+      "https://api.ebay.com/oauth/api_scope/sell.finances",
+    ].join(" "));
+
+    const btnConnectEbay = document.getElementById("btnConnectEbay");
+    const ebayStatusDot = document.getElementById("ebayStatusDot");
+    const ebayStatusText = document.getElementById("ebayStatusText");
+    const ebayConnectedPanel = document.getElementById("ebayConnectedPanel");
+
+    async function checkEbayConnection() {
+      try {
+        const headers = { "Authorization": `Bearer ${SERVICE_KEY}`, "apikey": SERVICE_KEY };
+        const resp = await fetch(
+          `${SUPABASE_URL}/rest/v1/marketplace_tokens?platform=eq.ebay&select=token_expires_at,extra,updated_at`,
+          { headers }
+        );
+        const rows = await resp.json();
+        if (rows.length && rows[0].extra?.connected) {
+          const expiresAt = new Date(rows[0].token_expires_at);
+          const isExpired = Date.now() > expiresAt.getTime();
+          ebayStatusDot.className = `w-3 h-3 rounded-full ${isExpired ? "bg-yellow-400" : "bg-green-500"}`;
+          ebayStatusText.textContent = isExpired ? "Connected (token expired — click Refresh)" : "Connected";
+          btnConnectEbay.textContent = "✓ Connected";
+          btnConnectEbay.classList.replace("bg-[#e53238]", "bg-green-600");
+          btnConnectEbay.classList.replace("hover:bg-[#c72a30]", "hover:bg-green-700");
+          ebayConnectedPanel.classList.remove("hidden");
+
+          document.getElementById("ebayTokenExpiry").textContent =
+            `Token expires: ${expiresAt.toLocaleString()}`;
+          document.getElementById("ebayLastSync").textContent =
+            `Last updated: ${new Date(rows[0].updated_at).toLocaleString()}`;
+          return true;
+        }
+      } catch (e) { console.error("eBay check failed:", e); }
+      ebayStatusDot.className = "w-3 h-3 rounded-full bg-gray-300";
+      ebayStatusText.textContent = "Not connected";
+      ebayConnectedPanel.classList.add("hidden");
+      return false;
+    }
+
+    // Handle OAuth callback code from URL
+    async function handleEbayOAuth() {
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get("code");
+      const state = params.get("state");
+      if (!code || state !== "ebay") return;
+
+      ebayStatusText.textContent = "Connecting...";
+      btnConnectEbay.disabled = true;
+
+      try {
+        const resp = await fetch(`${SUPABASE_URL}/functions/v1/ebay-oauth-callback`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code }),
+        });
+        const data = await resp.json();
+        if (data.success) {
+          alert("✅ eBay connected successfully!");
+          window.history.replaceState({}, document.title, window.location.pathname);
+          checkEbayConnection();
+        } else {
+          alert("❌ eBay connection failed: " + (data.error || "Unknown error"));
+        }
+      } catch (e) {
+        alert("❌ eBay connection error: " + e.message);
+      } finally {
+        btnConnectEbay.disabled = false;
+      }
+    }
+
+    // Connect button — redirect to eBay OAuth
+    btnConnectEbay.addEventListener("click", () => {
+      const authUrl = `https://auth.ebay.com/oauth2/authorize?client_id=${EBAY_CLIENT_ID}&response_type=code&redirect_uri=${EBAY_REDIRECT_URI}&scope=${EBAY_SCOPES}&state=ebay`;
+      window.location.href = authUrl;
+    });
+
+    // Sync Orders button
+    document.getElementById("btnSyncEbayOrders")?.addEventListener("click", async () => {
+      const btn = document.getElementById("btnSyncEbayOrders");
+      const status = document.getElementById("ebaySyncStatus");
+      btn.disabled = true;
+      btn.textContent = "Syncing...";
+      status.textContent = "Pulling orders from eBay...";
+
+      try {
+        const resp = await fetch(`${SUPABASE_URL}/functions/v1/ebay-sync-orders`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ days_back: 30 }),
+        });
+        const data = await resp.json();
+        if (data.success) {
+          status.textContent = `✅ Synced ${data.synced} new orders (${data.skipped} already existed)`;
+          checkEbayConnection();
+        } else {
+          status.textContent = "❌ " + (data.error || "Sync failed");
+        }
+      } catch (e) { status.textContent = "❌ Error: " + e.message; }
+      finally { btn.disabled = false; btn.textContent = "🔄 Sync Orders"; }
+    });
+
+    // Refresh Token button
+    document.getElementById("btnRefreshEbayToken")?.addEventListener("click", async () => {
+      const btn = document.getElementById("btnRefreshEbayToken");
+      const status = document.getElementById("ebaySyncStatus");
+      btn.disabled = true;
+      status.textContent = "Refreshing token...";
+
+      try {
+        const resp = await fetch(`${SUPABASE_URL}/functions/v1/ebay-refresh-token`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+        });
+        const data = await resp.json();
+        if (data.success) {
+          status.textContent = `✅ Token refreshed, expires: ${new Date(data.expires_at).toLocaleString()}`;
+          checkEbayConnection();
+        } else {
+          status.textContent = "❌ " + (data.error || "Refresh failed");
+        }
+      } catch (e) { status.textContent = "❌ Error: " + e.message; }
+      finally { btn.disabled = false; }
+    });
+
+    // Disconnect button
+    document.getElementById("btnDisconnectEbay")?.addEventListener("click", async () => {
+      if (!confirm("Disconnect eBay? You'll need to re-authorize to sync orders again.")) return;
+      const status = document.getElementById("ebaySyncStatus");
+      try {
+        const headers = { "Authorization": `Bearer ${SERVICE_KEY}`, "apikey": SERVICE_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" };
+        await fetch(`${SUPABASE_URL}/rest/v1/marketplace_tokens?platform=eq.ebay`, { method: "DELETE", headers });
+        status.textContent = "✅ eBay disconnected";
+        checkEbayConnection();
+      } catch (e) { status.textContent = "❌ Error: " + e.message; }
+    });
+
+    // Init: check connection + handle OAuth callback
+    checkEbayConnection();
+    handleEbayOAuth();
   </script>
 <script type="module" src="/js/shared/pwa.js"></script>
 </body>
