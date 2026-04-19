@@ -218,7 +218,7 @@
   - Direct Supabase storage image URLs (no proxy or transforms needed)
 
   </details>
-- [ ] **Referral share link** — sharer gets a unique link; referee gets 5% off at checkout; sharer earns 10% off when the referee completes a purchase
+- [ ] **Referral share link** — sharer gets a unique link; referee gets 5% off at checkout; sharer earns 10% off when the referee completes a purchase *(back burner — low priority for now)*
 - [x] **Catalog search on mobile** — predictive dropdown removed, iOS auto-zoom fixed (`font-size: 16px` on `#catalogSearch` at mobile breakpoint in `components.css`)
 - [x] **Product size/variant support** — size/color variants fully supported via `renderVariantSwatches()`
 - [x] **Revamp Reviews page** — split into two pages: one for browsing reviews, one for leaving a review + SMS review requests post-delivery
@@ -525,11 +525,11 @@
 - [x] **Fix category labels** — `hashtag_performance` now uses variation→asset→product→category chain; categories properly labeled (accessories, headwear, jewelry, plushies, bags) — `a11d224`
 
 ### Phase 2: Reach Multiplier (after observation)
-- [ ] **Simple Reels** — Ken Burns test first, then slideshow builder if validated (Sprint 5.1)
-- [ ] **Reels API posting** — `instagram-reel` edge function + `content_type` column (Sprint 5.3)
 - [ ] **Engagement dashboard** — comment reply UI + "Go Engage" guidance (Sprint 6.1)
-- [ ] **Instagram Stories** — story scheduling via API (Sprint 6.3)
+- [ ] **Instagram Stories** — auto-generate stories from posts or AI-selected content; story scheduling via API (Sprint 6.3)
 - [ ] **Growth tracking** — daily follower count + best-time heat map (Sprint 7)
+- [ ] **Simple Reels** — on hold until affordable AI video generation is viable; Ken Burns on static images not compelling enough vs real product videos. Revisit when store revenue supports AI video costs (Sprint 5.1)
+- [ ] **Reels API posting** — `instagram-reel` edge function + `content_type` column; depends on Reels content solution above (Sprint 5.3)
 
 ---
 
@@ -539,7 +539,7 @@
 - [x] **Abandoned cart CRON** — `sms-abandoned-cart-check` runs every 5 minutes, detects incomplete carts, sends SMS via Twilio
 - [x] **Coupon reminder CRON** — `sms-coupon-reminder` runs hourly at :30, sends reminders during 9 AM–9 PM ET window
 - [x] **Welcome series CRON** — `sms-welcome-series` runs hourly at :45, sends Day 2 + Day 5 onboarding SMS
-- [ ] **Email notifications** — no email provider integrated yet (Resend.com or SendGrid). Currently SMS + push only
+- [ ] **Email notifications** — no email provider integrated yet (Resend.com or SendGrid). Currently SMS + push only *(on hold — revisit later)*
 
   <details>
   <summary><strong>Implementation Plan</strong></summary>
@@ -578,12 +578,15 @@
 
 ## Inventory & Stock
 
-- [ ] **Inventory stock tracking** — `product_variants.stock` column exists and admin populates it, but frontend/checkout validation not implemented. Full plan in [`docs/implementation/inventory-stock-tracking.md`](implementation/inventory-stock-tracking.md)
+> **On hold** — waiting for Amazon SP-API + eBay API to build a unified cross-platform inventory system (website + Amazon + eBay in one place). No point building website-only stock tracking when selling on 3 platforms.
+
+- [ ] **Unified inventory tracking** — `product_variants.stock` column exists and admin populates it, but frontend/checkout validation not implemented. Full plan in [`docs/implementation/inventory-stock-tracking.md`](implementation/inventory-stock-tracking.md). Will expand to sync stock across all platforms once marketplace APIs are live.
   - [ ] Low stock badges on product page
   - [ ] Stock validation at checkout (prevent overselling)
   - [ ] Stock decrement on order completion
-  - [ ] Admin inventory dashboard
+  - [ ] Admin inventory dashboard (unified: website + Amazon + eBay)
   - [ ] Stock ledger audit trail
+  - [ ] Cross-platform stock sync (depends on Amazon SP-API + eBay API)
 
 ---
 
@@ -598,7 +601,7 @@
 - [x] **Admin push composer** — settings panel to send custom push notifications to all/admin/customers
 - [x] **`push_subscriptions` table** — `is_admin`, `is_active`, `endpoint` columns, RLS policies for anon insert/delete
 - [x] **PWA tags registered** — service worker + manifest link on all 34 HTML pages
-- [ ] **Customer push for order shipped / review reminder** — future enhancement
+- [ ] **Customer push for order shipped / review reminder** — extend existing push system to notify customers on shipment status changes + review reminders. `shippo-webhook` already catches DELIVERED status, `send-review-request` already sends SMS — need to wire: (1) push notification on TRANSIT/DELIVERED, (2) check if review request auto-triggers on delivery or only manual
 
 ---
 
@@ -621,10 +624,10 @@
 ## Marketplace Integrations
 
 ### Amazon SP-API
-> **Status:** 🟡 Blocked — registration submitted Feb 24, 2026, pending Amazon review. Currently CSV import only.
+> **Status:** 🟡 Blocked — developer account created, identity verification failed, support ticket submitted (April 18, 2026). Currently CSV import only.
 
 - [x] **CSV order import** — `import-amazon-orders.mjs` parses Seller Central TSV exports, `rpc_import_amazon_orders()` bulk-imports via JSON, admin drag-and-drop UI on expenses page
-- [ ] **SP-API registration approval** — waiting on Amazon; nothing can be built until approved
+- [ ] **SP-API identity verification** — identity check failed, support ticket open. Waiting on Amazon resolution.
 - [ ] **Auto-import orders** → unified order dashboard
 
   <details>
@@ -692,10 +695,10 @@
 - [ ] **Price alerts** — notify when competitor prices drop below threshold
 
 ### eBay API
-> **Status:** 🔴 Not started — no Developer Program registration yet. Currently CSV import only.
+> **Status:** � Pending — Developer Program registered (April 18, 2026), account pending approval (at least 1 business day). Currently CSV import only.
 
 - [x] **CSV order import** — `import-legacy-orders.mjs` parses eBay Transaction Report CSVs, admin drag-and-drop UI, fee/shipping/selling breakdown modal
-- [ ] **Register for eBay Developer Program** — create account at [developer.ebay.com](https://developer.ebay.com), get Production API keys
+- [x] **Register for eBay Developer Program** — registered April 18, 2026, pending approval
 
   <details>
   <summary><strong>Implementation Plan</strong></summary>
@@ -776,13 +779,13 @@
 
 ## Growth & Polish
 
-- [ ] **Pinterest production API** — currently sandbox-only (`api-sandbox.pinterest.com`). Pins not publicly visible. Needs Pinterest App Review for production access. Token refresh already handled by daily `refresh-tokens` CRON.
-- [ ] **Instagram comment → auto-DM coupon** — needs Meta App Review for `instagram_manage_comments` + `instagram_manage_messages` permissions. Would require new edge function `instagram-auto-dm` triggered by comment webhook.
-- [ ] **Admin public replies to reviews** — add reply field to admin review moderation UI, store in `review_replies` table, display on public reviews page
+- [ ] **Pinterest production API** — have Production Limited access (App ID: 1542566), redirect URI set to `karrykraze.com/pages/admin/social.html`. Current test token is read-only (pins:read, boards:read). Need to implement full OAuth flow requesting `pins:write` + `boards:write` scopes, then switch `pinterest-post` edge function from `api-sandbox.pinterest.com` → `api.pinterest.com`. Token refresh already handled by daily `refresh-tokens` CRON.
+- [ ] **Admin public replies to reviews** — add reply field to admin review moderation UI, store in `review_replies` table, display on public reviews page. Reviews may need more prominent presence on site for replies to have impact.
 - [ ] **Review helpfulness voting** — "Was this helpful?" button on review cards, `review_votes` table, sort by helpfulness
-- [ ] **SEO blog / content pages** — no blog exists currently. Would need: blog post table in Supabase, admin editor page, public `/blog/{slug}` page with dynamic routing via query params, sitemap generation, structured data (Article schema)
-- [ ] **TikTok integration** — OAuth flow + video posting outlined in `pSocial_002.md` (section 10.1). Video format (9:16) ready from Reels work. Needs: TikTok Developer account, `tiktok-oauth` + `tiktok-post` edge functions, admin connect button.
-- [ ] **Email marketing campaigns** — abandoned cart email (supplement to SMS), new arrivals digest, re-engagement for lapsed customers. Depends on email provider integration (see SMS/Notifications section).
+- [ ] **Instagram comment → auto-DM coupon** — needs Meta App Review for `instagram_manage_comments` + `instagram_manage_messages` permissions. Hold off until gaining traction — manual replies for now. *(Note: the system auto-POSTS content but does NOT auto-comment on posts. This feature would auto-DM people who comment on your posts.)*
+- [ ] **SEO blog / content pages** — articles like "Top 10 Plushie Gift Ideas" that rank in Google → free organic traffic. Would need: blog post table in Supabase, admin editor page, public `/blog/{slug}` page with dynamic routing via query params, sitemap generation, structured data (Article schema). Long-term growth channel.
+- [ ] **TikTok integration** — TikTok supports image carousels (Photo Mode) which we could do now. TikTok Shop is a separate opportunity (Seller Center registration + product catalog + fulfillment). Strategy: drive traffic to karrykraze.com rather than fragmenting across platform shops (same logic for Instagram Shopping). Video posting depends on AI video solution. *(on hold until video solution found or image-only posting decided)*
+- [ ] **Email marketing campaigns** — abandoned cart email (supplement to SMS), new arrivals digest, re-engagement for lapsed customers. Depends on email provider integration. *(on hold)*
 
 ---
 
