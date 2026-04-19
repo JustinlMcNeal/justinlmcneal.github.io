@@ -26,7 +26,8 @@ serve(async (req) => {
 
     const clientId = Deno.env.get("EBAY_CLIENT_ID") || "";
     const clientSecret = Deno.env.get("EBAY_CLIENT_SECRET") || "";
-    const redirectUri = Deno.env.get("EBAY_REDIRECT_URI") || "https://karrykraze.com/pages/admin/settings.html";
+    // eBay requires the RuName as redirect_uri, not the actual URL
+    const redirectUri = Deno.env.get("EBAY_RUNAME") || "Justin_Mcneal-JustinMc-KarryK-ipqfyelqa";
 
     // eBay uses Basic Auth: Base64(clientId:clientSecret)
     const basicAuth = btoa(`${clientId}:${clientSecret}`);
