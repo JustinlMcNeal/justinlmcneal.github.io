@@ -85,7 +85,7 @@ async function fetchEbayOrders(
   const limit = 50;
 
   while (true) {
-    const filter = `creationdate:[${since}..],orderfulfillmentstatus:{NOT_STARTED|IN_PROGRESS|FULFILLED}`;
+    const filter = `creationdate:[${since}..]`;
     const url = `${EBAY_API}/sell/fulfillment/v1/order?filter=${encodeURIComponent(filter)}&limit=${limit}&offset=${offset}`;
 
     const resp = await fetch(url, {
