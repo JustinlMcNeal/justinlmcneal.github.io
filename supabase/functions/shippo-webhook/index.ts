@@ -106,7 +106,8 @@ Deno.serve(async (req) => {
           logError = updateErr.message;
           console.error("[shippo-webhook] Update error:", updateErr.message);
         } else {
-          console.log(`[shippo-webhook] ${trackingNumber}: ${shipment.label_status} → ${newLabelStatus}`);
+          const subStatus = trackingStatus?.substatus as string || "";
+          console.log(`[shippo-webhook] ${trackingNumber} ${shipment.label_status} → ${newLabelStatus}${subStatus ? ` (${subStatus})` : ""} | order=${shipment.kk_order_id}`);
 
           // ── 3. Send SMS notifications for shipped / delivered ──
           const prevStatus = shipment.label_status;

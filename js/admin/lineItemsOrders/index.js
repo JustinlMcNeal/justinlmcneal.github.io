@@ -328,7 +328,7 @@ function renderOrderDetailsHtml(order, lineItems, shipment) {
         <span class="w-5 h-5 bg-black text-white text-[10px] flex items-center justify-center">5</span>
         Cost & Profit
       </div>
-      <div class="grid sm:grid-cols-3 gap-4">
+      <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div class="border-4 border-black p-4">
           <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">Product CPI</div>
           <div class="font-black text-lg text-red-600">${money(order.product_cpi_cents)}</div>
@@ -337,6 +337,19 @@ function renderOrderDetailsHtml(order, lineItems, shipment) {
         <div class="border-4 border-black p-4">
           <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">USPS Label</div>
           <div class="font-black text-lg text-red-600">${money(shipment?.label_cost_cents)}</div>
+        </div>
+        <div class="border-4 border-black p-4 ${(() => {
+          const shippingMargin = (order.shipping_paid_cents || 0) - (shipment?.label_cost_cents || 0);
+          return shipment?.label_cost_cents ? (shippingMargin >= 0 ? 'bg-emerald-50' : 'bg-red-50') : '';
+        })()}">
+          <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">Shipping Margin</div>
+          ${shipment?.label_cost_cents ? (() => {
+            const margin = (order.shipping_paid_cents || 0) - (shipment.label_cost_cents || 0);
+            const color = margin >= 0 ? 'text-emerald-600' : 'text-red-600';
+            return `<div class="font-black text-lg ${color}">${money(margin)}</div>
+            <div class="text-[9px] text-black/50 mt-1">${money(order.shipping_paid_cents)} paid − ${money(shipment.label_cost_cents)} label</div>`;
+          })() : `<div class="font-black text-lg text-gray-400">—</div>
+          <div class="text-[9px] text-black/50 mt-1">${money(order.shipping_paid_cents)} paid · no label yet</div>`}
         </div>
         <div class="border-4 border-black p-4 bg-emerald-50">
           <div class="text-[10px] font-black uppercase tracking-[.18em] text-emerald-700/60 mb-1">Profit</div>
@@ -369,6 +382,23 @@ function renderOrderDetailsHtml(order, lineItems, shipment) {
             : `<div class="font-mono text-sm break-all">${esc(tracking)}</div>`}
         </div>
       </div>
+
+      ${(() => {
+        // "Not yet scanned" warning: label purchased > 24h ago, no carrier scan
+        if (labelStatus === "label_purchased" && shipment?.label_purchased_at && !shipment?.in_transit_at) {
+          const hoursAgo = (Date.now() - new Date(shipment.label_purchased_at).getTime()) / 3600000;
+          if (hoursAgo > 24) {
+            return `<div class="mt-4 border-4 border-amber-400 bg-amber-50 p-4 flex items-center gap-3">
+              <span class="text-2xl">⚠️</span>
+              <div>
+                <div class="font-black text-sm text-amber-800 uppercase tracking-wider">Not Yet Scanned</div>
+                <div class="text-xs text-amber-700 mt-1">Label purchased ${Math.floor(hoursAgo)}h ago — no carrier scan detected. Check if package was dropped off.</div>
+              </div>
+            </div>`;
+          }
+        }
+        return "";
+      })()}
 
       ${shipment?.in_transit_at || shipment?.delivered_at || shipment?.estimated_delivery ? `
       <div class="grid sm:grid-cols-3 gap-4 mt-4">
