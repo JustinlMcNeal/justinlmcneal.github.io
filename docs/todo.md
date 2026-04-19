@@ -779,7 +779,7 @@
 
 ## Growth & Polish
 
-- [ ] **Pinterest production API** — have Production Limited access (App ID: 1542566), redirect URI set to `karrykraze.com/pages/admin/social.html`. Current test token is read-only (pins:read, boards:read). Need to implement full OAuth flow requesting `pins:write` + `boards:write` scopes, then switch `pinterest-post` edge function from `api-sandbox.pinterest.com` → `api.pinterest.com`. Token refresh already handled by daily `refresh-tokens` CRON.
+- [ ] **Pinterest production API** — upgraded from sandbox to production. App ID: 1542566, secrets set (`PINTEREST_CLIENT_ID`, `PINTEREST_CLIENT_SECRET`), `pinterest-post` switched from `api-sandbox.pinterest.com` → `api.pinterest.com`, auto-queue Pinterest checkbox enabled. OAuth flow requests `pins:read,pins:write,boards:read,boards:write` scopes. Token refresh already automated daily. **Next: Connect via OAuth button on social admin page, then test a pin.**
 - [ ] **Admin public replies to reviews** — add reply field to admin review moderation UI, store in `review_replies` table, display on public reviews page. Reviews may need more prominent presence on site for replies to have impact.
 - [ ] **Review helpfulness voting** — "Was this helpful?" button on review cards, `review_votes` table, sort by helpfulness
 - [ ] **Instagram comment → auto-DM coupon** — needs Meta App Review for `instagram_manage_comments` + `instagram_manage_messages` permissions. Hold off until gaining traction — manual replies for now. *(Note: the system auto-POSTS content but does NOT auto-comment on posts. This feature would auto-DM people who comment on your posts.)*

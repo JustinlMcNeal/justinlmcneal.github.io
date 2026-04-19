@@ -64,8 +64,8 @@ serve(async (req) => {
     if (description) pinData.description = description;
     if (link) pinData.link = link;
 
-    // Use sandbox API for Trial access apps
-    const pinterestResp = await fetch("https://api-sandbox.pinterest.com/v5/pins", {
+    // Use production API (Production Limited access)
+    const pinterestResp = await fetch("https://api.pinterest.com/v5/pins", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${accessToken}`,
