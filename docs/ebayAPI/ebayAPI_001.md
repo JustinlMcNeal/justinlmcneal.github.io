@@ -287,9 +287,10 @@ Unified handler — accepts `{ action, ...params }`:
 | `create_offer` | `POST /offer` | price, categoryId, policies | `{ offerId }` | ✅ Tested |
 | `publish` | `POST /offer/{offerId}/publish` | offerId | `{ listingId }` | ✅ Tested |
 | `update_item` | `PUT /inventory_item/{sku}` | revised data | `{ sku }` | ✅ Tested |
-| `update_offer` | `PUT /offer/{offerId}` | revised price/qty | `{ offerId }` | ✅ Built |
+| `update_offer` | `PUT /offer/{offerId}` | revised price/qty | `{ offerId }` | ✅ Tested |
 | `withdraw` | `POST /offer/{offerId}/withdraw` | offerId | `{ success }` | ✅ Tested |
 | `delete_item` | `DELETE /inventory_item/{sku}` | sku | `{ deleted }` | ✅ Tested |
+| `get_item` | `GET /inventory_item/{sku}` | sku | `{ item }` | ✅ Tested |
 | `list_items` | `GET /inventory_item?limit=100` | offset | `{ items[] }` | ✅ Tested |
 | `get_offers` | `GET /offer?sku={sku}` | sku | `{ offers[] }` | ✅ Built |
 | `bulk_update` | `POST /bulk_update_price_quantity` | `{ items[] }` | `{ responses[] }` | ✅ Built |
@@ -362,14 +363,15 @@ ALTER TABLE products
 
 ### 2.7 Admin UI — New Page: `pages/admin/ebay-listings.html`
 
-| Section | Features |
-|---------|----------|
-| **Products Table** | All products with eBay status badge (Active / Draft / Not Listed), eBay price, quantity, last synced |
-| **Push to eBay** | Select product → auto-fills form with product data → category suggestion → item specifics → publish |
-| **Edit Listing** | Click active listing → revise title, description, price, quantity → save → auto-updates live listing |
-| **Bulk Actions** | Select multiple → update price/quantity in batch via `bulk_update_price_quantity` |
-| **End Listing** | Withdraw offer (removes from eBay, keeps inventory item for easy re-list) |
-| **Migrate** | One-time button: pulls all current Seller Hub listings, migrates to API-managed, backfills products table |
+| Section | Features | Status |
+|---------|----------|--------|
+| **Products Table** | All products with eBay status badge (Active / Draft / Not Listed / Ended), eBay price, bulk checkboxes, action buttons per status | ✅ Built |
+| **Push to eBay** | Select product → auto-fills form → category suggestion → item specifics (auto-fetched, required validated, Brand pre-filled) → 3-step publish | ✅ Built |
+| **Edit Listing** | Click active/draft listing → fetches current data from eBay via `get_item` + `get_offers` → edit title, description, price, quantity, condition, aspects → saves via `update_item` + `update_offer` | ✅ Built |
+| **Bulk Actions** | Checkbox selection on active/draft listings → bulk update price or quantity via `bulk_update_price_quantity` → updates eBay + local DB | ✅ Built |
+| **End Listing** | Withdraw offer (removes from eBay, keeps inventory item for easy re-list) | ✅ Built |
+| **Re-list** | Ended listings show "Re-list" button → opens push modal to re-create | ✅ Built |
+| **Migrate** | Scan eBay inventory + auto-link to KK products | ✅ Built |
 
 ### 2.8 Data Flow: Listing a Product
 

@@ -1,6 +1,6 @@
 // ebay-manage-listing — Unified handler for eBay Inventory API operations
 // Actions: create_item, create_offer, publish, update_item, update_offer,
-//          withdraw, list_items, get_offers, bulk_update, get_policies, setup_location
+//          withdraw, delete_item, get_item, list_items, get_offers, bulk_update, get_policies, setup_location
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import {
   corsHeaders,
@@ -81,6 +81,17 @@ serve(async (req) => {
         updated_at: new Date().toISOString(),
       }).eq("code", sku);
       return new Response(JSON.stringify({ success: true, deleted: sku }), { headers: corsHeaders });
+    }
+
+    // ── GET SINGLE INVENTORY ITEM ───────────────────────────
+    if (action === "get_item") {
+      const { sku } = body;
+      if (!sku) throw new Error("sku is required");
+      const result = await ebayFetch(accessToken, "GET", `${INV_API}/inventory_item/${encodeURIComponent(sku)}`);
+      if (!result.ok) {
+        throw new Error(`Get item failed (${result.status}): ${JSON.stringify(result.data)}`);
+      }
+      return new Response(JSON.stringify({ success: true, item: result.data }), { headers: corsHeaders });
     }
 
     // ── CREATE / UPDATE INVENTORY ITEM ──────────────────────

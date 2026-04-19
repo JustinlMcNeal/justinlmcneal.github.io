@@ -89,11 +89,26 @@
 
     <!-- Products Table -->
     <section class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6 mb-6">
-      <h2 class="text-lg font-black mb-4">Products</h2>
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-black">Products</h2>
+        <div id="bulkBar" class="hidden flex items-center gap-2">
+          <span id="bulkCount" class="text-xs font-bold text-gray-600">0 selected</span>
+          <button id="btnBulkPrice" type="button"
+            class="bg-black text-white px-3 py-1.5 rounded text-[10px] font-bold uppercase hover:bg-kkpink hover:text-black transition-all">
+            Update Price
+          </button>
+          <button id="btnBulkQty" type="button"
+            class="bg-black text-white px-3 py-1.5 rounded text-[10px] font-bold uppercase hover:bg-kkpink hover:text-black transition-all">
+            Update Qty
+          </button>
+          <button id="btnBulkCancel" type="button" class="text-gray-400 hover:text-black text-sm ml-1">&times;</button>
+        </div>
+      </div>
       <div class="overflow-x-auto custom-scrollbar">
         <table class="w-full text-sm">
           <thead>
             <tr class="border-b-4 border-black text-left">
+              <th class="py-2 pr-2 w-8"><input type="checkbox" id="checkAll" class="accent-kkpink" /></th>
               <th class="py-2 pr-3 font-black uppercase text-[10px] tracking-wider">Product</th>
               <th class="py-2 pr-3 font-black uppercase text-[10px] tracking-wider">Code</th>
               <th class="py-2 pr-3 font-black uppercase text-[10px] tracking-wider">KK Price</th>
@@ -210,6 +225,110 @@
       </div>
     </div>
 
+    <!-- Edit Listing Modal -->
+    <div id="editModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center hidden">
+      <div class="bg-white rounded-2xl shadow-xl border-4 border-black w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+        <div class="p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-black">Edit Listing</h3>
+            <button id="btnCloseEdit" class="text-gray-400 hover:text-black text-xl">&times;</button>
+          </div>
+
+          <div id="editLoading" class="py-8 text-center text-gray-400">Loading listing data...</div>
+
+          <div id="editForm" class="space-y-4 hidden">
+            <!-- Product Info (read-only) -->
+            <div class="bg-gray-50 rounded-lg p-3">
+              <div id="editProductName" class="font-bold"></div>
+              <div class="flex gap-2 text-xs text-gray-500 mt-1">
+                <span id="editProductCode"></span>
+                <span>·</span>
+                <a id="editEbayLink" href="#" target="_blank" class="text-blue-600 hover:underline">View on eBay ↗</a>
+              </div>
+            </div>
+
+            <!-- Title -->
+            <div>
+              <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">eBay Title</label>
+              <input id="editTitle" type="text" maxlength="80" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors" />
+            </div>
+
+            <!-- Description -->
+            <div>
+              <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">Description</label>
+              <textarea id="editDescription" rows="3" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors"></textarea>
+            </div>
+
+            <!-- Item Specifics -->
+            <div id="editAspectsSection">
+              <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-2 text-black/70">Item Specifics</label>
+              <div id="editAspectsRequired" class="space-y-2"></div>
+              <details class="mt-2">
+                <summary class="text-[11px] font-bold uppercase tracking-wider text-gray-500 cursor-pointer hover:text-black">+ Optional Fields</summary>
+                <div id="editAspectsOptional" class="space-y-2 mt-2"></div>
+              </details>
+            </div>
+
+            <!-- Price + Qty -->
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">eBay Price ($)</label>
+                <input id="editPrice" type="number" step="0.01" min="0" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors" />
+              </div>
+              <div>
+                <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">Quantity</label>
+                <input id="editQuantity" type="number" min="0" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors" />
+              </div>
+            </div>
+
+            <!-- Condition -->
+            <div>
+              <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">Condition</label>
+              <select id="editCondition" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors">
+                <option value="NEW">New</option>
+                <option value="LIKE_NEW">Like New</option>
+                <option value="USED_EXCELLENT">Used — Excellent</option>
+                <option value="USED_GOOD">Used — Good</option>
+              </select>
+            </div>
+
+            <!-- Save -->
+            <div class="flex gap-2 pt-2">
+              <button id="btnSaveEdit" type="button"
+                class="flex-1 border-4 border-black bg-black text-white px-4 py-3 font-black uppercase tracking-[.12em] text-xs hover:bg-kkpink hover:border-kkpink hover:text-black transition-all">
+                Save Changes
+              </button>
+            </div>
+            <div id="editStatus" class="text-xs text-gray-400"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bulk Update Modal -->
+    <div id="bulkModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center hidden">
+      <div class="bg-white rounded-2xl shadow-xl border-4 border-black w-full max-w-sm mx-4">
+        <div class="p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 id="bulkModalTitle" class="text-lg font-black">Bulk Update</h3>
+            <button id="btnCloseBulk" class="text-gray-400 hover:text-black text-xl">&times;</button>
+          </div>
+          <div class="space-y-4">
+            <div>
+              <label id="bulkModalLabel" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">New Value</label>
+              <input id="bulkModalValue" type="number" step="0.01" min="0" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors" />
+            </div>
+            <div id="bulkModalItems" class="text-xs text-gray-500 max-h-32 overflow-y-auto"></div>
+            <button id="btnBulkApply" type="button"
+              class="w-full border-4 border-black bg-black text-white px-4 py-3 font-black uppercase tracking-[.12em] text-xs hover:bg-kkpink hover:border-kkpink hover:text-black transition-all">
+              Apply to All Selected
+            </button>
+            <div id="bulkModalStatus" class="text-xs text-gray-400"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Policies Info Panel (shown by Setup) -->
     <div id="policiesPanel" class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6 mb-6 hidden">
       <h2 class="text-lg font-black mb-4">⚙️ eBay Account Setup</h2>
@@ -318,7 +437,7 @@
     function renderTable() {
       const tbody = document.getElementById("productsBody");
       if (!allProducts.length) {
-        tbody.innerHTML = '<tr><td colspan="6" class="py-8 text-center text-gray-400">No products found</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="py-8 text-center text-gray-400">No products found</td></tr>';
         return;
       }
 
@@ -327,8 +446,12 @@
         const ebayPrice = p.ebay_price_cents ? `$${(p.ebay_price_cents / 100).toFixed(2)}` : "—";
         const status = p.ebay_status || "not_listed";
         const statusLabel = { active: "Active", draft: "Draft", ended: "Ended", not_listed: "Not Listed" }[status] || status;
+        const isListed = status === "active" || status === "draft";
 
         return `<tr class="product-row border-b border-gray-100">
+          <td class="py-2 pr-2">
+            ${isListed ? `<input type="checkbox" class="bulk-check accent-kkpink" data-code="${esc(p.code)}" data-offer="${esc(p.ebay_offer_id || '')}" data-sku="${esc(p.ebay_sku || p.code)}" />` : ''}
+          </td>
           <td class="py-2 pr-3">
             <div class="flex items-center gap-2">
               ${p.catalog_image_url ? `<img src="${p.catalog_image_url}" class="w-8 h-8 object-cover rounded" />` : '<div class="w-8 h-8 bg-gray-100 rounded"></div>'}
@@ -347,15 +470,22 @@
                 ? `<button onclick="openPush('${esc(p.code)}')" class="bg-black text-white px-2 py-1 rounded text-[10px] font-bold hover:bg-kkpink hover:text-black transition-all">Push</button>`
                 : ""}
               ${status === "active"
-                ? `<button onclick="doWithdraw('${esc(p.code)}', '${esc(p.ebay_offer_id)}')" class="border border-red-300 text-red-600 px-2 py-1 rounded text-[10px] font-bold hover:bg-red-50 transition-all">End</button>`
+                ? `<button onclick="openEdit('${esc(p.code)}')" class="bg-blue-600 text-white px-2 py-1 rounded text-[10px] font-bold hover:bg-blue-700 transition-all">Edit</button>
+                   <button onclick="doWithdraw('${esc(p.code)}', '${esc(p.ebay_offer_id)}')" class="border border-red-300 text-red-600 px-2 py-1 rounded text-[10px] font-bold hover:bg-red-50 transition-all">End</button>`
                 : ""}
-              ${status === "draft" && p.ebay_offer_id
-                ? `<button onclick="doPublish('${esc(p.code)}', '${esc(p.ebay_offer_id)}')" class="bg-green-600 text-white px-2 py-1 rounded text-[10px] font-bold hover:bg-green-700 transition-all">Publish</button>`
+              ${status === "draft"
+                ? `<button onclick="openEdit('${esc(p.code)}')" class="bg-blue-600 text-white px-2 py-1 rounded text-[10px] font-bold hover:bg-blue-700 transition-all">Edit</button>
+                   ${p.ebay_offer_id ? `<button onclick="doPublish('${esc(p.code)}', '${esc(p.ebay_offer_id)}')" class="bg-green-600 text-white px-2 py-1 rounded text-[10px] font-bold hover:bg-green-700 transition-all">Publish</button>` : ''}`
+                : ""}
+              ${status === "ended"
+                ? `<button onclick="openPush('${esc(p.code)}')" class="bg-black text-white px-2 py-1 rounded text-[10px] font-bold hover:bg-kkpink hover:text-black transition-all">Re-list</button>`
                 : ""}
             </div>
           </td>
         </tr>`;
       }).join("");
+
+      updateBulkBar();
     }
 
     function esc(s) { return (s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
@@ -641,6 +771,293 @@
         }
       } catch (e) { status.textContent = "❌ Error: " + e.message; }
       finally { btn.disabled = false; btn.textContent = "3. Publish"; }
+    });
+
+    // ── Edit Modal ─────────────────────────────────────
+    let editProduct = null;
+    let editAspects = [];
+
+    window.openEdit = async function(code) {
+      editProduct = allProducts.find(p => p.code === code);
+      if (!editProduct) return;
+
+      document.getElementById("editModal").classList.remove("hidden");
+      document.getElementById("editLoading").classList.remove("hidden");
+      document.getElementById("editForm").classList.add("hidden");
+      document.getElementById("editStatus").textContent = "";
+
+      document.getElementById("editProductName").textContent = editProduct.name;
+      document.getElementById("editProductCode").textContent = editProduct.code;
+
+      const ebayLink = document.getElementById("editEbayLink");
+      if (editProduct.ebay_listing_id) {
+        ebayLink.href = `https://www.ebay.com/itm/${editProduct.ebay_listing_id}`;
+        ebayLink.classList.remove("hidden");
+      } else {
+        ebayLink.classList.add("hidden");
+      }
+
+      try {
+        // Fetch current item data from eBay
+        const sku = editProduct.ebay_sku || editProduct.code;
+        const [itemResult, offerResult] = await Promise.all([
+          callEdge("ebay-manage-listing", { action: "get_item", sku }),
+          editProduct.ebay_offer_id
+            ? callEdge("ebay-manage-listing", { action: "get_offers", sku })
+            : Promise.resolve({ success: true, offers: [] }),
+        ]);
+
+        if (!itemResult.success) throw new Error(itemResult.error || "Failed to fetch item");
+
+        const item = itemResult.item;
+        const product = item.product || {};
+        const offer = (offerResult.offers || []).find(o => o.offerId === editProduct.ebay_offer_id) || {};
+
+        // Pre-fill fields
+        document.getElementById("editTitle").value = product.title || editProduct.name;
+        document.getElementById("editDescription").value = product.description || "";
+        document.getElementById("editCondition").value = item.condition || "NEW";
+        document.getElementById("editQuantity").value = item.availability?.shipToLocationAvailability?.quantity ?? 1;
+
+        const offerPrice = offer.pricingSummary?.price?.value;
+        document.getElementById("editPrice").value = offerPrice
+          ? parseFloat(offerPrice).toFixed(2)
+          : editProduct.ebay_price_cents
+            ? (editProduct.ebay_price_cents / 100).toFixed(2)
+            : Number(editProduct.price).toFixed(2);
+
+        // Fetch aspects for category and pre-fill
+        const categoryId = editProduct.ebay_category_id || offer.categoryId;
+        const existingAspects = product.aspects || {};
+
+        const reqContainer = document.getElementById("editAspectsRequired");
+        const optContainer = document.getElementById("editAspectsOptional");
+        reqContainer.innerHTML = "";
+        optContainer.innerHTML = "";
+        editAspects = [];
+
+        if (categoryId) {
+          const aspectResult = await callEdge("ebay-taxonomy", { action: "get_aspects", categoryId });
+          if (aspectResult.success && aspectResult.aspects?.length) {
+            editAspects = aspectResult.aspects;
+            const required = aspectResult.aspects.filter(a => a.required);
+            const optional = aspectResult.aspects.filter(a => !a.required).slice(0, 15);
+
+            // Pre-fill with existing aspect values
+            const defaults = {};
+            for (const [key, val] of Object.entries(existingAspects)) {
+              defaults[key] = Array.isArray(val) ? val[0] : val;
+            }
+
+            required.forEach(a => reqContainer.appendChild(buildEditAspectField(a, defaults, true)));
+            optional.forEach(a => optContainer.appendChild(buildEditAspectField(a, defaults, false)));
+          }
+        }
+
+        document.getElementById("editLoading").classList.add("hidden");
+        document.getElementById("editForm").classList.remove("hidden");
+      } catch (e) {
+        document.getElementById("editLoading").textContent = "❌ " + e.message;
+      }
+    };
+
+    function buildEditAspectField(aspect, defaults, isRequired) {
+      const div = document.createElement("div");
+      const listId = `edl_${aspect.name.replace(/\W/g, "_")}`;
+      const defaultVal = defaults[aspect.name] || "";
+      const label = isRequired ? `${aspect.name} <span class="text-red-500">*</span>` : aspect.name;
+
+      div.innerHTML = `
+        <label class="block text-[10px] font-bold uppercase tracking-wider ${isRequired ? 'text-black' : 'text-gray-500'} mb-0.5">${label}</label>
+        <input type="text" data-edit-aspect="${esc(aspect.name)}" data-required="${isRequired}"
+          value="${esc(defaultVal)}" list="${listId}"
+          class="w-full border-2 ${isRequired ? 'border-black' : 'border-gray-300'} px-2 py-1.5 text-xs outline-none focus:border-kkpink transition-colors" />
+        ${aspect.values?.length ? `<datalist id="${listId}">${aspect.values.slice(0, 30).map(v => `<option value="${esc(v)}">`).join("")}</datalist>` : ""}
+      `;
+      return div;
+    }
+
+    document.getElementById("btnCloseEdit").addEventListener("click", () => {
+      document.getElementById("editModal").classList.add("hidden");
+      editProduct = null;
+    });
+
+    document.getElementById("btnSaveEdit").addEventListener("click", async () => {
+      if (!editProduct) return;
+      const btn = document.getElementById("btnSaveEdit");
+      const status = document.getElementById("editStatus");
+      btn.disabled = true; btn.textContent = "Saving...";
+
+      const sku = editProduct.ebay_sku || editProduct.code;
+      const title = document.getElementById("editTitle").value.trim();
+      const description = document.getElementById("editDescription").value.trim();
+      const condition = document.getElementById("editCondition").value;
+      const quantity = parseInt(document.getElementById("editQuantity").value) || 1;
+      const price = parseFloat(document.getElementById("editPrice").value) || 0;
+
+      if (!title) { status.textContent = "❌ Title required"; btn.disabled = false; btn.textContent = "Save Changes"; return; }
+
+      // Validate required aspects
+      const missing = [];
+      document.querySelectorAll("[data-edit-aspect][data-required='true']").forEach(input => {
+        if (!input.value.trim()) missing.push(input.dataset.editAspect);
+      });
+      if (missing.length) {
+        status.textContent = `❌ Required: ${missing.join(", ")}`;
+        btn.disabled = false; btn.textContent = "Save Changes";
+        return;
+      }
+
+      // Collect aspects
+      const aspects = {};
+      document.querySelectorAll("[data-edit-aspect]").forEach(input => {
+        const val = input.value.trim();
+        if (val) aspects[input.dataset.editAspect] = [val];
+      });
+
+      const imageUrls = editProduct.catalog_image_url ? [editProduct.catalog_image_url] : [];
+
+      try {
+        // Step 1: Update inventory item
+        status.textContent = "Updating item...";
+        const itemResult = await callEdge("ebay-manage-listing", {
+          action: "update_item",
+          sku,
+          product: { title, description, condition, quantity, imageUrls, aspects },
+        });
+
+        if (!itemResult.success) throw new Error(itemResult.error || "Item update failed");
+
+        // Step 2: Update offer (price + quantity) if offer exists
+        if (editProduct.ebay_offer_id) {
+          status.textContent = "Updating offer...";
+          const priceCents = Math.round(price * 100);
+          const offerResult = await callEdge("ebay-manage-listing", {
+            action: "update_offer",
+            offerId: editProduct.ebay_offer_id,
+            sku,
+            priceCents,
+            quantity,
+          });
+
+          if (!offerResult.success) throw new Error(offerResult.error || "Offer update failed");
+        }
+
+        status.textContent = "✅ Listing updated successfully";
+        setTimeout(() => {
+          document.getElementById("editModal").classList.add("hidden");
+          editProduct = null;
+          loadProducts();
+        }, 1200);
+      } catch (e) {
+        status.textContent = "❌ " + e.message;
+      } finally {
+        btn.disabled = false; btn.textContent = "Save Changes";
+      }
+    });
+
+    // ── Bulk Selection ───────────────────────────────────
+    function getSelectedItems() {
+      return [...document.querySelectorAll(".bulk-check:checked")].map(cb => ({
+        code: cb.dataset.code,
+        offerId: cb.dataset.offer,
+        sku: cb.dataset.sku,
+      }));
+    }
+
+    function updateBulkBar() {
+      const selected = getSelectedItems();
+      const bar = document.getElementById("bulkBar");
+      if (selected.length > 0) {
+        bar.classList.remove("hidden");
+        bar.classList.add("flex");
+        document.getElementById("bulkCount").textContent = `${selected.length} selected`;
+      } else {
+        bar.classList.add("hidden");
+        bar.classList.remove("flex");
+      }
+    }
+
+    document.addEventListener("change", (e) => {
+      if (e.target.classList.contains("bulk-check")) updateBulkBar();
+    });
+
+    document.getElementById("checkAll").addEventListener("change", (e) => {
+      document.querySelectorAll(".bulk-check").forEach(cb => { cb.checked = e.target.checked; });
+      updateBulkBar();
+    });
+
+    document.getElementById("btnBulkCancel").addEventListener("click", () => {
+      document.querySelectorAll(".bulk-check").forEach(cb => { cb.checked = false; });
+      document.getElementById("checkAll").checked = false;
+      updateBulkBar();
+    });
+
+    // ── Bulk Price Update ────────────────────────────────
+    let bulkMode = "price"; // "price" or "qty"
+
+    document.getElementById("btnBulkPrice").addEventListener("click", () => openBulkModal("price"));
+    document.getElementById("btnBulkQty").addEventListener("click", () => openBulkModal("qty"));
+
+    function openBulkModal(mode) {
+      bulkMode = mode;
+      const selected = getSelectedItems();
+      if (!selected.length) return;
+
+      document.getElementById("bulkModalTitle").textContent = mode === "price" ? "Bulk Update Price" : "Bulk Update Quantity";
+      document.getElementById("bulkModalLabel").textContent = mode === "price" ? "New Price ($)" : "New Quantity";
+      document.getElementById("bulkModalValue").value = "";
+      document.getElementById("bulkModalValue").step = mode === "price" ? "0.01" : "1";
+      document.getElementById("bulkModalItems").textContent = selected.map(s => s.sku).join(", ");
+      document.getElementById("bulkModalStatus").textContent = "";
+      document.getElementById("bulkModal").classList.remove("hidden");
+    }
+
+    document.getElementById("btnCloseBulk").addEventListener("click", () => {
+      document.getElementById("bulkModal").classList.add("hidden");
+    });
+
+    document.getElementById("btnBulkApply").addEventListener("click", async () => {
+      const btn = document.getElementById("btnBulkApply");
+      const status = document.getElementById("bulkModalStatus");
+      const value = parseFloat(document.getElementById("bulkModalValue").value);
+      if (isNaN(value) || value < 0) { status.textContent = "❌ Enter a valid number"; return; }
+
+      const selected = getSelectedItems().filter(s => s.offerId);
+      if (!selected.length) { status.textContent = "❌ No items with offers selected"; return; }
+
+      btn.disabled = true; btn.textContent = "Updating...";
+
+      try {
+        const items = selected.map(s => ({
+          sku: s.sku,
+          offerId: s.offerId,
+          ...(bulkMode === "price" ? { priceCents: Math.round(value * 100) } : {}),
+          ...(bulkMode === "qty" ? { quantity: Math.round(value) } : {}),
+        }));
+
+        const result = await callEdge("ebay-manage-listing", { action: "bulk_update", items });
+        if (result.success) {
+          status.textContent = `✅ Updated ${selected.length} listings`;
+          // Update local DB prices if bulk price
+          if (bulkMode === "price") {
+            const priceCents = Math.round(value * 100);
+            for (const s of selected) {
+              await supabase.from("products").update({ ebay_price_cents: priceCents, updated_at: new Date().toISOString() }).eq("code", s.code);
+            }
+          }
+          setTimeout(() => {
+            document.getElementById("bulkModal").classList.add("hidden");
+            document.querySelectorAll(".bulk-check").forEach(cb => { cb.checked = false; });
+            document.getElementById("checkAll").checked = false;
+            updateBulkBar();
+            loadProducts();
+          }, 1200);
+        } else {
+          status.textContent = "❌ " + (result.error || "Bulk update failed");
+        }
+      } catch (e) { status.textContent = "❌ " + e.message; }
+      finally { btn.disabled = false; btn.textContent = "Apply to All Selected"; }
     });
 
     // ── Withdraw ─────────────────────────────────────────
