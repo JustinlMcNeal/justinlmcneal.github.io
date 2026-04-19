@@ -155,6 +155,17 @@
               <div id="modalCatSelected" class="mt-1 text-xs text-green-700 hidden"></div>
             </div>
 
+            <!-- Item Specifics (populated after category selection) -->
+            <div id="aspectsSection" class="hidden">
+              <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-2 text-black/70">Item Specifics</label>
+              <div id="aspectsRequired" class="space-y-2"></div>
+              <details class="mt-2">
+                <summary class="text-[11px] font-bold uppercase tracking-wider text-gray-500 cursor-pointer hover:text-black">+ Optional Fields</summary>
+                <div id="aspectsOptional" class="space-y-2 mt-2"></div>
+              </details>
+              <div id="aspectsLoading" class="text-xs text-gray-400 mt-1 hidden">Loading item specifics...</div>
+            </div>
+
             <!-- Price -->
             <div class="grid grid-cols-2 gap-3">
               <div>
@@ -266,6 +277,7 @@
 
     let allProducts = [];
     let currentProduct = null; // product being edited in modal
+    let currentAspects = [];   // aspects for current category
 
     // ── Edge Function Helper ─────────────────────────────
     async function callEdge(fnName, body) {
@@ -374,6 +386,12 @@
       document.getElementById("modalCatSelected").classList.add("hidden");
       document.getElementById("modalStatus").textContent = "";
 
+      // Reset aspects
+      currentAspects = [];
+      document.getElementById("aspectsSection").classList.add("hidden");
+      document.getElementById("aspectsRequired").innerHTML = "";
+      document.getElementById("aspectsOptional").innerHTML = "";
+
       // Reset step buttons
       enableBtn("btnCreateItem", true);
       enableBtn("btnCreateOffer", false);
@@ -420,6 +438,7 @@
             const opt = sel.options[sel.selectedIndex];
             document.getElementById("modalCatSelected").textContent = `✓ ${opt.text}`;
             document.getElementById("modalCatSelected").classList.remove("hidden");
+            fetchAspects(opt.value);
           });
           // Auto-select first
           sel.selectedIndex = 0;
@@ -435,6 +454,77 @@
       }
     });
 
+    // ── Fetch & Render Item Specifics ────────────────────
+    async function fetchAspects(categoryId) {
+      const section = document.getElementById("aspectsSection");
+      const reqContainer = document.getElementById("aspectsRequired");
+      const optContainer = document.getElementById("aspectsOptional");
+      const loading = document.getElementById("aspectsLoading");
+
+      section.classList.remove("hidden");
+      loading.classList.remove("hidden");
+      reqContainer.innerHTML = "";
+      optContainer.innerHTML = "";
+      currentAspects = [];
+
+      try {
+        const result = await callEdge("ebay-taxonomy", { action: "get_aspects", categoryId });
+        if (!result.success || !result.aspects?.length) {
+          loading.textContent = "No item specifics found for this category";
+          return;
+        }
+
+        currentAspects = result.aspects;
+
+        const defaults = { Brand: "Unbranded", Condition: "New" };
+
+        const required = result.aspects.filter(a => a.required);
+        const optional = result.aspects.filter(a => !a.required).slice(0, 15);
+
+        required.forEach(a => reqContainer.appendChild(buildAspectField(a, defaults, true)));
+        optional.forEach(a => optContainer.appendChild(buildAspectField(a, defaults, false)));
+
+        loading.classList.add("hidden");
+      } catch (e) {
+        loading.textContent = "Failed to load item specifics: " + e.message;
+      }
+    }
+
+    function buildAspectField(aspect, defaults, isRequired) {
+      const div = document.createElement("div");
+      const listId = `dl_${aspect.name.replace(/\W/g, "_")}`;
+      const defaultVal = defaults[aspect.name] || "";
+      const label = isRequired ? `${aspect.name} <span class="text-red-500">*</span>` : aspect.name;
+
+      div.innerHTML = `
+        <label class="block text-[10px] font-bold uppercase tracking-wider ${isRequired ? 'text-black' : 'text-gray-500'} mb-0.5">${label}</label>
+        <input type="text" data-aspect="${esc(aspect.name)}" data-required="${isRequired}"
+          value="${esc(defaultVal)}" list="${listId}"
+          class="w-full border-2 ${isRequired ? 'border-black' : 'border-gray-300'} px-2 py-1.5 text-xs outline-none focus:border-kkpink transition-colors" />
+        ${aspect.values?.length ? `<datalist id="${listId}">${aspect.values.slice(0, 30).map(v => `<option value="${esc(v)}">`).join("")}</datalist>` : ""}
+      `;
+      return div;
+    }
+
+    function collectAspects() {
+      const aspects = {};
+      document.querySelectorAll("[data-aspect]").forEach(input => {
+        const val = input.value.trim();
+        if (val) {
+          aspects[input.dataset.aspect] = [val];
+        }
+      });
+      return aspects;
+    }
+
+    function validateRequiredAspects() {
+      const missing = [];
+      document.querySelectorAll("[data-aspect][data-required='true']").forEach(input => {
+        if (!input.value.trim()) missing.push(input.dataset.aspect);
+      });
+      return missing;
+    }
+
     // ── Step 1: Create Item ──────────────────────────────
     document.getElementById("btnCreateItem").addEventListener("click", async () => {
       const btn = document.getElementById("btnCreateItem");
@@ -449,6 +539,17 @@
 
       if (!sku || !title) { status.textContent = "❌ SKU and title required"; btn.disabled = false; btn.textContent = "1. Create Item"; return; }
 
+      // Validate required aspects
+      const missingAspects = validateRequiredAspects();
+      if (missingAspects.length) {
+        status.textContent = `❌ Required item specifics missing: ${missingAspects.join(", ")}`;
+        btn.disabled = false; btn.textContent = "1. Create Item";
+        return;
+      }
+
+      // Collect filled aspects
+      const aspects = collectAspects();
+
       // Build image URLs from product
       const imageUrls = [];
       if (currentProduct.catalog_image_url) imageUrls.push(currentProduct.catalog_image_url);
@@ -457,7 +558,7 @@
         const result = await callEdge("ebay-manage-listing", {
           action: "create_item",
           sku,
-          product: { title, description, condition, quantity, imageUrls, aspects: {} },
+          product: { title, description, condition, quantity, imageUrls, aspects },
         });
 
         if (result.success) {

@@ -1,7 +1,7 @@
 # eBay API Integration — Master Roadmap
 
 > **Document:** `ebayAPI_001.md`
-> **Last Updated:** April 19, 2026
+> **Last Updated:** April 20, 2026
 > **Project:** Karry Kraze (karrykraze.com)
 > **Status:** Phase 1 complete — 7 edge functions live, 8 planned
 
@@ -216,14 +216,14 @@ Phase 1 is **done** when all of the following are true:
 
 - [x] Admin can create a draft listing from any product in the products table
 - [x] Category suggestion works — top 3 suggestions shown with confidence scores
-- [ ] Required item specifics are surfaced clearly; admin can fill in missing fields *(partially — Brand must be added manually; get_aspects endpoint is built but UI doesn't auto-populate)*
+- [x] Required item specifics are surfaced clearly; admin can fill in missing fields *(auto-fetches aspects via `get_aspects` when category selected; required fields validated before create; Brand pre-filled as "Unbranded")*
 - [x] Offer publishes successfully → listing goes live on eBay
 - [x] Product row stores `ebay_offer_id`, `ebay_listing_id`, `ebay_status` after publish
-- [ ] Existing Seller Hub listings have been migrated and remain editable through admin *(migration function built but not yet run — no existing Seller Hub listings to migrate)*
+- [x] Existing Seller Hub listings have been migrated and remain editable through admin *(N/A — no existing Seller Hub listings to migrate; migration function built and ready if needed)*
 - [x] Price and quantity can be revised from admin → live listing updates
 - [x] `matchProduct()` duplication is resolved (single source of truth for fuzzy matching)
 - [x] End listing (withdraw) works and updates `ebay_status = 'ended'`
-- [ ] Listing visually verified on eBay frontend — title, images, category, item specifics all render correctly *(first test listing published and withdrawn; full quality verification pending)*
+- [x] Listing visually verified on eBay frontend — Cherry Necklace (KK-0039) listing `377126818883` published successfully with correct title, image, category (155101), and item specifics (Brand, Style, Type, Material, Theme, Color)
 
 ### 2.2 eBay Inventory API Flow
 
