@@ -399,13 +399,16 @@
         <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
           <div class="p-4 border-b flex items-center justify-between">
             <h2 class="font-bold">Pinterest Boards</h2>
-            <button id="btnAddBoard" class="text-sm font-medium text-black hover:underline">+ Add Board</button>
+            <div class="flex gap-2">
+              <button id="btnSyncBoards" class="text-sm font-medium bg-red-600 text-white px-3 py-1.5 rounded-lg hover:bg-red-700 transition-colors">📌 Auto-Sync Boards</button>
+              <button id="btnAddBoard" class="text-sm font-medium text-black hover:underline">+ Add Board</button>
+            </div>
           </div>
           <div id="boardList" class="divide-y">
             <!-- Populated by JS -->
             <div class="p-8 text-center text-gray-400">
               <p>No boards configured yet</p>
-              <p class="text-xs mt-1">Add boards to organize your Pinterest pins by category</p>
+              <p class="text-xs mt-1">Click "Auto-Sync Boards" to create boards for each product category</p>
             </div>
           </div>
         </div>
@@ -2098,9 +2101,14 @@
       
       <!-- Scrollable Content -->
       <div class="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4">
-        <!-- Image preview -->
-        <div class="aspect-square bg-gray-100 rounded-lg overflow-hidden">
-          <img id="postDetailImage" class="w-full h-full object-cover">
+<!-- Image preview (carousel or single) -->
+      <div id="postDetailImageContainer" class="relative aspect-square bg-gray-100 rounded-lg overflow-hidden">
+        <img id="postDetailImage" class="w-full h-full object-cover">
+        <!-- Carousel controls (hidden for single image) -->
+        <button id="postDetailPrev" class="hidden absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-black/50 hover:bg-black/70 text-white rounded-full flex items-center justify-center transition-colors">‹</button>
+        <button id="postDetailNext" class="hidden absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-black/50 hover:bg-black/70 text-white rounded-full flex items-center justify-center transition-colors">›</button>
+        <div id="postDetailDots" class="hidden absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5"></div>
+        <div id="postDetailImageCount" class="hidden absolute top-2 right-2 bg-black/60 text-white text-xs font-bold px-2 py-1 rounded-full"></div>
         </div>
         
         <!-- Platform badge -->

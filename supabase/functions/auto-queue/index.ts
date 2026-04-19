@@ -498,6 +498,24 @@ Deno.serve(async (req) => {
       caption_tones: ["casual", "urgency"],
     };
 
+    // Load Pinterest board mapping for auto-assigning boards
+    let pinterestBoardMap: Record<string, string> = {};
+    let pinterestDefaultBoard = "";
+    if (platformList.includes("pinterest")) {
+      const { data: boardMapRow } = await supabase
+        .from("social_settings")
+        .select("setting_value")
+        .eq("setting_key", "pinterest_board_map")
+        .single();
+      if (boardMapRow?.setting_value) {
+        pinterestBoardMap = boardMapRow.setting_value.board_map || {};
+        pinterestDefaultBoard = boardMapRow.setting_value.default_board_id || "";
+        console.log(`[auto-queue] Pinterest board map loaded: ${Object.keys(pinterestBoardMap).length} categories mapped, default=${pinterestDefaultBoard}`);
+      } else {
+        console.warn("[auto-queue] No Pinterest board map found — run sync-pinterest-boards first");
+      }
+    }
+
     // ── SPRINT 3: DATA-DRIVEN POSTING TIMES ──
     const { data: timeData } = await supabase
       .from("posting_time_performance")
@@ -1099,6 +1117,7 @@ Deno.serve(async (req) => {
           product_id: product.id,
           product_name: product.name,
           product_slug: product.slug,
+          category_id: product.category_id,
           catalog_image_url: product.catalog_image_url,
           resolved_image_url: imageResult.imageUrl,
           image_source: carouselResult.isCarousel ? carouselResult.carouselSource : imageResult.imageSource,
@@ -1375,6 +1394,15 @@ Deno.serve(async (req) => {
           source_asset_id: post.pool_asset_id || null,
           selection_metadata: post.selection_metadata || null,
         };
+
+        // Auto-assign Pinterest board based on product category
+        if (post.platform === "pinterest") {
+          const boardId = (post.category_id && pinterestBoardMap[post.category_id]) || pinterestDefaultBoard;
+          if (boardId) {
+            postPayload.pinterest_board_id = boardId;
+            console.log(`[auto-queue] Pinterest board auto-assigned: ${boardId} for "${post.product_name}"`);
+          }
+        }
 
         // Add carousel fields if this is a carousel post
         if (post.is_carousel && post.carousel_urls?.length >= 2) {

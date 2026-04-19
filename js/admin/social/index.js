@@ -880,6 +880,35 @@ function setupBoards() {
     const name = prompt("Enter board name:");
     if (name) addBoard(name);
   });
+
+  document.getElementById("btnSyncBoards")?.addEventListener("click", async () => {
+    const btn = document.getElementById("btnSyncBoards");
+    btn.disabled = true;
+    btn.textContent = "Syncing...";
+    try {
+      const client = getSupabaseClient();
+      const { data: { session } } = await client.auth.getSession();
+      const resp = await fetch(`https://yxdzvzscufkvewecvagq.supabase.co/functions/v1/sync-pinterest-boards`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${session?.access_token}`,
+          "Content-Type": "application/json",
+        },
+      });
+      const result = await resp.json();
+      if (!resp.ok || !result.success) throw new Error(result.error || "Sync failed");
+      const msg = `Boards synced!\n\nMatched: ${result.matched?.length || 0}\nCreated: ${result.created?.length || 0}\nTotal mapped: ${result.total_mapped || 0}`;
+      alert(msg);
+      await loadBoards();
+      renderBoardList();
+    } catch (err) {
+      console.error("Board sync error:", err);
+      alert("Failed to sync boards: " + err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "📌 Auto-Sync Boards";
+    }
+  });
 }
 
 async function addBoard(name) {

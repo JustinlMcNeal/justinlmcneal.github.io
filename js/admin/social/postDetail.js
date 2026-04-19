@@ -13,6 +13,8 @@ let _state, _els, _showToast, _getClient;
 let _postToInstagram, _postToFacebook, _postToPinterest;
 let _loadStats, _loadAutoQueueStats, _loadCalendarPosts, _loadQueuePosts, _switchTab;
 let _populateBoardDropdown;
+let _carouselImages = [];
+let _carouselIndex = 0;
 
 export function initPostDetail(deps) {
   _state = deps.state;
@@ -39,16 +41,58 @@ export function setupPostDetailModal() {
   _els.btnDeletePost?.addEventListener("click", handleDeletePost);
   _els.btnSavePost?.addEventListener("click", handleSavePost);
   _els.btnPostNow?.addEventListener("click", handlePostNow);
+
+  // Carousel nav
+  document.getElementById("postDetailPrev")?.addEventListener("click", () => navigateCarousel(-1));
+  document.getElementById("postDetailNext")?.addEventListener("click", () => navigateCarousel(1));
+}
+
+function navigateCarousel(dir) {
+  if (_carouselImages.length <= 1) return;
+  _carouselIndex = (_carouselIndex + dir + _carouselImages.length) % _carouselImages.length;
+  renderCarouselSlide();
+}
+
+function renderCarouselSlide() {
+  _els.postDetailImage.src = _carouselImages[_carouselIndex];
+  const countEl = document.getElementById("postDetailImageCount");
+  if (countEl) countEl.textContent = `${_carouselIndex + 1} / ${_carouselImages.length}`;
+  const dotsEl = document.getElementById("postDetailDots");
+  if (dotsEl) {
+    dotsEl.innerHTML = _carouselImages.map((_, i) =>
+      `<span class="w-2 h-2 rounded-full ${i === _carouselIndex ? "bg-white" : "bg-white/50"} transition-colors cursor-pointer" data-idx="${i}"></span>`
+    ).join("");
+    dotsEl.onclick = (e) => {
+      const dot = e.target.closest("[data-idx]");
+      if (dot) { _carouselIndex = parseInt(dot.dataset.idx); renderCarouselSlide(); }
+    };
+  }
 }
 
 export function openPostDetail(post) {
   _state.editingPost = post;
   
-  const imageUrl = post.variation?.image_path 
+  const mainImageUrl = post.variation?.image_path 
     ? getPublicUrl(post.variation.image_path)
     : "/imgs/placeholder.jpg";
   
-  _els.postDetailImage.src = imageUrl;
+  // Build carousel image list
+  if (post.image_urls?.length > 1) {
+    _carouselImages = [...post.image_urls];
+  } else {
+    _carouselImages = [mainImageUrl];
+  }
+  _carouselIndex = 0;
+  
+  // Show/hide carousel controls
+  const isCarousel = _carouselImages.length > 1;
+  document.getElementById("postDetailPrev")?.classList.toggle("hidden", !isCarousel);
+  document.getElementById("postDetailNext")?.classList.toggle("hidden", !isCarousel);
+  document.getElementById("postDetailDots")?.classList.toggle("hidden", !isCarousel);
+  document.getElementById("postDetailImageCount")?.classList.toggle("hidden", !isCarousel);
+  
+  _els.postDetailImage.src = _carouselImages[0];
+  if (isCarousel) renderCarouselSlide();
   
   const platformClass = post.platform === "instagram" ? "badge-instagram" : "badge-pinterest";
   _els.postDetailPlatform.className = `badge ${platformClass}`;

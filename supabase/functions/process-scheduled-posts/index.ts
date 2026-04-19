@@ -146,7 +146,7 @@ serve(async (req) => {
               title,
               description,
               link,
-              boardId: post.board_id
+              boardId: post.pinterest_board_id
             })
           });
 
