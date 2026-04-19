@@ -808,7 +808,7 @@
 
     // Connect button — redirect to eBay OAuth
     btnConnectEbay.addEventListener("click", () => {
-      const authUrl = `https://auth.ebay.com/oauth2/authorize?client_id=${EBAY_CLIENT_ID}&response_type=code&redirect_uri=${EBAY_REDIRECT_URI}&scope=${EBAY_SCOPES}&state=ebay`;
+      const authUrl = `https://auth.ebay.com/oauth2/authorize?client_id=${EBAY_CLIENT_ID}&response_type=code&redirect_uri=${EBAY_REDIRECT_URI}&scope=${EBAY_SCOPES}&state=ebay&prompt=login`;
       window.location.href = authUrl;
     });
 
