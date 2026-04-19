@@ -843,6 +843,95 @@
 - [ ] **Inventory sync across platforms** — unified stock levels (website ↔ eBay ↔ Amazon)
 - [ ] **Listing management from admin** — create/edit eBay listings from admin panel (Inventory API)
 
+  <details>
+  <summary><strong>Implementation Plan</strong></summary>
+
+  #### Overview
+  Use the **eBay Inventory API** (`sell.inventory` scope — already in our OAuth token) to create, edit, and manage eBay listings directly from the admin panel. The flow is: Inventory Item → Offer → Published Listing.
+
+  #### eBay Inventory API Flow
+  ```
+  1. Create Inventory Item  →  PUT /sell/inventory/v1/inventory_item/{sku}
+     (product details: title, description, images, condition, quantity)
+  2. Create Offer            →  POST /sell/inventory/v1/offer
+     (price, eBay category, fulfillment/return/payment policies, marketplace)
+  3. Publish Offer           →  POST /sell/inventory/v1/offer/{offerId}/publish
+     (makes it a live listing, returns eBay listing ID)
+  ```
+
+  **Editing:** Update inventory item (PUT, full replacement) → offer auto-updates live listing.
+  **Price/quantity only:** `POST /sell/inventory/v1/bulk_update_price_quantity` for fast batch updates.
+
+  #### Important Caveat
+  > ⚠️ Listings created via Inventory API **cannot** be edited in Seller Hub or vice versa. Existing Seller Hub listings must be migrated first using `POST /sell/inventory/v1/bulk_migrate_listing` before they can be managed via API. **Decision needed:** migrate existing listings or only manage new ones via admin.
+
+  #### Edge Functions to Build
+  | Function | Method | eBay Endpoint | Purpose |
+  |----------|--------|---------------|---------|
+  | `ebay-manage-listing` | POST | Multiple | Unified handler for create/edit/publish/end |
+  | — | — | `PUT /inventory_item/{sku}` | Create or update inventory item |
+  | — | — | `POST /offer` | Create offer (price, category, policies) |
+  | — | — | `PUT /offer/{offerId}` | Update offer (revise price, quantity) |
+  | — | — | `POST /offer/{offerId}/publish` | Publish offer → live listing |
+  | — | — | `POST /offer/{offerId}/withdraw` | End/withdraw listing |
+  | — | — | `GET /inventory_item?limit=100` | List all inventory items |
+  | — | — | `GET /offer?sku={sku}` | Get offers for an SKU |
+  | `ebay-migrate-listings` | POST | `POST /bulk_migrate_listing` | Migrate existing Seller Hub listings to Inventory API |
+
+  #### Database Changes
+  | Change | Details |
+  |--------|---------|
+  | `products.ebay_sku` | SKU used on eBay (default: product `code` like `KK-0013`) |
+  | `products.ebay_offer_id` | eBay offer ID (set after first publish) |
+  | `products.ebay_listing_id` | eBay item ID (set after publish, for direct links) |
+  | `products.ebay_status` | `draft` / `active` / `ended` / `not_listed` |
+  | `products.ebay_category_id` | eBay category ID for the listing |
+  | `products.ebay_price_cents` | eBay-specific price (may differ from website price) |
+
+  #### Admin UI — New Page: `pages/admin/ebay-listings.html`
+  | Section | Features |
+  |---------|----------|
+  | **Products Table** | All products with eBay status badge (Active / Draft / Not Listed), eBay price, quantity, last synced |
+  | **Push to eBay** | Select product → auto-fills form with product data from DB (title, description, images, price, weight) → choose eBay category → publish |
+  | **Edit Listing** | Click active listing → edit title, description, price, quantity → save (auto-updates live listing) |
+  | **Bulk Actions** | Update price/quantity for multiple products at once |
+  | **End Listing** | Withdraw offer (removes from eBay but keeps inventory item for re-listing) |
+  | **Migrate** | One-time button to migrate existing Seller Hub listings to API-managed |
+
+  #### Data Flow: Push Product to eBay
+  ```
+  Admin clicks "List on eBay" for KK-0013 (Cherry Bag Charm)
+    → Edge function receives { action: "create", product_code: "KK-0013", price: 899, quantity: 10, category_id: "xxxxx" }
+    → Fetches product from DB (title, description, images, weight)
+    → PUT /inventory_item/KK-0013 {
+        condition: "NEW",
+        product: { title, description, imageUrls: [supabase storage URLs], brand: "Karry Kraze" },
+        availability: { shipToLocationAvailability: { quantity: 10 } }
+      }
+    → POST /offer { sku: "KK-0013", marketplaceId: "EBAY_US", format: "FIXED_PRICE",
+        pricingSummary: { price: { value: "8.99", currency: "USD" } },
+        categoryId, listingPolicies: { fulfillmentPolicyId, returnPolicyId, paymentPolicyId } }
+    → POST /offer/{offerId}/publish
+    → Update products table: ebay_offer_id, ebay_listing_id, ebay_status = 'active'
+  ```
+
+  #### Prerequisites (one-time setup)
+  1. **Opt into Business Policies** — `POST /sell/account/v1/program/opt_in` (may already be done)
+  2. **Create/verify policies** — need fulfillment, return, and payment policy IDs from eBay Account API
+  3. **Enable Out-of-Stock Control** — keeps listings alive at 0 qty (recommended by eBay)
+  4. **Set up inventory location** — at least one location required via `POST /sell/inventory/v1/location/{merchantLocationKey}`
+
+  #### Key API Constraints
+  - SKU max length: 50 chars (KK codes fit easily)
+  - Max 24 images per listing (we typically have 3-5)
+  - Images must be HTTPS (Supabase Storage URLs qualify)
+  - `Content-Language: en-US` header required on all Inventory API calls
+  - Listings can be revised up to 250 times per calendar day
+  - Batch operations: `bulkCreateOrReplaceInventoryItem` supports up to 25 items at once
+  - Rate limit: 5,000 calls/day (generous for our volume)
+
+  </details>
+
 ---
 
 ## Growth & Polish
