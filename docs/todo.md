@@ -536,6 +536,43 @@
 ## SMS / Notifications
 
 - [x] **Twilio integration** — fully integrated: `sms-subscribe`, `send-sms`, `twilio-webhook`, `sms-abandoned-cart`, `sms-coupon-reminder`, `sms-welcome-series` edge functions all live
+- [x] **Abandoned cart CRON** — `sms-abandoned-cart-check` runs every 5 minutes, detects incomplete carts, sends SMS via Twilio
+- [x] **Coupon reminder CRON** — `sms-coupon-reminder` runs hourly at :30, sends reminders during 9 AM–9 PM ET window
+- [x] **Welcome series CRON** — `sms-welcome-series` runs hourly at :45, sends Day 2 + Day 5 onboarding SMS
+- [ ] **Email notifications** — no email provider integrated yet (Resend.com or SendGrid). Currently SMS + push only
+
+  <details>
+  <summary><strong>Implementation Plan</strong></summary>
+
+  #### What we need
+  Admin + customer email notifications for: review approval + coupon, order confirmations, shipping updates, abandoned cart (email supplement to SMS).
+
+  #### Recommended approach
+  1. **Provider**: [Resend.com](https://resend.com) — free tier (100 emails/day), simple REST API, built for transactional email
+  2. **Edge function**: `send-email` — generic mailer edge function that accepts `{ to, subject, html, from? }`
+  3. **Templates**: HTML email templates stored as string literals in edge function (no build step needed)
+  4. **Integration points**:
+     - `submit-review` → on approval, call `send-email` with coupon code
+     - `stripe-webhook` → on `checkout.session.completed`, send order confirmation
+     - `shippo-webhook` → on `TRANSIT`/`DELIVERED`, send shipping update
+     - `sms-abandoned-cart` → add email fallback for non-SMS subscribers
+  5. **DNS**: Add Resend DKIM/SPF records to `karrykraze.com` domain DNS
+  6. **DB**: `email_sends` log table (to, subject, template, sent_at, status) for tracking delivery
+
+  #### Files to create
+  | File | Purpose |
+  |------|---------|
+  | `supabase/functions/send-email/index.ts` | Generic email sender via Resend API |
+  | `supabase/migrations/xxx_email_sends.sql` | Email log table |
+
+  #### Files to modify
+  | File | Change |
+  |------|--------|
+  | `supabase/functions/submit-review/index.ts` | Call `send-email` on review approval |
+  | `supabase/functions/stripe-webhook/index.ts` | Send order confirmation email |
+  | `supabase/functions/shippo-webhook/index.ts` | Send shipping status email |
+
+  </details>
 
 ---
 
@@ -547,3 +584,266 @@
   - [ ] Stock decrement on order completion
   - [ ] Admin inventory dashboard
   - [ ] Stock ledger audit trail
+
+---
+
+## PWA & Push Notifications
+
+- [x] **PWA manifest** — `manifest.json` with 10 icon sizes + maskable variants, `display: standalone`, theme colors
+- [x] **Service worker** — `sw.js` with network-first pages, cache-first images, stale-while-revalidate CSS/JS, offline fallback (`offline.html`), MAX_DYNAMIC=50, MAX_IMAGES=100
+- [x] **"Add to Home Screen" banner** — auto-shows on eligible devices, dismissible install prompt
+- [x] **Web push notifications** — VAPID keys, subscription flow via `js/shared/pwa.js`, soft permission prompt
+- [x] **`send-push-notification` edge function** — sends to all/admin/customers, auto-cleans stale subscriptions
+- [x] **Admin push on new order** — Stripe webhook fires push notification to admin devices (fire-and-forget)
+- [x] **Admin push composer** — settings panel to send custom push notifications to all/admin/customers
+- [x] **`push_subscriptions` table** — `is_admin`, `is_active`, `endpoint` columns, RLS policies for anon insert/delete
+- [x] **PWA tags registered** — service worker + manifest link on all 34 HTML pages
+- [ ] **Customer push for order shipped / review reminder** — future enhancement
+
+---
+
+## AI Content Pipeline
+
+- [x] **AI image generation** — `generate-social-image` edge function: gpt-image-1 img2img (product photo reference) + DALL-E 3 text-to-image fallback
+- [x] **Scene randomizer** — 18.9M combos (30 envs × 15 lighting × 12 comps × 14 moods × 25 props × 10 cameras), seasonal awareness (spring/summer/fall/winter pools, 60/40 weighted)
+- [x] **Smart scheduling dedup** — SceneFingerprint (env/mood/camera), avoids last 5 scenes per product
+- [x] **Quality scoring** — GPT-4o-mini Vision compares generated vs original: auto-approve 8+, review 5-7, reject <5
+- [x] **Image blacklist** — `image_blacklist` table + admin UI, auto-queue checks blacklist before using supplier images
+- [x] **Image review queue** — `social_generated_images` table with pending_review/approved/rejected workflow
+- [x] **Carousel image sets** — generates 3-5 images with shared `carousel_set_id`, locked camera style, narrative composition flow (wide → hero → angled → close-up → held)
+- [x] **Supplier image auto-import** — `import-product-images` edge function downloads external URLs to Supabase Storage, dedup, auto-updates product records, auto-fires on product save
+- [x] **AI product fill** — `ai-product-fill` edge function uses GPT-4o Vision to analyze product images → descriptions, tags, titles
+- [x] **Category-aware prompts** — all 6 product categories (accessories, headwear, bags, jewelry, plushies, lego) have tailored generation prompts
+- [~] **Text/price overlay** — deferred (low priority promo post overlay generator)
+
+---
+
+## Marketplace Integrations
+
+### Amazon SP-API
+> **Status:** 🟡 Blocked — registration submitted Feb 24, 2026, pending Amazon review. Currently CSV import only.
+
+- [x] **CSV order import** — `import-amazon-orders.mjs` parses Seller Central TSV exports, `rpc_import_amazon_orders()` bulk-imports via JSON, admin drag-and-drop UI on expenses page
+- [ ] **SP-API registration approval** — waiting on Amazon; nothing can be built until approved
+- [ ] **Auto-import orders** → unified order dashboard
+
+  <details>
+  <summary><strong>Implementation Plan (post-approval)</strong></summary>
+
+  #### Prerequisites
+  - Amazon Developer Account approved with SP-API access
+  - LWA (Login With Amazon) OAuth credentials (Client ID + Secret)
+  - IAM role ARN for cross-account access (if required by Amazon for self-authorized apps)
+
+  #### OAuth Flow
+  1. **Register self-authorized app** in Amazon Seller Central → Developer Console
+  2. **Generate refresh token** via LWA OAuth (one-time; self-authorized apps get a permanent refresh token)
+  3. **Store credentials** via `supabase secrets set`:
+     - `AMAZON_LWA_CLIENT_ID`, `AMAZON_LWA_CLIENT_SECRET`, `AMAZON_SP_REFRESH_TOKEN`
+     - `AMAZON_SELLER_ID` (for Reports API calls)
+
+  #### Edge Functions to Build
+  | Function | Purpose | SP-API Endpoint |
+  |----------|---------|-----------------|
+  | `amazon-refresh-token` | Exchange refresh token → access token (1h expiry) | `api.amazon.com/auth/o2/token` |
+  | `amazon-sync-orders` | Pull orders from last 24h, upsert to `orders_raw` | `GET /orders/v0/orders` + `GET /orders/v0/orders/{id}/orderItems` |
+  | `amazon-sync-catalog` | Pull product data + images | `GET /catalog/2022-04-01/items` |
+  | `amazon-settlement-report` | Request + download settlement reports | `POST /reports/2021-06-30/reports` (type `GET_V2_SETTLEMENT_REPORT_DATA_FLAT_FILE`) |
+
+  #### Data Flow
+  ```
+  CRON (daily 4 AM UTC)
+    → amazon-sync-orders
+      → LWA token refresh (if expired)
+      → GET /orders/v0/orders?CreatedAfter=yesterday
+      → For each order: GET /orders/v0/orders/{id}/orderItems
+      → Map to orders_raw schema (order_session_id = Amazon Order ID)
+      → Upsert to orders_raw + line_items
+  ```
+
+  #### Database Changes
+  | Change | Details |
+  |--------|---------|
+  | `orders_raw.source` | Add `'amazon_api'` to distinguish from CSV imports (`'amazon'`) |
+  | `marketplace_tokens` table (new) | `platform`, `access_token`, `refresh_token`, `expires_at` — reusable for eBay too |
+
+  #### Key SP-API Constraints
+  - Rate limits: Orders API = 1 req/sec burst, 1/30s sustained. Use exponential backoff.
+  - Restricted data: PII (buyer name/address) requires Restricted Data Token (RDT) per request
+  - Sandbox: SP-API has sandbox endpoints for testing (`sandbox.sellingpartnerapi-na.amazon.com`)
+  - Region: NA endpoint = `sellingpartnerapi-na.amazon.com`
+
+  #### CRON Setup
+  ```sql
+  SELECT cron.schedule('amazon-sync-orders-daily',
+    '0 4 * * *',
+    $$SELECT net.http_post(
+      url := 'https://yxdzvzscufkvewecvagq.supabase.co/functions/v1/amazon-sync-orders',
+      headers := '{"Authorization":"Bearer SERVICE_ROLE_KEY"}'::jsonb
+    )$$
+  );
+  ```
+
+  </details>
+
+- [ ] **Catalog sync** — product data + images from Amazon → local DB
+- [ ] **Competitor pricing intelligence** — track competing listings for same ASINs
+- [ ] **Settlement report import** — automated download of bi-weekly settlement CSVs
+- [ ] **Price alerts** — notify when competitor prices drop below threshold
+
+### eBay API
+> **Status:** 🔴 Not started — no Developer Program registration yet. Currently CSV import only.
+
+- [x] **CSV order import** — `import-legacy-orders.mjs` parses eBay Transaction Report CSVs, admin drag-and-drop UI, fee/shipping/selling breakdown modal
+- [ ] **Register for eBay Developer Program** — create account at [developer.ebay.com](https://developer.ebay.com), get Production API keys
+
+  <details>
+  <summary><strong>Implementation Plan</strong></summary>
+
+  #### Step 1: Developer Account Setup
+  1. Go to [developer.ebay.com](https://developer.ebay.com) → Sign In with eBay seller account
+  2. Create an Application → select Production environment
+  3. Get **App ID (Client ID)** + **Cert ID (Client Secret)** + **Dev ID**
+  4. Set OAuth redirect URI to `https://karrykraze.com/pages/admin/ebay-callback.html` (or edge function callback)
+
+  #### Step 2: OAuth Implementation
+  eBay uses OAuth 2.0 with Authorization Code Grant (for user-specific actions like order access).
+
+  ```
+  Auth URL: https://auth.ebay.com/oauth2/authorize
+  Token URL: https://api.ebay.com/identity/v1/oauth2/token
+  Scopes needed:
+    - https://api.ebay.com/oauth/api_scope/sell.fulfillment (orders)
+    - https://api.ebay.com/oauth/api_scope/sell.inventory (listings)
+    - https://api.ebay.com/oauth/api_scope/sell.finances (payouts/settlements)
+  ```
+
+  #### Edge Functions to Build
+  | Function | Purpose | eBay API Endpoint |
+  |----------|---------|-------------------|
+  | `ebay-oauth-callback` | Exchange auth code → access + refresh tokens | `POST /identity/v1/oauth2/token` |
+  | `ebay-refresh-token` | Refresh access token (2h expiry, refresh token = 18 months) | `POST /identity/v1/oauth2/token` |
+  | `ebay-sync-orders` | Pull orders from last 24h | `GET /sell/fulfillment/v1/order` |
+  | `ebay-sync-inventory` | Sync inventory/listings | `GET /sell/inventory/v1/inventory_item` |
+  | `ebay-sync-finances` | Pull payout/transaction data | `GET /sell/finances/v1/transaction` |
+
+  #### Data Flow
+  ```
+  CRON (daily 5 AM UTC)
+    → ebay-sync-orders
+      → Refresh token if expired (access_token = 2h, refresh_token = 18 months)
+      → GET /sell/fulfillment/v1/order?filter=creationdate:[yesterday..now]
+      → Map to orders_raw schema (order_session_id = eBay Order ID)
+      → Upsert to orders_raw + line_items
+  ```
+
+  #### Database Changes
+  | Change | Details |
+  |--------|---------|
+  | `orders_raw.source` | Add `'ebay_api'` to distinguish from CSV imports (`'ebay'`) |
+  | `marketplace_tokens` table | Reuse same table as Amazon (platform = `'ebay'`) |
+
+  #### Key eBay API Constraints
+  - Rate limits: 5,000 calls/day for most APIs (generous)
+  - Token expiry: Access token = 2 hours, Refresh token = 18 months (auto-refresh via CRON)
+  - Sandbox: `api.sandbox.ebay.com` for testing (separate sandbox seller account needed)
+  - Fulfillment API: Returns last 90 days of orders by default
+  - Finances API: Returns transaction-level fee breakdowns (replaces CSV fee parsing)
+
+  #### CRON Setup
+  ```sql
+  SELECT cron.schedule('ebay-sync-orders-daily',
+    '0 5 * * *',
+    $$SELECT net.http_post(
+      url := 'https://yxdzvzscufkvewecvagq.supabase.co/functions/v1/ebay-sync-orders',
+      headers := '{"Authorization":"Bearer SERVICE_ROLE_KEY"}'::jsonb
+    )$$
+  );
+  ```
+
+  #### Admin UI
+  - Add "eBay" tab to admin settings → OAuth connect button → redirect to eBay auth → callback saves tokens
+  - Order dashboard: unified view showing source badge (Website / Amazon / eBay)
+
+  </details>
+
+- [ ] **OAuth + listing management** — connect eBay seller account, manage listings from admin
+- [ ] **Order sync to admin panel** — automated daily order pull via Fulfillment API
+- [ ] **Inventory sync across platforms** — unified stock levels (website ↔ eBay ↔ Amazon)
+- [ ] **Financial transaction sync** — automated fee/payout data via Finances API (replaces CSV import)
+
+---
+
+## Growth & Polish
+
+- [ ] **Pinterest production API** — currently sandbox-only (`api-sandbox.pinterest.com`). Pins not publicly visible. Needs Pinterest App Review for production access. Token refresh already handled by daily `refresh-tokens` CRON.
+- [ ] **Instagram comment → auto-DM coupon** — needs Meta App Review for `instagram_manage_comments` + `instagram_manage_messages` permissions. Would require new edge function `instagram-auto-dm` triggered by comment webhook.
+- [ ] **Admin public replies to reviews** — add reply field to admin review moderation UI, store in `review_replies` table, display on public reviews page
+- [ ] **Review helpfulness voting** — "Was this helpful?" button on review cards, `review_votes` table, sort by helpfulness
+- [ ] **SEO blog / content pages** — no blog exists currently. Would need: blog post table in Supabase, admin editor page, public `/blog/{slug}` page with dynamic routing via query params, sitemap generation, structured data (Article schema)
+- [ ] **TikTok integration** — OAuth flow + video posting outlined in `pSocial_002.md` (section 10.1). Video format (9:16) ready from Reels work. Needs: TikTok Developer account, `tiktok-oauth` + `tiktok-post` edge functions, admin connect button.
+- [ ] **Email marketing campaigns** — abandoned cart email (supplement to SMS), new arrivals digest, re-engagement for lapsed customers. Depends on email provider integration (see SMS/Notifications section).
+
+---
+
+## Architecture Reference
+
+### Social Media Posting Flow
+```
+Product in DB
+  → autopilot-fill (daily CRON, 2 AM UTC) checks calendar gaps
+    → auto-queue generates posts (AI captions + Image Pool / AI images)
+      → process-scheduled-posts (every-minute CRON) fires when scheduled_for <= now
+        → dispatches to instagram-post / instagram-carousel / facebook-post / pinterest-post
+          → instagram-insights (6h CRON) pulls engagement metrics
+            → post-learning engine aggregates patterns
+              → feeds learnings back into next caption/hashtag/timing generation
+```
+
+### Key Supabase Edge Functions
+| Function | Purpose |
+|----------|---------|
+| `ai-generate` | GPT-4o-mini captions, hashtags, scoring, insights |
+| `ai-product-fill` | GPT-4o Vision → product descriptions from images |
+| `auto-queue` | Generate scheduled posts from product catalog |
+| `autopilot-fill` | Auto-fill content calendar gaps (CRON trigger) |
+| `auto-repost` | Resurface high-engagement posts 30+ days old |
+| `process-scheduled-posts` | Publish queued posts when time arrives |
+| `instagram-post` | Single image post to Instagram |
+| `instagram-carousel` | Multi-image carousel to Instagram |
+| `instagram-insights` | Pull engagement metrics + trigger learning |
+| `facebook-post` | Post to Facebook Page |
+| `pinterest-post` | Create pin on Pinterest (sandbox) |
+| `generate-social-image` | AI image generation (gpt-image-1 + DALL-E 3 + quality scoring) |
+| `import-product-images` | Download external supplier images to Supabase Storage |
+| `create-checkout-session` | Stripe checkout |
+| `stripe-webhook` | Handle Stripe payment events |
+| `submit-review` | Customer review submission + auto-coupon |
+| `verify-order` | Verify order for review eligibility |
+| `verify-review-token` | JWT verify for SMS review deep links |
+| `send-review-request` | Generate review JWT + send SMS via Twilio |
+| `refresh-tokens` | Auto-refresh Instagram/Facebook/Pinterest tokens |
+| `send-push-notification` | Web push notifications to subscribed browsers |
+| `share-product` | Generate OG meta tags for product share links |
+| `lookup-orders` | Customer order lookup with shipment tracking |
+| `shippo-create-label` | Buy shipping label via Shippo |
+| `shippo-void-label` | Void/refund unused shipping label |
+| `shippo-webhook` | Receive Shippo tracking updates (PRE_TRANSIT/TRANSIT/DELIVERED) |
+| `send-sms` | Generic SMS sender via Twilio |
+| `sms-subscribe` | SMS opt-in subscriber endpoint |
+| `sms-abandoned-cart` | Detect + notify abandoned carts |
+| `sms-coupon-reminder` | Send coupon reminder SMS |
+| `sms-welcome-series` | Day 2 + Day 5 onboarding SMS |
+| `sms-redirect` | SMS link click tracking + redirect |
+| `twilio-webhook` | Inbound SMS handling (STOP/START) |
+
+### Active CRON Jobs (pg_cron)
+| Job | Schedule | Function |
+|-----|----------|----------|
+| `process-scheduled-social-posts` | Every minute | `process-scheduled-posts` |
+| `autopilot-fill-daily` | 2:00 AM UTC daily | `autopilot-fill` |
+| `refresh-social-tokens-daily` | 3:00 AM UTC daily | `refresh-tokens` |
+| `sync-instagram-insights` | Every 6 hours | `instagram-insights` |
+| `sms-abandoned-cart-check` | Every 5 minutes | `sms-abandoned-cart` |
+| `sms-coupon-reminder` | Hourly at :30 | `sms-coupon-reminder` |
+| `sms-welcome-series` | Hourly at :45 | `sms-welcome-series` |
