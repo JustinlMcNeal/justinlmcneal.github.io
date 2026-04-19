@@ -178,7 +178,7 @@
               </div>
               <div id="modalDescriptionEditor" style="height:150px;"></div>
               <textarea id="modalDescriptionHtml" class="hidden w-full h-[200px] font-mono text-xs border border-gray-300 rounded p-2 bg-gray-50" placeholder="Paste or type raw HTML here..."></textarea>
-              <iframe id="modalDescriptionPreview" class="hidden w-full h-[300px] border border-gray-300 rounded bg-white" sandbox="allow-same-origin"></iframe>
+              <iframe id="modalDescriptionPreview" class="hidden w-full h-[300px] border border-gray-300 rounded bg-white"></iframe>
             </div>
 
             <!-- Images -->
@@ -298,7 +298,7 @@
               </div>
               <div id="editDescriptionEditor" style="height:150px;"></div>
               <textarea id="editDescriptionHtml" class="hidden w-full h-[200px] font-mono text-xs border border-gray-300 rounded p-2 bg-gray-50" placeholder="Paste or type raw HTML here..."></textarea>
-              <iframe id="editDescriptionPreview" class="hidden w-full h-[300px] border border-gray-300 rounded bg-white" sandbox="allow-same-origin"></iframe>
+              <iframe id="editDescriptionPreview" class="hidden w-full h-[300px] border border-gray-300 rounded bg-white"></iframe>
             </div>
 
             <!-- Images -->
@@ -607,12 +607,10 @@
         textarea.classList.remove("hidden");
         btnHtml.classList.add("active");
       } else if (mode === "preview") {
-        // Render current HTML into sandboxed iframe
+        // Render current HTML into iframe via srcdoc
         const html = getDescriptionHtml(prefix, quillInstance);
-        const doc = preview.contentDocument || preview.contentWindow.document;
-        doc.open();
-        doc.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:12px;font-family:Arial,sans-serif;color:#222;line-height:1.6;}</style></head><body>${sanitizeForEbay(html)}</body></html>`);
-        doc.close();
+        const safeHtml = sanitizeForEbay(html);
+        preview.srcdoc = "<!DOCTYPE html><html><head><meta charset='utf-8'><style>body{margin:12px;font-family:Arial,sans-serif;color:#222;line-height:1.6;}</style><\/head><body>" + safeHtml + "<\/body><\/html>";
         preview.classList.remove("hidden");
         btnPreview.classList.add("active");
       } else {
