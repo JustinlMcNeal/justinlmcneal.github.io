@@ -281,12 +281,41 @@ async function importSelectedCatalogImages() {
   _els.catalogBrowseImport.disabled = false;
 
   if (succeeded.length) {
-    _showToast(`${succeeded.length} image${succeeded.length > 1 ? "s" : ""} added to pool`, "success");
+    _showToast(`${succeeded.length} image${succeeded.length > 1 ? "s" : ""} added to pool — AI tagging...`, "success");
     await loadAssets();
-    openTagModal(succeeded[0]);
+
+    // Auto-tag with AI in the background
+    const assetIds = succeeded.map(a => a.id).filter(Boolean);
+    if (assetIds.length) {
+      autoTagAssets(assetIds);
+    }
   }
   if (failed.length) {
     _showToast(`${failed.length} failed: ${failed.map(f => f.name).join(", ")}`, "error");
+  }
+}
+
+async function autoTagAssets(assetIds) {
+  try {
+    const client = getSupabaseClient();
+    const { data: { session } } = await client.auth.getSession();
+    const resp = await fetch("https://yxdzvzscufkvewecvagq.supabase.co/functions/v1/ai-tag-assets", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${session?.access_token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ asset_ids: assetIds }),
+    });
+    const result = await resp.json();
+    if (result.success && result.tagged > 0) {
+      _showToast(`AI tagged ${result.tagged} image${result.tagged > 1 ? "s" : ""} ✨`, "success");
+      await loadAssets();
+    } else if (!result.success) {
+      console.warn("[autoTag] AI tagging failed:", result.error);
+    }
+  } catch (err) {
+    console.warn("[autoTag] AI tagging error:", err);
   }
 }
 
