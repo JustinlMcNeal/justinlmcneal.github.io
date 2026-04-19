@@ -169,10 +169,11 @@ function renderPostPill(post) {
   // Special styling for deleted posts
   const deletedClass = status === "deleted" ? "opacity-50 line-through" : "";
   const icon = status === "deleted" ? "❌" : (platform === "instagram" ? "📸" : platform === "facebook" ? "📘" : "📌");
+  const carouselBadge = post.media_type === "carousel" ? " 🎠" : "";
   
   return `
-    <div class="cal-post ${platform} ${status} ${deletedClass}" data-post-id="${post.id}" title="${status === 'deleted' ? '[DELETED] ' : ''}${post.caption || ""}">
-      ${time} ${icon}
+    <div class="cal-post ${platform} ${status} ${deletedClass}" data-post-id="${post.id}" title="${status === 'deleted' ? '[DELETED] ' : ''}${post.media_type === 'carousel' ? '[CAROUSEL] ' : ''}${post.caption || ""}">
+      ${time} ${icon}${carouselBadge}
     </div>
   `;
 }

@@ -87,8 +87,13 @@ serve(async (req) => {
         // Get image URL - priority: post.image_url > variation > asset > product catalog
         // post.image_url is set by auto-queue with the best resolved image (AI-generated preferred)
         if (post.image_url) {
-          imageUrl = post.image_url;
-          console.log(`[process-scheduled-posts] Using post.image_url directly`);
+          // Resolve relative storage paths (e.g. "originals/2026/01/...") to full public URLs
+          if (post.image_url.startsWith('http://') || post.image_url.startsWith('https://')) {
+            imageUrl = post.image_url;
+          } else {
+            imageUrl = `${supabaseUrl}/storage/v1/object/public/social-media/${post.image_url}`;
+          }
+          console.log(`[process-scheduled-posts] Using post.image_url: ${imageUrl}`);
         } else if (variation?.image_path) {
           // Check if it's already a full URL or a storage path
           if (variation.image_path.startsWith('http://') || variation.image_path.startsWith('https://')) {
@@ -158,8 +163,12 @@ serve(async (req) => {
           const isCarousel = post.media_type === "carousel" && Array.isArray(post.image_urls) && post.image_urls.length >= 2;
           
           if (isCarousel) {
+            // Resolve any relative storage paths in carousel image URLs
+            const resolvedImageUrls = post.image_urls.map((url: string) =>
+              url.startsWith('http://') || url.startsWith('https://') ? url : `${supabaseUrl}/storage/v1/object/public/social-media/${url}`
+            );
             // Call Instagram carousel function
-            console.log(`[process-scheduled-posts] Calling instagram-carousel with ${post.image_urls.length} images`);
+            console.log(`[process-scheduled-posts] Calling instagram-carousel with ${resolvedImageUrls.length} images`);
             const igResp = await fetch(`${supabaseUrl}/functions/v1/instagram-carousel`, {
               method: "POST",
               headers: {
@@ -168,7 +177,7 @@ serve(async (req) => {
               },
               body: JSON.stringify({
                 postId: post.id,
-                imageUrls: post.image_urls,
+                imageUrls: resolvedImageUrls,
                 caption: description
               })
             });
