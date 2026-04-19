@@ -173,10 +173,12 @@
                 <div class="flex gap-1">
                   <button type="button" id="btnPushVisual" class="desc-tab active text-[10px] px-2 py-0.5 rounded font-bold">Visual</button>
                   <button type="button" id="btnPushHtml" class="desc-tab text-[10px] px-2 py-0.5 rounded font-bold">HTML</button>
+                  <button type="button" id="btnPushPreview" class="desc-tab text-[10px] px-2 py-0.5 rounded font-bold">Preview</button>
                 </div>
               </div>
               <div id="modalDescriptionEditor" style="height:150px;"></div>
               <textarea id="modalDescriptionHtml" class="hidden w-full h-[200px] font-mono text-xs border border-gray-300 rounded p-2 bg-gray-50" placeholder="Paste or type raw HTML here..."></textarea>
+              <iframe id="modalDescriptionPreview" class="hidden w-full h-[300px] border border-gray-300 rounded bg-white" sandbox="allow-same-origin"></iframe>
             </div>
 
             <!-- Images -->
@@ -291,10 +293,12 @@
                 <div class="flex gap-1">
                   <button type="button" id="btnEditVisual" class="desc-tab active text-[10px] px-2 py-0.5 rounded font-bold">Visual</button>
                   <button type="button" id="btnEditHtml" class="desc-tab text-[10px] px-2 py-0.5 rounded font-bold">HTML</button>
+                  <button type="button" id="btnEditPreview" class="desc-tab text-[10px] px-2 py-0.5 rounded font-bold">Preview</button>
                 </div>
               </div>
               <div id="editDescriptionEditor" style="height:150px;"></div>
               <textarea id="editDescriptionHtml" class="hidden w-full h-[200px] font-mono text-xs border border-gray-300 rounded p-2 bg-gray-50" placeholder="Paste or type raw HTML here..."></textarea>
+              <iframe id="editDescriptionPreview" class="hidden w-full h-[300px] border border-gray-300 rounded bg-white" sandbox="allow-same-origin"></iframe>
             </div>
 
             <!-- Images -->
@@ -579,8 +583,20 @@
       const qlContainer = document.getElementById(`${prefix}DescriptionEditor`);
       const qlToolbar = qlContainer.previousElementSibling;
       const textarea = document.getElementById(`${prefix}DescriptionHtml`);
-      const btnVisual = document.getElementById(`btn${prefix === "modal" ? "Push" : "Edit"}Visual`);
-      const btnHtml = document.getElementById(`btn${prefix === "modal" ? "Push" : "Edit"}Html`);
+      const preview = document.getElementById(`${prefix}DescriptionPreview`);
+      const btnPrefix = prefix === "modal" ? "Push" : "Edit";
+      const btnVisual = document.getElementById(`btn${btnPrefix}Visual`);
+      const btnHtml = document.getElementById(`btn${btnPrefix}Html`);
+      const btnPreview = document.getElementById(`btn${btnPrefix}Preview`);
+
+      // Hide all panels first
+      qlContainer.style.display = "none";
+      if (qlToolbar?.classList?.contains("ql-toolbar")) qlToolbar.style.display = "none";
+      textarea.classList.add("hidden");
+      preview.classList.add("hidden");
+      btnVisual.classList.remove("active");
+      btnHtml.classList.remove("active");
+      btnPreview.classList.remove("active");
 
       if (mode === "html") {
         // Sync Quill content to textarea (only if textarea is empty — don't overwrite user HTML)
@@ -588,21 +604,25 @@
           const html = quillInstance.root.innerHTML;
           textarea.value = html === "<p><br></p>" ? "" : html;
         }
-        qlContainer.style.display = "none";
-        if (qlToolbar?.classList?.contains("ql-toolbar")) qlToolbar.style.display = "none";
         textarea.classList.remove("hidden");
-        btnVisual.classList.remove("active");
         btnHtml.classList.add("active");
+      } else if (mode === "preview") {
+        // Render current HTML into sandboxed iframe
+        const html = getDescriptionHtml(prefix, quillInstance);
+        const doc = preview.contentDocument || preview.contentWindow.document;
+        doc.open();
+        doc.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:12px;font-family:Arial,sans-serif;color:#222;line-height:1.6;}</style></head><body>${sanitizeForEbay(html)}</body></html>`);
+        doc.close();
+        preview.classList.remove("hidden");
+        btnPreview.classList.add("active");
       } else {
-        // Only sync simple HTML back into Quill — complex HTML would crash it
+        // Visual mode
         const val = textarea.value.trim();
         if (quillInstance && val && !isComplexHtml(val)) {
           quillInstance.root.innerHTML = val;
         }
         qlContainer.style.display = "";
         if (qlToolbar?.classList?.contains("ql-toolbar")) qlToolbar.style.display = "";
-        textarea.classList.add("hidden");
-        btnHtml.classList.remove("active");
         btnVisual.classList.add("active");
       }
     }
@@ -722,8 +742,10 @@
       pushDescMode = "visual";
       document.getElementById("modalDescriptionHtml").value = "";
       document.getElementById("modalDescriptionHtml").classList.add("hidden");
+      document.getElementById("modalDescriptionPreview").classList.add("hidden");
       document.getElementById("btnPushVisual").classList.add("active");
       document.getElementById("btnPushHtml").classList.remove("active");
+      document.getElementById("btnPushPreview").classList.remove("active");
 
       // Build image strip
       pushImageUrls = buildImageUrls(currentProduct);
@@ -775,6 +797,9 @@
     document.getElementById("btnPushHtml").addEventListener("click", () => {
       pushDescMode = "html";
       toggleDescMode("html", "modal", pushQuill);
+    });
+    document.getElementById("btnPushPreview").addEventListener("click", () => {
+      toggleDescMode("preview", "modal", pushQuill);
     });
 
     // ── Category Search ──────────────────────────────────
@@ -1055,6 +1080,8 @@
 
         // Detect complex HTML → start in HTML mode; simple → load into Quill
         const existingDesc = product.description || "";
+        document.getElementById("editDescriptionPreview").classList.add("hidden");
+        document.getElementById("btnEditPreview").classList.remove("active");
         if (existingDesc && isComplexHtml(existingDesc)) {
           editDescMode = "html";
           document.getElementById("editDescriptionHtml").value = existingDesc;
@@ -1155,6 +1182,9 @@
     document.getElementById("btnEditHtml").addEventListener("click", () => {
       editDescMode = "html";
       toggleDescMode("html", "edit", editQuill);
+    });
+    document.getElementById("btnEditPreview").addEventListener("click", () => {
+      toggleDescMode("preview", "edit", editQuill);
     });
 
     document.getElementById("btnSaveEdit").addEventListener("click", async () => {
