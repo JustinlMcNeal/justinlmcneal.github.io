@@ -43,6 +43,8 @@
     .img-strip .img-thumb.picker:hover { opacity: 1; border-color: #ff69b4; }
     .ql-container { font-size: 14px; }
     .ql-editor { min-height: 100px; }
+    .desc-tab { background: #e5e7eb; color: #555; }
+    .desc-tab.active { background: #ff69b4; color: #fff; }
   </style>
 </head>
 
@@ -166,8 +168,15 @@
 
             <!-- Description -->
             <div>
-              <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">Description</label>
+              <div class="flex items-center gap-3 mb-1">
+                <label class="block text-[11px] font-black uppercase tracking-[.12em] text-black/70">Description</label>
+                <div class="flex gap-1">
+                  <button type="button" id="btnPushVisual" class="desc-tab active text-[10px] px-2 py-0.5 rounded font-bold">Visual</button>
+                  <button type="button" id="btnPushHtml" class="desc-tab text-[10px] px-2 py-0.5 rounded font-bold">HTML</button>
+                </div>
+              </div>
               <div id="modalDescriptionEditor" style="height:150px;"></div>
+              <textarea id="modalDescriptionHtml" class="hidden w-full h-[200px] font-mono text-xs border border-gray-300 rounded p-2 bg-gray-50" placeholder="Paste or type raw HTML here..."></textarea>
             </div>
 
             <!-- Images -->
@@ -277,8 +286,15 @@
 
             <!-- Description -->
             <div>
-              <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">Description</label>
+              <div class="flex items-center gap-3 mb-1">
+                <label class="block text-[11px] font-black uppercase tracking-[.12em] text-black/70">Description</label>
+                <div class="flex gap-1">
+                  <button type="button" id="btnEditVisual" class="desc-tab active text-[10px] px-2 py-0.5 rounded font-bold">Visual</button>
+                  <button type="button" id="btnEditHtml" class="desc-tab text-[10px] px-2 py-0.5 rounded font-bold">HTML</button>
+                </div>
+              </div>
               <div id="editDescriptionEditor" style="height:150px;"></div>
+              <textarea id="editDescriptionHtml" class="hidden w-full h-[200px] font-mono text-xs border border-gray-300 rounded p-2 bg-gray-50" placeholder="Paste or type raw HTML here..."></textarea>
             </div>
 
             <!-- Images -->
@@ -549,6 +565,48 @@
       ["clean"],
     ];
 
+    // ── Description Mode Toggle (Visual / HTML) ──────────
+    let pushDescMode = "visual"; // "visual" or "html"
+    let editDescMode = "visual";
+
+    function toggleDescMode(mode, prefix, quillInstance) {
+      // Quill transforms the editor div into .ql-container and inserts .ql-toolbar before it
+      const qlContainer = document.getElementById(`${prefix}DescriptionEditor`);
+      const qlToolbar = qlContainer.previousElementSibling;
+      const textarea = document.getElementById(`${prefix}DescriptionHtml`);
+      const btnVisual = document.getElementById(`btn${prefix === "modal" ? "Push" : "Edit"}Visual`);
+      const btnHtml = document.getElementById(`btn${prefix === "modal" ? "Push" : "Edit"}Html`);
+
+      if (mode === "html") {
+        // Sync Quill content to textarea
+        if (quillInstance) {
+          const html = quillInstance.root.innerHTML;
+          textarea.value = html === "<p><br></p>" ? "" : html;
+        }
+        qlContainer.style.display = "none";
+        if (qlToolbar?.classList?.contains("ql-toolbar")) qlToolbar.style.display = "none";
+        textarea.classList.remove("hidden");
+        btnVisual.classList.remove("active");
+        btnHtml.classList.add("active");
+      } else {
+        // Sync textarea content back to Quill
+        if (quillInstance && textarea.value.trim()) quillInstance.root.innerHTML = textarea.value;
+        qlContainer.style.display = "";
+        if (qlToolbar?.classList?.contains("ql-toolbar")) qlToolbar.style.display = "";
+        textarea.classList.add("hidden");
+        btnHtml.classList.remove("active");
+        btnVisual.classList.add("active");
+      }
+    }
+
+    function getDescriptionHtml(prefix, quillInstance) {
+      const mode = prefix === "modal" ? pushDescMode : editDescMode;
+      if (mode === "html") {
+        return document.getElementById(`${prefix}DescriptionHtml`).value;
+      }
+      return quillInstance.root.innerHTML;
+    }
+
     // ── Load Products ────────────────────────────────────
     async function loadProducts() {
       const { data, error } = await supabase
@@ -652,6 +710,12 @@
       const editorEl = document.getElementById("modalDescriptionEditor");
       editorEl.innerHTML = "";
       pushQuill = new Quill(editorEl, { theme: "snow", modules: { toolbar: quillToolbar } });
+      // Reset description mode to visual
+      pushDescMode = "visual";
+      document.getElementById("modalDescriptionHtml").value = "";
+      document.getElementById("modalDescriptionHtml").classList.add("hidden");
+      document.getElementById("btnPushVisual").classList.add("active");
+      document.getElementById("btnPushHtml").classList.remove("active");
 
       // Build image strip
       pushImageUrls = buildImageUrls(currentProduct);
@@ -693,6 +757,16 @@
     document.getElementById("btnAddImgPush").addEventListener("click", () => {
       if (!currentProduct) return;
       showGalleryPicker("modalImagePicker", "modalImageStrip", pushImageUrls, currentProduct);
+    });
+
+    // Push modal description toggle
+    document.getElementById("btnPushVisual").addEventListener("click", () => {
+      pushDescMode = "visual";
+      toggleDescMode("visual", "modal", pushQuill);
+    });
+    document.getElementById("btnPushHtml").addEventListener("click", () => {
+      pushDescMode = "html";
+      toggleDescMode("html", "modal", pushQuill);
     });
 
     // ── Category Search ──────────────────────────────────
@@ -811,7 +885,8 @@
 
       const sku = document.getElementById("modalSku").value.trim();
       const title = document.getElementById("modalTitle").value.trim();
-      const description = wrapDescription(title, pushQuill.root.innerHTML);
+      const rawHtml = getDescriptionHtml("modal", pushQuill);
+      const description = pushDescMode === "html" ? sanitizeForEbay(rawHtml) : wrapDescription(title, rawHtml);
       const condition = document.getElementById("modalCondition").value;
       const quantity = parseInt(document.getElementById("modalQuantity").value) || 1;
 
@@ -970,6 +1045,12 @@
         editEditorEl.innerHTML = "";
         editQuill = new Quill(editEditorEl, { theme: "snow", modules: { toolbar: quillToolbar } });
         if (product.description) editQuill.root.innerHTML = product.description;
+        // Reset description mode to visual
+        editDescMode = "visual";
+        document.getElementById("editDescriptionHtml").value = "";
+        document.getElementById("editDescriptionHtml").classList.add("hidden");
+        document.getElementById("btnEditVisual").classList.add("active");
+        document.getElementById("btnEditHtml").classList.remove("active");
 
         // Build edit image strip from eBay's current image list or local data
         const ebayImages = product.imageUrls || [];
@@ -1045,6 +1126,16 @@
       showGalleryPicker("editImagePicker", "editImageStrip", editImageUrls, editProduct);
     });
 
+    // Edit modal description toggle
+    document.getElementById("btnEditVisual").addEventListener("click", () => {
+      editDescMode = "visual";
+      toggleDescMode("visual", "edit", editQuill);
+    });
+    document.getElementById("btnEditHtml").addEventListener("click", () => {
+      editDescMode = "html";
+      toggleDescMode("html", "edit", editQuill);
+    });
+
     document.getElementById("btnSaveEdit").addEventListener("click", async () => {
       if (!editProduct) return;
       const btn = document.getElementById("btnSaveEdit");
@@ -1053,7 +1144,8 @@
 
       const sku = editProduct.ebay_sku || editProduct.code;
       const title = document.getElementById("editTitle").value.trim();
-      const description = wrapDescription(title, editQuill.root.innerHTML);
+      const rawHtml = getDescriptionHtml("edit", editQuill);
+      const description = editDescMode === "html" ? sanitizeForEbay(rawHtml) : wrapDescription(title, rawHtml);
       const condition = document.getElementById("editCondition").value;
       const quantity = parseInt(document.getElementById("editQuantity").value) || 1;
       const price = parseFloat(document.getElementById("editPrice").value) || 0;
