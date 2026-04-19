@@ -67,6 +67,22 @@ serve(async (req) => {
     const body = await req.json();
     const { action } = body;
 
+    // ── DELETE INVENTORY ITEM ─────────────────────────────
+    if (action === "delete_item") {
+      const { sku } = body;
+      if (!sku) throw new Error("sku is required");
+      const result = await ebayFetch(accessToken, "DELETE", `${INV_API}/inventory_item/${encodeURIComponent(sku)}`);
+      if (!result.ok && result.status !== 204) {
+        throw new Error(`Delete item failed (${result.status}): ${JSON.stringify(result.data)}`);
+      }
+      await supabase.from("products").update({
+        ebay_sku: null, ebay_offer_id: null, ebay_listing_id: null,
+        ebay_status: "not_listed", ebay_category_id: null, ebay_price_cents: null,
+        updated_at: new Date().toISOString(),
+      }).eq("code", sku);
+      return new Response(JSON.stringify({ success: true, deleted: sku }), { headers: corsHeaders });
+    }
+
     // ── CREATE / UPDATE INVENTORY ITEM ──────────────────────
     if (action === "create_item" || action === "update_item") {
       const { sku, product } = body;

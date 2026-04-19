@@ -311,7 +311,7 @@
       }
 
       tbody.innerHTML = allProducts.map(p => {
-        const kkPrice = p.price ? `$${(p.price / 100).toFixed(2)}` : "—";
+        const kkPrice = p.price ? `$${Number(p.price).toFixed(2)}` : "—";
         const ebayPrice = p.ebay_price_cents ? `$${(p.ebay_price_cents / 100).toFixed(2)}` : "—";
         const status = p.ebay_status || "not_listed";
         const statusLabel = { active: "Active", draft: "Draft", ended: "Ended", not_listed: "Not Listed" }[status] || status;
@@ -366,7 +366,7 @@
       document.getElementById("modalSku").value = currentProduct.ebay_sku || currentProduct.code;
       document.getElementById("modalTitle").value = currentProduct.name;
       document.getElementById("modalDescription").value = "";
-      document.getElementById("modalPrice").value = currentProduct.price ? (currentProduct.price / 100).toFixed(2) : "";
+      document.getElementById("modalPrice").value = currentProduct.price ? Number(currentProduct.price).toFixed(2) : "";
       document.getElementById("modalQuantity").value = "1";
       document.getElementById("modalCondition").value = "NEW";
       document.getElementById("modalCatSearch").value = currentProduct.name;
