@@ -2001,7 +2001,7 @@
       const wi = parseFloat(document.getElementById(`${prefix}DimW`).value);
       const h = parseFloat(document.getElementById(`${prefix}DimH`).value);
       if (!w && !l && !wi && !h) return null;
-      const pkg = { packageType: "MAILING_OR_SHIPPING" };
+      const pkg = {};
       if (w) pkg.weight = { value: w, unit: "OUNCE" };
       if (l || wi || h) pkg.dimensions = { length: l || 0, width: wi || 0, height: h || 0, unit: "INCH" };
       return pkg;
