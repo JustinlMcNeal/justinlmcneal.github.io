@@ -65,12 +65,18 @@ Your job is to generate an optimized eBay listing from product data and images.
 
 STRICT RULES:
 1. TITLE: Create an SEO-optimized eBay title, max 80 characters. Pack with relevant search keywords buyers would use. Do NOT include "Karry Kraze" or brand name in title.
-2. DESCRIPTION: Write product features ONLY. Do NOT include:
-   - Shipping information, handling times, or delivery promises
-   - Return policy or refund terms
-   - Store information or links
-   - Payment methods
-   Focus on: what the product IS, materials, colors, features, who it's for, occasions.
+2. DESCRIPTION: Create a PREMIUM, visually stunning HTML description that looks like a professional eBay storefront listing. Structure:
+   - A branded header banner section with the store name "Karry Kraze" styled with a gradient background, centered text, and a tagline like "Trendy Accessories for the Bold & Beautiful"
+   - A product highlights section with an icon-styled feature list (use emoji or unicode symbols as bullet markers like ✨ 💎 🎀 📦)
+   - A "Why You'll Love It" or "Perfect For" section describing use cases, occasions, gift ideas
+   - A styled divider between sections (use a simple HR with inline styling or a decorative border)
+   - A "Shop With Confidence" trust banner at the bottom with satisfaction guarantee messaging
+   - Use inline CSS only (no <style> blocks, no classes). eBay strips <style> tags.
+   - Use clean, modern styling: soft rounded containers, subtle backgrounds (#f8f9fa, #fff5f5, #f0f4ff), gentle borders
+   - Font: sans-serif throughout. Readable font sizes (14-16px body, 20-24px headers)
+   - Mobile-friendly: use max-width containers, responsive-safe inline styles
+   - Do NOT include: shipping info, return policy, payment methods, external links, store URLs
+   - Keep total HTML under 4000 characters
 3. ITEM SPECIFICS: Only fill values you can determine from the data or images.
    - For each specific, indicate your confidence:
      - "certain" = directly from product data
@@ -90,7 +96,7 @@ JSON structure:
     "source": "generated"
   },
   "description_html": {
-    "value": "<ul><li>Feature 1</li>...</ul>",
+    "value": "<div style='max-width:680px;margin:0 auto;font-family:sans-serif'>...full branded HTML...</div>",
     "confidence": 0.0-1.0,
     "source": "generated"
   },
@@ -119,7 +125,7 @@ JSON structure:
       userPrompt += `\nFill common item specifics: Brand, Type, Color, Material, Style, Theme (leave unknown ones empty).`;
     }
 
-    userPrompt += `\n\nDescription should be a clean HTML unordered list (<ul><li>) of 4-6 product features. Keep it concise and engaging.`;
+    userPrompt += `\n\nDescription should be a PREMIUM styled HTML listing with branded header banner ("Karry Kraze" branding with gradient), product highlights with emoji icons, a "Perfect For" section, styled dividers, and a trust/confidence footer. Use inline CSS only. Make it look like a top-tier professional eBay store listing that stands out. Keep HTML under 4000 characters.`;
     userPrompt += `\n\nReturn ONLY valid JSON.`;
 
     console.log(
