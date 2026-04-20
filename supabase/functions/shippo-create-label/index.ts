@@ -1,7 +1,9 @@
 // supabase/functions/shippo-create-label/index.ts
 // Buy a USPS shipping label for one order via Shippo.
 // Idempotent: refuses to purchase if a non-voided label already exists.
+// Phase 1c: After label purchase, auto-pushes tracking to eBay for eBay orders.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getAccessToken, EBAY_API } from "../_shared/ebayUtils.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const serviceKey  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -42,6 +44,68 @@ async function shippo(path: string, method = "GET", body?: unknown) {
 interface CreateLabelRequest {
   stripe_checkout_session_id: string;
   preset_id?: string; // UUID from package_presets — null → use default
+}
+
+// ── eBay Carrier Code Mapping ──
+const CARRIER_MAP: Record<string, string> = {
+  usps: "USPS", ups: "UPS", fedex: "FEDEX", dhl_express: "DHL",
+};
+
+/** Push tracking number to eBay Fulfillment API for eBay orders */
+async function pushTrackingToEbay(
+  sb: ReturnType<typeof createClient>,
+  sessionId: string,
+  trackingNumber: string,
+  carrier: string,
+) {
+  const ebayOrderId = sessionId.replace("ebay_api_", "");
+  const ebayCarrier = CARRIER_MAP[carrier.toLowerCase()] || carrier.toUpperCase();
+
+  // Resolve eBay line item IDs from our DB
+  const { data: lineItems } = await sb
+    .from("line_items_raw")
+    .select("stripe_line_item_id, quantity")
+    .eq("stripe_checkout_session_id", sessionId);
+
+  if (!lineItems?.length) {
+    throw new Error(`No line items found for eBay order ${ebayOrderId}`);
+  }
+
+  const ebayLineItems = lineItems.map((li) => ({
+    lineItemId: li.stripe_line_item_id.replace("ebay_li_", ""),
+    quantity: li.quantity || 1,
+  }));
+
+  const token = await getAccessToken(sb);
+
+  const resp = await fetch(
+    `${EBAY_API}/sell/fulfillment/v1/order/${ebayOrderId}/shipping_fulfillment`,
+    {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Accept-Language": "en-US",
+      },
+      body: JSON.stringify({
+        trackingNumber,
+        shippingCarrierCode: ebayCarrier,
+        lineItems: ebayLineItems,
+      }),
+    },
+  );
+
+  if (!resp.ok) {
+    const errBody = await resp.text();
+    throw new Error(`eBay fulfillment POST ${resp.status}: ${errBody}`);
+  }
+
+  // Extract fulfillmentId from Location header (eBay returns it there on 201)
+  const location = resp.headers.get("Location") || "";
+  const fulfillmentId = location.split("/").pop() || "";
+
+  return fulfillmentId;
 }
 
 Deno.serve(async (req) => {
@@ -221,6 +285,33 @@ Deno.serve(async (req) => {
       });
     }
 
+    // ── 10. Push tracking to eBay (if eBay order) ──
+    let trackingPushedToEbay = false;
+    let ebayFulfillmentId: string | null = null;
+    if (stripe_checkout_session_id.startsWith("ebay_api_")) {
+      try {
+        ebayFulfillmentId = await pushTrackingToEbay(
+          sb, stripe_checkout_session_id, transaction.tracking_number, cheapest.provider,
+        );
+        trackingPushedToEbay = true;
+        console.log(`[shippo-create-label] eBay tracking pushed: fulfillmentId=${ebayFulfillmentId}`);
+      } catch (ebayErr: unknown) {
+        const ebayMsg = ebayErr instanceof Error ? ebayErr.message : String(ebayErr);
+        console.error("[shippo-create-label] eBay tracking push failed:", ebayMsg);
+        // Don't fail — label is already purchased. Admin can retry.
+      }
+
+      // Update fulfillment_shipments with eBay sync status
+      await sb
+        .from("fulfillment_shipments")
+        .update({
+          tracking_pushed_to_ebay: trackingPushedToEbay,
+          ebay_fulfillment_id: ebayFulfillmentId,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("stripe_checkout_session_id", stripe_checkout_session_id);
+    }
+
     return json({
       success: true,
       data: {
@@ -233,6 +324,8 @@ Deno.serve(async (req) => {
         transaction_id:   transaction.object_id,
         rate_amount:      cheapest.amount,
         estimated_days:   cheapest.estimated_days,
+        tracking_pushed_to_ebay: trackingPushedToEbay,
+        ebay_fulfillment_id: ebayFulfillmentId,
       },
     });
 

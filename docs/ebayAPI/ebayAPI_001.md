@@ -1063,12 +1063,12 @@ const ebayLineItems = lineItems.map(li => ({
 
 Phase 1c is **done** when:
 
-- [ ] Purchasing a Shippo label for an eBay order automatically pushes tracking to eBay
-- [ ] eBay order shows "Shipped" status with tracking number in Seller Hub
-- [ ] Buyer receives eBay shipping notification with tracking link
-- [ ] `fulfillment_shipments.tracking_pushed_to_ebay` is set to `true` on success
-- [ ] Failed pushes are visible in admin (badge or indicator)
-- [ ] At least one real eBay order has been shipped with tracking synced end-to-end
+- [x] Purchasing a Shippo label for an eBay order automatically pushes tracking to eBay
+- [ ] eBay order shows "Shipped" status with tracking number in Seller Hub *(needs live order test)*
+- [ ] Buyer receives eBay shipping notification with tracking link *(needs live order test)*
+- [x] `fulfillment_shipments.tracking_pushed_to_ebay` is set to `true` on success
+- [ ] Failed pushes are visible in admin (badge or indicator) *(Phase 1c follow-up)*
+- [ ] At least one real eBay order has been shipped with tracking synced end-to-end *(needs live order test)*
 
 ---
 
@@ -1618,7 +1618,7 @@ Complete registry of all eBay edge functions (existing + planned):
 | `ebay-manage-listing` | 1 | ✅ Live | — | — |
 | `ebay-migrate-listings` | 1 | ✅ Live | — | — |
 | `ebay-taxonomy` | 1 | ✅ Live | — | — |
-| `shippo-create-label` *(updated)* | 1c | ✅ Live *(update pending)* | — | — |
+| `shippo-create-label` *(updated)* | 1c | ✅ Live | — | — |
 | `ebay-webhook` | 2 | ⏳ Planned | `--no-verify-jwt` | — |
 | `ebay-sync-inventory` | 3 | ⏳ Planned | — | `0 3 * * *` |
 | `ebay-manage-ads` | 4 | ⏳ Planned | — | `0 7 * * *` |
