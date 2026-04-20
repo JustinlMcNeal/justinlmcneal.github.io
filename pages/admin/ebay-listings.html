@@ -289,6 +289,16 @@
               </div>
             </div>
 
+            <!-- Variant Panel (shown when product has color variants) -->
+            <div id="variantPanel" class="hidden">
+              <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-2 text-black/70">🎨 Color Variants</label>
+              <p class="text-[10px] text-gray-500 mb-2">This product has multiple color variants. Each creates a separate eBay inventory item grouped under one listing.</p>
+              <div id="variantList" class="space-y-2 max-h-[200px] overflow-y-auto"></div>
+              <div class="mt-2 text-[10px] text-gray-400">
+                <span id="variantCount">0</span> variant(s) · SKU pattern: <code id="variantSkuPattern" class="bg-gray-100 px-1 rounded"></code>
+              </div>
+            </div>
+
             <!-- Best Offer -->
             <div>
               <label class="flex items-center gap-2 cursor-pointer">
@@ -391,6 +401,7 @@
                 3. Publish
               </button>
             </div>
+            <div id="variantProgress" class="hidden text-[10px] text-gray-500"></div>
             <div id="modalStatus" class="text-xs text-gray-400"></div>
           </div>
         </div>
@@ -678,6 +689,8 @@
     let editQuill = null;      // Quill editor for edit modal
     let pushImageUrls = [];    // ordered image URLs for push modal
     let editImageUrls = [];    // ordered image URLs for edit modal
+    let pushVariants = [];     // active color variants for push modal
+    let isVariantListing = false; // whether current push is a variant listing
 
     // ── Edge Function Helper ─────────────────────────────
     async function callEdge(fnName, body) {
@@ -861,7 +874,7 @@
     async function loadProducts() {
       const { data, error } = await supabase
         .from("products")
-        .select("id, code, name, slug, price, weight_g, catalog_image_url, catalog_hover_url, primary_image_url, is_active, ebay_sku, ebay_offer_id, ebay_listing_id, ebay_status, ebay_category_id, ebay_price_cents, product_gallery_images(url, position, is_active)")
+        .select("id, code, name, slug, price, weight_g, catalog_image_url, catalog_hover_url, primary_image_url, is_active, ebay_sku, ebay_offer_id, ebay_listing_id, ebay_status, ebay_category_id, ebay_price_cents, ebay_item_group_key, product_gallery_images(url, position, is_active), product_variants(id, option_name, option_value, stock, preview_image_url, sort_order, is_active)")
         .order("code");
 
       if (error) {
@@ -1077,6 +1090,28 @@
         document.getElementById("modalWeightOz").value = "4";
       }
 
+      // Detect variants
+      const activeVariants = (currentProduct.product_variants || []).filter(v => v.is_active);
+      pushVariants = activeVariants;
+      isVariantListing = activeVariants.length > 1;
+
+      if (isVariantListing) {
+        document.getElementById("variantPanel").classList.remove("hidden");
+        document.getElementById("modalQuantity").closest(".grid").querySelector("label[for='modalQuantity'], label").parentElement ||
+          (document.getElementById("modalQuantity").parentElement.querySelector("label").textContent = "Qty (per variant)");
+        renderVariantPanel(activeVariants, currentProduct.code);
+        // Update button labels
+        document.getElementById("btnCreateItem").textContent = "1. Create Items";
+        document.getElementById("btnCreateOffer").textContent = "2. Create Group + Offer";
+      } else {
+        document.getElementById("variantPanel").classList.add("hidden");
+        document.getElementById("variantProgress").classList.add("hidden");
+        pushVariants = [];
+        isVariantListing = false;
+        document.getElementById("btnCreateItem").textContent = "1. Create Item";
+        document.getElementById("btnCreateOffer").textContent = "2. Create Offer";
+      }
+
       // Reset step buttons
       enableBtn("btnCreateItem", true);
       enableBtn("btnCreateOffer", false);
@@ -1095,6 +1130,44 @@
         btn.classList.add("border-gray-300", "bg-gray-100", "text-gray-400");
         btn.classList.remove("border-black", "bg-black", "text-white", "hover:bg-kkpink", "hover:border-kkpink", "hover:text-black");
       }
+    }
+
+    function renderVariantPanel(variants, baseCode) {
+      const list = document.getElementById("variantList");
+      list.innerHTML = variants.map((v, i) => {
+        const suffix = v.option_value.toUpperCase().replace(/[^A-Z0-9]/g, "").substring(0, 6);
+        const sku = `${baseCode}-${suffix}`;
+        return `<div class="flex items-center gap-2 p-2 rounded-lg border border-gray-200 bg-gray-50">
+          <input type="checkbox" class="variant-check accent-pink-500" data-idx="${i}" checked />
+          ${v.preview_image_url
+            ? `<img src="${v.preview_image_url}" class="w-8 h-8 rounded object-cover border" />`
+            : `<div class="w-8 h-8 rounded bg-gray-200 flex items-center justify-center text-[10px]">?</div>`}
+          <div class="flex-1 min-w-0">
+            <div class="text-xs font-bold truncate">${esc(v.option_value)}</div>
+            <div class="text-[10px] text-gray-400 font-mono">${esc(sku)}</div>
+          </div>
+          <input type="number" class="variant-qty w-14 border border-gray-300 rounded px-1 py-0.5 text-xs text-center" value="${v.stock || 1}" min="0" data-idx="${i}" />
+          <span class="text-[10px] text-gray-400">qty</span>
+        </div>`;
+      }).join("");
+
+      document.getElementById("variantCount").textContent = variants.length;
+      document.getElementById("variantSkuPattern").textContent = `${baseCode}-{COLOR}`;
+    }
+
+    function getCheckedVariants() {
+      const checks = document.querySelectorAll(".variant-check");
+      const qtys = document.querySelectorAll(".variant-qty");
+      const result = [];
+      checks.forEach((cb, i) => {
+        if (cb.checked && pushVariants[i]) {
+          const v = pushVariants[i];
+          const suffix = v.option_value.toUpperCase().replace(/[^A-Z0-9]/g, "").substring(0, 6);
+          const qty = parseInt(qtys[i]?.value) || 1;
+          result.push({ ...v, sku: `${currentProduct.code}-${suffix}`, quantity: qty });
+        }
+      });
+      return result;
     }
 
     // ── Search / Filter / View Listeners ───────────────
@@ -1369,10 +1442,11 @@
       return missing;
     }
 
-    // ── Step 1: Create Item ──────────────────────────────
+    // ── Step 1: Create Item(s) ─────────────────────────────
     document.getElementById("btnCreateItem").addEventListener("click", async () => {
       const btn = document.getElementById("btnCreateItem");
       const status = document.getElementById("modalStatus");
+      const progressEl = document.getElementById("variantProgress");
       btn.disabled = true; btn.textContent = "Creating...";
 
       const sku = document.getElementById("modalSku").value.trim();
@@ -1382,45 +1456,100 @@
       const condition = document.getElementById("modalCondition").value;
       const quantity = parseInt(document.getElementById("modalQuantity").value) || 1;
 
-      if (!sku || !title) { status.textContent = "❌ SKU and title required"; btn.disabled = false; btn.textContent = "1. Create Item"; return; }
+      if (!sku || !title) { status.textContent = "❌ SKU and title required"; btn.disabled = false; btn.textContent = isVariantListing ? "1. Create Items" : "1. Create Item"; return; }
 
       // Validate required aspects
       const missingAspects = validateRequiredAspects();
       if (missingAspects.length) {
         status.textContent = `❌ Required item specifics missing: ${missingAspects.join(", ")}`;
-        btn.disabled = false; btn.textContent = "1. Create Item";
+        btn.disabled = false; btn.textContent = isVariantListing ? "1. Create Items" : "1. Create Item";
         return;
       }
 
       // Collect filled aspects
       const aspects = collectAspects();
-
-      // Build image URLs from strip
       const imageUrls = [...pushImageUrls];
 
       try {
-        const result = await callEdge("ebay-manage-listing", {
-          action: "create_item",
-          sku,
-          product: { title, description, condition, quantity, imageUrls, aspects },
-          packageWeightAndSize: buildPackageWeightAndSize("modal"),
-        });
+        if (isVariantListing) {
+          // VARIANT FLOW: Create one inventory item per checked variant
+          const checked = getCheckedVariants();
+          if (!checked.length) {
+            status.textContent = "❌ Select at least one variant";
+            btn.disabled = false; btn.textContent = "1. Create Items";
+            return;
+          }
 
-        if (result.success) {
-          status.textContent = "✅ Inventory item created — now create an offer";
-          enableBtn("btnCreateItem", false);
-          enableBtn("btnCreateOffer", true);
+          progressEl.classList.remove("hidden");
+          let created = 0;
+          const errors = [];
+
+          for (const v of checked) {
+            progressEl.textContent = `Creating ${v.option_value} (${v.sku})... (${created + 1}/${checked.length})`;
+
+            // Each variant gets its own aspects with the Color value
+            const variantAspects = { ...aspects, Color: [v.option_value] };
+
+            // Variant-specific images: put variant preview first, then shared images
+            const variantImages = [];
+            if (v.preview_image_url) variantImages.push(v.preview_image_url);
+            imageUrls.forEach(url => { if (url !== v.preview_image_url) variantImages.push(url); });
+
+            const result = await callEdge("ebay-manage-listing", {
+              action: "create_item",
+              sku: v.sku,
+              product: {
+                title,
+                description,
+                condition,
+                quantity: v.quantity,
+                imageUrls: variantImages.slice(0, 24),
+                aspects: variantAspects,
+              },
+              packageWeightAndSize: buildPackageWeightAndSize("modal"),
+            });
+
+            if (result.success) {
+              created++;
+            } else {
+              errors.push(`${v.option_value}: ${result.error || "Failed"}`);
+            }
+          }
+
+          if (created === checked.length) {
+            status.textContent = `✅ ${created} variant items created — now create group + offer`;
+            progressEl.textContent = `All ${created} items created ✓`;
+            enableBtn("btnCreateItem", false);
+            enableBtn("btnCreateOffer", true);
+          } else {
+            status.textContent = `⚠️ ${created}/${checked.length} created. Errors: ${errors.join("; ")}`;
+          }
         } else {
-          status.textContent = "❌ " + (result.error || "Create failed");
+          // SINGLE ITEM FLOW (unchanged)
+          const result = await callEdge("ebay-manage-listing", {
+            action: "create_item",
+            sku,
+            product: { title, description, condition, quantity, imageUrls, aspects },
+            packageWeightAndSize: buildPackageWeightAndSize("modal"),
+          });
+
+          if (result.success) {
+            status.textContent = "✅ Inventory item created — now create an offer";
+            enableBtn("btnCreateItem", false);
+            enableBtn("btnCreateOffer", true);
+          } else {
+            status.textContent = "❌ " + (result.error || "Create failed");
+          }
         }
       } catch (e) { status.textContent = "❌ Error: " + e.message; }
-      finally { btn.disabled = false; btn.textContent = "1. Create Item"; }
+      finally { btn.disabled = false; btn.textContent = isVariantListing ? "1. Create Items" : "1. Create Item"; }
     });
 
-    // ── Step 2: Create Offer ─────────────────────────────
+    // ── Step 2: Create Offer (or Group + Offer) ──────────
     document.getElementById("btnCreateOffer").addEventListener("click", async () => {
       const btn = document.getElementById("btnCreateOffer");
       const status = document.getElementById("modalStatus");
+      const progressEl = document.getElementById("variantProgress");
       btn.disabled = true; btn.textContent = "Creating...";
 
       const sku = document.getElementById("modalSku").value.trim();
@@ -1430,33 +1559,101 @@
 
       if (!categoryId || categoryId === "No categories found") {
         status.textContent = "❌ Select a category first";
-        btn.disabled = false; btn.textContent = "2. Create Offer";
+        btn.disabled = false; btn.textContent = isVariantListing ? "2. Create Group + Offer" : "2. Create Offer";
         return;
       }
 
       try {
-        const storeCat = document.getElementById("modalStoreCategory").value;
-        const result = await callEdge("ebay-manage-listing", {
-          action: "create_offer",
-          sku,
-          categoryId,
-          priceCents: Math.round(price * 100),
-          quantity,
-          policies: getSelectedPolicies("modal"),
-          bestOfferTerms: getBestOfferTerms("modal"),
-          storeCategoryNames: storeCat ? [storeCat] : [],
-        });
+        if (isVariantListing) {
+          // VARIANT FLOW: Create inventory item group, then create offer for the group
+          const checked = getCheckedVariants();
+          const groupKey = `${currentProduct.code}-GROUP`;
+          const title = document.getElementById("modalTitle").value.trim();
+          const rawHtml = getDescriptionHtml("modal", pushQuill);
+          const description = pushDescMode === "html" ? sanitizeForEbay(rawHtml) : wrapDescription(title, rawHtml);
+          const aspects = collectAspects();
+          // Remove Color from shared aspects (it varies per variant)
+          delete aspects.Color;
 
-        if (result.success) {
-          status.textContent = `✅ Offer created (${result.offerId}) — ready to publish`;
-          currentProduct._offerId = result.offerId;
-          enableBtn("btnCreateOffer", false);
-          enableBtn("btnPublish", true);
+          const variantSKUs = checked.map(v => v.sku);
+          const colorValues = checked.map(v => v.option_value);
+
+          // Build variesBy
+          const variesBy = {
+            aspectsImageVariesBy: ["Color"],
+            specifications: [{ name: "Color", values: colorValues }],
+          };
+
+          progressEl.textContent = "Creating inventory item group...";
+
+          // Step A: Create inventory item group
+          const groupResult = await callEdge("ebay-manage-listing", {
+            action: "create_item_group",
+            inventoryItemGroupKey: groupKey,
+            title,
+            description,
+            imageUrls: [...pushImageUrls].slice(0, 24),
+            aspects,
+            variantSKUs,
+            variesBy,
+            baseProductCode: currentProduct.code,
+          });
+
+          if (!groupResult.success) {
+            status.textContent = "❌ Group creation failed: " + (groupResult.error || "Unknown");
+            btn.disabled = false; btn.textContent = "2. Create Group + Offer";
+            return;
+          }
+
+          progressEl.textContent = "Group created ✓ — Creating offer...";
+
+          // Step B: Create offer for the group
+          const storeCat = document.getElementById("modalStoreCategory").value;
+          const offerResult = await callEdge("ebay-manage-listing", {
+            action: "create_group_offer",
+            inventoryItemGroupKey: groupKey,
+            categoryId,
+            priceCents: Math.round(price * 100),
+            policies: getSelectedPolicies("modal"),
+            bestOfferTerms: getBestOfferTerms("modal"),
+            storeCategoryNames: storeCat ? [storeCat] : [],
+            baseProductCode: currentProduct.code,
+          });
+
+          if (offerResult.success) {
+            status.textContent = `✅ Group + Offer created (${offerResult.offerId}) — ready to publish`;
+            progressEl.textContent = `Group "${groupKey}" + Offer created ✓`;
+            currentProduct._offerId = offerResult.offerId;
+            enableBtn("btnCreateOffer", false);
+            enableBtn("btnPublish", true);
+          } else {
+            status.textContent = "❌ Offer creation failed: " + (offerResult.error || "Unknown");
+          }
         } else {
-          status.textContent = "❌ " + (result.error || "Offer creation failed");
+          // SINGLE ITEM FLOW (unchanged)
+          const storeCat = document.getElementById("modalStoreCategory").value;
+          const result = await callEdge("ebay-manage-listing", {
+            action: "create_offer",
+            sku,
+            categoryId,
+            priceCents: Math.round(price * 100),
+            quantity,
+            policies: getSelectedPolicies("modal"),
+            bestOfferTerms: getBestOfferTerms("modal"),
+            storeCategoryNames: storeCat ? [storeCat] : [],
+          });
+
+          if (result.success) {
+            status.textContent = `✅ Offer created (${result.offerId}) — ready to publish`;
+            currentProduct._offerId = result.offerId;
+            enableBtn("btnCreateOffer", false);
+            enableBtn("btnPublish", true);
+          } else {
+            status.textContent = "❌ " + (result.error || "Offer creation failed");
+          }
         }
       } catch (e) { status.textContent = "❌ Error: " + e.message; }
-      finally { btn.disabled = false; btn.textContent = "2. Create Offer"; }
+      finally { btn.disabled = false; btn.textContent = isVariantListing ? "2. Create Group + Offer" : "2. Create Offer"; }
     });
 
     // ── Step 3: Publish ──────────────────────────────────
@@ -1474,7 +1671,7 @@
         const result = await callEdge("ebay-manage-listing", {
           action: "publish",
           offerId,
-          sku,
+          sku: isVariantListing ? currentProduct.code : sku,
         });
 
         if (result.success) {
@@ -1500,13 +1697,15 @@
       editProduct = allProducts.find(p => p.code === code);
       if (!editProduct) return;
 
+      const isGroupListing = !!editProduct.ebay_item_group_key;
+
       document.getElementById("editModal").classList.remove("hidden");
       document.getElementById("editLoading").classList.remove("hidden");
       document.getElementById("editForm").classList.add("hidden");
       document.getElementById("editStatus").textContent = "";
 
       document.getElementById("editProductName").textContent = editProduct.name;
-      document.getElementById("editProductCode").textContent = editProduct.code;
+      document.getElementById("editProductCode").textContent = editProduct.code + (isGroupListing ? " (Multi-Variant)" : "");
 
       const ebayLink = document.getElementById("editEbayLink");
       if (editProduct.ebay_listing_id) {
@@ -1517,20 +1716,51 @@
       }
 
       try {
-        // Fetch current item data from eBay
-        const sku = editProduct.ebay_sku || editProduct.code;
-        const [itemResult, offerResult] = await Promise.all([
-          callEdge("ebay-manage-listing", { action: "get_item", sku }),
-          editProduct.ebay_offer_id
-            ? callEdge("ebay-manage-listing", { action: "get_offers", sku })
-            : Promise.resolve({ success: true, offers: [] }),
-        ]);
+        let product = {};
+        let item = {};
+        let offer = {};
 
-        if (!itemResult.success) throw new Error(itemResult.error || "Failed to fetch item");
+        if (isGroupListing) {
+          // Fetch group data (offer data from DB since group offers don't filter by SKU)
+          const groupResult = await callEdge("ebay-manage-listing", { action: "get_item_group", inventoryItemGroupKey: editProduct.ebay_item_group_key });
 
-        const item = itemResult.item;
-        const product = item.product || {};
-        const offer = (offerResult.offers || []).find(o => o.offerId === editProduct.ebay_offer_id) || {};
+          if (!groupResult.success) throw new Error(groupResult.error || "Failed to fetch item group");
+
+          const group = groupResult.itemGroup;
+          product = {
+            title: group.title || "",
+            description: group.description || "",
+            imageUrls: group.imageUrls || [],
+            aspects: group.aspects || {},
+          };
+          // Store group data for save
+          editProduct._groupData = group;
+          editProduct._isGroup = true;
+
+          // Use stored DB values for offer data (group offers don't filter by SKU)
+          offer = {
+            pricingSummary: editProduct.ebay_price_cents
+              ? { price: { value: (editProduct.ebay_price_cents / 100).toFixed(2) } }
+              : {},
+          };
+        } else {
+          // Fetch current item data from eBay (single SKU)
+          const sku = editProduct.ebay_sku || editProduct.code;
+          const [itemResult, offerResult] = await Promise.all([
+            callEdge("ebay-manage-listing", { action: "get_item", sku }),
+            editProduct.ebay_offer_id
+              ? callEdge("ebay-manage-listing", { action: "get_offers", sku })
+              : Promise.resolve({ success: true, offers: [] }),
+          ]);
+
+          if (!itemResult.success) throw new Error(itemResult.error || "Failed to fetch item");
+
+          item = itemResult.item;
+          product = item.product || {};
+          editProduct._isGroup = false;
+
+          offer = (offerResult.offers || []).find(o => o.offerId === editProduct.ebay_offer_id) || {};
+        }
 
         // Pre-fill fields
         document.getElementById("editTitle").value = product.title || editProduct.name;
@@ -1814,34 +2044,106 @@
       const imageUrls = [...editImageUrls];
 
       try {
-        // Step 1: Update inventory item
-        status.textContent = "Updating item...";
-        const itemResult = await callEdge("ebay-manage-listing", {
-          action: "update_item",
-          sku,
-          product: { title, description, condition, quantity, imageUrls, aspects },
-          packageWeightAndSize: buildPackageWeightAndSize("edit"),
-        });
+        if (editProduct._isGroup) {
+          // VARIANT LISTING: Update group + variant items + offer
+          const groupKey = editProduct.ebay_item_group_key;
+          const groupData = editProduct._groupData || {};
+          const variantSKUs = groupData.variantSKUs || [];
 
-        if (!itemResult.success) throw new Error(itemResult.error || "Item update failed");
+          // Remove Color from shared aspects (it varies per variant)
+          const sharedAspects = { ...aspects };
+          delete sharedAspects.Color;
 
-        // Step 2: Update offer (price + quantity) if offer exists
-        if (editProduct.ebay_offer_id) {
-          status.textContent = "Updating offer...";
-          const priceCents = Math.round(price * 100);
-          const editStoreCat = document.getElementById("editStoreCategory").value;
-          const offerResult = await callEdge("ebay-manage-listing", {
-            action: "update_offer",
-            offerId: editProduct.ebay_offer_id,
+          // Step 1: Update inventory item group
+          status.textContent = "Updating item group...";
+          const groupResult = await callEdge("ebay-manage-listing", {
+            action: "update_item_group",
+            inventoryItemGroupKey: groupKey,
+            title,
+            description,
+            imageUrls,
+            aspects: sharedAspects,
+            variantSKUs,
+            variesBy: groupData.variesBy || { aspectsImageVariesBy: ["Color"], specifications: [] },
+            baseProductCode: editProduct.code,
+          });
+          if (!groupResult.success) throw new Error(groupResult.error || "Group update failed");
+
+          // Step 2: Update each variant item's shared fields
+          status.textContent = `Updating ${variantSKUs.length} variant items...`;
+          for (const vSku of variantSKUs) {
+            // Get variant-specific Color value from the variant SKU
+            const varResult = await callEdge("ebay-manage-listing", { action: "get_item", sku: vSku });
+            if (!varResult.success) continue;
+
+            const varItem = varResult.item;
+            const varAspects = varItem.product?.aspects || {};
+            // Merge shared aspects with variant-specific Color
+            const mergedAspects = { ...sharedAspects };
+            if (varAspects.Color) mergedAspects.Color = varAspects.Color;
+
+            await callEdge("ebay-manage-listing", {
+              action: "update_item",
+              sku: vSku,
+              product: {
+                title,
+                description,
+                condition,
+                quantity: varItem.availability?.shipToLocationAvailability?.quantity ?? quantity,
+                imageUrls: varItem.product?.imageUrls || imageUrls,
+                aspects: mergedAspects,
+              },
+              packageWeightAndSize: buildPackageWeightAndSize("edit"),
+            });
+          }
+
+          // Step 3: Update offer
+          if (editProduct.ebay_offer_id) {
+            status.textContent = "Updating offer...";
+            const priceCents = Math.round(price * 100);
+            const editStoreCat = document.getElementById("editStoreCategory").value;
+            const offerResult = await callEdge("ebay-manage-listing", {
+              action: "update_offer",
+              offerId: editProduct.ebay_offer_id,
+              sku: editProduct.code,
+              priceCents,
+              quantity,
+              policies: getSelectedPolicies("edit"),
+              bestOfferTerms: getBestOfferTerms("edit"),
+              storeCategoryNames: editStoreCat ? [editStoreCat] : [],
+            });
+            if (!offerResult.success) throw new Error(offerResult.error || "Offer update failed");
+          }
+        } else {
+          // SINGLE ITEM: Update item + offer (unchanged)
+          status.textContent = "Updating item...";
+          const itemResult = await callEdge("ebay-manage-listing", {
+            action: "update_item",
             sku,
-            priceCents,
-            quantity,
-            policies: getSelectedPolicies("edit"),
-            bestOfferTerms: getBestOfferTerms("edit"),
-            storeCategoryNames: editStoreCat ? [editStoreCat] : [],
+            product: { title, description, condition, quantity, imageUrls, aspects },
+            packageWeightAndSize: buildPackageWeightAndSize("edit"),
           });
 
-          if (!offerResult.success) throw new Error(offerResult.error || "Offer update failed");
+          if (!itemResult.success) throw new Error(itemResult.error || "Item update failed");
+
+          // Update offer if exists
+          if (editProduct.ebay_offer_id) {
+            status.textContent = "Updating offer...";
+            const priceCents = Math.round(price * 100);
+            const editStoreCat = document.getElementById("editStoreCategory").value;
+            const offerResult = await callEdge("ebay-manage-listing", {
+              action: "update_offer",
+              offerId: editProduct.ebay_offer_id,
+              sku,
+              priceCents,
+              quantity,
+              policies: getSelectedPolicies("edit"),
+              bestOfferTerms: getBestOfferTerms("edit"),
+              storeCategoryNames: editStoreCat ? [editStoreCat] : [],
+            });
+
+            if (!offerResult.success) throw new Error(offerResult.error || "Offer update failed");
+          }
         }
 
         status.textContent = "✅ Listing updated successfully";

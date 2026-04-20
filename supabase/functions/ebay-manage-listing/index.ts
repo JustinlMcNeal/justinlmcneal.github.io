@@ -78,6 +78,7 @@ serve(async (req) => {
       await supabase.from("products").update({
         ebay_sku: null, ebay_offer_id: null, ebay_listing_id: null,
         ebay_status: "not_listed", ebay_category_id: null, ebay_price_cents: null,
+        ebay_item_group_key: null,
         updated_at: new Date().toISOString(),
       }).eq("code", sku);
       return new Response(JSON.stringify({ success: true, deleted: sku }), { headers: corsHeaders });
@@ -732,6 +733,160 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ success: true, action: "test_webhook_subscription", data: result.data }),
         { headers: corsHeaders },
+      );
+    }
+
+    // ── CREATE / UPDATE INVENTORY ITEM GROUP ─────────────
+    if (action === "create_item_group" || action === "update_item_group") {
+      const { inventoryItemGroupKey, title, description, imageUrls, aspects, variantSKUs, variesBy } = body;
+      if (!inventoryItemGroupKey) throw new Error("inventoryItemGroupKey is required");
+      if (!variantSKUs?.length) throw new Error("variantSKUs array is required");
+
+      const groupBody: Record<string, unknown> = {
+        title: title || "",
+        description: description || "",
+        imageUrls: imageUrls || [],
+        aspects: aspects || {},
+        variantSKUs,
+        variesBy: variesBy || {},
+      };
+
+      const result = await ebayFetch(
+        accessToken,
+        "PUT",
+        `${INV_API}/inventory_item_group/${encodeURIComponent(inventoryItemGroupKey)}`,
+        groupBody
+      );
+
+      if (!result.ok && result.status !== 204) {
+        throw new Error(`${action} failed (${result.status}): ${JSON.stringify(result.data)}`);
+      }
+
+      // Store group key in products table (on the base product code)
+      const baseCode = body.baseProductCode;
+      if (baseCode) {
+        await supabase
+          .from("products")
+          .update({
+            ebay_item_group_key: inventoryItemGroupKey,
+            ebay_status: "draft",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("code", baseCode);
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, inventoryItemGroupKey, action }),
+        { headers: corsHeaders }
+      );
+    }
+
+    // ── DELETE INVENTORY ITEM GROUP ──────────────────────
+    if (action === "delete_item_group") {
+      const { inventoryItemGroupKey } = body;
+      if (!inventoryItemGroupKey) throw new Error("inventoryItemGroupKey is required");
+
+      const result = await ebayFetch(
+        accessToken,
+        "DELETE",
+        `${INV_API}/inventory_item_group/${encodeURIComponent(inventoryItemGroupKey)}`
+      );
+
+      if (!result.ok && result.status !== 204) {
+        throw new Error(`Delete item group failed (${result.status}): ${JSON.stringify(result.data)}`);
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, deleted: inventoryItemGroupKey }),
+        { headers: corsHeaders }
+      );
+    }
+
+    // ── GET INVENTORY ITEM GROUP ────────────────────────
+    if (action === "get_item_group") {
+      const { inventoryItemGroupKey } = body;
+      if (!inventoryItemGroupKey) throw new Error("inventoryItemGroupKey is required");
+
+      const result = await ebayFetch(
+        accessToken,
+        "GET",
+        `${INV_API}/inventory_item_group/${encodeURIComponent(inventoryItemGroupKey)}`
+      );
+
+      if (!result.ok) {
+        throw new Error(`Get item group failed (${result.status}): ${JSON.stringify(result.data)}`);
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, itemGroup: result.data }),
+        { headers: corsHeaders }
+      );
+    }
+
+    // ── CREATE OFFER FOR ITEM GROUP ─────────────────────
+    if (action === "create_group_offer") {
+      const { inventoryItemGroupKey, categoryId, priceCents, policies, bestOfferTerms, storeCategoryNames, baseProductCode } = body;
+      if (!inventoryItemGroupKey || !categoryId) throw new Error("inventoryItemGroupKey and categoryId are required");
+
+      const priceValue = ((priceCents || 0) / 100).toFixed(2);
+
+      const offer: Record<string, unknown> = {
+        inventoryItemGroupKey,
+        marketplaceId: "EBAY_US",
+        format: "FIXED_PRICE",
+        categoryId,
+        pricingSummary: {
+          price: { value: priceValue, currency: "USD" },
+        },
+        listingPolicies: {
+          fulfillmentPolicyId: policies?.fulfillmentPolicyId || Deno.env.get("EBAY_FULFILLMENT_POLICY_ID") || "",
+          returnPolicyId: policies?.returnPolicyId || Deno.env.get("EBAY_RETURN_POLICY_ID") || "",
+          paymentPolicyId: policies?.paymentPolicyId || Deno.env.get("EBAY_PAYMENT_POLICY_ID") || "",
+        },
+        merchantLocationKey: Deno.env.get("EBAY_LOCATION_KEY") || "default",
+      };
+
+      if (bestOfferTerms?.bestOfferEnabled) {
+        (offer.listingPolicies as Record<string, unknown>).bestOfferTerms = {
+          bestOfferEnabled: true,
+          ...(bestOfferTerms.autoAcceptPrice ? { autoAcceptPrice: { value: bestOfferTerms.autoAcceptPrice, currency: "USD" } } : {}),
+          ...(bestOfferTerms.autoDeclinePrice ? { autoDeclinePrice: { value: bestOfferTerms.autoDeclinePrice, currency: "USD" } } : {}),
+        };
+      }
+
+      if (storeCategoryNames?.length) {
+        offer.storeCategoryNames = storeCategoryNames;
+      }
+
+      const result = await ebayFetch(
+        accessToken,
+        "POST",
+        `${INV_API}/offer`,
+        offer
+      );
+
+      if (!result.ok) {
+        throw new Error(`Create group offer failed (${result.status}): ${JSON.stringify(result.data)}`);
+      }
+
+      const offerId = (result.data as Record<string, string>)?.offerId;
+
+      // Update products table with offer ID and price
+      if (baseProductCode) {
+        await supabase
+          .from("products")
+          .update({
+            ebay_offer_id: offerId,
+            ebay_category_id: categoryId,
+            ebay_price_cents: priceCents,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("code", baseProductCode);
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, offerId }),
+        { headers: corsHeaders }
       );
     }
 
