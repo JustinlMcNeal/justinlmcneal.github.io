@@ -29,6 +29,9 @@ export async function initFooter() {
     
     // Show admin-only links if user is admin
     await applyAdminFooterBehavior();
+
+    // Secret admin access: tap footer logo 5 times quickly
+    initSecretAdminTap();
     
   } catch (err) {
     console.error('[footer] Error loading footer:', err);
@@ -57,11 +60,11 @@ async function applyAdminFooterBehavior() {
     const sb = getSupabaseClient();
     if (!sb) return;
 
-    const { data } = await sb.auth.getSession();
-    const session = data?.session;
+    const { data: sessionData } = await sb.auth.getSession();
+    if (!sessionData?.session) return;
 
-    if (session) {
-      // Show admin-only elements in footer
+    const { data: isAdmin } = await sb.rpc('is_admin');
+    if (isAdmin) {
       document.querySelectorAll('#kkFooterMount .kk-admin-only').forEach(el => {
         el.classList.remove('hidden');
       });
@@ -69,4 +72,28 @@ async function applyAdminFooterBehavior() {
   } catch (err) {
     console.error('[footer] Error checking admin status:', err);
   }
+}
+
+/**
+ * Secret admin tap: tap footer logo 5 times within 3 seconds to go to admin login
+ */
+function initSecretAdminTap() {
+  const logo = document.getElementById('kkFooterLogo');
+  if (!logo) return;
+
+  let tapCount = 0;
+  let tapTimer = null;
+
+  logo.addEventListener('click', (e) => {
+    tapCount++;
+    if (tapCount === 1) {
+      tapTimer = setTimeout(() => { tapCount = 0; }, 3000);
+    }
+    if (tapCount >= 5) {
+      e.preventDefault();
+      clearTimeout(tapTimer);
+      tapCount = 0;
+      window.location.href = '/pages/admin/login.html';
+    }
+  });
 }

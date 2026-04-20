@@ -1211,3 +1211,9 @@ Product in DB
 | `sms-abandoned-cart-check` | Every 5 minutes | `sms-abandoned-cart` |
 | `sms-coupon-reminder` | Hourly at :30 | `sms-coupon-reminder` |
 | `sms-welcome-series` | Hourly at :45 | `sms-welcome-series` |
+
+
+
+Manual adds
+push notifications  and test fix
+footer hyperlink fix

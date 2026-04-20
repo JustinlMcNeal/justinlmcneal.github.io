@@ -136,8 +136,8 @@ async function ensureNavbarInjected() {
 async function applyAdminNavbarBehavior() {
   const onAdmin = isAdminPage();
 
-  // Show/hide admin-only menu block
-  document.querySelectorAll(".kk-admin-only").forEach((el) => {
+  // Show/hide admin-only menu block (scoped to navbar only)
+  document.querySelectorAll("[data-kk-nav] .kk-admin-only, [data-kk-drawer='menu'] .kk-admin-only").forEach((el) => {
       // Always show container so we can control internally via auth state
       el.classList.remove("hidden");
   });

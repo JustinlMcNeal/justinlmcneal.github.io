@@ -185,13 +185,13 @@ export async function unsubscribeFromPush() {
 async function saveSubscription(sub) {
   const subJSON = sub.toJSON();
   try {
-    await fetch(`${SUPABASE_URL}/rest/v1/push_subscriptions`, {
+    const resp = await fetch(`${SUPABASE_URL}/rest/v1/push_subscriptions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'apikey': SUPABASE_ANON_KEY,
         'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        'Prefer': 'return=minimal,resolution=merge-duplicates'
+        'Prefer': 'return=minimal'
       },
       body: JSON.stringify({
         endpoint: subJSON.endpoint,
@@ -202,7 +202,31 @@ async function saveSubscription(sub) {
         is_active: true
       })
     });
-    console.log('[PWA] Subscription saved to DB');
+    if (!resp.ok) {
+      // Endpoint may already exist (unique constraint) — try updating instead
+      if (resp.status === 409) {
+        await fetch(`${SUPABASE_URL}/rest/v1/push_subscriptions?endpoint=eq.${encodeURIComponent(subJSON.endpoint)}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Prefer': 'return=minimal'
+          },
+          body: JSON.stringify({
+            keys_p256dh: subJSON.keys?.p256dh || null,
+            keys_auth: subJSON.keys?.auth || null,
+            user_agent: navigator.userAgent,
+            is_active: true
+          })
+        });
+        console.log('[PWA] Subscription updated in DB');
+      } else {
+        console.error('[PWA] Subscription save failed:', resp.status);
+      }
+    } else {
+      console.log('[PWA] Subscription saved to DB');
+    }
   } catch (err) {
     console.error('[PWA] Failed to save subscription:', err);
   }
