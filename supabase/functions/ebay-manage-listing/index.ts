@@ -149,7 +149,7 @@ serve(async (req) => {
 
     // ── CREATE OFFER ────────────────────────────────────────
     if (action === "create_offer") {
-      const { sku, categoryId, priceCents, quantity, policies, bestOfferTerms } = body;
+      const { sku, categoryId, priceCents, quantity, policies, bestOfferTerms, storeCategoryNames } = body;
       if (!sku || !categoryId) throw new Error("sku and categoryId are required");
 
       const priceValue = ((priceCents || 0) / 100).toFixed(2);
@@ -177,6 +177,10 @@ serve(async (req) => {
           ...(bestOfferTerms.autoAcceptPrice ? { autoAcceptPrice: { value: bestOfferTerms.autoAcceptPrice, currency: "USD" } } : {}),
           ...(bestOfferTerms.autoDeclinePrice ? { autoDeclinePrice: { value: bestOfferTerms.autoDeclinePrice, currency: "USD" } } : {}),
         };
+      }
+
+      if (storeCategoryNames?.length) {
+        offer.storeCategoryNames = storeCategoryNames;
       }
 
       const result = await ebayFetch(
@@ -247,7 +251,7 @@ serve(async (req) => {
 
     // ── UPDATE OFFER (price, quantity) ──────────────────────
     if (action === "update_offer") {
-      const { offerId, sku, priceCents, quantity, categoryId, policies, bestOfferTerms } = body;
+      const { offerId, sku, priceCents, quantity, categoryId, policies, bestOfferTerms, storeCategoryNames } = body;
       if (!offerId) throw new Error("offerId is required");
 
       // First GET current offer to preserve fields we're not changing
@@ -291,6 +295,12 @@ serve(async (req) => {
           lp.bestOfferTerms = { bestOfferEnabled: false };
         }
         updatedOffer.listingPolicies = lp;
+      }
+
+      if (storeCategoryNames?.length) {
+        updatedOffer.storeCategoryNames = storeCategoryNames;
+      } else if (storeCategoryNames !== undefined) {
+        updatedOffer.storeCategoryNames = [];
       }
 
       const result = await ebayFetch(

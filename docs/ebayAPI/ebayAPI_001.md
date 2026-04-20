@@ -866,12 +866,12 @@ Build in three passes. Each pass ends with a verification checkpoint.
 - Edit modal pre-fills policy dropdowns from existing offer (`offer.listingPolicies.*PolicyId`)
 - Edge function updated: accepts `packageWeightAndSize` field and passes to eBay Inventory API
 
-**Pass 3 — Nice-to-Have**
+**Pass 3 — Nice-to-Have** (in progress)
 
-| Step | Feature | Touches | Effort |
-|------|---------|---------|--------|
-| 5 | Best Offer | UI + edge function (`create_offer`, `update_offer`) | Medium |
-| 6 | Store category | UI + edge function (`create_offer`) — cut first if time is tight | Small |
+| Step | Feature | Touches | Effort | Status |
+|------|---------|---------|--------|--------|
+| 5 | Best Offer | UI + edge function (`create_offer`, `update_offer`) | Medium | ✅ Done |
+| 6 | Store category | UI + edge function (`create_offer`) — cut first if time is tight | Small | |
 
 **Skipped / Deferred**
 
@@ -898,7 +898,7 @@ Phase 1b is **done** when:
 
 - [x] Push/Edit modals show all product gallery images and send full `imageUrls[]` to eBay (up to 24)
 - [x] Description field uses a rich text editor (Quill) that outputs eBay-safe HTML
-- [ ] "Allow Offers" toggle with auto-accept/auto-decline price fields works on create and edit
+- [x] "Allow Offers" toggle with auto-accept/auto-decline price fields works on create and edit
 - [x] Package weight + dimensions can be set per listing and are sent to eBay
 - [x] Admin can pick shipping/return/payment policies from dropdowns (not hardcoded)
 - [ ] Store category can be assigned to listings

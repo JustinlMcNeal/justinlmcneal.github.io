@@ -299,6 +299,20 @@
               </div>
             </details>
 
+            <!-- Store Category -->
+            <div>
+              <label class="block text-[9px] font-bold uppercase text-gray-500 mb-0.5">Store Category</label>
+              <select id="modalStoreCategory" class="w-full border-2 border-gray-300 px-2 py-1.5 text-xs outline-none focus:border-kkpink transition-colors">
+                <option value="">— None —</option>
+                <option value="Headwear">Headwear</option>
+                <option value="Jewelry">Jewelry</option>
+                <option value="Bags">Bags</option>
+                <option value="Accessories">Accessories</option>
+                <option value="Plushies">Plushies</option>
+                <option value="Lego">Lego</option>
+              </select>
+            </div>
+
             <!-- Action Buttons -->
             <div class="flex flex-wrap gap-2 pt-2">
               <button id="btnCreateItem" type="button"
@@ -468,6 +482,20 @@
                 </div>
               </div>
             </details>
+
+            <!-- Store Category -->
+            <div>
+              <label class="block text-[9px] font-bold uppercase text-gray-500 mb-0.5">Store Category</label>
+              <select id="editStoreCategory" class="w-full border-2 border-gray-300 px-2 py-1.5 text-xs outline-none focus:border-kkpink transition-colors">
+                <option value="">— None —</option>
+                <option value="Headwear">Headwear</option>
+                <option value="Jewelry">Jewelry</option>
+                <option value="Bags">Bags</option>
+                <option value="Accessories">Accessories</option>
+                <option value="Plushies">Plushies</option>
+                <option value="Lego">Lego</option>
+              </select>
+            </div>
 
             <!-- Save -->
             <div class="flex gap-2 pt-2">
@@ -1098,6 +1126,7 @@
       }
 
       try {
+        const storeCat = document.getElementById("modalStoreCategory").value;
         const result = await callEdge("ebay-manage-listing", {
           action: "create_offer",
           sku,
@@ -1106,6 +1135,7 @@
           quantity,
           policies: getSelectedPolicies("modal"),
           bestOfferTerms: getBestOfferTerms("modal"),
+          storeCategoryNames: storeCat ? [storeCat] : [],
         });
 
         if (result.success) {
@@ -1261,6 +1291,10 @@
         document.getElementById("editAutoAccept").value = bot.autoAcceptPrice?.value || "";
         document.getElementById("editAutoDecline").value = bot.autoDeclinePrice?.value || "";
 
+        // Pre-fill Store Category from offer
+        const storeCats = offer.storeCategoryNames || [];
+        document.getElementById("editStoreCategory").value = storeCats[0] || "";
+
         // Fetch aspects for category and pre-fill
         const categoryId = editProduct.ebay_category_id || offer.categoryId;
         const existingAspects = product.aspects || {};
@@ -1388,6 +1422,7 @@
         if (editProduct.ebay_offer_id) {
           status.textContent = "Updating offer...";
           const priceCents = Math.round(price * 100);
+          const editStoreCat = document.getElementById("editStoreCategory").value;
           const offerResult = await callEdge("ebay-manage-listing", {
             action: "update_offer",
             offerId: editProduct.ebay_offer_id,
@@ -1396,6 +1431,7 @@
             quantity,
             policies: getSelectedPolicies("edit"),
             bestOfferTerms: getBestOfferTerms("edit"),
+            storeCategoryNames: editStoreCat ? [editStoreCat] : [],
           });
 
           if (!offerResult.success) throw new Error(offerResult.error || "Offer update failed");
