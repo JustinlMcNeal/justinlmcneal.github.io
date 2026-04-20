@@ -1015,34 +1015,79 @@ serve(async (req) => {
       const endDate = new Date(now);
       endDate.setFullYear(endDate.getFullYear() + 1);
 
-      const discountRules = tiers.map((t: { minQuantity: number; percentOff: number; amountOff?: number }, i: number) => {
-        const rule: Record<string, unknown> = {
-          minQuantity: t.minQuantity,
-          ruleOrder: i + 1,
-          discountBenefit: {},
-        };
-        if (t.amountOff) {
-          rule.discountBenefit = { amountOffItem: { value: t.amountOff.toFixed(2), currency: "USD" } };
-        } else {
-          rule.discountBenefit = { percentageOffItem: String(t.percentOff) };
+      const sortedTiers = [...tiers]
+        .map((t: { minQuantity: number; percentOff: number }) => ({
+          minQuantity: Number(t.minQuantity),
+          percentOff: Number(t.percentOff || 0),
+        }))
+        .filter((t) => Number.isFinite(t.minQuantity) && t.minQuantity >= 2)
+        .sort((a, b) => a.minQuantity - b.minQuantity);
+
+      // VOLUME_DISCOUNT requires baseline rule: minQuantity=1 with 0% off.
+      const normalized = [{ minQuantity: 1, percentOff: 0 }, ...sortedTiers]
+        .slice(0, 4)
+        .map((t, idx) => ({
+          minQuantity: idx + 1,
+          percentOff: t.percentOff,
+        }));
+
+      if (normalized.length < 2) {
+        throw new Error("Volume pricing requires at least one tier at quantity 2+");
+      }
+
+      const discountRules = normalized.map((t) => ({
+        ruleOrder: t.minQuantity,
+        discountSpecification: { minQuantity: t.minQuantity },
+        discountBenefit: { percentageOffOrder: String(t.percentOff) },
+      }));
+
+      let inventoryCriterion: Record<string, unknown> = {
+        inventoryCriterionType: "INVENTORY_BY_VALUE",
+        listingIds: [listingId],
+      };
+
+      // For multi-variation listings, use inventoryItemGroupKey to avoid listing-ID timing/eligibility issues.
+      if (productCode) {
+        const { data: product } = await supabase
+          .from("products")
+          .select("ebay_item_group_key")
+          .eq("code", productCode)
+          .maybeSingle();
+        const groupKey = (product as { ebay_item_group_key?: string } | null)?.ebay_item_group_key;
+        if (groupKey) {
+          inventoryCriterion = {
+            inventoryCriterionType: "INVENTORY_BY_VALUE",
+            inventoryItems: [
+              {
+                inventoryReferenceType: "INVENTORY_ITEM_GROUP",
+                inventoryReferenceId: groupKey,
+              },
+            ],
+          };
         }
-        return rule;
-      });
+      }
 
       const promo = {
         name: `Volume Discount — ${productCode || listingId}`,
         marketplaceId: "EBAY_US",
+        promotionStatus: "SCHEDULED",
         promotionType: "VOLUME_DISCOUNT",
+        applyDiscountToSingleItemOnly: false,
         startDate: now.toISOString(),
         endDate: endDate.toISOString(),
         discountRules,
-        inventoryCriterion: {
-          inventoryCriterionType: "INVENTORY_BY_VALUE",
-          listingIds: [listingId],
-        },
+        inventoryCriterion,
       };
 
-      const result = await ebayFetch(accessToken, "POST", `${MKTG_API}/item_promotion`, promo);
+      let result = await ebayFetch(accessToken, "POST", `${MKTG_API}/item_promotion`, promo);
+      // Newly published listings can briefly fail validation in Marketing API.
+      if (!result.ok) {
+        for (const waitMs of [1500, 3000]) {
+          await delay(waitMs);
+          result = await ebayFetch(accessToken, "POST", `${MKTG_API}/item_promotion`, promo);
+          if (result.ok) break;
+        }
+      }
       if (!result.ok) {
         throw new Error(`Create volume discount failed (${result.status}): ${JSON.stringify(result.data)}`);
       }
@@ -1094,22 +1139,34 @@ serve(async (req) => {
 
       const existing = current.data as Record<string, unknown>;
 
-      const discountRules = tiers.map((t: { minQuantity: number; percentOff: number; amountOff?: number }, i: number) => {
-        const rule: Record<string, unknown> = {
-          minQuantity: t.minQuantity,
-          ruleOrder: i + 1,
-          discountBenefit: {},
-        };
-        if (t.amountOff) {
-          rule.discountBenefit = { amountOffItem: { value: t.amountOff.toFixed(2), currency: "USD" } };
-        } else {
-          rule.discountBenefit = { percentageOffItem: String(t.percentOff) };
-        }
-        return rule;
-      });
+      const sortedTiers = [...tiers]
+        .map((t: { minQuantity: number; percentOff: number }) => ({
+          minQuantity: Number(t.minQuantity),
+          percentOff: Number(t.percentOff || 0),
+        }))
+        .filter((t) => Number.isFinite(t.minQuantity) && t.minQuantity >= 2)
+        .sort((a, b) => a.minQuantity - b.minQuantity);
 
-      const updatedPromo = {
+      const normalized = [{ minQuantity: 1, percentOff: 0 }, ...sortedTiers]
+        .slice(0, 4)
+        .map((t, idx) => ({
+          minQuantity: idx + 1,
+          percentOff: t.percentOff,
+        }));
+
+      if (normalized.length < 2) {
+        throw new Error("Volume pricing requires at least one tier at quantity 2+");
+      }
+
+      const discountRules = normalized.map((t) => ({
+        ruleOrder: t.minQuantity,
+        discountSpecification: { minQuantity: t.minQuantity },
+        discountBenefit: { percentageOffOrder: String(t.percentOff) },
+      }));
+
+      const updatedPromo: Record<string, unknown> = {
         ...existing,
+        promotionStatus: (existing.promotionStatus as string) || "SCHEDULED",
         discountRules,
       };
 
