@@ -913,6 +913,165 @@ Phase 1b is **done** when:
 
 ---
 
+## 2c. Phase 1c — eBay Fulfillment Tracking Sync (Shippo → eBay)
+
+> **Priority:** 🟢 NOW — small scope, high impact, no new scopes needed
+> **Prerequisite:** Phase 1 complete, Shippo label creation working
+> **Scope:** Uses existing `sell.fulfillment` scope (already authorized)
+> **Goal:** When a Shippo label is purchased for an eBay order, automatically push the tracking number to eBay so the order shows "Shipped" in Seller Hub and the buyer gets tracking updates.
+
+### 2c.1 Problem
+
+Currently, `shippo-create-label` creates a shipping label and saves the tracking number to `fulfillment_shipments` — but eBay doesn't know about it. For eBay orders, the seller must manually enter tracking in Seller Hub or the order stays "Awaiting Shipment" forever. This hurts:
+- **Seller metrics** — eBay tracks "on-time shipping" and "tracking uploaded" rates. Missing tracking = seller standard defects.
+- **Buyer experience** — buyer doesn't get eBay shipping notifications or estimated delivery.
+- **Dispute protection** — without tracking on file with eBay, seller has no proof of shipment in case of "Item Not Received" claims.
+
+### 2c.2 Architecture
+
+```
+Admin clicks "Buy Label" for an eBay order
+  │
+  ├─ shippo-create-label (existing)
+  │   → Creates Shippo label → gets tracking number
+  │   → Upserts fulfillment_shipments (tracking_number, carrier, etc.)
+  │   → Returns { tracking_number, carrier, ... }
+  │
+  └─ NEW: After label purchase, detect eBay order + push tracking
+      │
+      ├─ Check: stripe_checkout_session_id starts with "ebay_api_"?
+      │   → If no: done (website order, no eBay sync needed)
+      │   → If yes: extract eBay orderId from session ID
+      │
+      └─ POST /sell/fulfillment/v1/order/{orderId}/shipping_fulfillment
+          Body: {
+            "trackingNumber": "9400111899223100XXXXXX",
+            "shippingCarrierCode": "USPS",
+            "lineItems": [{ "lineItemId": "...", "quantity": N }]
+          }
+          → eBay marks order as shipped
+          → Buyer gets tracking notification from eBay
+```
+
+### 2c.3 eBay Fulfillment API Reference
+
+**Endpoint:** `POST /sell/fulfillment/v1/order/{orderId}/shipping_fulfillment`
+
+```json
+{
+  "trackingNumber": "9400111899223100123456",
+  "shippingCarrierCode": "USPS",
+  "lineItems": [
+    {
+      "lineItemId": "12345678901234",
+      "quantity": 1
+    }
+  ]
+}
+```
+
+**Carrier codes:** `USPS`, `UPS`, `FEDEX`, `DHL` — eBay uses specific carrier code strings. Since we ship almost exclusively via USPS (Shippo default for our weight range), map Shippo's carrier name to eBay's code.
+
+**Carrier mapping:**
+| Shippo Carrier | eBay `shippingCarrierCode` |
+|---------------|---------------------------|
+| `usps` | `USPS` |
+| `ups` | `UPS` |
+| `fedex` | `FEDEX` |
+| `dhl_express` | `DHL` |
+
+**Response:** `201 Created` with `fulfillmentId` (eBay's shipment reference). Store this in `fulfillment_shipments.ebay_fulfillment_id` for reference.
+
+**Line items:** Required field. Must include at least one line item from the order. For single-item orders (most of ours), send all line items. Line item IDs are available in `line_items_raw.stripe_line_item_id` (stored as `ebay_li_{lineItemId}`).
+
+### 2c.4 Implementation Options
+
+**Option A: Hook into `shippo-create-label` directly** *(recommended)*
+
+Add the eBay tracking push at the end of `shippo-create-label`, after the label is purchased and `fulfillment_shipments` is updated:
+
+```typescript
+// After successful label purchase + fulfillment_shipments upsert...
+
+// Push tracking to eBay if this is an eBay order
+const sessionId = order.stripe_checkout_session_id;
+if (sessionId?.startsWith("ebay_api_")) {
+  const ebayOrderId = sessionId.replace("ebay_api_", "");
+  try {
+    await pushTrackingToEbay(supabase, ebayOrderId, trackingNumber, carrier, sessionId);
+  } catch (err: unknown) {
+    // Log but don't fail — label is already purchased, tracking push is best-effort
+    console.error("eBay tracking push failed:", err instanceof Error ? err.message : String(err));
+  }
+}
+```
+
+**Pros:** Single atomic operation — label purchase + eBay notification in one call. No separate trigger needed.
+**Cons:** Couples Shippo and eBay logic in one function. If eBay API is down, the label purchase still succeeds but tracking push silently fails.
+
+**Option B: Separate edge function triggered after label purchase**
+
+Create `ebay-push-tracking` edge function. Call it from the admin UI after `shippo-create-label` returns, or via a database trigger on `fulfillment_shipments` insert.
+
+**Pros:** Clean separation. Can retry eBay push independently.
+**Cons:** Extra network hop. Admin UI needs to chain two calls.
+
+**Decision:** **Option A** — hook into `shippo-create-label`. The tracking push is a lightweight API call (single POST). If it fails, the label is already purchased — worst case, tracking can be pushed manually or retried. Add a `tracking_pushed_to_ebay` boolean on `fulfillment_shipments` to track sync status.
+
+### 2c.5 Database Changes
+
+```sql
+ALTER TABLE fulfillment_shipments
+  ADD COLUMN ebay_fulfillment_id text,
+  ADD COLUMN tracking_pushed_to_ebay boolean DEFAULT false;
+```
+
+- `ebay_fulfillment_id` — eBay's fulfillment reference ID (returned from POST)
+- `tracking_pushed_to_ebay` — `true` once tracking is successfully pushed to eBay. Used for retry logic and admin visibility.
+
+### 2c.6 Retry / Safety Net
+
+eBay tracking push can fail (token expired, rate limit, network error). Safety mechanisms:
+
+1. **Immediate retry** — If the POST fails, retry once after 2 seconds. If still failing, log and move on.
+2. **Admin visibility** — Show a "⚠️ Tracking not synced to eBay" badge on eBay orders where `tracking_pushed_to_ebay = false` and a label exists.
+3. **Manual retry button** — Admin can click "Push Tracking to eBay" for any order with a label but `tracking_pushed_to_ebay = false`.
+4. **CRON sweep (optional)** — A lightweight CRON (daily) that scans for `fulfillment_shipments` rows where `tracking_pushed_to_ebay = false` AND `stripe_checkout_session_id LIKE 'ebay_api_%'` AND label exists → retry push. Low priority — manual retry should be sufficient at current volume.
+
+### 2c.7 Line Item Resolution
+
+The eBay shipping fulfillment POST requires `lineItems[]` with eBay line item IDs. To resolve these:
+
+1. Query `line_items_raw` where `stripe_checkout_session_id = 'ebay_api_{orderId}'`
+2. Each row has `stripe_line_item_id = 'ebay_li_{lineItemId}'`
+3. Extract the eBay `lineItemId` by stripping the `ebay_li_` prefix
+4. Include all line items with their quantities (ship entire order at once)
+
+```typescript
+const { data: lineItems } = await supabase
+  .from("line_items_raw")
+  .select("stripe_line_item_id, quantity")
+  .eq("stripe_checkout_session_id", sessionId);
+
+const ebayLineItems = lineItems.map(li => ({
+  lineItemId: li.stripe_line_item_id.replace("ebay_li_", ""),
+  quantity: li.quantity || 1,
+}));
+```
+
+### 2c.8 Success Criteria
+
+Phase 1c is **done** when:
+
+- [ ] Purchasing a Shippo label for an eBay order automatically pushes tracking to eBay
+- [ ] eBay order shows "Shipped" status with tracking number in Seller Hub
+- [ ] Buyer receives eBay shipping notification with tracking link
+- [ ] `fulfillment_shipments.tracking_pushed_to_ebay` is set to `true` on success
+- [ ] Failed pushes are visible in admin (badge or indicator)
+- [ ] At least one real eBay order has been shipped with tracking synced end-to-end
+
+---
+
 ## 3. Phase 2 — Real-Time Order Webhooks
 
 > **Priority:** 🟢 NOW — can start alongside Phase 1 (thin initial implementation)
@@ -1377,6 +1536,13 @@ CREATE TABLE ebay_category_cache (
 );
 ```
 
+### Phase 1c — Fulfillment tracking sync columns
+```sql
+ALTER TABLE fulfillment_shipments
+  ADD COLUMN ebay_fulfillment_id text,
+  ADD COLUMN tracking_pushed_to_ebay boolean DEFAULT false;
+```
+
 ### Phase 3 — Inventory tracking columns
 ```sql
 ALTER TABLE products
@@ -1452,6 +1618,7 @@ Complete registry of all eBay edge functions (existing + planned):
 | `ebay-manage-listing` | 1 | ✅ Live | — | — |
 | `ebay-migrate-listings` | 1 | ✅ Live | — | — |
 | `ebay-taxonomy` | 1 | ✅ Live | — | — |
+| `shippo-create-label` *(updated)* | 1c | ✅ Live *(update pending)* | — | — |
 | `ebay-webhook` | 2 | ⏳ Planned | `--no-verify-jwt` | — |
 | `ebay-sync-inventory` | 3 | ⏳ Planned | — | `0 3 * * *` |
 | `ebay-manage-ads` | 4 | ⏳ Planned | — | `0 7 * * *` |
@@ -1485,20 +1652,28 @@ Phase 1 (DONE — April 19, 2026)
   ├── ✅ OAuth scopes expanded: sell.account, sell.account.readonly
   └── ✅ First listing test: create → offer → publish → withdraw cycle verified
 
-Phase 1b (NOW — Enhanced Listing Features)
-  ├── Multi-image management (gallery images → imageUrls[])
-  ├── HTML description editor (Quill.js CDN)
-  ├── Best Offer / Allow Offers (bestOfferTerms on offer)
-  ├── Package weight & dimensions (packageWeightAndSize on item)
-  ├── Policy picker (ship/return/payment dropdowns)
-  ├── Store category assignment
+Phase 1b (DONE — April 19, 2026)
+  ├── ✅ Multi-image management (gallery images → imageUrls[])
+  ├── ✅ HTML description editor (Quill.js CDN)
+  ├── ✅ Best Offer / Allow Offers (bestOfferTerms on offer)
+  ├── ✅ Package weight & dimensions (packageWeightAndSize on item, auto-fills from weight_g)
+  ├── ✅ Policy picker (ship/return/payment dropdowns)
+  ├── ✅ Store category assignment
   ├── Volume pricing → deferred to Phase 4 (needs sell.marketing)
   └── Item location override → skipped (single location)
 
 ── NOW ──────────────────────────────────────────
 
+Phase 1c: eBay Fulfillment Tracking Sync (Shippo → eBay)
+  ├── Depends on: Phase 1 + Shippo integration (both done)
+  ├── Hook into shippo-create-label — detect eBay orders, push tracking
+  ├── POST /sell/fulfillment/v1/order/{orderId}/shipping_fulfillment
+  ├── fulfillment_shipments.tracking_pushed_to_ebay flag
+  ├── No new scopes needed (sell.fulfillment already authorized)
+  └── Small scope — single POST call + DB column additions
+
 Phase 2: Real-Time Webhooks (thin — ItemSold only)
-  ├── Depends on: nothing (parallel with Phase 1)
+  ├── Depends on: nothing (parallel with Phase 1c)
   ├── ebay-webhook (receives ItemSold push notifications)
   ├── Reduces CRON frequency (2h → 6-12h fallback)
   └── Other events (feedback, unsold) wired up later
