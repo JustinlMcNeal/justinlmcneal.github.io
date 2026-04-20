@@ -45,6 +45,11 @@
     .ql-editor { min-height: 100px; }
     .desc-tab { background: #e5e7eb; color: #555; }
     .desc-tab.active { background: #ff69b4; color: #fff; }
+    .ai-badge { display: inline-block; padding: 1px 5px; border-radius: 3px; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; margin-left: 4px; vertical-align: middle; }
+    .ai-badge-generated { background: #ede9fe; color: #6d28d9; }
+    .ai-badge-inferred { background: #fef3c7; color: #92400e; }
+    .ai-badge-default { background: #dcfce7; color: #166534; }
+    .ai-badge-from_data { background: #dbeafe; color: #1e40af; }
   </style>
 </head>
 
@@ -203,6 +208,13 @@
               <div id="modalProductName" class="font-bold"></div>
               <div id="modalProductCode" class="text-xs text-gray-500"></div>
             </div>
+
+            <!-- AI Auto-Fill -->
+            <button id="btnAiFill" type="button"
+              class="w-full border-2 border-dashed border-purple-400 bg-purple-50 text-purple-700 px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-purple-100 hover:border-purple-500 transition-all flex items-center justify-center gap-2">
+              <span>✨</span> AI Auto-Fill
+            </button>
+            <div id="aiFillStatus" class="text-[10px] text-gray-400 text-center hidden"></div>
 
             <!-- SKU -->
             <div>
@@ -1102,6 +1114,127 @@
       document.getElementById("modalImagePicker").classList.add("hidden");
       currentProduct = null;
     });
+
+    // ── AI Auto-Fill ─────────────────────────────────────
+    document.getElementById("btnAiFill").addEventListener("click", async () => {
+      if (!currentProduct) return;
+
+      const btn = document.getElementById("btnAiFill");
+      const statusEl = document.getElementById("aiFillStatus");
+      btn.disabled = true;
+      btn.innerHTML = '<span class="animate-pulse">✨ Generating...</span>';
+      statusEl.textContent = "Analyzing product images and generating listing...";
+      statusEl.classList.remove("hidden");
+
+      try {
+        // Collect existing aspect names if category has been selected
+        const existingAspects = currentAspects.map(a => a.name);
+
+        // Resolve KK category name from the product's category
+        let categoryName = "";
+        if (currentProduct.category_id) {
+          // Try to resolve from store category dropdown options or use a lookup
+          const catMap = { headwear: "Headwear", jewelry: "Jewelry", bags: "Bags", accessories: "Accessories", plushies: "Plushies", lego: "Lego" };
+          // Check if product has category info in allProducts data
+          for (const [key, val] of Object.entries(catMap)) {
+            if (currentProduct.name?.toLowerCase().includes(key) || currentProduct.code?.toLowerCase().startsWith(key.substring(0, 2).toUpperCase())) {
+              categoryName = val;
+              break;
+            }
+          }
+        }
+        // Fallback: use store category if one is pre-selected
+        if (!categoryName) {
+          categoryName = document.getElementById("modalStoreCategory")?.value || "";
+        }
+
+        const result = await callEdge("ebay-ai-autofill", {
+          productName: currentProduct.name,
+          productCode: currentProduct.code,
+          category: categoryName,
+          price: currentProduct.price ? Number(currentProduct.price) : undefined,
+          imageUrls: pushImageUrls.slice(0, 4),
+          existingAspects,
+        });
+
+        if (!result.success) {
+          statusEl.textContent = "AI fill failed: " + (result.error || "Unknown error");
+          statusEl.className = "text-[10px] text-red-500 text-center";
+          return;
+        }
+
+        const ai = result.data;
+
+        // Fill title with source badge
+        if (ai.title?.value) {
+          document.getElementById("modalTitle").value = ai.title.value;
+          addAiBadge("modalTitle", ai.title.source || "generated");
+        }
+
+        // Fill description
+        if (ai.description_html?.value) {
+          const descHtml = ai.description_html.value;
+          // Check if it's complex HTML or simple
+          if (pushQuill) {
+            // Use HTML mode for AI content since it's structured
+            pushDescMode = "html";
+            document.getElementById("modalDescriptionHtml").value = descHtml;
+            toggleDescMode("html", "modal", pushQuill);
+            document.getElementById("btnPushHtml").classList.add("active");
+            document.getElementById("btnPushVisual").classList.remove("active");
+            document.getElementById("btnPushPreview").classList.remove("active");
+          }
+          addAiBadge("modalDescriptionHtml", ai.description_html.source || "generated");
+        }
+
+        // Fill item specifics (if aspects section is visible)
+        if (ai.item_specifics?.length && currentAspects.length) {
+          for (const spec of ai.item_specifics) {
+            const input = document.querySelector(`[data-aspect="${spec.name}"]`);
+            if (input && spec.value) {
+              input.value = spec.value;
+              // Add badge next to the aspect input
+              const badge = document.createElement("span");
+              badge.className = `ai-badge ai-badge-${spec.source || "inferred"}`;
+              badge.textContent = spec.source === "default" ? "Default" : spec.source === "from_data" ? "From data" : "AI";
+              const existing = input.parentElement.querySelector(".ai-badge");
+              if (existing) existing.remove();
+              input.parentElement.appendChild(badge);
+            }
+          }
+        }
+
+        // Show notes if any
+        const notes = ai.notes || [];
+        if (notes.length) {
+          statusEl.innerHTML = "✅ AI filled fields. Notes:<br>" + notes.map(n => `• ${esc(n)}`).join("<br>");
+          statusEl.className = "text-[10px] text-amber-600 text-center";
+        } else {
+          statusEl.textContent = "✅ AI auto-fill complete — review fields before proceeding.";
+          statusEl.className = "text-[10px] text-green-600 text-center";
+        }
+
+      } catch (e) {
+        statusEl.textContent = "AI fill error: " + e.message;
+        statusEl.className = "text-[10px] text-red-500 text-center";
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span>✨</span> AI Auto-Fill';
+      }
+    });
+
+    function addAiBadge(inputId, source) {
+      const input = document.getElementById(inputId);
+      if (!input) return;
+      const label = input.closest("div")?.querySelector("label");
+      if (!label) return;
+      const existing = label.querySelector(".ai-badge");
+      if (existing) existing.remove();
+      const badge = document.createElement("span");
+      badge.className = `ai-badge ai-badge-${source}`;
+      badge.textContent = source === "generated" ? "AI" : source === "from_data" ? "From data" : source;
+      label.appendChild(badge);
+    }
 
     document.getElementById("btnAddImgPush").addEventListener("click", () => {
       if (!currentProduct) return;

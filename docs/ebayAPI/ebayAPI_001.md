@@ -1627,6 +1627,7 @@ Complete registry of all eBay edge functions (existing + planned):
 | `ebay-taxonomy` | 1 | ✅ Live | — | — |
 | `shippo-create-label` *(updated)* | 1c | ✅ Live | — | — |
 | `ebay-webhook` | 2 | ✅ Live | `--no-verify-jwt` | — |
+| `ebay-ai-autofill` | 6 | ✅ Live | — | — |
 | `ebay-sync-inventory` | 3 | ⏳ Planned | — | `0 3 * * *` |
 | `ebay-manage-ads` | 4 | ⏳ Planned | — | `0 7 * * *` |
 | `ebay-analytics` | 5 | ⏳ Planned | — | `0 7 * * *` |
@@ -1741,28 +1742,109 @@ Phase 5: Compliance + Competitor Pricing
 
 ## Phase 6 — AI Auto-Fill for eBay Listings
 
+> **Priority:** ✅ DONE — April 19, 2026
+> **Type:** Enhancement to Phase 1 listing flow
+> **Prerequisite:** Phase 1 stable (manual listing system proven)
+> **Philosophy:** AI is an **assistant**, not a decision-maker. Admin confirms everything.
+
 ### 6.1 Overview
-When pushing a product to eBay, an "AI Auto-Fill" button generates optimized listing content (title, description, item specifics, category suggestion) based on product data and images.
+When pushing a product to eBay, an "✨ AI Auto-Fill" button generates draft listing content (title, description, item specifics) based on product data and images. The admin reviews, edits if needed, then proceeds with the normal push flow.
 
-### 6.2 Architecture
-- **Edge Function**: `ebay-ai-autofill` — accepts product data, calls OpenAI API, returns optimized listing fields
-- **Frontend**: "✨ AI Auto-Fill" button in the Push Modal populates fields automatically
-- **Flow**: Button click → send product name, images, category, price → edge function → AI generates title (max 80 chars, keyword-rich), HTML description, item specifics → auto-populate modal fields
+### 6.2 Guardrails
 
-### 6.3 AI Outputs
-| Field | Details |
-|-------|---------|
-| Title | SEO-optimized, ≤80 chars, keyword-rich |
-| Description | Styled HTML with product features, specs, shipping info |
-| Item Specifics | Brand, material, color, size from product data |
-| Category | Suggested eBay category ID via Taxonomy API cross-referenced with AI |
+| Rule | Implementation |
+|------|---------------|
+| **AI does not choose category** | Taxonomy API returns candidates, AI can rank/explain, but final category ID comes from taxonomy results only |
+| **AI does not invent facts** | Item specifics sourced from DB = `certain`, from images = `inferred`, unknown = left blank |
+| **No shipping info in descriptions** | AI writes product body only; policy-safe footer added by existing template wrapper |
+| **Confidence + source visibility** | Each AI field shows a badge: `From data`, `Inferred`, `Suggested` |
+| **Admin always confirms** | AI populates form fields as drafts; admin must review before clicking "Create Item" |
 
-### 6.4 Implementation Steps
-1. Create `ebay-ai-autofill` edge function (Deno/TS, OpenAI SDK)
-2. Add AI Auto-Fill button to Push Modal UI
-3. Wire button → call edge function → populate form fields
-4. Add "Regenerate" option with prompt tweaks (tone, keywords)
-5. Store AI-generated content alongside manual edits for A/B comparison
+### 6.3 Output Contract
+
+The edge function returns structured JSON with confidence and source metadata:
+
+```json
+{
+  "title": {
+    "value": "Cherry Necklace Cute Red Heart Pendant Jewelry Gift",
+    "confidence": 0.89,
+    "source": "generated"
+  },
+  "description_html": {
+    "value": "<div>...</div>",
+    "confidence": 0.84,
+    "source": "generated"
+  },
+  "item_specifics": [
+    { "name": "Brand", "value": "Unbranded", "source": "default", "confidence": 1.0 },
+    { "name": "Color", "value": "Red", "source": "inferred", "confidence": 0.76 }
+  ],
+  "notes": [
+    "Material could not be confidently determined — left blank for admin"
+  ]
+}
+```
+
+**Source types:**
+- `default` — known safe value (e.g., Brand = "Unbranded")
+- `from_data` — sourced directly from product database fields
+- `inferred` — derived from product images or title
+- `generated` — AI-created content (title, description)
+
+### 6.4 Architecture
+- **Edge Function**: `ebay-ai-autofill` — accepts product data + image URLs, calls OpenAI GPT-4o (vision), returns structured output
+- **Frontend**: "✨ AI Auto-Fill" button in Push Modal → calls edge function → populates form fields with source badges
+- **No persistence in Pass 1** — AI output fills the form; whatever admin submits is the final value
+
+### 6.5 Implementation — Pass 1 (MVP)
+
+| Step | Feature | Status |
+|------|---------|--------|
+| 1 | `ebay-ai-autofill` edge function (GPT-4o vision) | ✅ Done |
+| 2 | "✨ AI Auto-Fill" button in Push Modal | ✅ Done |
+| 3 | Wire button → edge function → populate title, description, specifics | ✅ Done |
+| 4 | Source badges on AI-filled fields | ✅ Done |
+| 5 | Taxonomy remains authoritative for category (AI does not touch) | ✅ Done |
+
+### 6.6 Future — Pass 2 (Not Yet Built)
+
+| Step | Feature |
+|------|---------|
+| 1 | Regenerate with tone/keyword tweaks |
+| 2 | Structured storage: AI suggestion vs. final edit |
+| 3 | A/B comparison / reporting |
+| 4 | Learning from accepted vs. rejected suggestions |
+
+### 6.7 Edge Function: `ebay-ai-autofill`
+
+**Input:**
+```json
+{
+  "productName": "Cherry Necklace",
+  "productCode": "AC-012",
+  "category": "jewelry",
+  "price": 14.97,
+  "imageUrls": ["https://...catalog.jpg", "https://...gallery1.jpg"],
+  "existingAspects": ["Brand", "Color", "Material", "Type"]
+}
+```
+
+**System prompt rules:**
+1. Title: SEO-optimized, ≤80 chars, keyword-rich for eBay search
+2. Description: Product features only — NO shipping, NO return policy, NO store info
+3. Item specifics: Only fill from visible/known data; mark confidence; leave unknowns blank
+4. Use vision to identify colors, patterns, materials when visible
+5. Output must be valid JSON matching the output contract
+
+### 6.8 Success Criteria
+
+- [x] AI Auto-Fill button generates title + description + specifics for a product
+- [x] AI does NOT fill category (taxonomy stays authoritative)
+- [x] AI does NOT include shipping/policy info in descriptions
+- [x] Each AI-filled field shows source type (generated/inferred/default)
+- [x] Admin can edit all AI-filled fields before proceeding
+- [ ] Tested with at least 3 different product types *(manual testing)*
 
 ---
 
