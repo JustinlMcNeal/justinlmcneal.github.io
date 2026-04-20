@@ -281,6 +281,56 @@ serve(async (req) => {
       );
     }
 
+    // ── PUBLISH OFFER BY INVENTORY ITEM GROUP ───────────────
+    if (action === "publish_group") {
+      const { inventoryItemGroupKey, sku } = body;
+      if (!inventoryItemGroupKey) throw new Error("inventoryItemGroupKey is required");
+
+      let result = await ebayFetch(
+        accessToken,
+        "POST",
+        `${INV_API}/offer/publish_by_inventory_item_group`,
+        { inventoryItemGroupKey, marketplaceId: "EBAY_US" }
+      );
+
+      // Retry briefly for eBay eventual consistency windows.
+      if (!result.ok && isEbayProductNotFoundPublishError(result.data)) {
+        for (const waitMs of [1500, 3000, 5000]) {
+          await delay(waitMs);
+          result = await ebayFetch(
+            accessToken,
+            "POST",
+            `${INV_API}/offer/publish_by_inventory_item_group`,
+            { inventoryItemGroupKey, marketplaceId: "EBAY_US" }
+          );
+          if (result.ok) break;
+          if (!isEbayProductNotFoundPublishError(result.data)) break;
+        }
+      }
+
+      if (!result.ok) {
+        throw new Error(`Publish group failed (${result.status}): ${JSON.stringify(result.data)}`);
+      }
+
+      const listingId = (result.data as Record<string, unknown>)?.listingId as string | undefined;
+
+      if (sku) {
+        await supabase
+          .from("products")
+          .update({
+            ebay_listing_id: listingId || null,
+            ebay_status: "active",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("code", sku);
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, listingId: listingId || null, data: result.data }),
+        { headers: corsHeaders }
+      );
+    }
+
     // ── UPDATE OFFER (price, quantity) ──────────────────────
     if (action === "update_offer") {
       const { offerId, sku, priceCents, quantity, categoryId, policies, bestOfferTerms, storeCategoryNames } = body;
@@ -394,6 +444,27 @@ serve(async (req) => {
       );
     }
 
+    // ── DELETE OFFER (cleanup stale/unpublished offers) ───
+    if (action === "delete_offer") {
+      const { offerId } = body;
+      if (!offerId) throw new Error("offerId is required");
+
+      const result = await ebayFetch(
+        accessToken,
+        "DELETE",
+        `${INV_API}/offer/${offerId}`,
+      );
+
+      if (!result.ok && result.status !== 204) {
+        throw new Error(`Delete offer failed (${result.status}): ${JSON.stringify(result.data)}`);
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, deleted: true, offerId }),
+        { headers: corsHeaders }
+      );
+    }
+
     // ── LIST INVENTORY ITEMS ────────────────────────────────
     if (action === "list_items") {
       const limit = body.limit || 100;
@@ -417,13 +488,17 @@ serve(async (req) => {
 
     // ── GET OFFERS FOR SKU ──────────────────────────────────
     if (action === "get_offers") {
-      const { sku } = body;
-      if (!sku) throw new Error("sku is required");
+      const { sku, inventoryItemGroupKey, limit, offset } = body;
+      const qp = new URLSearchParams();
+      if (sku) qp.set("sku", String(sku));
+      if (inventoryItemGroupKey) qp.set("inventory_item_group_key", String(inventoryItemGroupKey));
+      if (limit) qp.set("limit", String(limit));
+      if (offset) qp.set("offset", String(offset));
 
       const result = await ebayFetch(
         accessToken,
         "GET",
-        `${INV_API}/offer?sku=${encodeURIComponent(sku)}`
+        `${INV_API}/offer${qp.toString() ? `?${qp.toString()}` : ""}`
       );
 
       if (!result.ok) {
@@ -856,68 +931,67 @@ serve(async (req) => {
 
     // ── CREATE OFFER FOR ITEM GROUP ─────────────────────
     if (action === "create_group_offer") {
-      const { inventoryItemGroupKey, categoryId, priceCents, policies, bestOfferTerms, storeCategoryNames, baseProductCode } = body;
-      if (!inventoryItemGroupKey || !categoryId) throw new Error("inventoryItemGroupKey and categoryId are required");
+      const { categoryId, priceCents, policies, bestOfferTerms, storeCategoryNames, baseProductCode, variantSKUs } = body;
+      if (!categoryId) throw new Error("categoryId is required");
+      if (!variantSKUs?.length) throw new Error("variantSKUs is required");
 
       const priceValue = ((priceCents || 0) / 100).toFixed(2);
+      const offerIds: string[] = [];
 
-      const offer: Record<string, unknown> = {
-        inventoryItemGroupKey,
-        marketplaceId: "EBAY_US",
-        format: "FIXED_PRICE",
-        categoryId,
-        pricingSummary: {
-          price: { value: priceValue, currency: "USD" },
-        },
-        listingPolicies: {
-          fulfillmentPolicyId: policies?.fulfillmentPolicyId || Deno.env.get("EBAY_FULFILLMENT_POLICY_ID") || "",
-          returnPolicyId: policies?.returnPolicyId || Deno.env.get("EBAY_RETURN_POLICY_ID") || "",
-          paymentPolicyId: policies?.paymentPolicyId || Deno.env.get("EBAY_PAYMENT_POLICY_ID") || "",
-        },
-        merchantLocationKey: Deno.env.get("EBAY_LOCATION_KEY") || "default",
-      };
-
-      if (bestOfferTerms?.bestOfferEnabled) {
-        (offer.listingPolicies as Record<string, unknown>).bestOfferTerms = {
-          bestOfferEnabled: true,
-          ...(bestOfferTerms.autoAcceptPrice ? { autoAcceptPrice: { value: bestOfferTerms.autoAcceptPrice, currency: "USD" } } : {}),
-          ...(bestOfferTerms.autoDeclinePrice ? { autoDeclinePrice: { value: bestOfferTerms.autoDeclinePrice, currency: "USD" } } : {}),
+      for (const sku of variantSKUs as string[]) {
+        const offer: Record<string, unknown> = {
+          sku,
+          marketplaceId: "EBAY_US",
+          format: "FIXED_PRICE",
+          categoryId,
+          pricingSummary: {
+            price: { value: priceValue, currency: "USD" },
+          },
+          listingPolicies: {
+            fulfillmentPolicyId: policies?.fulfillmentPolicyId || Deno.env.get("EBAY_FULFILLMENT_POLICY_ID") || "",
+            returnPolicyId: policies?.returnPolicyId || Deno.env.get("EBAY_RETURN_POLICY_ID") || "",
+            paymentPolicyId: policies?.paymentPolicyId || Deno.env.get("EBAY_PAYMENT_POLICY_ID") || "",
+          },
+          merchantLocationKey: Deno.env.get("EBAY_LOCATION_KEY") || "default",
         };
-      }
 
-      if (storeCategoryNames?.length) {
-        offer.storeCategoryNames = storeCategoryNames;
-      }
-
-      let result = await ebayFetch(
-        accessToken,
-        "POST",
-        `${INV_API}/offer`,
-        offer
-      );
-
-      // Retry on error 25709 (InventoryItemBundleKey not yet available after group PUT — eBay eventual consistency)
-      if (!result.ok && isEbayProductNotFoundPublishError(result.data)) {
-        for (const waitMs of [2000, 4000, 7000]) {
-          await delay(waitMs);
-          result = await ebayFetch(accessToken, "POST", `${INV_API}/offer`, offer);
-          if (result.ok) break;
-          if (!isEbayProductNotFoundPublishError(result.data)) break;
+        if (bestOfferTerms?.bestOfferEnabled) {
+          (offer.listingPolicies as Record<string, unknown>).bestOfferTerms = {
+            bestOfferEnabled: true,
+            ...(bestOfferTerms.autoAcceptPrice ? { autoAcceptPrice: { value: bestOfferTerms.autoAcceptPrice, currency: "USD" } } : {}),
+            ...(bestOfferTerms.autoDeclinePrice ? { autoDeclinePrice: { value: bestOfferTerms.autoDeclinePrice, currency: "USD" } } : {}),
+          };
         }
+
+        if (storeCategoryNames?.length) {
+          offer.storeCategoryNames = storeCategoryNames;
+        }
+
+        let result = await ebayFetch(accessToken, "POST", `${INV_API}/offer`, offer);
+
+        // If an offer already exists for this SKU, reuse it instead of failing.
+        if (!result.ok) {
+          const existing = await ebayFetch(accessToken, "GET", `${INV_API}/offer?sku=${encodeURIComponent(sku)}`);
+          const existingOffers = (existing.data as { offers?: Array<{ offerId?: string }> })?.offers || [];
+          const existingOfferId = existingOffers[0]?.offerId;
+          if (existing.ok && existingOfferId) {
+            offerIds.push(existingOfferId);
+            continue;
+          }
+        }
+
+        if (!result.ok) {
+          throw new Error(`Create group offer failed (${result.status}): ${JSON.stringify(result.data)}`);
+        }
+
+        const offerId = (result.data as Record<string, string>)?.offerId;
+        if (offerId) offerIds.push(offerId);
       }
 
-      if (!result.ok) {
-        throw new Error(`Create group offer failed (${result.status}): ${JSON.stringify(result.data)}`);
-      }
-
-      const offerId = (result.data as Record<string, string>)?.offerId;
-
-      // Update products table with offer ID and price
       if (baseProductCode) {
         await supabase
           .from("products")
           .update({
-            ebay_offer_id: offerId,
             ebay_category_id: categoryId,
             ebay_price_cents: priceCents,
             updated_at: new Date().toISOString(),
@@ -926,7 +1000,7 @@ serve(async (req) => {
       }
 
       return new Response(
-        JSON.stringify({ success: true, offerId }),
+        JSON.stringify({ success: true, offerIds, count: offerIds.length }),
         { headers: corsHeaders }
       );
     }

@@ -1773,6 +1773,7 @@
           const offerResult = await callEdge("ebay-manage-listing", {
             action: "create_group_offer",
             inventoryItemGroupKey: groupKey,
+            variantSKUs,
             categoryId,
             priceCents: Math.round(price * 100),
             policies: getSelectedPolicies("modal"),
@@ -1782,9 +1783,10 @@
           });
 
           if (offerResult.success) {
-            status.textContent = `✅ Group + Offer created (${offerResult.offerId}) — ready to publish`;
-            progressEl.textContent = `Group "${groupKey}" + Offer created ✓`;
-            currentProduct._offerId = offerResult.offerId;
+            status.textContent = `✅ Group + Offers created (${offerResult.count || 0} variants) — ready to publish`;
+            progressEl.textContent = `Group "${groupKey}" + ${offerResult.count || 0} offers created ✓`;
+            currentProduct._groupKey = groupKey;
+            currentProduct._groupOfferIds = offerResult.offerIds || [];
             enableBtn("btnCreateOffer", false);
             enableBtn("btnPublish", true);
           } else {
@@ -1825,15 +1827,22 @@
 
       const sku = document.getElementById("modalSku").value.trim();
       const offerId = currentProduct._offerId || currentProduct.ebay_offer_id;
+      const groupKey = currentProduct._groupKey || currentProduct.ebay_item_group_key || `${currentProduct.code}-GROUP`;
 
-      if (!offerId) { status.textContent = "❌ No offer ID"; btn.disabled = false; btn.textContent = "3. Publish"; return; }
+      if (!isVariantListing && !offerId) { status.textContent = "❌ No offer ID"; btn.disabled = false; btn.textContent = "3. Publish"; return; }
 
       try {
-        const result = await callEdge("ebay-manage-listing", {
-          action: "publish",
-          offerId,
-          sku: isVariantListing ? currentProduct.code : sku,
-        });
+        const result = isVariantListing
+          ? await callEdge("ebay-manage-listing", {
+              action: "publish_group",
+              inventoryItemGroupKey: groupKey,
+              sku: currentProduct.code,
+            })
+          : await callEdge("ebay-manage-listing", {
+              action: "publish",
+              offerId,
+              sku,
+            });
 
         if (result.success) {
           status.textContent = `✅ Published! Listing ID: ${result.listingId}`;
