@@ -330,6 +330,21 @@
               </select>
             </div>
 
+            <!-- Sell as Lot -->
+            <div>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" id="modalLotEnabled" class="accent-pink-500" />
+                <span class="text-[11px] font-black uppercase tracking-[.12em] text-black/70">Sell as Lot</span>
+              </label>
+              <div id="modalLotFields" class="hidden mt-2">
+                <div class="flex items-center gap-2">
+                  <label class="block text-[9px] font-bold uppercase text-gray-500">Items per lot</label>
+                  <input id="modalLotSize" type="number" min="2" value="2" class="w-20 border-2 border-gray-300 px-2 py-1.5 text-xs outline-none focus:border-kkpink transition-colors" />
+                </div>
+                <p class="text-[9px] text-gray-400 mt-1">Group identical items into one lot. Quantity = number of lots available.</p>
+              </div>
+            </div>
+
             <!-- Package Weight & Dimensions -->
             <details>
               <summary class="text-[11px] font-bold uppercase tracking-wider text-gray-500 cursor-pointer hover:text-black">📦 Package Weight & Dimensions</summary>
@@ -520,6 +535,21 @@
                 <option value="USED_EXCELLENT">Used — Excellent</option>
                 <option value="USED_GOOD">Used — Good</option>
               </select>
+            </div>
+
+            <!-- Sell as Lot -->
+            <div>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" id="editLotEnabled" class="accent-pink-500" />
+                <span class="text-[11px] font-black uppercase tracking-[.12em] text-black/70">Sell as Lot</span>
+              </label>
+              <div id="editLotFields" class="hidden mt-2">
+                <div class="flex items-center gap-2">
+                  <label class="block text-[9px] font-bold uppercase text-gray-500">Items per lot</label>
+                  <input id="editLotSize" type="number" min="2" value="2" class="w-20 border-2 border-gray-300 px-2 py-1.5 text-xs outline-none focus:border-kkpink transition-colors" />
+                </div>
+                <p class="text-[9px] text-gray-400 mt-1">Group identical items into one lot. Quantity = number of lots available.</p>
+              </div>
             </div>
 
             <!-- Package Weight & Dimensions -->
@@ -1054,6 +1084,9 @@
       document.getElementById("modalPrice").value = currentProduct.price ? Number(currentProduct.price).toFixed(2) : "";
       document.getElementById("modalQuantity").value = "1";
       document.getElementById("modalCondition").value = "NEW";
+      document.getElementById("modalLotEnabled").checked = false;
+      document.getElementById("modalLotFields").classList.add("hidden");
+      document.getElementById("modalLotSize").value = "2";
       document.getElementById("modalCatSearch").value = currentProduct.name;
       document.getElementById("modalCatSelect").classList.add("hidden");
       document.getElementById("modalCatSelected").classList.add("hidden");
@@ -1455,6 +1488,7 @@
       const description = pushDescMode === "html" ? sanitizeForEbay(rawHtml) : wrapDescription(title, rawHtml);
       const condition = document.getElementById("modalCondition").value;
       const quantity = parseInt(document.getElementById("modalQuantity").value) || 1;
+      const lotSize = document.getElementById("modalLotEnabled").checked ? (parseInt(document.getElementById("modalLotSize").value) || 0) : 0;
 
       if (!sku || !title) { status.textContent = "❌ SKU and title required"; btn.disabled = false; btn.textContent = isVariantListing ? "1. Create Items" : "1. Create Item"; return; }
 
@@ -1495,17 +1529,20 @@
             if (v.preview_image_url) variantImages.push(v.preview_image_url);
             imageUrls.forEach(url => { if (url !== v.preview_image_url) variantImages.push(url); });
 
-            const result = await callEdge("ebay-manage-listing", {
-              action: "create_item",
-              sku: v.sku,
-              product: {
+            const variantProduct = {
                 title,
                 description,
                 condition,
                 quantity: v.quantity,
                 imageUrls: variantImages.slice(0, 24),
                 aspects: variantAspects,
-              },
+              };
+              if (lotSize > 1) variantProduct.lotSize = lotSize;
+
+            const result = await callEdge("ebay-manage-listing", {
+              action: "create_item",
+              sku: v.sku,
+              product: variantProduct,
               packageWeightAndSize: buildPackageWeightAndSize("modal"),
             });
 
@@ -1525,11 +1562,14 @@
             status.textContent = `⚠️ ${created}/${checked.length} created. Errors: ${errors.join("; ")}`;
           }
         } else {
-          // SINGLE ITEM FLOW (unchanged)
+          // SINGLE ITEM FLOW
+          const productPayload = { title, description, condition, quantity, imageUrls, aspects };
+          if (lotSize > 1) productPayload.lotSize = lotSize;
+
           const result = await callEdge("ebay-manage-listing", {
             action: "create_item",
             sku,
-            product: { title, description, condition, quantity, imageUrls, aspects },
+            product: productPayload,
             packageWeightAndSize: buildPackageWeightAndSize("modal"),
           });
 
@@ -1766,6 +1806,12 @@
         document.getElementById("editTitle").value = product.title || editProduct.name;
         document.getElementById("editCondition").value = item.condition || "NEW";
         document.getElementById("editQuantity").value = item.availability?.shipToLocationAvailability?.quantity ?? 1;
+
+        // Pre-fill lot size
+        const existingLotSize = item.lotSize || 0;
+        document.getElementById("editLotEnabled").checked = existingLotSize > 1;
+        document.getElementById("editLotFields").classList.toggle("hidden", existingLotSize <= 1);
+        document.getElementById("editLotSize").value = existingLotSize > 1 ? existingLotSize : 2;
 
         // Init Quill for edit (destroy previous)
         const editEditorEl = document.getElementById("editDescriptionEditor");
@@ -2020,6 +2066,7 @@
       const condition = document.getElementById("editCondition").value;
       const quantity = parseInt(document.getElementById("editQuantity").value) || 1;
       const price = parseFloat(document.getElementById("editPrice").value) || 0;
+      const editLotSize = document.getElementById("editLotEnabled").checked ? (parseInt(document.getElementById("editLotSize").value) || 0) : 0;
 
       if (!title) { status.textContent = "❌ Title required"; btn.disabled = false; btn.textContent = "Save Changes"; return; }
 
@@ -2082,17 +2129,20 @@
             const mergedAspects = { ...sharedAspects };
             if (varAspects.Color) mergedAspects.Color = varAspects.Color;
 
-            await callEdge("ebay-manage-listing", {
-              action: "update_item",
-              sku: vSku,
-              product: {
+            const variantUpdateProduct = {
                 title,
                 description,
                 condition,
                 quantity: varItem.availability?.shipToLocationAvailability?.quantity ?? quantity,
                 imageUrls: varItem.product?.imageUrls || imageUrls,
                 aspects: mergedAspects,
-              },
+              };
+              if (editLotSize > 1) variantUpdateProduct.lotSize = editLotSize;
+
+            await callEdge("ebay-manage-listing", {
+              action: "update_item",
+              sku: vSku,
+              product: variantUpdateProduct,
               packageWeightAndSize: buildPackageWeightAndSize("edit"),
             });
           }
@@ -2115,12 +2165,15 @@
             if (!offerResult.success) throw new Error(offerResult.error || "Offer update failed");
           }
         } else {
-          // SINGLE ITEM: Update item + offer (unchanged)
+          // SINGLE ITEM: Update item + offer
           status.textContent = "Updating item...";
+          const editProductPayload = { title, description, condition, quantity, imageUrls, aspects };
+          if (editLotSize > 1) editProductPayload.lotSize = editLotSize;
+
           const itemResult = await callEdge("ebay-manage-listing", {
             action: "update_item",
             sku,
-            product: { title, description, condition, quantity, imageUrls, aspects },
+            product: editProductPayload,
             packageWeightAndSize: buildPackageWeightAndSize("edit"),
           });
 
@@ -2442,6 +2495,14 @@
     });
     document.getElementById("editBestOffer").addEventListener("change", (e) => {
       document.getElementById("editBestOfferFields").classList.toggle("hidden", !e.target.checked);
+    });
+
+    // Lot checkbox toggles
+    document.getElementById("modalLotEnabled").addEventListener("change", (e) => {
+      document.getElementById("modalLotFields").classList.toggle("hidden", !e.target.checked);
+    });
+    document.getElementById("editLotEnabled").addEventListener("change", (e) => {
+      document.getElementById("editLotFields").classList.toggle("hidden", !e.target.checked);
     });
 
     async function loadPoliciesCache() {

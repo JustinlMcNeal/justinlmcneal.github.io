@@ -100,7 +100,7 @@ serve(async (req) => {
       const { sku, product, packageWeightAndSize } = body;
       if (!sku) throw new Error("sku is required");
 
-      // product = { title, description, imageUrls[], aspects{}, condition, quantity }
+      // product = { title, description, imageUrls[], aspects{}, condition, quantity, lotSize }
       const invItem: Record<string, unknown> = {
         condition: product.condition || "NEW",
         availability: {
@@ -115,6 +115,10 @@ serve(async (req) => {
           aspects: product.aspects || {},
         },
       };
+
+      if (product.lotSize && product.lotSize > 1) {
+        invItem.lotSize = product.lotSize;
+      }
 
       if (packageWeightAndSize) {
         invItem.packageWeightAndSize = packageWeightAndSize;
