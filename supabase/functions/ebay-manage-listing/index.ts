@@ -57,6 +57,16 @@ async function ebayFetch(
   return { ok: resp.ok, status: resp.status, data, headers: resp.headers };
 }
 
+// Detects eBay eventual-consistency errors: 25604 (Product not found at publish) and 25709 (Invalid InventoryItemBundleKey)
+function isEbayProductNotFoundPublishError(data: unknown): boolean {
+  const payload = data as { errors?: Array<{ errorId?: number }> } | null;
+  return Boolean(payload?.errors?.some((e) => e?.errorId === 25604 || e?.errorId === 25709));
+}
+
+async function delay(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -224,12 +234,28 @@ serve(async (req) => {
       const { offerId, sku } = body;
       if (!offerId) throw new Error("offerId is required");
 
-      const result = await ebayFetch(
+      let result = await ebayFetch(
         accessToken,
         "POST",
         `${INV_API}/offer/${offerId}/publish`,
         {}
       );
+
+      // eBay can intermittently return API_INVENTORY 25604 immediately after item/offer creation.
+      // Retry briefly to handle eventual consistency on their side.
+      if (!result.ok && result.status === 500 && isEbayProductNotFoundPublishError(result.data)) {
+        for (const waitMs of [1500, 3000, 5000]) {
+          await delay(waitMs);
+          result = await ebayFetch(
+            accessToken,
+            "POST",
+            `${INV_API}/offer/${offerId}/publish`,
+            {}
+          );
+          if (result.ok) break;
+          if (!(result.status === 500 && isEbayProductNotFoundPublishError(result.data))) break;
+        }
+      }
 
       if (!result.ok) {
         throw new Error(`Publish failed (${result.status}): ${JSON.stringify(result.data)}`);
@@ -863,12 +889,22 @@ serve(async (req) => {
         offer.storeCategoryNames = storeCategoryNames;
       }
 
-      const result = await ebayFetch(
+      let result = await ebayFetch(
         accessToken,
         "POST",
         `${INV_API}/offer`,
         offer
       );
+
+      // Retry on error 25709 (InventoryItemBundleKey not yet available after group PUT — eBay eventual consistency)
+      if (!result.ok && isEbayProductNotFoundPublishError(result.data)) {
+        for (const waitMs of [2000, 4000, 7000]) {
+          await delay(waitMs);
+          result = await ebayFetch(accessToken, "POST", `${INV_API}/offer`, offer);
+          if (result.ok) break;
+          if (!isEbayProductNotFoundPublishError(result.data)) break;
+        }
+      }
 
       if (!result.ok) {
         throw new Error(`Create group offer failed (${result.status}): ${JSON.stringify(result.data)}`);
