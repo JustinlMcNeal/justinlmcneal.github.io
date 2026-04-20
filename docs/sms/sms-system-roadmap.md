@@ -28,6 +28,8 @@ The system should:
 
 ### 1) SMS coupon minimum-order bypass is real
 
+> **Severity:** P0 (highest priority) — direct margin + analytics integrity impact
+
 #### Evidence from live data
 - `site_settings.sms_coupon` is configured as: `15% off`, `min_order_amount: 40`, `prefix: SMS`.
 - `promotions` rows for `SMS-*` codes are being created with `min_order_amount = 40.00`.
@@ -49,7 +51,9 @@ The system should:
 
 #### Impact
 - SMS signup coupons intended for `$40+` are redeemable on smaller carts.
-- Margin leakage and analytics distortion (campaign appears to convert under intended constraints).
+- Margin leakage.
+- Distorted campaign performance metrics (conversion/AOV not reflecting true promo rules).
+- Reduced trust in discounting controls (business rule exists but is not enforced server-side).
 
 ### 2) Website shipping is still flat-rate fallback, not live Shippo rating
 
@@ -82,30 +86,32 @@ The system should:
    - reload promotion by `promo.code`
    - validate active window, `requires_code`, usage limits, and `min_order_amount`
    - reject checkout with 400 if subtotal is below threshold.
-3. Add a defensive server recompute for discount amount from authoritative promo record (do not trust client-provided savings cents).
+3. Make server totals authoritative (anti-tamper):
+  - never trust client `discount_cents`, `savings_cents`, or client-derived final totals
+  - always recompute `discount` and final total server-side from authoritative promo + cart values.
+4. Add invalid coupon attempt logging:
+  - when coupon fails min order (or other policy checks), log event with `coupon_code`, `subtotal`, `min_required`, `session/user context`
+  - use this for abuse monitoring + recovered margin analysis.
+5. Improve user-facing rejection reason:
+  - return/display explicit message: `This code requires a $40 minimum order.`
+  - avoid generic `Invalid code` for minimum-order failures.
 
 ### Hotfix B — Promotion redemption accounting
 1. On `checkout.session.completed` in `stripe-webhook`, increment `promotions.usage_count` when a non-review coupon is redeemed.
 2. Keep existing review coupon handling (`review_coupons.used_at`) unchanged.
 
-### Follow-up C — Shipping accuracy roadmap
-1. Keep current flat-rate behavior as explicit V1 policy (documented) until dynamic rating is built.
-2. Build V2 dynamic shipping quotes:
-   - At checkout, call new edge function to fetch Shippo rates from cart weight + destination.
-   - Create Stripe Checkout shipping options from returned rates.
-   - Persist selected service + expected cost for reconciliation.
-3. Add guardrails:
-   - fallback behavior if Shippo is unavailable
-   - max/min sanity bounds to avoid extreme quotes
-   - alerting when label cost diverges from charged shipping beyond threshold.
+### Follow-up C — Shipping (deferred by decision)
+1. **No shipping pricing changes in this cycle.**
+2. Keep current flat-rate checkout behavior as explicit V1 policy (documented baseline).
+3. Defer dynamic Shippo checkout-rating implementation to a later phase.
+4. Continue monitoring charge vs label-cost deltas until dynamic rating work is prioritized.
 
 ### Validation checklist after fixes
 - Coupon `SMS-*` fails below $40 in both UI and direct API call.
 - Existing valid `$40+` flows still pass.
 - `usage_count` increases after successful checkout.
-- Shipping behavior is clearly either:
-  - intentionally flat-rate (V1), or
-  - dynamically rated (V2), with no ambiguity.
+- Invalid min-order attempts are logged and queryable.
+- Shipping behavior remains intentionally flat-rate (no change in this cycle).
 
 ---
 
