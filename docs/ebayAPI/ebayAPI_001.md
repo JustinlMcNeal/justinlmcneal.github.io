@@ -915,7 +915,7 @@ Phase 1b is **done** when:
 
 ## 2c. Phase 1c — eBay Fulfillment Tracking Sync (Shippo → eBay)
 
-> **Priority:** 🟢 NOW — small scope, high impact, no new scopes needed
+> **Priority:** ✅ **COMPLETE** — code deployed April 19, 2026; awaiting first live eBay order for end-to-end verification
 > **Prerequisite:** Phase 1 complete, Shippo label creation working
 > **Scope:** Uses existing `sell.fulfillment` scope (already authorized)
 > **Goal:** When a Shippo label is purchased for an eBay order, automatically push the tracking number to eBay so the order shows "Shipped" in Seller Hub and the buyer gets tracking updates.
@@ -1017,6 +1017,13 @@ Create `ebay-push-tracking` edge function. Call it from the admin UI after `ship
 **Cons:** Extra network hop. Admin UI needs to chain two calls.
 
 **Decision:** **Option A** — hook into `shippo-create-label`. The tracking push is a lightweight API call (single POST). If it fails, the label is already purchased — worst case, tracking can be pushed manually or retried. Add a `tracking_pushed_to_ebay` boolean on `fulfillment_shipments` to track sync status.
+
+**Status:** ✅ **Implemented and deployed** (commit `8e76b8f`, April 19, 2026). `shippo-create-label` edge function updated with:
+- `CARRIER_MAP` — maps Shippo carrier names to eBay codes (`usps→USPS`, `ups→UPS`, `fedex→FEDEX`, `dhl_express→DHL`)
+- `pushTrackingToEbay()` — resolves eBay line items from `line_items_raw`, calls eBay Fulfillment API
+- Non-blocking design — label purchase always succeeds even if eBay push fails
+- DB columns `ebay_fulfillment_id` + `tracking_pushed_to_ebay` updated after push
+- Migration file: `supabase/migrations/20260419_ebay_tracking_sync.sql`
 
 ### 2c.5 Database Changes
 
@@ -1662,15 +1669,17 @@ Phase 1b (DONE — April 19, 2026)
   ├── Volume pricing → deferred to Phase 4 (needs sell.marketing)
   └── Item location override → skipped (single location)
 
-── NOW ──────────────────────────────────────────
+── ✅ COMPLETE (code deployed, awaiting live order test) ──
 
 Phase 1c: eBay Fulfillment Tracking Sync (Shippo → eBay)
-  ├── Depends on: Phase 1 + Shippo integration (both done)
-  ├── Hook into shippo-create-label — detect eBay orders, push tracking
-  ├── POST /sell/fulfillment/v1/order/{orderId}/shipping_fulfillment
-  ├── fulfillment_shipments.tracking_pushed_to_ebay flag
-  ├── No new scopes needed (sell.fulfillment already authorized)
-  └── Small scope — single POST call + DB column additions
+  ├── ✅ Hook into shippo-create-label — detects ebay_api_ prefix, pushes tracking
+  ├── ✅ POST /sell/fulfillment/v1/order/{orderId}/shipping_fulfillment
+  ├── ✅ CARRIER_MAP: usps→USPS, ups→UPS, fedex→FEDEX, dhl_express→DHL
+  ├── ✅ fulfillment_shipments.tracking_pushed_to_ebay + ebay_fulfillment_id columns
+  ├── ✅ Non-blocking — label always purchased even if eBay push fails
+  └── ⏳ Needs first live eBay order to verify end-to-end
+
+── NOW ──────────────────────────────────────────
 
 Phase 2: Real-Time Webhooks (thin — ItemSold only)
   ├── Depends on: nothing (parallel with Phase 1c)
