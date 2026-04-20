@@ -909,7 +909,7 @@ Phase 1b is **done** when:
 - [x] Package weight + dimensions can be set per listing and are sent to eBay
 - [x] Admin can pick shipping/return/payment policies from dropdowns (not hardcoded)
 - [x] Store category can be assigned to listings
-- [ ] At least one listing has been revised with multiple images + HTML description and verified on eBay
+- [x] At least one listing has been revised with multiple images + HTML description and verified on eBay *(Cherry Necklace KK-0039, listing `377126818883` — 3 images, branded HTML description, verified live April 19, 2026)*
 
 ---
 
