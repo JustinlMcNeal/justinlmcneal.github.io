@@ -1,5 +1,5 @@
 // supabase/functions/ebay-ai-autofill/index.ts
-// AI-powered eBay listing auto-fill using GPT-4o vision
+// AI-powered eBay listing auto-fill using GPT-5-mini vision
 // Generates title, description, and item specifics with confidence/source metadata
 // GUARDRAILS: AI does NOT choose category, does NOT include shipping/policy info
 
@@ -134,8 +134,7 @@ JSON structure:
       userContent.push(img as unknown as { type: string; image_url: { url: string; detail: string } });
     }
 
-    // Call OpenAI — gpt-4o-mini: fast, cheap, supports vision
-    // (gpt-5-mini tested in ai-generate but returns empty responses)
+    // Call OpenAI — gpt-5-mini: fast, cheap, supports vision + structured output
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -143,7 +142,7 @@ JSON structure:
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: "gpt-5-mini",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userContent },
@@ -161,7 +160,13 @@ JSON structure:
     }
 
     const completion = await response.json();
-    const rawContent = completion.choices?.[0]?.message?.content?.trim() || "";
+    // GPT-5 models may use a different response structure
+    const rawContent = (
+      completion.choices?.[0]?.message?.content ||
+      completion.output?.[0]?.content?.[0]?.text ||
+      completion.choices?.[0]?.text ||
+      ""
+    ).trim();
 
     console.log("[ebay-ai-autofill] Raw response length:", rawContent.length);
 
