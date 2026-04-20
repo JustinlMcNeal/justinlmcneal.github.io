@@ -24,6 +24,91 @@ The system should:
 
 ---
 
+## 🚨 April 20, 2026 Audit Findings (Coupon + Shipping)
+
+### 1) SMS coupon minimum-order bypass is real
+
+#### Evidence from live data
+- `site_settings.sms_coupon` is configured as: `15% off`, `min_order_amount: 40`, `prefix: SMS`.
+- `promotions` rows for `SMS-*` codes are being created with `min_order_amount = 40.00`.
+- `orders_raw` shows SMS coupon redemptions below $40:
+  - `sms_coupon_orders = 3`
+  - `under_40_paid_subtotal = 3`
+  - `under_40_original_subtotal = 2`
+- Concrete example:
+  - `KKO-110050`
+  - `coupon_code_used = SMS-UDX32V`
+  - `subtotal_original_cents = 2298` ($22.98)
+  - `order_savings_code_cents = 345` (15% applied)
+
+#### Root cause
+- Minimum-order validation for **regular promotions** is missing in coupon validation logic.
+  - `js/shared/promotions/promoCoupons.js` validates active/date/scope, but does **not** enforce `promotions.min_order_amount`.
+- Server checkout path trusts client promo payload and does not re-validate promotion min order before creating Stripe session.
+  - `supabase/functions/create-checkout-session/index.ts` only special-cases review coupons (`THANKS-*`), not regular promotion thresholds.
+
+#### Impact
+- SMS signup coupons intended for `$40+` are redeemable on smaller carts.
+- Margin leakage and analytics distortion (campaign appears to convert under intended constraints).
+
+### 2) Website shipping is still flat-rate fallback, not live Shippo rating
+
+#### Evidence from live data + code
+- Recent website order with coupon leak (`KKO-110050`) shows `shipping_paid_cents = 895` ($8.95).
+- Website `KKO-*` orders with non-free shipping consistently show `895` charged.
+- Checkout function currently falls back to inline fixed shipping rates:
+  - Standard: `895`
+  - Express: `1299`
+  - Free: `0` when threshold/coupon applies
+  - File: `supabase/functions/create-checkout-session/index.ts`
+- Shippo is being used for **post-purchase label buying** (`shippo-create-label`), not for checkout-time customer shipping quotes.
+
+#### Root cause
+- Real-time Shippo checkout rating was never implemented in the checkout session flow.
+- Current checkout shipping logic depends on Stripe shipping rates or inline fallback, and inline fallback is flat-rate.
+
+#### Impact
+- Customers may be over/under-charged vs true label cost.
+- Shipping margin is inconsistent and not weight/zone aware.
+
+---
+
+## 🛠️ Fix Plan (Hotfix + Follow-up)
+
+### Hotfix A — Coupon floor enforcement (same day)
+1. Add min-order validation for regular promotions in `validateCouponCode()`:
+   - enforce `promotions.min_order_amount` against cart subtotal.
+2. Add server-side revalidation in `create-checkout-session`:
+   - reload promotion by `promo.code`
+   - validate active window, `requires_code`, usage limits, and `min_order_amount`
+   - reject checkout with 400 if subtotal is below threshold.
+3. Add a defensive server recompute for discount amount from authoritative promo record (do not trust client-provided savings cents).
+
+### Hotfix B — Promotion redemption accounting
+1. On `checkout.session.completed` in `stripe-webhook`, increment `promotions.usage_count` when a non-review coupon is redeemed.
+2. Keep existing review coupon handling (`review_coupons.used_at`) unchanged.
+
+### Follow-up C — Shipping accuracy roadmap
+1. Keep current flat-rate behavior as explicit V1 policy (documented) until dynamic rating is built.
+2. Build V2 dynamic shipping quotes:
+   - At checkout, call new edge function to fetch Shippo rates from cart weight + destination.
+   - Create Stripe Checkout shipping options from returned rates.
+   - Persist selected service + expected cost for reconciliation.
+3. Add guardrails:
+   - fallback behavior if Shippo is unavailable
+   - max/min sanity bounds to avoid extreme quotes
+   - alerting when label cost diverges from charged shipping beyond threshold.
+
+### Validation checklist after fixes
+- Coupon `SMS-*` fails below $40 in both UI and direct API call.
+- Existing valid `$40+` flows still pass.
+- `usage_count` increases after successful checkout.
+- Shipping behavior is clearly either:
+  - intentionally flat-rate (V1), or
+  - dynamically rated (V2), with no ambiguity.
+
+---
+
 ## ✅ Phase 1: SMS Opt-In + Coupon System — COMPLETE (Apr 13, 2026)
 
 ### What Was Built
