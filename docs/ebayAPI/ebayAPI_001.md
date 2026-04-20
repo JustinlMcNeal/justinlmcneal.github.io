@@ -444,7 +444,7 @@ Admin clicks "List on eBay" for KK-0013 (Cherry Bag Charm)
 
 ## 2b. Phase 1b — Enhanced Listing Features
 
-> **Priority:** 🟢 NOW — extends Phase 1, no new scopes needed
+> **Priority:** ✅ **COMPLETE** (April 19, 2026)
 > **Prerequisite:** Phase 1 complete (all infrastructure in place)
 > **Scope additions:** None — all features use existing `sell.inventory` + `sell.account` scopes
 > **Goal:** Bring the admin Push/Edit modals to full parity with eBay's "Revise Your Listing" page
@@ -866,12 +866,21 @@ Build in three passes. Each pass ends with a verification checkpoint.
 - Edit modal pre-fills policy dropdowns from existing offer (`offer.listingPolicies.*PolicyId`)
 - Edge function updated: accepts `packageWeightAndSize` field and passes to eBay Inventory API
 
-**Pass 3 — Nice-to-Have** (in progress)
+**Pass 3 — Nice-to-Have** ✅ COMPLETE (April 19, 2026)
 
 | Step | Feature | Touches | Effort | Status |
 |------|---------|---------|--------|--------|
 | 5 | Best Offer | UI + edge function (`create_offer`, `update_offer`) | Medium | ✅ Done |
-| 6 | Store category | UI + edge function (`create_offer`) — cut first if time is tight | Small | |
+| 6 | Store category | UI + edge function (`create_offer`, `update_offer`) | Small | ✅ Done |
+
+**Pass 3 Features Delivered:**
+- "Allow Offers" checkbox with auto-accept/auto-decline price fields in Push and Edit modals
+- Checkbox toggles visibility of price threshold inputs
+- Edge function passes `bestOfferTerms` to eBay on create_offer and update_offer
+- Edit modal pre-fills Best Offer state from existing offer `listingPolicies.bestOfferTerms`
+- Store Category dropdown (Headwear, Jewelry, Bags, Accessories, Plushies, Lego) in both modals
+- Edge function passes `storeCategoryNames[]` to eBay on create_offer and update_offer
+- Edit modal pre-fills Store Category from existing offer
 
 **Skipped / Deferred**
 
@@ -901,7 +910,7 @@ Phase 1b is **done** when:
 - [x] "Allow Offers" toggle with auto-accept/auto-decline price fields works on create and edit
 - [x] Package weight + dimensions can be set per listing and are sent to eBay
 - [x] Admin can pick shipping/return/payment policies from dropdowns (not hardcoded)
-- [ ] Store category can be assigned to listings
+- [x] Store category can be assigned to listings
 - [ ] At least one listing has been revised with multiple images + HTML description and verified on eBay
 
 ---
