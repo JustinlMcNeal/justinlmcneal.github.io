@@ -789,7 +789,7 @@
     async function loadProducts() {
       const { data, error } = await supabase
         .from("products")
-        .select("id, code, name, price, catalog_image_url, catalog_hover_url, primary_image_url, is_active, ebay_sku, ebay_offer_id, ebay_listing_id, ebay_status, ebay_category_id, ebay_price_cents, product_gallery_images(url, position, is_active)")
+        .select("id, code, name, price, weight_g, catalog_image_url, catalog_hover_url, primary_image_url, is_active, ebay_sku, ebay_offer_id, ebay_listing_id, ebay_status, ebay_category_id, ebay_price_cents, product_gallery_images(url, position, is_active)")
         .order("code");
 
       if (error) {
@@ -907,6 +907,13 @@
       document.getElementById("aspectsSection").classList.add("hidden");
       document.getElementById("aspectsRequired").innerHTML = "";
       document.getElementById("aspectsOptional").innerHTML = "";
+
+      // Auto-fill weight from product data (grams → ounces)
+      if (currentProduct.weight_g) {
+        document.getElementById("modalWeightOz").value = (currentProduct.weight_g / 28.3495).toFixed(1);
+      } else {
+        document.getElementById("modalWeightOz").value = "4";
+      }
 
       // Reset step buttons
       enableBtn("btnCreateItem", true);

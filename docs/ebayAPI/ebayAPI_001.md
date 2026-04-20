@@ -732,12 +732,9 @@ PUT /sell/inventory/v1/inventory_item/{sku}
    }
    ```
 
-4. **Smart defaults** — Most KK products are lightweight jewelry/accessories. Pre-fill with sensible defaults:
-   - Weight: 4 oz (typical for jewelry/accessories)
-   - Dimensions: 6×4×1 in (small padded envelope)
-   - Package type: `MAILING_OR_SHIPPING`
+4. **Smart defaults + auto-fill** — Weight auto-fills from the product's `weight_g` column (converted to ounces via `weight_g / 28.3495`). If the product has no weight set, falls back to 4 oz. Dimensions default to 6×4×1 in (small padded envelope). Package type: `MAILING_OR_SHIPPING`.
 
-   > **Future alignment note:** These defaults should eventually align with any Shippo/fulfillment package presets used elsewhere in the system. Not a blocker for Phase 1b, but prevents eBay listing data and actual fulfillment data from drifting apart over time.
+   > **Alignment note:** The `weight_g` column is the same field used by Shippo for label generation (`shippo-create-label` converts it to oz the same way). This ensures eBay listing weight and actual shipping label weight stay consistent from a single source of truth.
 
 ### 2b.5 Shipping / Return / Payment Policy Picker
 
@@ -861,7 +858,8 @@ Build in three passes. Each pass ends with a verification checkpoint.
 - Default policies pre-selected: fulfillment 266551432012, return 266551433012, payment 266551437012
 - Policy selection passed through to `create_offer` and `update_offer`
 - Collapsible "📦 Package Weight & Dimensions" section in both modals
-- Smart defaults: 4 oz weight, 6×4×1 in dimensions (typical jewelry/accessories)
+- Weight auto-fills from product's `weight_g` column (grams → oz conversion), falls back to 4 oz if not set
+- Dimensions default to 6×4×1 in (same data used by Shippo for label generation — single source of truth)
 - Edit modal pre-fills package data from existing eBay item (`item.packageWeightAndSize`)
 - Edit modal pre-fills policy dropdowns from existing offer (`offer.listingPolicies.*PolicyId`)
 - Edge function updated: accepts `packageWeightAndSize` field and passes to eBay Inventory API
