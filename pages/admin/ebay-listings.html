@@ -419,6 +419,13 @@
               </div>
             </div>
 
+            <!-- AI Auto-Fill -->
+            <button id="btnEditAiFill" type="button"
+              class="w-full border-2 border-dashed border-purple-400 bg-purple-50 text-purple-700 px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-purple-100 hover:border-purple-500 transition-all flex items-center justify-center gap-2">
+              <span>✨</span> AI Auto-Fill
+            </button>
+            <div id="editAiFillStatus" class="text-[10px] text-gray-400 text-center hidden"></div>
+
             <!-- Title -->
             <div>
               <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">eBay Title</label>
@@ -1657,6 +1664,104 @@
     document.getElementById("btnAddImgEdit").addEventListener("click", () => {
       if (!editProduct) return;
       showGalleryPicker("editImagePicker", "editImageStrip", editImageUrls, editProduct);
+    });
+
+    // ── AI Auto-Fill for Edit Modal ─────────────────────
+    document.getElementById("btnEditAiFill").addEventListener("click", async () => {
+      if (!editProduct) return;
+
+      const btn = document.getElementById("btnEditAiFill");
+      const statusEl = document.getElementById("editAiFillStatus");
+      btn.disabled = true;
+      btn.innerHTML = '<span class="animate-pulse">✨ Generating...</span>';
+      statusEl.textContent = "Analyzing product images and generating listing...";
+      statusEl.classList.remove("hidden");
+
+      try {
+        const existingAspects = editAspects.map(a => a.name);
+
+        let categoryName = "";
+        const catMap = { headwear: "Headwear", jewelry: "Jewelry", bags: "Bags", accessories: "Accessories", plushies: "Plushies", lego: "Lego" };
+        for (const [key, val] of Object.entries(catMap)) {
+          if (editProduct.name?.toLowerCase().includes(key) || editProduct.code?.toLowerCase().startsWith(key.substring(0, 2).toUpperCase())) {
+            categoryName = val;
+            break;
+          }
+        }
+        if (!categoryName) {
+          categoryName = document.getElementById("editStoreCategory")?.value || "";
+        }
+
+        const result = await callEdge("ebay-ai-autofill", {
+          productName: editProduct.name,
+          productCode: editProduct.code,
+          category: categoryName,
+          price: editProduct.price ? Number(editProduct.price) : undefined,
+          imageUrls: editImageUrls.slice(0, 4),
+          existingAspects,
+        });
+
+        if (!result.success) {
+          statusEl.textContent = "AI fill failed: " + (result.error || "Unknown error");
+          statusEl.className = "text-[10px] text-red-500 text-center";
+          return;
+        }
+
+        const ai = result.data;
+
+        // Fill title
+        if (ai.title?.value) {
+          document.getElementById("editTitle").value = ai.title.value;
+          addAiBadge("editTitle", ai.title.source || "generated");
+        }
+
+        // Fill description
+        if (ai.description_html?.value) {
+          const descHtml = ai.description_html.value;
+          editDescMode = "html";
+          document.getElementById("editDescriptionHtml").value = descHtml;
+          toggleDescMode("html", "edit", editQuill);
+          document.getElementById("btnEditHtml").classList.add("active");
+          document.getElementById("btnEditVisual").classList.remove("active");
+          document.getElementById("btnEditPreview").classList.remove("active");
+          addAiBadge("editDescriptionHtml", ai.description_html.source || "generated");
+        }
+
+        // Fill item specifics
+        if (ai.item_specifics?.length && editAspects.length) {
+          for (const spec of ai.item_specifics) {
+            const input = document.querySelector(`[data-edit-aspect="${spec.name}"]`);
+            if (input && spec.value) {
+              // Only fill if currently empty or user wants AI suggestion
+              if (!input.value || input.value === "Unbranded") {
+                input.value = spec.value;
+              }
+              const badge = document.createElement("span");
+              badge.className = `ai-badge ai-badge-${spec.source || "inferred"}`;
+              badge.textContent = spec.source === "default" ? "Default" : spec.source === "from_data" ? "From data" : "AI";
+              const existing = input.parentElement.querySelector(".ai-badge");
+              if (existing) existing.remove();
+              input.parentElement.appendChild(badge);
+            }
+          }
+        }
+
+        const notes = ai.notes || [];
+        if (notes.length) {
+          statusEl.innerHTML = "✅ AI filled fields. Notes:<br>" + notes.map(n => `• ${esc(n)}`).join("<br>");
+          statusEl.className = "text-[10px] text-amber-600 text-center";
+        } else {
+          statusEl.textContent = "✅ AI auto-fill complete — review fields before saving.";
+          statusEl.className = "text-[10px] text-green-600 text-center";
+        }
+
+      } catch (e) {
+        statusEl.textContent = "AI fill error: " + e.message;
+        statusEl.className = "text-[10px] text-red-500 text-center";
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span>✨</span> AI Auto-Fill';
+      }
     });
 
     // Edit modal description toggle
