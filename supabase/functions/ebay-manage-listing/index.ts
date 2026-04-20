@@ -149,7 +149,7 @@ serve(async (req) => {
 
     // ── CREATE OFFER ────────────────────────────────────────
     if (action === "create_offer") {
-      const { sku, categoryId, priceCents, quantity, policies } = body;
+      const { sku, categoryId, priceCents, quantity, policies, bestOfferTerms } = body;
       if (!sku || !categoryId) throw new Error("sku and categoryId are required");
 
       const priceValue = ((priceCents || 0) / 100).toFixed(2);
@@ -170,6 +170,14 @@ serve(async (req) => {
         },
         merchantLocationKey: Deno.env.get("EBAY_LOCATION_KEY") || "default",
       };
+
+      if (bestOfferTerms?.bestOfferEnabled) {
+        (offer.listingPolicies as Record<string, unknown>).bestOfferTerms = {
+          bestOfferEnabled: true,
+          ...(bestOfferTerms.autoAcceptPrice ? { autoAcceptPrice: { value: bestOfferTerms.autoAcceptPrice, currency: "USD" } } : {}),
+          ...(bestOfferTerms.autoDeclinePrice ? { autoDeclinePrice: { value: bestOfferTerms.autoDeclinePrice, currency: "USD" } } : {}),
+        };
+      }
 
       const result = await ebayFetch(
         accessToken,
@@ -239,7 +247,7 @@ serve(async (req) => {
 
     // ── UPDATE OFFER (price, quantity) ──────────────────────
     if (action === "update_offer") {
-      const { offerId, sku, priceCents, quantity, categoryId, policies } = body;
+      const { offerId, sku, priceCents, quantity, categoryId, policies, bestOfferTerms } = body;
       if (!offerId) throw new Error("offerId is required");
 
       // First GET current offer to preserve fields we're not changing
@@ -269,6 +277,20 @@ serve(async (req) => {
           ...(existing.listingPolicies as Record<string, unknown> || {}),
           ...policies,
         };
+      }
+
+      if (bestOfferTerms !== undefined) {
+        const lp = (updatedOffer.listingPolicies || existing.listingPolicies || {}) as Record<string, unknown>;
+        if (bestOfferTerms.bestOfferEnabled) {
+          lp.bestOfferTerms = {
+            bestOfferEnabled: true,
+            ...(bestOfferTerms.autoAcceptPrice ? { autoAcceptPrice: { value: bestOfferTerms.autoAcceptPrice, currency: "USD" } } : {}),
+            ...(bestOfferTerms.autoDeclinePrice ? { autoDeclinePrice: { value: bestOfferTerms.autoDeclinePrice, currency: "USD" } } : {}),
+          };
+        } else {
+          lp.bestOfferTerms = { bestOfferEnabled: false };
+        }
+        updatedOffer.listingPolicies = lp;
       }
 
       const result = await ebayFetch(

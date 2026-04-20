@@ -226,6 +226,26 @@
               </div>
             </div>
 
+            <!-- Best Offer -->
+            <div>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" id="modalBestOffer" class="accent-pink-500" />
+                <span class="text-[11px] font-black uppercase tracking-[.12em] text-black/70">Allow Offers</span>
+              </label>
+              <div id="modalBestOfferFields" class="hidden grid grid-cols-2 gap-3 mt-2">
+                <div>
+                  <label class="block text-[9px] font-bold uppercase text-gray-500 mb-0.5">Auto Accept ($)</label>
+                  <input id="modalAutoAccept" type="number" step="0.01" min="0" class="w-full border-2 border-gray-300 px-2 py-1.5 text-xs outline-none focus:border-kkpink transition-colors" />
+                  <p class="text-[9px] text-gray-400 mt-0.5">Offers at or above auto-accepted</p>
+                </div>
+                <div>
+                  <label class="block text-[9px] font-bold uppercase text-gray-500 mb-0.5">Auto Decline ($)</label>
+                  <input id="modalAutoDecline" type="number" step="0.01" min="0" class="w-full border-2 border-gray-300 px-2 py-1.5 text-xs outline-none focus:border-kkpink transition-colors" />
+                  <p class="text-[9px] text-gray-400 mt-0.5">Offers below auto-declined</p>
+                </div>
+              </div>
+            </div>
+
             <!-- Condition -->
             <div>
               <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">Condition</label>
@@ -373,6 +393,26 @@
               <div>
                 <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">Quantity</label>
                 <input id="editQuantity" type="number" min="0" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors" />
+              </div>
+            </div>
+
+            <!-- Best Offer -->
+            <div>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" id="editBestOffer" class="accent-pink-500" />
+                <span class="text-[11px] font-black uppercase tracking-[.12em] text-black/70">Allow Offers</span>
+              </label>
+              <div id="editBestOfferFields" class="hidden grid grid-cols-2 gap-3 mt-2">
+                <div>
+                  <label class="block text-[9px] font-bold uppercase text-gray-500 mb-0.5">Auto Accept ($)</label>
+                  <input id="editAutoAccept" type="number" step="0.01" min="0" class="w-full border-2 border-gray-300 px-2 py-1.5 text-xs outline-none focus:border-kkpink transition-colors" />
+                  <p class="text-[9px] text-gray-400 mt-0.5">Offers at or above auto-accepted</p>
+                </div>
+                <div>
+                  <label class="block text-[9px] font-bold uppercase text-gray-500 mb-0.5">Auto Decline ($)</label>
+                  <input id="editAutoDecline" type="number" step="0.01" min="0" class="w-full border-2 border-gray-300 px-2 py-1.5 text-xs outline-none focus:border-kkpink transition-colors" />
+                  <p class="text-[9px] text-gray-400 mt-0.5">Offers below auto-declined</p>
+                </div>
               </div>
             </div>
 
@@ -1065,6 +1105,7 @@
           priceCents: Math.round(price * 100),
           quantity,
           policies: getSelectedPolicies("modal"),
+          bestOfferTerms: getBestOfferTerms("modal"),
         });
 
         if (result.success) {
@@ -1212,6 +1253,14 @@
         if (lp.returnPolicyId) document.getElementById("editReturnPolicy").value = lp.returnPolicyId;
         if (lp.paymentPolicyId) document.getElementById("editPaymentPolicy").value = lp.paymentPolicyId;
 
+        // Pre-fill Best Offer from offer
+        const bot = lp.bestOfferTerms || {};
+        const boCheckbox = document.getElementById("editBestOffer");
+        boCheckbox.checked = !!bot.bestOfferEnabled;
+        document.getElementById("editBestOfferFields").classList.toggle("hidden", !bot.bestOfferEnabled);
+        document.getElementById("editAutoAccept").value = bot.autoAcceptPrice?.value || "";
+        document.getElementById("editAutoDecline").value = bot.autoDeclinePrice?.value || "";
+
         // Fetch aspects for category and pre-fill
         const categoryId = editProduct.ebay_category_id || offer.categoryId;
         const existingAspects = product.aspects || {};
@@ -1346,6 +1395,7 @@
             priceCents,
             quantity,
             policies: getSelectedPolicies("edit"),
+            bestOfferTerms: getBestOfferTerms("edit"),
           });
 
           if (!offerResult.success) throw new Error(offerResult.error || "Offer update failed");
@@ -1629,6 +1679,25 @@
       if (p) policies.paymentPolicyId = p;
       return Object.keys(policies).length ? policies : null;
     }
+
+    function getBestOfferTerms(prefix) {
+      const enabled = document.getElementById(`${prefix}BestOffer`).checked;
+      if (!enabled) return { bestOfferEnabled: false };
+      const autoAccept = parseFloat(document.getElementById(`${prefix}AutoAccept`).value);
+      const autoDecline = parseFloat(document.getElementById(`${prefix}AutoDecline`).value);
+      const terms = { bestOfferEnabled: true };
+      if (autoAccept > 0) terms.autoAcceptPrice = autoAccept.toFixed(2);
+      if (autoDecline > 0) terms.autoDeclinePrice = autoDecline.toFixed(2);
+      return terms;
+    }
+
+    // Best Offer checkbox toggles
+    document.getElementById("modalBestOffer").addEventListener("change", (e) => {
+      document.getElementById("modalBestOfferFields").classList.toggle("hidden", !e.target.checked);
+    });
+    document.getElementById("editBestOffer").addEventListener("change", (e) => {
+      document.getElementById("editBestOfferFields").classList.toggle("hidden", !e.target.checked);
+    });
 
     async function loadPoliciesCache() {
       if (cachedPolicies) return cachedPolicies;

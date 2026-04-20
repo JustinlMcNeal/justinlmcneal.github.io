@@ -848,12 +848,23 @@ Build in three passes. Each pass ends with a verification checkpoint.
 - `sanitizeForEbay()` — strips scripts/iframes/forms/event handlers
 - `wrapDescription()` — branded template wrapper (Visual mode only)
 
-**Pass 2 — Listing Infrastructure**
+**Pass 2 — Listing Infrastructure** ✅ COMPLETE (April 19, 2026)
 
-| Step | Feature | Touches | Effort |
-|------|---------|---------|--------|
-| 3 | Policy picker | UI only (populate dropdowns from cached `get_policies`) | Small |
-| 4 | Package weight/dimensions | UI + edge function (`create_item`, `update_item`) | Small |
+| Step | Feature | Touches | Effort | Status |
+|------|---------|---------|--------|--------|
+| 3 | Policy picker | UI only (populate dropdowns from cached `get_policies`) | Small | ✅ Done |
+| 4 | Package weight/dimensions | UI + edge function (`create_item`, `update_item`) | Small | ✅ Done |
+
+**Pass 2 Features Delivered:**
+- Collapsible "📋 Listing Policies" section in both Push and Edit modals
+- 3 dropdowns (Shipping, Returns, Payment) populated from cached `get_policies` call
+- Default policies pre-selected: fulfillment 266551432012, return 266551433012, payment 266551437012
+- Policy selection passed through to `create_offer` and `update_offer`
+- Collapsible "📦 Package Weight & Dimensions" section in both modals
+- Smart defaults: 4 oz weight, 6×4×1 in dimensions (typical jewelry/accessories)
+- Edit modal pre-fills package data from existing eBay item (`item.packageWeightAndSize`)
+- Edit modal pre-fills policy dropdowns from existing offer (`offer.listingPolicies.*PolicyId`)
+- Edge function updated: accepts `packageWeightAndSize` field and passes to eBay Inventory API
 
 **Pass 3 — Nice-to-Have**
 
@@ -888,8 +899,8 @@ Phase 1b is **done** when:
 - [x] Push/Edit modals show all product gallery images and send full `imageUrls[]` to eBay (up to 24)
 - [x] Description field uses a rich text editor (Quill) that outputs eBay-safe HTML
 - [ ] "Allow Offers" toggle with auto-accept/auto-decline price fields works on create and edit
-- [ ] Package weight + dimensions can be set per listing and are sent to eBay
-- [ ] Admin can pick shipping/return/payment policies from dropdowns (not hardcoded)
+- [x] Package weight + dimensions can be set per listing and are sent to eBay
+- [x] Admin can pick shipping/return/payment policies from dropdowns (not hardcoded)
 - [ ] Store category can be assigned to listings
 - [ ] At least one listing has been revised with multiple images + HTML description and verified on eBay
 
