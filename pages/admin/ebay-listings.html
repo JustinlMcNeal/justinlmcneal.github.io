@@ -622,6 +622,14 @@
 
             <!-- Store Category -->
             <div>
+              <label class="block text-[9px] font-bold uppercase text-gray-500 mb-0.5">eBay Category ID</label>
+              <input id="editCategoryId" type="text" readonly
+                class="w-full border-2 border-gray-300 px-2 py-1.5 text-xs bg-gray-50 text-gray-700" />
+              <p class="text-[9px] text-gray-400 mt-1">If this is empty, use Resume Push from the products list to select a category and create an offer.</p>
+            </div>
+
+            <!-- Store Category -->
+            <div>
               <label class="block text-[9px] font-bold uppercase text-gray-500 mb-0.5">Store Category</label>
               <select id="editStoreCategory" class="w-full border-2 border-gray-300 px-2 py-1.5 text-xs outline-none focus:border-kkpink transition-colors">
                 <option value="">— None —</option>
@@ -862,6 +870,19 @@
       ["clean"],
     ];
 
+    function resetQuillEditorMount(editorId) {
+      const editor = document.getElementById(editorId);
+      if (!editor) return;
+
+      editor.innerHTML = "";
+      let prev = editor.previousElementSibling;
+      while (prev && prev.classList?.contains("ql-toolbar")) {
+        const toRemove = prev;
+        prev = toRemove.previousElementSibling;
+        toRemove.remove();
+      }
+    }
+
     // ── Description Mode Toggle (Visual / HTML) ──────────
     let pushDescMode = "visual"; // "visual" or "html"
     let editDescMode = "visual";
@@ -1027,7 +1048,9 @@
                 : ""}
               ${status === "draft"
                 ? `<button onclick="openEdit('${esc(p.code)}')" class="bg-blue-600 text-white px-2 py-1 rounded text-[10px] font-bold hover:bg-blue-700 transition-all">Edit</button>
-                   ${p.ebay_offer_id ? `<button onclick="doPublish('${esc(p.code)}', '${esc(p.ebay_offer_id)}')" class="bg-green-600 text-white px-2 py-1 rounded text-[10px] font-bold hover:bg-green-700 transition-all">Publish</button>` : ''}`
+                   ${p.ebay_offer_id
+                     ? `<button onclick="doPublish('${esc(p.code)}', '${esc(p.ebay_offer_id)}')" class="bg-green-600 text-white px-2 py-1 rounded text-[10px] font-bold hover:bg-green-700 transition-all">Publish</button>`
+                     : `<button onclick="openPush('${esc(p.code)}')" class="bg-black text-white px-2 py-1 rounded text-[10px] font-bold hover:bg-kkpink hover:text-black transition-all">Resume Push</button>`}`
                 : ""}
               ${status === "ended"
                 ? `<button onclick="openPush('${esc(p.code)}')" class="bg-black text-white px-2 py-1 rounded text-[10px] font-bold hover:bg-kkpink hover:text-black transition-all">Re-list</button>`
@@ -1064,7 +1087,9 @@
                      <button onclick="doWithdraw('${esc(p.code)}', '${esc(p.ebay_offer_id)}')" class="flex-1 border border-red-300 text-red-600 px-2 py-1.5 rounded text-xs font-bold">End</button>`;
         } else if (status === "draft") {
           actions = `<button onclick="openEdit('${esc(p.code)}')" class="flex-1 bg-blue-600 text-white px-2 py-1.5 rounded text-xs font-bold">Edit</button>
-                     ${p.ebay_offer_id ? `<button onclick="doPublish('${esc(p.code)}', '${esc(p.ebay_offer_id)}')" class="flex-1 bg-green-600 text-white px-2 py-1.5 rounded text-xs font-bold">Publish</button>` : ""}`;
+                     ${p.ebay_offer_id
+                       ? `<button onclick="doPublish('${esc(p.code)}', '${esc(p.ebay_offer_id)}')" class="flex-1 bg-green-600 text-white px-2 py-1.5 rounded text-xs font-bold">Publish</button>`
+                       : `<button onclick="openPush('${esc(p.code)}')" class="flex-1 bg-black text-white px-2 py-1.5 rounded text-xs font-bold hover:bg-kkpink hover:text-black transition-all">Resume Push</button>`}`;
         } else if (status === "ended") {
           actions = `<button onclick="openPush('${esc(p.code)}')" class="flex-1 bg-black text-white px-2 py-1.5 rounded text-xs font-bold hover:bg-kkpink hover:text-black transition-all">Re-list</button>`;
         }
@@ -1122,8 +1147,8 @@
       document.getElementById("modalStatus").textContent = "";
 
       // Init Quill (destroy previous if exists)
+      resetQuillEditorMount("modalDescriptionEditor");
       const editorEl = document.getElementById("modalDescriptionEditor");
-      editorEl.innerHTML = "";
       pushQuill = new Quill(editorEl, { theme: "snow", modules: { toolbar: quillToolbar } });
       // Reset description mode to visual
       pushDescMode = "visual";
@@ -1413,12 +1438,12 @@
             `<option value="${s.categoryId}">${esc(s.categoryName)} (${s.categoryId})</option>`
           ).join("");
           sel.classList.remove("hidden");
-          sel.addEventListener("change", () => {
+          sel.onchange = () => {
             const opt = sel.options[sel.selectedIndex];
             document.getElementById("modalCatSelected").textContent = `✓ ${opt.text}`;
             document.getElementById("modalCatSelected").classList.remove("hidden");
             fetchAspects(opt.value);
-          });
+          };
           // Auto-select first
           sel.selectedIndex = 0;
           sel.dispatchEvent(new Event("change"));
@@ -1633,9 +1658,46 @@
       }
 
       try {
+        const checked = getCheckedVariants();
+
+        // If isVariantListing but only 1 variant checked, switch to single-item flow
+        if (isVariantListing && checked.length < 2) {
+          // SINGLE ITEM FLOW (even though database has multiple variants)
+          if (checked.length === 0) {
+            status.textContent = "❌ Select at least 1 variant";
+            btn.disabled = false; btn.textContent = "2. Create Offer";
+            return;
+          }
+
+          const variantItem = checked[0];
+          const sku = variantItem.sku;
+          const quantity = variantItem.quantity || 1;
+          const storeCat = document.getElementById("modalStoreCategory").value;
+          const result = await callEdge("ebay-manage-listing", {
+            action: "create_offer",
+            sku,
+            categoryId,
+            priceCents: Math.round(price * 100),
+            quantity,
+            policies: getSelectedPolicies("modal"),
+            bestOfferTerms: getBestOfferTerms("modal"),
+            storeCategoryNames: storeCat ? [storeCat] : [],
+          });
+
+          if (result.success) {
+            status.textContent = `✅ Offer created (${result.offerId}) — ready to publish`;
+            currentProduct._offerId = result.offerId;
+            enableBtn("btnCreateOffer", false);
+            enableBtn("btnPublish", true);
+          } else {
+            status.textContent = "❌ " + (result.error || "Offer creation failed");
+          }
+          btn.disabled = false; btn.textContent = "2. Create Offer";
+          return;
+        }
+
         if (isVariantListing) {
           // VARIANT FLOW: Create inventory item group, then create offer for the group
-          const checked = getCheckedVariants();
           const groupKey = `${currentProduct.code}-GROUP`;
           const title = document.getElementById("modalTitle").value.trim();
           const rawHtml = getDescriptionHtml("modal", pushQuill);
@@ -1867,8 +1929,8 @@
         document.getElementById("editLotSize").value = existingLotSize > 1 ? existingLotSize : 2;
 
         // Init Quill for edit (destroy previous)
+        resetQuillEditorMount("editDescriptionEditor");
         const editEditorEl = document.getElementById("editDescriptionEditor");
-        editEditorEl.innerHTML = "";
         editQuill = new Quill(editEditorEl, { theme: "snow", modules: { toolbar: quillToolbar } });
 
         // Detect complex HTML → start in HTML mode; simple → load into Quill
@@ -1961,7 +2023,8 @@
         }
 
         // Fetch aspects for category and pre-fill
-        const categoryId = editProduct.ebay_category_id || offer.categoryId;
+        const categoryId = editProduct.ebay_category_id || offer.categoryId || item.categoryId || "";
+        document.getElementById("editCategoryId").value = categoryId || "";
         const existingAspects = product.aspects || {};
 
         const reqContainer = document.getElementById("editAspectsRequired");
@@ -1986,6 +2049,8 @@
             required.forEach(a => reqContainer.appendChild(buildEditAspectField(a, defaults, true)));
             optional.forEach(a => optContainer.appendChild(buildEditAspectField(a, defaults, false)));
           }
+        } else if (!editProduct.ebay_offer_id) {
+          document.getElementById("editStatus").textContent = "⚠️ This draft has no category/offer yet. Use Resume Push from the list to choose a category and create the offer.";
         }
 
         document.getElementById("editLoading").classList.add("hidden");
@@ -2232,12 +2297,14 @@
             status.textContent = "Updating offer...";
             const priceCents = Math.round(price * 100);
             const editStoreCat = document.getElementById("editStoreCategory").value;
+            const editCategoryId = document.getElementById("editCategoryId").value.trim();
             const offerResult = await callEdge("ebay-manage-listing", {
               action: "update_offer",
               offerId: editProduct.ebay_offer_id,
               sku: editProduct.code,
               priceCents,
               quantity,
+              categoryId: editCategoryId || undefined,
               policies: getSelectedPolicies("edit"),
               bestOfferTerms: getBestOfferTerms("edit"),
               storeCategoryNames: editStoreCat ? [editStoreCat] : [],
@@ -2264,12 +2331,14 @@
             status.textContent = "Updating offer...";
             const priceCents = Math.round(price * 100);
             const editStoreCat = document.getElementById("editStoreCategory").value;
+            const editCategoryId = document.getElementById("editCategoryId").value.trim();
             const offerResult = await callEdge("ebay-manage-listing", {
               action: "update_offer",
               offerId: editProduct.ebay_offer_id,
               sku,
               priceCents,
               quantity,
+              categoryId: editCategoryId || undefined,
               policies: getSelectedPolicies("edit"),
               bestOfferTerms: getBestOfferTerms("edit"),
               storeCategoryNames: editStoreCat ? [editStoreCat] : [],
