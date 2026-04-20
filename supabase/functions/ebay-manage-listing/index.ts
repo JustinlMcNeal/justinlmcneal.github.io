@@ -18,7 +18,7 @@ async function ebayFetch(
   method: string,
   url: string,
   body?: unknown
-): Promise<{ ok: boolean; status: number; data: unknown }> {
+): Promise<{ ok: boolean; status: number; data: unknown; headers: Headers }> {
   const headers: Record<string, string> = {
     Authorization: `Bearer ${token}`,
     Accept: "application/json",
@@ -38,7 +38,7 @@ async function ebayFetch(
 
   // Some endpoints return 204 No Content on success (PUT inventory_item)
   if (resp.status === 204) {
-    return { ok: true, status: 204, data: null };
+    return { ok: true, status: 204, data: null, headers: resp.headers };
   }
 
   const text = await resp.text();
@@ -53,7 +53,7 @@ async function ebayFetch(
     console.error(`[ebay-listing] ${method} ${url} → ${resp.status}:`, text.slice(0, 500));
   }
 
-  return { ok: resp.ok, status: resp.status, data };
+  return { ok: resp.ok, status: resp.status, data, headers: resp.headers };
 }
 
 serve(async (req) => {
@@ -588,6 +588,150 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ success: true, locationKey }),
         { headers: corsHeaders }
+      );
+    }
+
+    // ── SETUP WEBHOOK NOTIFICATIONS ───────────────────────
+    if (action === "setup_webhook_config") {
+      // Step 1: Create alert configuration
+      const alertEmail = body.alertEmail || "justinlmcneal@gmail.com";
+      const configResult = await ebayFetch(
+        accessToken,
+        "PUT",
+        `${EBAY_API}/commerce/notification/v1/config`,
+        { alertEmail },
+      );
+      return new Response(
+        JSON.stringify({ success: true, action: "setup_webhook_config", data: configResult.data }),
+        { headers: corsHeaders },
+      );
+    }
+
+    if (action === "delete_webhook_destination") {
+      const destinationId = body.destinationId;
+      if (!destinationId) throw new Error("destinationId required");
+      const result = await ebayFetch(
+        accessToken,
+        "DELETE",
+        `${EBAY_API}/commerce/notification/v1/destination/${destinationId}`,
+      );
+      return new Response(
+        JSON.stringify({ success: true, action: "delete_webhook_destination", destinationId, data: result.data }),
+        { headers: corsHeaders },
+      );
+    }
+
+    if (action === "create_webhook_destination") {
+      // Step 2: Create destination endpoint (eBay will challenge-verify it)
+      const endpointUrl = body.endpointUrl;
+      const verificationToken = body.verificationToken;
+      if (!endpointUrl || !verificationToken) throw new Error("endpointUrl and verificationToken required");
+
+      const result = await ebayFetch(
+        accessToken,
+        "POST",
+        `${EBAY_API}/commerce/notification/v1/destination`,
+        {
+          name: "KarryKraze-Webhook",
+          status: "ENABLED",
+          deliveryConfig: {
+            endpoint: endpointUrl,
+            verificationToken,
+            protocol: "HTTPS",
+            method: "POST",
+          },
+        },
+      );
+
+      // destinationId is in the Location header
+      const locationHeader = result.headers?.get?.("location") || "";
+      const destinationId = locationHeader.split("/").pop() || (result.data as Record<string, unknown>)?.destinationId || "";
+
+      return new Response(
+        JSON.stringify({ success: true, action: "create_webhook_destination", destinationId, data: result.data }),
+        { headers: corsHeaders },
+      );
+    }
+
+    if (action === "create_webhook_subscription") {
+      // Step 3: Subscribe to a notification topic
+      const topicId = body.topicId;
+      const destinationId = body.destinationId;
+      const schemaVersion = body.schemaVersion || "1.0";
+      if (!topicId || !destinationId) throw new Error("topicId and destinationId required");
+
+      const result = await ebayFetch(
+        accessToken,
+        "POST",
+        `${EBAY_API}/commerce/notification/v1/subscription`,
+        {
+          topicId,
+          status: "ENABLED",
+          payload: {
+            format: "JSON",
+            schemaVersion,
+            deliveryProtocol: "HTTPS",
+          },
+          destinationId,
+        },
+      );
+
+      const locationHeader = result.headers?.get?.("location") || "";
+      const subscriptionId = locationHeader.split("/").pop() || (result.data as Record<string, unknown>)?.subscriptionId || "";
+
+      return new Response(
+        JSON.stringify({ success: true, action: "create_webhook_subscription", subscriptionId, topicId, data: result.data }),
+        { headers: corsHeaders },
+      );
+    }
+
+    if (action === "list_webhook_subscriptions") {
+      const result = await ebayFetch(
+        accessToken,
+        "GET",
+        `${EBAY_API}/commerce/notification/v1/subscription`,
+      );
+      return new Response(
+        JSON.stringify({ success: true, subscriptions: result.data }),
+        { headers: corsHeaders },
+      );
+    }
+
+    if (action === "list_webhook_destinations") {
+      const result = await ebayFetch(
+        accessToken,
+        "GET",
+        `${EBAY_API}/commerce/notification/v1/destination`,
+      );
+      return new Response(
+        JSON.stringify({ success: true, destinations: result.data }),
+        { headers: corsHeaders },
+      );
+    }
+
+    if (action === "get_notification_topics") {
+      const result = await ebayFetch(
+        accessToken,
+        "GET",
+        `${EBAY_API}/commerce/notification/v1/topic`,
+      );
+      return new Response(
+        JSON.stringify({ success: true, topics: result.data }),
+        { headers: corsHeaders },
+      );
+    }
+
+    if (action === "test_webhook_subscription") {
+      const subscriptionId = body.subscriptionId;
+      if (!subscriptionId) throw new Error("subscriptionId required");
+      const result = await ebayFetch(
+        accessToken,
+        "POST",
+        `${EBAY_API}/commerce/notification/v1/subscription/${subscriptionId}/test`,
+      );
+      return new Response(
+        JSON.stringify({ success: true, action: "test_webhook_subscription", data: result.data }),
+        { headers: corsHeaders },
       );
     }
 

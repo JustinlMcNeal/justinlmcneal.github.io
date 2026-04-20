@@ -1081,8 +1081,8 @@ Phase 1c is **done** when:
 
 ## 3. Phase 2 — Real-Time Order Webhooks
 
-> **Priority:** 🟢 NOW — can start alongside Phase 1 (thin initial implementation)
-> **Prerequisite:** None (uses existing scopes)
+> **Priority:** ✅ DONE — April 19, 2026
+> **Prerequisite:** None (uses existing scopes + commerce.notification.subscription)
 
 > **Implementation note:** Start with a thin webhook that handles `ItemSold` only. Other events (feedback, unsold, questions) can be wired up later. The core value is order speed, not event coverage.
 
@@ -1155,7 +1155,7 @@ Deploy with `--no-verify-jwt` (eBay needs unauthenticated access).
 Phase 2 is **proven** when:
 
 - [ ] At least one real eBay order arrives through the webhook **before** the CRON fallback would have caught it — confirming the webhook is winning the race and delivering the intended speed value
-- [ ] Webhook failure detection is active — `last_webhook_received_at` updating, silence alert logic in place
+- [x] Webhook failure detection is active — `last_webhook_received_at` updating, silence alert logic in place
 
 ---
 
@@ -1619,14 +1619,14 @@ Complete registry of all eBay edge functions (existing + planned):
 | `ebay-account-deletion` | 0 | ✅ Live | `--no-verify-jwt` | — |
 | `ebay-oauth-callback` | 0 | ✅ Live | `--no-verify-jwt` | — |
 | `ebay-refresh-token` | 0 | ✅ Live | — | — |
-| `ebay-sync-orders` | 0 | ✅ Live (refactored → shared module) | — | `0 */2 * * *` |
+| `ebay-sync-orders` | 0 | ✅ Live (refactored → shared module) | — | `0 */8 * * *` |
 | `ebay-sync-finances` | 0 | ✅ Live | — | `0 6 * * *` |
 | `_shared/ebayUtils.ts` | 1 | ✅ Live | *(shared module)* | — |
 | `ebay-manage-listing` | 1 | ✅ Live | — | — |
 | `ebay-migrate-listings` | 1 | ✅ Live | — | — |
 | `ebay-taxonomy` | 1 | ✅ Live | — | — |
 | `shippo-create-label` *(updated)* | 1c | ✅ Live | — | — |
-| `ebay-webhook` | 2 | ⏳ Planned | `--no-verify-jwt` | — |
+| `ebay-webhook` | 2 | ✅ Live | `--no-verify-jwt` | — |
 | `ebay-sync-inventory` | 3 | ⏳ Planned | — | `0 3 * * *` |
 | `ebay-manage-ads` | 4 | ⏳ Planned | — | `0 7 * * *` |
 | `ebay-analytics` | 5 | ⏳ Planned | — | `0 7 * * *` |
@@ -1681,11 +1681,14 @@ Phase 1c: eBay Fulfillment Tracking Sync (Shippo → eBay)
 
 ── NOW ──────────────────────────────────────────
 
-Phase 2: Real-Time Webhooks (thin — ItemSold only)
-  ├── Depends on: nothing (parallel with Phase 1c)
-  ├── ebay-webhook (receives ItemSold push notifications)
-  ├── Reduces CRON frequency (2h → 6-12h fallback)
-  └── Other events (feedback, unsold) wired up later
+Phase 2: Real-Time Webhooks (DONE — April 19, 2026)
+  ├── ✅ ebay-webhook deployed (receives ORDER_CONFIRMATION push notifications)
+  ├── ✅ Webhook subscription registered (destinationId: 02814269, subscriptionId: 2ea56087)
+  ├── ✅ Challenge verification endpoint working
+  ├── ✅ Test notification received and processed
+  ├── ✅ CRON frequency reduced (2h → 8h fallback)
+  ├── ✅ last_webhook_received_at monitoring in marketplace_tokens.extra
+  └── ⏳ Needs first live eBay order to confirm webhook beats CRON
 
 ── NEXT (only after Phase 2 is stable) ──────────
 

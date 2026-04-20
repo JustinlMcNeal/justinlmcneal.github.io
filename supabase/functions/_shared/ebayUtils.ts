@@ -49,6 +49,7 @@ export async function getAccessToken(supabase: SupabaseClient): Promise<string> 
     "https://api.ebay.com/oauth/api_scope/sell.finances",
     "https://api.ebay.com/oauth/api_scope/sell.account",
     "https://api.ebay.com/oauth/api_scope/sell.account.readonly",
+    "https://api.ebay.com/oauth/api_scope/commerce.notification.subscription",
   ].join(" ");
 
   const resp = await fetch(`${EBAY_API}/identity/v1/oauth2/token`, {
