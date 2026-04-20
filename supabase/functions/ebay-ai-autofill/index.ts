@@ -134,7 +134,8 @@ JSON structure:
       userContent.push(img as unknown as { type: string; image_url: { url: string; detail: string } });
     }
 
-    // Call OpenAI GPT-4o
+    // Call OpenAI — gpt-4o-mini: fast, cheap, supports vision
+    // (gpt-5-mini tested in ai-generate but returns empty responses)
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -142,7 +143,7 @@ JSON structure:
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o",
+        model: "gpt-4o-mini",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userContent },
