@@ -1853,16 +1853,20 @@
                 });
                 if (volResult.success) {
                   status.textContent = `✅ Published + Volume pricing set! Listing ID: ${result.listingId}`;
+                  setTimeout(() => { document.getElementById("pushModal").classList.add("hidden"); loadProducts(); }, 1500);
                 } else {
-                  status.textContent = `✅ Published (Listing ${result.listingId}) — ⚠️ Volume pricing failed: ${volResult.error}`;
+                  status.textContent = `✅ Published (Listing ${result.listingId}) — ⚠️ Volume pricing failed: ${volResult.error || JSON.stringify(volResult)} (close manually when done)`;
+                  // Don't auto-close on error so user can read it
                 }
               } catch (ve) {
-                status.textContent = `✅ Published (Listing ${result.listingId}) — ⚠️ Volume pricing error: ${ve.message}`;
+                status.textContent = `✅ Published (Listing ${result.listingId}) — ⚠️ Volume pricing error: ${ve.message} (close manually when done)`;
+                // Don't auto-close on error so user can read it
               }
+              return; // early return; close handled above or manually
             }
           }
 
-          // Reload table
+          // Reload table (no volume pricing configured)
           setTimeout(() => {
             document.getElementById("pushModal").classList.add("hidden");
             loadProducts();
