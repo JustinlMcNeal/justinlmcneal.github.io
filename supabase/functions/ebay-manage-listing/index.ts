@@ -11,6 +11,7 @@ import {
 
 const INV_API = `${EBAY_API}/sell/inventory/v1`;
 const ACCT_API = `${EBAY_API}/sell/account/v1`;
+const MKTG_API = `${EBAY_API}/sell/marketing/v1`;
 
 /** Make an authenticated request to eBay Inventory/Account API */
 async function ebayFetch(
@@ -890,6 +891,156 @@ serve(async (req) => {
 
       return new Response(
         JSON.stringify({ success: true, offerId }),
+        { headers: corsHeaders }
+      );
+    }
+
+    // ── CREATE VOLUME DISCOUNT PROMOTION ─────────────────
+    if (action === "create_volume_discount") {
+      const { listingId, tiers, productCode } = body;
+      if (!listingId) throw new Error("listingId is required");
+      if (!tiers?.length) throw new Error("At least one discount tier is required");
+
+      const now = new Date();
+      const endDate = new Date(now);
+      endDate.setFullYear(endDate.getFullYear() + 1);
+
+      const discountRules = tiers.map((t: { minQuantity: number; percentOff: number; amountOff?: number }, i: number) => {
+        const rule: Record<string, unknown> = {
+          minQuantity: t.minQuantity,
+          ruleOrder: i + 1,
+          discountBenefit: {},
+        };
+        if (t.amountOff) {
+          rule.discountBenefit = { amountOffItem: { value: t.amountOff.toFixed(2), currency: "USD" } };
+        } else {
+          rule.discountBenefit = { percentageOffItem: String(t.percentOff) };
+        }
+        return rule;
+      });
+
+      const promo = {
+        name: `Volume Discount — ${productCode || listingId}`,
+        marketplaceId: "EBAY_US",
+        promotionType: "VOLUME_DISCOUNT",
+        startDate: now.toISOString(),
+        endDate: endDate.toISOString(),
+        discountRules,
+        inventoryCriterion: {
+          inventoryCriterionType: "INVENTORY_BY_VALUE",
+          listingIds: [listingId],
+        },
+      };
+
+      const result = await ebayFetch(accessToken, "POST", `${MKTG_API}/item_promotion`, promo);
+      if (!result.ok) {
+        throw new Error(`Create volume discount failed (${result.status}): ${JSON.stringify(result.data)}`);
+      }
+
+      const promotionId = (result.data as Record<string, string>)?.promotionId
+        || result.headers.get("Location")?.split("/").pop()
+        || null;
+
+      if (productCode && promotionId) {
+        await supabase.from("products").update({
+          ebay_volume_promo_id: promotionId,
+          updated_at: new Date().toISOString(),
+        }).eq("code", productCode);
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, promotionId }),
+        { headers: corsHeaders }
+      );
+    }
+
+    // ── GET VOLUME DISCOUNT PROMOTION ────────────────────
+    if (action === "get_volume_discount") {
+      const { promotionId } = body;
+      if (!promotionId) throw new Error("promotionId is required");
+
+      const result = await ebayFetch(accessToken, "GET", `${MKTG_API}/item_promotion/${promotionId}`);
+      if (!result.ok) {
+        throw new Error(`Get volume discount failed (${result.status}): ${JSON.stringify(result.data)}`);
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, promotion: result.data }),
+        { headers: corsHeaders }
+      );
+    }
+
+    // ── UPDATE VOLUME DISCOUNT PROMOTION ─────────────────
+    if (action === "update_volume_discount") {
+      const { promotionId, listingId, tiers } = body;
+      if (!promotionId) throw new Error("promotionId is required");
+      if (!tiers?.length) throw new Error("At least one discount tier is required");
+
+      // Fetch existing promotion to preserve fields
+      const current = await ebayFetch(accessToken, "GET", `${MKTG_API}/item_promotion/${promotionId}`);
+      if (!current.ok) {
+        throw new Error(`Get promotion failed (${current.status}): ${JSON.stringify(current.data)}`);
+      }
+
+      const existing = current.data as Record<string, unknown>;
+
+      const discountRules = tiers.map((t: { minQuantity: number; percentOff: number; amountOff?: number }, i: number) => {
+        const rule: Record<string, unknown> = {
+          minQuantity: t.minQuantity,
+          ruleOrder: i + 1,
+          discountBenefit: {},
+        };
+        if (t.amountOff) {
+          rule.discountBenefit = { amountOffItem: { value: t.amountOff.toFixed(2), currency: "USD" } };
+        } else {
+          rule.discountBenefit = { percentageOffItem: String(t.percentOff) };
+        }
+        return rule;
+      });
+
+      const updatedPromo = {
+        ...existing,
+        discountRules,
+      };
+
+      // If listingId changed, update inventoryCriterion
+      if (listingId) {
+        updatedPromo.inventoryCriterion = {
+          inventoryCriterionType: "INVENTORY_BY_VALUE",
+          listingIds: [listingId],
+        };
+      }
+
+      const result = await ebayFetch(accessToken, "PUT", `${MKTG_API}/item_promotion/${promotionId}`, updatedPromo);
+      if (!result.ok && result.status !== 204) {
+        throw new Error(`Update volume discount failed (${result.status}): ${JSON.stringify(result.data)}`);
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, promotionId }),
+        { headers: corsHeaders }
+      );
+    }
+
+    // ── DELETE VOLUME DISCOUNT PROMOTION ─────────────────
+    if (action === "delete_volume_discount") {
+      const { promotionId, productCode } = body;
+      if (!promotionId) throw new Error("promotionId is required");
+
+      const result = await ebayFetch(accessToken, "DELETE", `${MKTG_API}/item_promotion/${promotionId}`);
+      if (!result.ok && result.status !== 204) {
+        throw new Error(`Delete volume discount failed (${result.status}): ${JSON.stringify(result.data)}`);
+      }
+
+      if (productCode) {
+        await supabase.from("products").update({
+          ebay_volume_promo_id: null,
+          updated_at: new Date().toISOString(),
+        }).eq("code", productCode);
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, deleted: promotionId }),
         { headers: corsHeaders }
       );
     }

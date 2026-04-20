@@ -345,6 +345,19 @@
               </div>
             </div>
 
+            <!-- Volume Pricing -->
+            <div>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" id="modalVolEnabled" class="accent-pink-500" />
+                <span class="text-[11px] font-black uppercase tracking-[.12em] text-black/70">Volume Pricing</span>
+              </label>
+              <div id="modalVolFields" class="hidden mt-2 space-y-2">
+                <p class="text-[9px] text-gray-400">Offer discounts when buyers purchase multiple items. Applied after publish.</p>
+                <div id="modalVolTiers"></div>
+                <button type="button" id="modalAddTier" class="text-[10px] text-pink-500 font-bold hover:underline">+ Add tier</button>
+              </div>
+            </div>
+
             <!-- Package Weight & Dimensions -->
             <details>
               <summary class="text-[11px] font-bold uppercase tracking-wider text-gray-500 cursor-pointer hover:text-black">📦 Package Weight & Dimensions</summary>
@@ -549,6 +562,19 @@
                   <input id="editLotSize" type="number" min="2" value="2" class="w-20 border-2 border-gray-300 px-2 py-1.5 text-xs outline-none focus:border-kkpink transition-colors" />
                 </div>
                 <p class="text-[9px] text-gray-400 mt-1">Group identical items into one lot. Quantity = number of lots available.</p>
+              </div>
+            </div>
+
+            <!-- Volume Pricing -->
+            <div>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" id="editVolEnabled" class="accent-pink-500" />
+                <span class="text-[11px] font-black uppercase tracking-[.12em] text-black/70">Volume Pricing</span>
+              </label>
+              <div id="editVolFields" class="hidden mt-2 space-y-2">
+                <p class="text-[9px] text-gray-400">Offer discounts when buyers purchase multiple items.</p>
+                <div id="editVolTiers"></div>
+                <button type="button" id="editAddTier" class="text-[10px] text-pink-500 font-bold hover:underline">+ Add tier</button>
               </div>
             </div>
 
@@ -904,7 +930,7 @@
     async function loadProducts() {
       const { data, error } = await supabase
         .from("products")
-        .select("id, code, name, slug, price, weight_g, catalog_image_url, catalog_hover_url, primary_image_url, is_active, ebay_sku, ebay_offer_id, ebay_listing_id, ebay_status, ebay_category_id, ebay_price_cents, ebay_item_group_key, product_gallery_images(url, position, is_active), product_variants(id, option_name, option_value, stock, preview_image_url, sort_order, is_active)")
+        .select("id, code, name, slug, price, weight_g, catalog_image_url, catalog_hover_url, primary_image_url, is_active, ebay_sku, ebay_offer_id, ebay_listing_id, ebay_status, ebay_category_id, ebay_price_cents, ebay_item_group_key, ebay_volume_promo_id, product_gallery_images(url, position, is_active), product_variants(id, option_name, option_value, stock, preview_image_url, sort_order, is_active)")
         .order("code");
 
       if (error) {
@@ -1087,6 +1113,9 @@
       document.getElementById("modalLotEnabled").checked = false;
       document.getElementById("modalLotFields").classList.add("hidden");
       document.getElementById("modalLotSize").value = "2";
+      document.getElementById("modalVolEnabled").checked = false;
+      document.getElementById("modalVolFields").classList.add("hidden");
+      document.getElementById("modalVolTiers").innerHTML = "";
       document.getElementById("modalCatSearch").value = currentProduct.name;
       document.getElementById("modalCatSelect").classList.add("hidden");
       document.getElementById("modalCatSelected").classList.add("hidden");
@@ -1717,6 +1746,30 @@
         if (result.success) {
           status.textContent = `✅ Published! Listing ID: ${result.listingId}`;
           enableBtn("btnPublish", false);
+
+          // Create volume pricing promotion if configured
+          if (document.getElementById("modalVolEnabled").checked) {
+            const volTiers = getVolTiers("modal");
+            if (volTiers.length && result.listingId) {
+              try {
+                status.textContent += " — Creating volume discount...";
+                const volResult = await callEdge("ebay-manage-listing", {
+                  action: "create_volume_discount",
+                  listingId: result.listingId,
+                  tiers: volTiers,
+                  productCode: currentProduct.code,
+                });
+                if (volResult.success) {
+                  status.textContent = `✅ Published + Volume pricing set! Listing ID: ${result.listingId}`;
+                } else {
+                  status.textContent = `✅ Published (Listing ${result.listingId}) — ⚠️ Volume pricing failed: ${volResult.error}`;
+                }
+              } catch (ve) {
+                status.textContent = `✅ Published (Listing ${result.listingId}) — ⚠️ Volume pricing error: ${ve.message}`;
+              }
+            }
+          }
+
           // Reload table
           setTimeout(() => {
             document.getElementById("pushModal").classList.add("hidden");
@@ -1879,6 +1932,33 @@
         // Pre-fill Store Category from offer
         const storeCats = offer.storeCategoryNames || [];
         document.getElementById("editStoreCategory").value = storeCats[0] || "";
+
+        // Pre-fill Volume Pricing from existing promotion
+        const volPromoId = editProduct.ebay_volume_promo_id;
+        if (volPromoId) {
+          try {
+            const promoResult = await callEdge("ebay-manage-listing", { action: "get_volume_discount", promotionId: volPromoId });
+            if (promoResult.success && promoResult.promotion?.discountRules?.length) {
+              document.getElementById("editVolEnabled").checked = true;
+              document.getElementById("editVolFields").classList.remove("hidden");
+              setVolTiers("edit", promoResult.promotion.discountRules);
+              editProduct._volPromoId = volPromoId;
+            } else {
+              document.getElementById("editVolEnabled").checked = false;
+              document.getElementById("editVolFields").classList.add("hidden");
+              document.getElementById("editVolTiers").innerHTML = "";
+            }
+          } catch (ve) {
+            console.warn("Volume pricing fetch failed:", ve);
+            document.getElementById("editVolEnabled").checked = false;
+            document.getElementById("editVolFields").classList.add("hidden");
+            document.getElementById("editVolTiers").innerHTML = "";
+          }
+        } else {
+          document.getElementById("editVolEnabled").checked = false;
+          document.getElementById("editVolFields").classList.add("hidden");
+          document.getElementById("editVolTiers").innerHTML = "";
+        }
 
         // Fetch aspects for category and pre-fill
         const categoryId = editProduct.ebay_category_id || offer.categoryId;
@@ -2199,6 +2279,44 @@
           }
         }
 
+        // Handle Volume Pricing
+        const volEnabled = document.getElementById("editVolEnabled").checked;
+        const volTiers = volEnabled ? getVolTiers("edit") : [];
+        const existingPromoId = editProduct._volPromoId || editProduct.ebay_volume_promo_id;
+        const listingId = editProduct.ebay_listing_id;
+
+        if (volEnabled && volTiers.length && listingId) {
+          status.textContent = "Updating volume pricing...";
+          if (existingPromoId) {
+            // Update existing promotion
+            const volResult = await callEdge("ebay-manage-listing", {
+              action: "update_volume_discount",
+              promotionId: existingPromoId,
+              listingId,
+              tiers: volTiers,
+            });
+            if (!volResult.success) console.warn("Volume pricing update failed:", volResult.error);
+          } else {
+            // Create new promotion
+            const volResult = await callEdge("ebay-manage-listing", {
+              action: "create_volume_discount",
+              listingId,
+              tiers: volTiers,
+              productCode: editProduct.code,
+            });
+            if (!volResult.success) console.warn("Volume pricing create failed:", volResult.error);
+          }
+        } else if (!volEnabled && existingPromoId) {
+          // Delete existing promotion
+          status.textContent = "Removing volume pricing...";
+          const volResult = await callEdge("ebay-manage-listing", {
+            action: "delete_volume_discount",
+            promotionId: existingPromoId,
+            productCode: editProduct.code,
+          });
+          if (!volResult.success) console.warn("Volume pricing delete failed:", volResult.error);
+        }
+
         status.textContent = "✅ Listing updated successfully";
         setTimeout(() => {
           document.getElementById("editModal").classList.add("hidden");
@@ -2504,6 +2622,55 @@
     document.getElementById("editLotEnabled").addEventListener("change", (e) => {
       document.getElementById("editLotFields").classList.toggle("hidden", !e.target.checked);
     });
+
+    // Volume Pricing checkbox toggles
+    document.getElementById("modalVolEnabled").addEventListener("change", (e) => {
+      document.getElementById("modalVolFields").classList.toggle("hidden", !e.target.checked);
+      if (e.target.checked && !document.getElementById("modalVolTiers").children.length) {
+        addVolTier("modal");
+      }
+    });
+    document.getElementById("editVolEnabled").addEventListener("change", (e) => {
+      document.getElementById("editVolFields").classList.toggle("hidden", !e.target.checked);
+      if (e.target.checked && !document.getElementById("editVolTiers").children.length) {
+        addVolTier("edit");
+      }
+    });
+    document.getElementById("modalAddTier").addEventListener("click", () => addVolTier("modal"));
+    document.getElementById("editAddTier").addEventListener("click", () => addVolTier("edit"));
+
+    function addVolTier(prefix, qty = 2, pct = 5) {
+      const container = document.getElementById(`${prefix}VolTiers`);
+      const div = document.createElement("div");
+      div.className = "vol-tier flex items-center gap-2 mb-1";
+      div.innerHTML = `<span class="text-[9px] text-gray-500">Buy</span>
+        <input type="number" min="2" value="${qty}" class="vol-qty w-14 border-2 border-gray-300 px-2 py-1 text-xs outline-none focus:border-kkpink" />
+        <span class="text-[9px] text-gray-500">+, get</span>
+        <input type="number" min="1" max="99" value="${pct}" class="vol-pct w-14 border-2 border-gray-300 px-2 py-1 text-xs outline-none focus:border-kkpink" />
+        <span class="text-[9px] text-gray-500">% off</span>
+        <button type="button" class="vol-remove text-red-400 hover:text-red-600 text-xs font-bold" title="Remove tier">✕</button>`;
+      div.querySelector(".vol-remove").addEventListener("click", () => div.remove());
+      container.appendChild(div);
+    }
+
+    function getVolTiers(prefix) {
+      const tiers = [];
+      document.querySelectorAll(`#${prefix}VolTiers .vol-tier`).forEach(row => {
+        const qty = parseInt(row.querySelector(".vol-qty").value) || 2;
+        const pct = parseFloat(row.querySelector(".vol-pct").value) || 0;
+        if (pct > 0) tiers.push({ minQuantity: qty, percentOff: pct });
+      });
+      return tiers.sort((a, b) => a.minQuantity - b.minQuantity);
+    }
+
+    function setVolTiers(prefix, tiers) {
+      const container = document.getElementById(`${prefix}VolTiers`);
+      container.innerHTML = "";
+      tiers.forEach(t => {
+        const pct = t.discountBenefit?.percentageOffItem || t.percentOff || 5;
+        addVolTier(prefix, t.minQuantity || 2, pct);
+      });
+    }
 
     async function loadPoliciesCache() {
       if (cachedPolicies) return cachedPolicies;
