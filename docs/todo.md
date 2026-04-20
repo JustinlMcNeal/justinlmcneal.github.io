@@ -1136,6 +1136,12 @@
 
   </details>
 
+- [ ] **AI Auto-Fill for eBay Listings** — use AI (OpenAI) to auto-generate optimized eBay title, description, item specifics, and category suggestion when pushing a product. Edge function `ebay-ai-autofill`, "✨ AI Auto-Fill" button in push modal. See roadmap Phase 6.
+
+- [ ] **Universal Analytics Dashboard** — unified admin dashboard aggregating sales, traffic, and product performance across all channels (website/Stripe + eBay + future Amazon/Etsy). Includes revenue, units sold, conversion rates, trending products, cart abandonment, AOV. AI-powered optimization suggestions. See roadmap Phase 7.
+
+- [ ] **eBay Reviews Sync** — pull eBay buyer feedback via API, display alongside KarryKraze reviews on product pages, allow replying from admin Reviews page. `ebay_reviews` table, `ebay-reviews-sync` edge function, 6-hour cron. See roadmap Phase 8.
+
 ---
 
 ## Growth & Polish

@@ -1736,3 +1736,93 @@ Phase 5: Compliance + Competitor Pricing
 | Taxonomy | `api.ebay.com` | Application token | 5,000/day |
 | Browse | `api.ebay.com` | Application token | 5,000/day |
 | Notification | `api.ebay.com` | User token | — |
+
+---
+
+## Phase 6 — AI Auto-Fill for eBay Listings
+
+### 6.1 Overview
+When pushing a product to eBay, an "AI Auto-Fill" button generates optimized listing content (title, description, item specifics, category suggestion) based on product data and images.
+
+### 6.2 Architecture
+- **Edge Function**: `ebay-ai-autofill` — accepts product data, calls OpenAI API, returns optimized listing fields
+- **Frontend**: "✨ AI Auto-Fill" button in the Push Modal populates fields automatically
+- **Flow**: Button click → send product name, images, category, price → edge function → AI generates title (max 80 chars, keyword-rich), HTML description, item specifics → auto-populate modal fields
+
+### 6.3 AI Outputs
+| Field | Details |
+|-------|---------|
+| Title | SEO-optimized, ≤80 chars, keyword-rich |
+| Description | Styled HTML with product features, specs, shipping info |
+| Item Specifics | Brand, material, color, size from product data |
+| Category | Suggested eBay category ID via Taxonomy API cross-referenced with AI |
+
+### 6.4 Implementation Steps
+1. Create `ebay-ai-autofill` edge function (Deno/TS, OpenAI SDK)
+2. Add AI Auto-Fill button to Push Modal UI
+3. Wire button → call edge function → populate form fields
+4. Add "Regenerate" option with prompt tweaks (tone, keywords)
+5. Store AI-generated content alongside manual edits for A/B comparison
+
+---
+
+## Phase 7 — Universal Analytics Dashboard
+
+### 7.1 Overview
+Unified dashboard aggregating sales, traffic, and product performance across all channels: website (Stripe), eBay, and future platforms (Amazon, Etsy).
+
+### 7.2 Key Metrics
+| Metric | Sources |
+|--------|---------|
+| Total Revenue | `orders_raw` (Stripe) + eBay Finances API |
+| Units Sold | `line_items_raw` + eBay Fulfillment API |
+| Conversion Rate | Page views → purchases (per channel) |
+| Top Products | Cross-channel best sellers |
+| Trending | Sales velocity changes over 7/30/90 days |
+| Cart Abandonment | Stripe incomplete sessions + eBay watchers |
+| Average Order Value | Aggregated across channels |
+
+### 7.3 Architecture
+- **Admin Page**: `pages/admin/analytics.html` — interactive charts (Chart.js or lightweight lib)
+- **Edge Function**: `analytics-aggregate` — pulls data from Supabase tables + eBay APIs, returns unified JSON
+- **Cron Job**: Daily aggregation into `analytics_daily` table for fast dashboard loads
+- **AI Insights**: Optional AI-powered suggestions ("Product X selling 3x better on eBay — consider raising price")
+
+### 7.4 Implementation Steps
+1. Create `analytics_daily` table (date, channel, product_id, revenue, units, views)
+2. Build `analytics-aggregate` edge function
+3. Set up daily cron to populate aggregated data
+4. Build admin dashboard page with charts and KPI cards
+5. Add per-product channel comparison view
+6. (Optional) AI-powered optimization suggestions
+
+---
+
+## Phase 8 — eBay Reviews Sync
+
+### 8.1 Overview
+Pull eBay buyer feedback and seller ratings, display alongside existing KarryKraze reviews on product pages, and allow replying from admin.
+
+### 8.2 Architecture
+- **Edge Function**: `ebay-reviews-sync` — polls eBay Fulfillment/Feedback API for new reviews
+- **DB Table**: `ebay_reviews` (order_id, buyer, rating, text, reply, synced_at)
+- **Sync**: Map eBay reviews to products via SKU → display on product pages
+- **Admin**: Reply to eBay reviews from the existing Reviews admin page
+- **Cron**: Scheduled sync every 6 hours
+
+### 8.3 Data Flow
+```
+eBay Feedback API → ebay-reviews-sync edge function → ebay_reviews table
+                                                         ↓
+                                              Product page (merged with KK reviews)
+                                                         ↓
+                                              Admin Reviews page (reply → eBay API)
+```
+
+### 8.4 Implementation Steps
+1. Create `ebay_reviews` table with RLS policies
+2. Build `ebay-reviews-sync` edge function
+3. Set up cron job for periodic sync
+4. Update product page review section to merge eBay reviews
+5. Add eBay review management tab to admin Reviews page
+6. Implement reply functionality (admin → eBay API)
