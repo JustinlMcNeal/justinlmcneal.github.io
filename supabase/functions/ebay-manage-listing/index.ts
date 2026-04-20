@@ -96,7 +96,7 @@ serve(async (req) => {
 
     // ── CREATE / UPDATE INVENTORY ITEM ──────────────────────
     if (action === "create_item" || action === "update_item") {
-      const { sku, product } = body;
+      const { sku, product, packageWeightAndSize } = body;
       if (!sku) throw new Error("sku is required");
 
       // product = { title, description, imageUrls[], aspects{}, condition, quantity }
@@ -114,6 +114,10 @@ serve(async (req) => {
           aspects: product.aspects || {},
         },
       };
+
+      if (packageWeightAndSize) {
+        invItem.packageWeightAndSize = packageWeightAndSize;
+      }
 
       // PUT /inventory_item/{sku} — creates or replaces
       const result = await ebayFetch(

@@ -453,8 +453,8 @@ Admin clicks "List on eBay" for KK-0013 (Cherry Bag Charm)
 
 | Feature | eBay API Field | Current State | Impact |
 |---------|---------------|---------------|--------|
-| Multi-image (up to 24) | `product.imageUrls[]` | Only sends 1 `catalog_image_url` | 🔴 HIGH — multi-image = higher conversion |
-| HTML description | `product.description` | Plain text `<textarea>` | 🔴 HIGH — formatted descriptions look professional |
+| Multi-image (up to 24) | `product.imageUrls[]` | ✅ Full gallery support (drag reorder, up to 24) | 🔴 HIGH — multi-image = higher conversion |
+| HTML description | `product.description` | ✅ Quill rich text + raw HTML + Preview modes | 🔴 HIGH — formatted descriptions look professional |
 | Best Offer / Allow Offers | `offer.listingPolicies.bestOfferTerms` | Not exposed | 🟡 MEDIUM — enables negotiation on higher-priced items |
 | Package weight & dimensions | `inventoryItem.packageWeightAndSize` | Not sent | 🟡 MEDIUM — required for calculated shipping |
 | Policy picker (ship/return/pay) | `offer.listingPolicies.*PolicyId` | Hardcoded to defaults | 🟡 MEDIUM — needed when multiple policies exist |
@@ -828,14 +828,25 @@ PUT /sell/inventory/v1/inventory_item/{sku}
 
 Build in three passes. Each pass ends with a verification checkpoint.
 
-**Pass 1 — Listing Quality** (highest buyer impact)
+**Pass 1 — Listing Quality** ✅ COMPLETE (April 19, 2026)
 
-| Step | Feature | Touches | Effort |
-|------|---------|---------|--------|
-| 1 | Multi-image | UI only (push + edit modals, `loadProducts` query) | Medium |
-| 2 | HTML description | UI only (add Quill CDN + replace textarea + sanitize) | Small |
+| Step | Feature | Touches | Effort | Status |
+|------|---------|---------|--------|--------|
+| 1 | Multi-image | UI only (push + edit modals, `loadProducts` query) | Medium | ✅ Done |
+| 2 | HTML description | UI only (Quill CDN + Visual/HTML/Preview modes + sanitize) | Small | ✅ Done |
 
 > **Checkpoint:** Revise one live listing with multiple images + HTML description. Verify on eBay before proceeding.
+
+**Pass 1 Features Delivered:**
+- `buildImageUrls(product)` — collects images from catalog→primary→hover→gallery, dedupes, caps at 24
+- `renderImageStrip()` — 60×60 draggable thumbnails with X remove, first=main photo
+- `showGalleryPicker()` — clickable unused gallery images to add
+- Quill.js rich text editor (Visual mode) with limited eBay-safe toolbar
+- Raw HTML textarea (HTML mode) for complex styled descriptions with grids/flexbox
+- `isComplexHtml()` detection — auto-routes complex HTML to textarea mode, prevents Quill crashes
+- Preview tab — iframe with `srcdoc` renders description as buyers will see it
+- `sanitizeForEbay()` — strips scripts/iframes/forms/event handlers
+- `wrapDescription()` — branded template wrapper (Visual mode only)
 
 **Pass 2 — Listing Infrastructure**
 
@@ -874,8 +885,8 @@ Build in three passes. Each pass ends with a verification checkpoint.
 
 Phase 1b is **done** when:
 
-- [ ] Push/Edit modals show all product gallery images and send full `imageUrls[]` to eBay (up to 24)
-- [ ] Description field uses a rich text editor (Quill) that outputs eBay-safe HTML
+- [x] Push/Edit modals show all product gallery images and send full `imageUrls[]` to eBay (up to 24)
+- [x] Description field uses a rich text editor (Quill) that outputs eBay-safe HTML
 - [ ] "Allow Offers" toggle with auto-accept/auto-decline price fields works on create and edit
 - [ ] Package weight + dimensions can be set per listing and are sent to eBay
 - [ ] Admin can pick shipping/return/payment policies from dropdowns (not hardcoded)
