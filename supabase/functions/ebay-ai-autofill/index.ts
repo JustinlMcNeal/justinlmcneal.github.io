@@ -147,8 +147,7 @@ JSON structure:
           { role: "system", content: systemPrompt },
           { role: "user", content: userContent },
         ],
-        max_tokens: 2000,
-        temperature: 0.7,
+        max_completion_tokens: 16000,
         response_format: { type: "json_object" },
       }),
     });
