@@ -444,6 +444,41 @@ serve(async (req) => {
       );
     }
 
+    // ── WITHDRAW BY INVENTORY ITEM GROUP (variation listing) ─
+    if (action === "withdraw_group") {
+      const { inventoryItemGroupKey, sku } = body;
+      if (!inventoryItemGroupKey) throw new Error("inventoryItemGroupKey is required");
+
+      const result = await ebayFetch(
+        accessToken,
+        "POST",
+        `${INV_API}/offer/withdraw_by_inventory_item_group`,
+        {
+          inventoryItemGroupKey,
+          marketplaceId: "EBAY_US",
+        }
+      );
+
+      if (!result.ok) {
+        throw new Error(`Withdraw group failed (${result.status}): ${JSON.stringify(result.data)}`);
+      }
+
+      if (sku) {
+        await supabase
+          .from("products")
+          .update({
+            ebay_status: "ended",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("code", sku);
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, withdrawn: true }),
+        { headers: corsHeaders }
+      );
+    }
+
     // ── DELETE OFFER (cleanup stale/unpublished offers) ───
     if (action === "delete_offer") {
       const { offerId } = body;

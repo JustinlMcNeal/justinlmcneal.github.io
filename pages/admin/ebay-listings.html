@@ -1044,7 +1044,7 @@
                 : ""}
               ${status === "active"
                 ? `<button onclick="openEdit('${esc(p.code)}')" class="bg-blue-600 text-white px-2 py-1 rounded text-[10px] font-bold hover:bg-blue-700 transition-all">Edit</button>
-                   <button onclick="doWithdraw('${esc(p.code)}', '${esc(p.ebay_offer_id)}')" class="border border-red-300 text-red-600 px-2 py-1 rounded text-[10px] font-bold hover:bg-red-50 transition-all">End</button>`
+                   <button onclick="doWithdraw('${esc(p.code)}', '${esc(p.ebay_offer_id)}', '${esc(p.ebay_item_group_key)}')" class="border border-red-300 text-red-600 px-2 py-1 rounded text-[10px] font-bold hover:bg-red-50 transition-all">End</button>`
                 : ""}
               ${status === "draft"
                 ? `<button onclick="openEdit('${esc(p.code)}')" class="bg-blue-600 text-white px-2 py-1 rounded text-[10px] font-bold hover:bg-blue-700 transition-all">Edit</button>
@@ -1084,7 +1084,7 @@
           actions = `<button onclick="openPush('${esc(p.code)}')" class="flex-1 bg-black text-white px-2 py-1.5 rounded text-xs font-bold hover:bg-kkpink hover:text-black transition-all">Push</button>`;
         } else if (status === "active") {
           actions = `<button onclick="openEdit('${esc(p.code)}')" class="flex-1 bg-blue-600 text-white px-2 py-1.5 rounded text-xs font-bold">Edit</button>
-                     <button onclick="doWithdraw('${esc(p.code)}', '${esc(p.ebay_offer_id)}')" class="flex-1 border border-red-300 text-red-600 px-2 py-1.5 rounded text-xs font-bold">End</button>`;
+                     <button onclick="doWithdraw('${esc(p.code)}', '${esc(p.ebay_offer_id)}', '${esc(p.ebay_item_group_key)}')" class="flex-1 border border-red-300 text-red-600 px-2 py-1.5 rounded text-xs font-bold">End</button>`;
         } else if (status === "draft") {
           actions = `<button onclick="openEdit('${esc(p.code)}')" class="flex-1 bg-blue-600 text-white px-2 py-1.5 rounded text-xs font-bold">Edit</button>
                      ${p.ebay_offer_id
@@ -2547,12 +2547,31 @@
     });
 
     // ── Withdraw ─────────────────────────────────────────
-    window.doWithdraw = async function(code, offerId) {
+    window.doWithdraw = async function(code, offerId, itemGroupKey) {
       if (!confirm(`End eBay listing for ${code}?`)) return;
       showStatus("Withdrawing...");
 
       try {
-        const result = await callEdge("ebay-manage-listing", { action: "withdraw", offerId, sku: code });
+        const hasGroup = itemGroupKey && String(itemGroupKey).trim();
+        const hasOffer = offerId && String(offerId).trim();
+
+        if (!hasGroup && !hasOffer) {
+          showStatus("❌ Cannot end listing: missing offer ID/group key", true);
+          return;
+        }
+
+        const result = hasGroup
+          ? await callEdge("ebay-manage-listing", {
+              action: "withdraw_group",
+              inventoryItemGroupKey: String(itemGroupKey).trim(),
+              sku: code,
+            })
+          : await callEdge("ebay-manage-listing", {
+              action: "withdraw",
+              offerId: String(offerId).trim(),
+              sku: code,
+            });
+
         if (result.success) {
           showStatus("✅ Listing ended");
           loadProducts();
