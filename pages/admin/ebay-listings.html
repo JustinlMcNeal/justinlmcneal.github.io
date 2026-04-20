@@ -1571,9 +1571,19 @@
           progressEl.classList.remove("hidden");
           let created = 0;
           const errors = [];
+          const createdSkus = [];
+          // Only attempt to create items with quantity > 0
+          const validVariants = checked.filter(v => v.quantity > 0);
+          const skippedOos = checked.filter(v => v.quantity <= 0);
 
-          for (const v of checked) {
-            progressEl.textContent = `Creating ${v.option_value} (${v.sku})... (${created + 1}/${checked.length})`;
+          if (!validVariants.length) {
+            status.textContent = "❌ All selected variants have quantity 0 — set at least 1 to a quantity > 0";
+            btn.disabled = false; btn.textContent = "1. Create Items";
+            return;
+          }
+
+          for (const v of validVariants) {
+            progressEl.textContent = `Creating ${v.option_value} (${v.sku})... (${created + 1}/${validVariants.length})`;
 
             // Each variant gets its own aspects with the Color value
             const variantAspects = { ...aspects, Color: [v.option_value] };
@@ -1602,18 +1612,27 @@
 
             if (result.success) {
               created++;
+              createdSkus.push(v.sku);
             } else {
               errors.push(`${v.option_value}: ${result.error || "Failed"}`);
             }
           }
 
-          if (created === checked.length) {
-            status.textContent = `✅ ${created} variant items created — now create group + offer`;
+          // Store successfully created SKUs for group offer step
+          currentProduct._createdVariantSKUs = createdSkus;
+          const skippedMsg = skippedOos.length ? ` (${skippedOos.length} out-of-stock skipped)` : "";
+
+          if (created === validVariants.length && !errors.length) {
+            status.textContent = `✅ ${created} variant items created${skippedMsg} — now create group + offer`;
             progressEl.textContent = `All ${created} items created ✓`;
             enableBtn("btnCreateItem", false);
             enableBtn("btnCreateOffer", true);
+          } else if (created > 0) {
+            status.textContent = `⚠️ ${created}/${validVariants.length} created${skippedMsg}. Errors: ${errors.join("; ")}. You can still proceed.`;
+            enableBtn("btnCreateItem", false);
+            enableBtn("btnCreateOffer", true);
           } else {
-            status.textContent = `⚠️ ${created}/${checked.length} created. Errors: ${errors.join("; ")}`;
+            status.textContent = `❌ No items created. Errors: ${errors.join("; ")}`;
           }
         } else {
           // SINGLE ITEM FLOW
@@ -1659,17 +1678,19 @@
 
       try {
         const checked = getCheckedVariants();
+        // Effective SKUs = those actually created in step 1 (excludes qty 0 skips)
+        const effectiveSkus = currentProduct._createdVariantSKUs || checked.filter(v => v.quantity > 0).map(v => v.sku);
 
-        // If isVariantListing but only 1 variant checked, switch to single-item flow
-        if (isVariantListing && checked.length < 2) {
+        // If only 1 effective SKU, use single-item flow regardless of isVariantListing
+        if (isVariantListing && effectiveSkus.length < 2) {
           // SINGLE ITEM FLOW (even though database has multiple variants)
-          if (checked.length === 0) {
-            status.textContent = "❌ Select at least 1 variant";
+          if (effectiveSkus.length === 0) {
+            status.textContent = "❌ No valid items to create an offer for — check quantities";
             btn.disabled = false; btn.textContent = "2. Create Offer";
             return;
           }
 
-          const variantItem = checked[0];
+          const variantItem = checked.find(v => v.sku === effectiveSkus[0]) || checked[0];
           const sku = variantItem.sku;
           const quantity = variantItem.quantity || 1;
           const storeCat = document.getElementById("modalStoreCategory").value;
@@ -1706,8 +1727,17 @@
           // Remove Color from shared aspects (it varies per variant)
           delete aspects.Color;
 
-          const variantSKUs = checked.map(v => v.sku);
-          const colorValues = checked.map(v => v.option_value);
+          // Use only successfully created SKUs (qty > 0 items from step 1)
+          const createdSkus = currentProduct._createdVariantSKUs;
+          if (!createdSkus || !createdSkus.length) {
+            status.textContent = "❌ No variant items were created in step 1 — complete step 1 first";
+            btn.disabled = false; btn.textContent = "2. Create Group + Offer";
+            return;
+          }
+          // Map back to variant objects for color values
+          const createdVariants = checked.filter(v => createdSkus.includes(v.sku));
+          const variantSKUs = createdSkus;
+          const colorValues = createdVariants.map(v => v.option_value);
 
           // Build variesBy
           const variesBy = {
