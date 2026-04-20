@@ -3,7 +3,7 @@
 > **Document:** `ebayAPI_001.md`
 > **Last Updated:** April 20, 2026
 > **Project:** Karry Kraze (karrykraze.com)
-> **Status:** Phase 1 complete — 7 edge functions live, 8 planned
+> **Status:** Phases 0, 1, 1b, 1c, 2, and 6 complete — listing + webhook + AI flows are live
 
 ---
 
@@ -11,9 +11,9 @@
 
 | Tier | What | Why |
 |------|------|-----|
-| **Now** | Phase 1b (Enhanced Listing Features), thin Phase 2 (Webhooks) | Full listing parity with eBay Seller Hub + real-time orders |
-| **Next** | Phase 3 (Inventory Sync), lightweight eBay performance reporting | Only after listings are stable and order flow is proven |
-| **Later** | Phase 4 (Promoted Listings), Compliance, Competitor Pricing | Revenue growth & intelligence — gated on eBay volume justifying the investment |
+| **Now** | Phase 3 (Inventory Sync) + live flow validation (webhook race, fulfillment push) | Scale safely after listing stack is complete |
+| **Next** | Lightweight eBay performance reporting + webhook/fulfillment verification hardening | Improves visibility before ad spend automation |
+| **Later** | Phase 4 campaign automation, Compliance, Competitor Pricing | Revenue growth & intelligence — gated on eBay volume justifying the investment |
 
 ---
 
@@ -42,8 +42,13 @@
 | OAuth connection | `ebay-oauth-callback` | — | ✅ Live |
 | Token refresh | `ebay-refresh-token` | — | ✅ Live (auto-refresh in sync functions) |
 | Account deletion compliance | `ebay-account-deletion` | — | ✅ Live |
-| Order sync (Fulfillment API) | `ebay-sync-orders` | Every 2h | ✅ Live |
+| Order sync (Fulfillment API) | `ebay-sync-orders` | Every 8h (fallback) | ✅ Live |
 | Financial transaction sync | `ebay-sync-finances` | Daily 6 AM UTC | ✅ Live |
+| Listing management (items/offers/groups/volume pricing) | `ebay-manage-listing` | — | ✅ Live |
+| Taxonomy suggestions + aspects cache | `ebay-taxonomy` | — | ✅ Live |
+| Listing migration/linking | `ebay-migrate-listings` | — | ✅ Live |
+| Real-time order notifications | `ebay-webhook` | Push (event-driven) | ✅ Live |
+| AI listing draft assist | `ebay-ai-autofill` | — | ✅ Live |
 | CSV order import | Client-side (`ebayImport.js`) | — | ✅ Live |
 | CSV transaction import | Client-side (`importEbayTransactions.js`) | — | ✅ Live |
 
@@ -60,7 +65,7 @@
 #### `ebay-refresh-token` (index.ts — ~97 lines)
 - Standalone access token refresh endpoint
 - Called by admin settings UI "Refresh Token" button
-- Scopes: `api_scope`, `sell.fulfillment`, `sell.inventory`, `sell.finances`
+- Scopes: `api_scope`, `sell.fulfillment`, `sell.inventory`, `sell.finances`, `sell.account`, `sell.account.readonly`, `sell.marketing`
 - Also called internally by `getAccessToken()` in sync functions (auto-refresh with 5-min buffer)
 
 #### `ebay-sync-orders` (index.ts — ~270 lines)
@@ -301,6 +306,23 @@ Unified handler — accepts `{ action, ...params }`:
 | `opt_in_policies` | `POST /account/v1/program/opt_in` | — | `{ success }` | ✅ Tested |
 | `create_default_policies` | `POST /account/v1/{policy_type}` | — | `{ created }` | ✅ Tested |
 | `setup_location` | `POST /inventory_location/{key}` | locationKey | `{ success }` | ✅ Tested |
+| `setup_webhook_config` | `POST /commerce/notification/v1/config` | endpoint + token | `{ config }` | ✅ Built |
+| `delete_webhook_destination` | `DELETE /commerce/notification/v1/destination/{id}` | destinationId | `{ success }` | ✅ Built |
+| `create_webhook_destination` | `POST /commerce/notification/v1/destination` | endpoint | `{ destinationId }` | ✅ Built |
+| `create_webhook_subscription` | `POST /commerce/notification/v1/subscription` | topic + destinationId | `{ subscriptionId }` | ✅ Built |
+| `list_webhook_subscriptions` | `GET /commerce/notification/v1/subscription` | — | `{ subscriptions[] }` | ✅ Built |
+| `list_webhook_destinations` | `GET /commerce/notification/v1/destination` | — | `{ destinations[] }` | ✅ Built |
+| `get_notification_topics` | `GET /commerce/notification/v1/topic` | — | `{ topics[] }` | ✅ Built |
+| `test_webhook_subscription` | `POST /commerce/notification/v1/subscription/{id}/test` | subscriptionId | `{ success }` | ✅ Built |
+| `create_item_group` | `PUT /inventory_item_group/{key}` | group data + variant SKUs | `{ inventoryItemGroupKey }` | ✅ Tested |
+| `update_item_group` | `PUT /inventory_item_group/{key}` | revised group data | `{ inventoryItemGroupKey }` | ✅ Tested |
+| `delete_item_group` | `DELETE /inventory_item_group/{key}` | group key | `{ deleted }` | ✅ Built |
+| `get_item_group` | `GET /inventory_item_group/{key}` | group key | `{ itemGroup }` | ✅ Tested |
+| `create_group_offer` | `POST /offer` | group key + category + pricing/policies | `{ offerId }` | ✅ Tested |
+| `create_volume_discount` | `POST /item_promotion` (Marketing API) | listingId + tiers | `{ promotionId }` | ✅ Tested |
+| `get_volume_discount` | `GET /item_promotion/{id}` (Marketing API) | promotionId | `{ promotion }` | ✅ Built |
+| `update_volume_discount` | `PUT /item_promotion/{id}` (Marketing API) | promotionId + tiers | `{ promotionId }` | ✅ Built |
+| `delete_volume_discount` | `DELETE /item_promotion/{id}` (Marketing API) | promotionId | `{ deleted }` | ✅ Built |
 
 #### `ebay-migrate-listings` — ✅ DEPLOYED
 Migration + scan handler:
@@ -344,6 +366,8 @@ Shared module used by all eBay edge functions:
 | `ebay_status` | text | `'not_listed'` / `'draft'` / `'active'` / `'ended'` |
 | `ebay_category_id` | text | eBay category ID for the listing |
 | `ebay_price_cents` | integer | eBay-specific price (may differ from website price) |
+| `ebay_item_group_key` | text | eBay inventory item group key for multi-variant listings |
+| `ebay_volume_promo_id` | text | eBay Marketing promotion ID for volume pricing |
 
 ```sql
 ALTER TABLE products
@@ -369,8 +393,8 @@ ALTER TABLE products
 | Section | Features | Status |
 |---------|----------|--------|
 | **Products Table** | All products with eBay status badge (Active / Draft / Not Listed / Ended), eBay price, bulk checkboxes, action buttons per status | ✅ Built |
-| **Push to eBay** | Select product → auto-fills form → category suggestion → item specifics (auto-fetched, required validated, Brand pre-filled) → 3-step publish | ✅ Built |
-| **Edit Listing** | Click active/draft listing → fetches current data from eBay via `get_item` + `get_offers` → edit title, description, price, quantity, condition, aspects → saves via `update_item` + `update_offer` | ✅ Built |
+| **Push to eBay** | Select product → auto-fills form → category suggestion → specifics → lot-size + volume pricing + policy controls → 3-step publish | ✅ Built |
+| **Edit Listing** | Click active/draft listing → fetches item/group + offers + promo → edit title, description, price, quantity, condition, aspects, lot-size, volume pricing → saves updates | ✅ Built |
 | **Bulk Actions** | Checkbox selection on active/draft listings → bulk update price or quantity via `bulk_update_price_quantity` → updates eBay + local DB | ✅ Built |
 | **End Listing** | Withdraw offer (removes from eBay, keeps inventory item for easy re-list) | ✅ Built |
 | **Re-list** | Ended listings show "Re-list" button → opens push modal to re-create | ✅ Built |
@@ -446,7 +470,7 @@ Admin clicks "List on eBay" for KK-0013 (Cherry Bag Charm)
 
 > **Priority:** ✅ **COMPLETE** (April 19, 2026)
 > **Prerequisite:** Phase 1 complete (all infrastructure in place)
-> **Scope additions:** None — all features use existing `sell.inventory` + `sell.account` scopes
+> **Scope additions:** `sell.marketing` now included to support volume pricing promotions (added April 20, 2026)
 > **Goal:** Bring the admin Push/Edit modals to full parity with eBay's "Revise Your Listing" page
 
 ### 2b.0 Gap Summary
@@ -455,13 +479,13 @@ Admin clicks "List on eBay" for KK-0013 (Cherry Bag Charm)
 |---------|---------------|---------------|--------|
 | Multi-image (up to 24) | `product.imageUrls[]` | ✅ Full gallery support (drag reorder, up to 24) | 🔴 HIGH — multi-image = higher conversion |
 | HTML description | `product.description` | ✅ Quill rich text + raw HTML + Preview modes | 🔴 HIGH — formatted descriptions look professional |
-| Best Offer / Allow Offers | `offer.listingPolicies.bestOfferTerms` | Not exposed | 🟡 MEDIUM — enables negotiation on higher-priced items |
-| Package weight & dimensions | `inventoryItem.packageWeightAndSize` | Not sent | 🟡 MEDIUM — required for calculated shipping |
-| Policy picker (ship/return/pay) | `offer.listingPolicies.*PolicyId` | Hardcoded to defaults | 🟡 MEDIUM — needed when multiple policies exist |
-| Store category | `offer.storeCategoryNames[]` | Not exposed | 🟢 LOW — organizational, not buyer-facing |
-| International shipping | Via fulfillment policy selection | Not exposed | 🟡 MEDIUM — handled by policy picker |
+| Best Offer / Allow Offers | `offer.listingPolicies.bestOfferTerms` | ✅ Exposed in Push/Edit | 🟡 MEDIUM — enables negotiation on higher-priced items |
+| Package weight & dimensions | `inventoryItem.packageWeightAndSize` | ✅ Sent from Push/Edit | 🟡 MEDIUM — required for calculated shipping |
+| Policy picker (ship/return/pay) | `offer.listingPolicies.*PolicyId` | ✅ Dynamic dropdowns | 🟡 MEDIUM — needed when multiple policies exist |
+| Store category | `offer.storeCategoryNames[]` | ✅ Exposed in Push/Edit | 🟢 LOW — organizational, not buyer-facing |
+| International shipping | Via fulfillment policy selection | ✅ Covered through selected fulfillment policy | 🟡 MEDIUM — handled by policy picker |
 | Item location override | `offer.merchantLocationKey` | Hardcoded to "default" | 🟢 LOW — single location currently |
-| Volume pricing | Not in Inventory API | No support | 🟢 LOW — requires Marketing API (`sell.marketing`) |
+| Volume pricing | Marketing API item promotion | ✅ Tiered discounts in Push/Edit | 🟢 LOW — conversion lift feature |
 
 ### 2b.1 Multi-Image Management
 
@@ -810,16 +834,18 @@ PUT /sell/inventory/v1/inventory_item/{sku}
 
 ### 2b.8 Volume Pricing
 
-**Current problem:** No volume pricing support. eBay's "Add volume pricing" feature lets sellers offer tiered discounts (e.g., buy 2 get 5% off).
+**Current state:** Volume pricing is now supported in the Push/Edit modals using eBay Marketing API item promotions.
 
-**Limitation:** The Inventory API **does not support volume pricing tiers directly**. eBay's volume pricing on the listing page uses the Trading API's `DiscountPriceInfo` field or the Marketing API's item promotion endpoints.
+**Constraint:** Inventory API still does not support tiers directly. Implementation uses Marketing API (`/sell/marketing/v1/item_promotion`) while the listing itself remains managed by Inventory API.
 
-**Options:**
-1. **Marketing API approach** — Use `POST /sell/marketing/v1/item_promotion` to create a volume/order discount. Requires `sell.marketing` scope (planned for Phase 4).
-2. **Trading API approach** — Use `ReviseItem` with `DiscountPriceInfo` to add volume pricing to an existing listing. This would require the Trading API XML calls, which we don't currently use.
-3. **Skip for now** — Volume pricing is a conversion optimization, not a listing requirement. Defer to Phase 4 when `sell.marketing` scope is added for Promoted Listings anyway.
+**Implemented flow:**
+1. Admin enables **Volume Pricing** in Push or Edit modal.
+2. Admin defines tiers (example: buy 2+, get 5% off).
+3. On publish (Push flow), UI calls `create_volume_discount` after listing ID is returned.
+4. On Edit flow, UI reads existing promo via `get_volume_discount`, then creates/updates/deletes promo as needed.
+5. Promotion ID is persisted on product row (`ebay_volume_promo_id`).
 
-**Decision:** Defer to Phase 4. When we add `sell.marketing` scope for Promoted Listings, we'll also add volume pricing via item promotions. No action needed in Phase 1b.
+**Scope dependency:** `sell.marketing` is now included in OAuth + refresh-token scopes; re-consent is required for any token minted before this scope was added.
 
 ### 2b.9 Implementation Order
 
@@ -870,6 +896,7 @@ Build in three passes. Each pass ends with a verification checkpoint.
 |------|---------|---------|--------|--------|
 | 5 | Best Offer | UI + edge function (`create_offer`, `update_offer`) | Medium | ✅ Done |
 | 6 | Store category | UI + edge function (`create_offer`, `update_offer`) | Small | ✅ Done |
+| 7 | Volume pricing tiers | UI + edge function (`create_volume_discount`, `update_volume_discount`, `delete_volume_discount`) | Medium | ✅ Done (April 20, 2026) |
 
 **Pass 3 Features Delivered:**
 - "Allow Offers" checkbox with auto-accept/auto-decline price fields in Push and Edit modals
@@ -879,13 +906,16 @@ Build in three passes. Each pass ends with a verification checkpoint.
 - Store Category dropdown (Headwear, Jewelry, Bags, Accessories, Plushies, Lego) in both modals
 - Edge function passes `storeCategoryNames[]` to eBay on create_offer and update_offer
 - Edit modal pre-fills Store Category from existing offer
+- Volume Pricing checkbox + tier builder in Push/Edit modals
+- Push flow creates promotion post-publish using listingId
+- Edit flow pre-fills existing tiers and supports update/delete of active promotion
+- Product row tracks promo linkage via `ebay_volume_promo_id`
 
 **Skipped / Deferred**
 
 | Step | Feature | Reason |
 |------|---------|--------|
 | — | Item location | Single location, no action needed |
-| — | Volume pricing | Deferred to Phase 4 (`sell.marketing` scope) |
 
 ### 2b.10 Edge Function Changes Required
 
@@ -896,6 +926,10 @@ Build in three passes. Each pass ends with a verification checkpoint.
 | `create_item` / `update_item` | Accept `packageWeightAndSize` | `{ dimensions, weight, packageType }` |
 | `create_offer` | Accept `bestOfferTerms`, `storeCategoryNames` | `{ bestOfferEnabled, autoAcceptPrice, autoDeclinePrice }`, `["category"]` |
 | `update_offer` | Accept `bestOfferTerms`, `storeCategoryNames` | Same as create_offer |
+| `create_volume_discount` | Create Marketing API promotion for listing | `{ listingId, tiers[] }` |
+| `get_volume_discount` | Fetch existing promotion details | `{ promotionId }` |
+| `update_volume_discount` | Update promotion tiers | `{ promotionId, tiers[] }` |
+| `delete_volume_discount` | Remove listing promotion | `{ promotionId }` |
 
 **No new edge functions needed.** All features use existing `ebay-manage-listing` actions — just need to pass additional fields through.
 
@@ -909,6 +943,7 @@ Phase 1b is **done** when:
 - [x] Package weight + dimensions can be set per listing and are sent to eBay
 - [x] Admin can pick shipping/return/payment policies from dropdowns (not hardcoded)
 - [x] Store category can be assigned to listings
+- [x] Volume pricing tiers can be created/updated/removed from Push/Edit modals
 - [x] At least one listing has been revised with multiple images + HTML description and verified on eBay *(Cherry Necklace KK-0039, listing `377126818883` — 3 images, branded HTML description, verified live April 19, 2026)*
 
 ---
@@ -1129,7 +1164,7 @@ Deploy with `--no-verify-jwt` (eBay needs unauthenticated access).
 
 ### 3.5 Integration with Existing System
 
-- **`ebay-sync-orders` CRON stays as fallback** — reduce frequency from every 2h to every 6h or 12h. Catches any missed webhook notifications.
+- **`ebay-sync-orders` CRON stays as fallback** — currently every 8h. Catches any missed webhook notifications.
 - **Same database writes** — webhook handler reuses the same insert/upsert logic (orders_raw, line_items_raw, fulfillment_shipments).
 - **Same fuzzy matching** — webhook handler calls `matchProduct()` for product association.
 - **Dedup unchanged** — webhook might fire before/after CRON. Existing dedup on `stripe_checkout_session_id` prevents duplicates.
@@ -1263,7 +1298,7 @@ Job: ebay-sync-inventory-reconcile
 
 > **Priority:** 🔵 LATER — revenue growth, gated on eBay volume
 > **Prerequisite:** Phase 1 (listings must be API-managed), Phase 3 (inventory must be accurate)
-> **Scope addition needed:** `sell.marketing`
+> **Scope note:** `sell.marketing` is already added; this phase is still gated on eBay sales volume and conversion maturity.
 
 > ⚠️ **Gate:** Only proceed with this phase if eBay is already producing meaningful sales volume and listings are converting well. Promoted Listings amplifies what you already have — if listing quality, category mapping, or pricing aren't dialed in, you're paying to amplify problems. Review eBay conversion rates and revenue trends before investing here.
 
@@ -1487,6 +1522,8 @@ sell.inventory
 sell.finances
 sell.account              ← added Phase 1
 sell.account.readonly     ← added Phase 1
+commerce.notification.subscription
+sell.marketing            ← added April 20, 2026
 ```
 
 Scopes to add at specific phases:
@@ -1495,7 +1532,7 @@ Scopes to add at specific phases:
 |-------|-------|-------------|--------|
 | Phase 1 | `sell.account` | Business policy management | ✅ Added |
 | Phase 1 | `sell.account.readonly` | Policy reads | ✅ Added |
-| Phase 4 | `sell.marketing` | Promoted Listings campaigns | ⏳ Planned |
+| Phase 4 foundation | `sell.marketing` | Volume pricing + future campaign automation | ✅ Added |
 | Phase 5a | `sell.analytics` | Traffic reports + seller standards | ⏳ Planned |
 
 **How to add scopes:**
@@ -1531,6 +1568,13 @@ ALTER TABLE products
   ADD COLUMN ebay_status text DEFAULT 'not_listed',
   ADD COLUMN ebay_category_id text,
   ADD COLUMN ebay_price_cents integer;
+```
+
+### Phase 1+ — Additional products columns now in use
+```sql
+ALTER TABLE products
+  ADD COLUMN ebay_item_group_key text,
+  ADD COLUMN ebay_volume_promo_id text;
 ```
 
 ### Phase 1 — Category cache table
@@ -1649,7 +1693,7 @@ Phase 0 (DONE)
 
 Phase 1 (DONE — April 19, 2026)
   ├── ✅ _shared/ebayUtils.ts — consolidated matching + token helpers
-  ├── ✅ ebay-manage-listing — 14 actions (create/edit/publish/withdraw/delete/policies/location)
+  ├── ✅ ebay-manage-listing — inventory + offers + webhook admin + variant groups + volume pricing actions
   ├── ✅ ebay-taxonomy — category suggestions + item aspects with 30-day cache
   ├── ✅ ebay-migrate-listings — scan/link/auto_link
   ├── ✅ ebay-sync-orders refactored to use shared module
@@ -1667,7 +1711,7 @@ Phase 1b (DONE — April 19, 2026)
   ├── ✅ Package weight & dimensions (packageWeightAndSize on item, auto-fills from weight_g)
   ├── ✅ Policy picker (ship/return/payment dropdowns)
   ├── ✅ Store category assignment
-  ├── Volume pricing → deferred to Phase 4 (needs sell.marketing)
+  ├── ✅ Volume pricing tiers via Marketing API promotions
   └── Item location override → skipped (single location)
 
 ── ✅ COMPLETE (code deployed, awaiting live order test) ──
@@ -1710,7 +1754,7 @@ Lightweight eBay Performance Reporting (can pull from Phase 5)
 Phase 4: Promoted Listings
   ├── GATE: eBay producing meaningful sales volume
   ├── GATE: Listings converting well, pricing dialed in
-  ├── Requires: sell.marketing scope (re-auth needed)
+  ├── Requires: sell.marketing scope (already added; re-auth needed for older tokens)
   ├── ebay-manage-ads (campaigns, bids, reports)
   ├── Revenue-based budget model
   └── Admin campaign dashboard
@@ -1793,16 +1837,16 @@ The edge function returns structured JSON with confidence and source metadata:
 - `generated` — AI-created content (title, description)
 
 ### 6.4 Architecture
-- **Edge Function**: `ebay-ai-autofill` — accepts product data + image URLs, calls OpenAI GPT-4o (vision), returns structured output
-- **Frontend**: "✨ AI Auto-Fill" button in Push Modal → calls edge function → populates form fields with source badges
+- **Edge Function**: `ebay-ai-autofill` — accepts product data + image URLs, calls OpenAI GPT-5-mini (vision), returns structured output
+- **Frontend**: "✨ AI Auto-Fill" button in Push + Edit modals → calls edge function → populates form fields with source badges
 - **No persistence in Pass 1** — AI output fills the form; whatever admin submits is the final value
 
 ### 6.5 Implementation — Pass 1 (MVP)
 
 | Step | Feature | Status |
 |------|---------|--------|
-| 1 | `ebay-ai-autofill` edge function (GPT-4o vision) | ✅ Done |
-| 2 | "✨ AI Auto-Fill" button in Push Modal | ✅ Done |
+| 1 | `ebay-ai-autofill` edge function (GPT-5-mini vision) | ✅ Done |
+| 2 | "✨ AI Auto-Fill" button in Push + Edit modals | ✅ Done |
 | 3 | Wire button → edge function → populate title, description, specifics | ✅ Done |
 | 4 | Source badges on AI-filled fields | ✅ Done |
 | 5 | Taxonomy remains authoritative for category (AI does not touch) | ✅ Done |
