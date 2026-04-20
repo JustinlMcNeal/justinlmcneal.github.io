@@ -81,12 +81,9 @@ Deno.serve(async (req) => {
 
     if (!items.length) return json({ error: "Cart is empty" }, 400);
 
-    // Calculate cart subtotal (after discounts)
-    const cartSubtotal = items.reduce((sum: number, it: any) => {
-      const price = Number(it?.discounted_price ?? it?.price ?? 0);
-      const qty = Math.max(1, Number(it?.qty || 1));
-      return sum + (price * qty);
-    }, 0);
+    const clientIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
+      || req.headers.get("cf-connecting-ip")
+      || null;
 
     // Fetch free shipping threshold from site_settings
     let freeShippingThreshold = 50; // default
@@ -110,12 +107,8 @@ Deno.serve(async (req) => {
     // ✅ Check for free_shipping type coupon (handles both free-shipping and free_shipping)
     const promo = body?.promo ?? {};
     const couponType = String(promo?.coupon_type || "").toLowerCase();
-    const hasFreeShippingCoupon = couponType === "free_shipping" || couponType === "free-shipping";
-
-    // Qualifies if: (a) cart meets threshold OR (b) has free_shipping coupon applied
-    const qualifiesForFreeShipping = 
-      (freeShippingEnabled && cartSubtotal >= freeShippingThreshold) || 
-      hasFreeShippingCoupon;
+    let hasFreeShippingCoupon = couponType === "free_shipping" || couponType === "free-shipping";
+    let qualifiesForFreeShipping = false;
 
     // order id
     const kk_order_id =
@@ -143,10 +136,10 @@ Deno.serve(async (req) => {
     const orderShippingType = metaStr(body?.shipping_type || "", 60) || "";
 
     // promo truth (since Stripe doesn't discount for you) - promo already declared above
-    const promoCode = metaStr(promo?.code || "", 80);
-    const savingsCents = Math.max(0, safeInt(promo?.savings_cents, 0));
-    const savingsCodeCents = Math.max(0, safeInt(promo?.savings_code_cents, 0));
-    const savingsAutoCents = Math.max(0, safeInt(promo?.savings_auto_cents, 0));
+    const promoCode = metaStr(promo?.code || "", 80).toUpperCase();
+    let savingsCents = Math.max(0, safeInt(promo?.savings_cents, 0));
+    let savingsCodeCents = Math.max(0, safeInt(promo?.savings_code_cents, 0));
+    let savingsAutoCents = Math.max(0, safeInt(promo?.savings_auto_cents, 0));
 
     const appliedIds = Array.isArray(promo?.applied_ids)
       ? promo.applied_ids.map((x: any) => metaStr(x, 80)).filter(Boolean)
@@ -157,12 +150,35 @@ Deno.serve(async (req) => {
 
     // ── Review coupon validation (THANKS-XXXXXX) ──────────────
     let reviewCouponId: string | null = null;
+    let reviewCouponMin = 0;
     const isReviewCoupon = promoCode.startsWith("THANKS-");
+
+    async function logCouponAttempt(reason: string, detail: string, extra: Record<string, unknown> = {}) {
+      try {
+        await supabaseAdmin.from("coupon_attempt_logs").insert({
+          coupon_code: promoCode || null,
+          reason,
+          detail,
+          subtotal_cents: Number(extra.subtotal_cents || 0),
+          min_required_cents: Number(extra.min_required_cents || 0),
+          kk_order_id,
+          ip_address: clientIp,
+          user_agent: req.headers.get("user-agent") || null,
+          context: {
+            source: orderSource,
+            shipping_type: orderShippingType,
+            ...extra,
+          },
+        });
+      } catch (logErr) {
+        console.warn("[create-checkout-session] coupon attempt logging failed:", logErr);
+      }
+    }
 
     if (isReviewCoupon && promoCode) {
       const { data: rcData, error: rcErr } = await supabaseAdmin
         .from("review_coupons")
-        .select("id, used_at, expires_at, single_use")
+        .select("id, used_at, expires_at, single_use, min_order")
         .eq("code", promoCode)
         .maybeSingle();
 
@@ -176,18 +192,20 @@ Deno.serve(async (req) => {
         return json({ error: "This review coupon has expired." }, 400);
       } else {
         reviewCouponId = rcData.id;
+        reviewCouponMin = Number(rcData.min_order || 0);
       }
     }
 
     // ✅ weight lookup from products table by SKU code
     const skus = uniqStrings(items.map((it: any) => it?.product_id || it?.id || ""));
     const weightMap = new Map<string, number>();
+    const priceMap = new Map<string, number>();
     const productUuidMap = new Map<string, string>();
 
     if (skus.length) {
       const { data, error } = await supabaseAdmin
         .from("products")
-        .select("id, code, weight_g")
+        .select("id, code, price, weight_g")
         .in("code", skus);
 
       if (error) {
@@ -195,15 +213,129 @@ Deno.serve(async (req) => {
       } else {
         for (const row of data || []) {
           const code = String((row as any).code ?? "").trim();
+          const price = Number((row as any).price ?? 0);
           const w = Number((row as any).weight_g ?? 0);
           const uuid = String((row as any).id ?? "");
           if (code) {
+            if (Number.isFinite(price) && price >= 0) {
+              priceMap.set(code, toCents(price));
+            }
             weightMap.set(code, Number.isFinite(w) ? Math.max(0, Math.round(w)) : 0);
             if (uuid) productUuidMap.set(code, uuid);
           }
         }
       }
     }
+
+    // Authoritative subtotal calculations
+    const cartSubtotalOriginalCents = items.reduce((sum: number, it: any) => {
+      const sku = String(it?.product_id || it?.id || "").trim();
+      const qty = Math.max(1, Number(it?.qty || 1));
+      const fallbackPriceCents = toCents(Number(it?.price ?? 0));
+      const unitCents = priceMap.get(sku) ?? Math.max(0, fallbackPriceCents);
+      return sum + (unitCents * qty);
+    }, 0);
+
+    const cartSubtotalPaidCents = items.reduce((sum: number, it: any) => {
+      const qty = Math.max(1, Number(it?.qty || 1));
+      const paidUnit = toCents(Number(it?.discounted_price ?? it?.price ?? 0));
+      return sum + (Math.max(0, paidUnit) * qty);
+    }, 0);
+
+    const cartSubtotal = cartSubtotalPaidCents / 100;
+
+    // Server-side promotion validation + anti-tamper for regular coupons
+    if (promoCode && !isReviewCoupon) {
+      const { data: promoRow, error: promoErr } = await supabaseAdmin
+        .from("promotions")
+        .select("id, code, type, value, min_order_amount, usage_count, usage_limit, start_date, end_date, is_active, requires_code")
+        .eq("code", promoCode)
+        .maybeSingle();
+
+      if (promoErr || !promoRow) {
+        await logCouponAttempt("invalid_coupon", "Coupon not found", { subtotal_cents: cartSubtotalOriginalCents });
+        return json({ error: "Coupon not found." }, 400);
+      }
+
+      if (!promoRow.is_active) {
+        await logCouponAttempt("inactive_coupon", "Coupon inactive", { subtotal_cents: cartSubtotalOriginalCents });
+        return json({ error: "Coupon is not active." }, 400);
+      }
+
+      if (promoRow.requires_code === false) {
+        await logCouponAttempt("not_code_coupon", "Promotion does not accept coupon code", { subtotal_cents: cartSubtotalOriginalCents });
+        return json({ error: "This promotion does not accept a code." }, 400);
+      }
+
+      const now = new Date();
+      const starts = promoRow.start_date ? new Date(promoRow.start_date) : null;
+      const ends = promoRow.end_date ? new Date(promoRow.end_date) : null;
+      if ((starts && starts > now) || (ends && ends < now)) {
+        await logCouponAttempt("outside_window", "Coupon outside date window", { subtotal_cents: cartSubtotalOriginalCents });
+        return json({ error: "Coupon is not active." }, 400);
+      }
+
+      const usageLimit = Number(promoRow.usage_limit || 0);
+      const usageCount = Number(promoRow.usage_count || 0);
+      if (usageLimit > 0 && usageCount >= usageLimit) {
+        await logCouponAttempt("usage_exceeded", "Coupon usage limit reached", { subtotal_cents: cartSubtotalOriginalCents });
+        return json({ error: "This coupon has already been used." }, 400);
+      }
+
+      const minOrderCents = toCents(Number(promoRow.min_order_amount || 0));
+      if (minOrderCents > 0 && cartSubtotalOriginalCents < minOrderCents) {
+        await logCouponAttempt("min_order_failed", "Coupon minimum order requirement not met", {
+          subtotal_cents: cartSubtotalOriginalCents,
+          min_required_cents: minOrderCents,
+        });
+        return json({ error: `This code requires a $${(minOrderCents / 100).toFixed(2)} minimum order.` }, 400);
+      }
+
+      const promoType = String(promoRow.type || "").toLowerCase();
+      const promoValue = Number(promoRow.value || 0);
+      let authoritativeCodeSavingsCents = 0;
+
+      if (promoType === "percentage") {
+        authoritativeCodeSavingsCents = Math.round(cartSubtotalOriginalCents * (promoValue / 100));
+      } else if (promoType === "fixed") {
+        authoritativeCodeSavingsCents = Math.min(toCents(promoValue), cartSubtotalOriginalCents);
+      } else if (promoType === "free_shipping" || promoType === "free-shipping") {
+        authoritativeCodeSavingsCents = 0;
+        hasFreeShippingCoupon = true;
+      }
+
+      const expectedPaidCents = Math.max(0, cartSubtotalOriginalCents - authoritativeCodeSavingsCents);
+      if (Math.abs(cartSubtotalPaidCents - expectedPaidCents) > 1) {
+        await logCouponAttempt("pricing_mismatch", "Client totals mismatch server-calculated totals", {
+          subtotal_cents: cartSubtotalOriginalCents,
+          expected_paid_cents: expectedPaidCents,
+          client_paid_cents: cartSubtotalPaidCents,
+          authoritative_discount_cents: authoritativeCodeSavingsCents,
+        });
+        return json({ error: "Pricing mismatch detected. Please refresh your cart and try again." }, 400);
+      }
+
+      savingsCodeCents = authoritativeCodeSavingsCents;
+      savingsAutoCents = 0;
+      savingsCents = savingsCodeCents;
+    }
+
+    // Review coupon minimum order enforcement (server-side)
+    if (isReviewCoupon && reviewCouponMin > 0) {
+      const minOrderCents = toCents(reviewCouponMin);
+      if (cartSubtotalOriginalCents < minOrderCents) {
+        await logCouponAttempt("review_min_order_failed", "Review coupon minimum order requirement not met", {
+          subtotal_cents: cartSubtotalOriginalCents,
+          min_required_cents: minOrderCents,
+        });
+        return json({ error: `This code requires a $${(minOrderCents / 100).toFixed(2)} minimum order.` }, 400);
+      }
+    }
+
+    // Qualifies if: (a) cart meets threshold OR (b) has free_shipping coupon applied
+    qualifiesForFreeShipping =
+      (freeShippingEnabled && cartSubtotal >= freeShippingThreshold) ||
+      hasFreeShippingCoupon;
 
     // ✅ Stock check — determine which items are back-ordered (informational, not blocking)
     const backOrderSkus = new Set<string>();
@@ -255,7 +387,7 @@ Deno.serve(async (req) => {
 
       const qty = Math.max(1, Number(it?.qty || 1));
 
-      const originalUnit = Number(it?.price ?? 0);
+      const originalUnit = (priceMap.get(productId) ?? toCents(Number(it?.price ?? 0))) / 100;
       const finalUnit = Number(it?.discounted_price ?? it?.price ?? 0);
 
       if (!Number.isFinite(finalUnit) || finalUnit <= 0) {
@@ -358,7 +490,7 @@ Deno.serve(async (req) => {
         shipping_type: orderShippingType,
         
         kk_free_shipping_applied: qualifiesForFreeShipping ? "true" : "false",
-        kk_cart_subtotal_cents: String(toCents(cartSubtotal)),
+        kk_cart_subtotal_cents: String(cartSubtotalPaidCents),
       },
 
       customer_creation: "always",

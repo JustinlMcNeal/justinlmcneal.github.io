@@ -489,6 +489,12 @@ if (req.method === "GET") {
       order_date,
     };
 
+    const { data: existingOrderBefore } = await supabaseAdmin
+      .from("orders_raw")
+      .select("coupon_code_used")
+      .eq("stripe_checkout_session_id", sessionId)
+      .maybeSingle();
+
     const { error: oErr } = await supabaseAdmin
       .from("orders_raw")
       .upsert(orderRow, { onConflict: "stripe_checkout_session_id" });
@@ -496,6 +502,36 @@ if (req.method === "GET") {
     if (oErr) {
       console.error("[stripe-webhook] orders_raw upsert failed", oErr);
       return json({ error: "Failed to upsert order", detail: oErr }, 500);
+    }
+
+    // Promotion redemption accounting (idempotent across webhook retries)
+    const shouldIncrementPromotionUsage = !!coupon_code_used
+      && !coupon_code_used.startsWith("THANKS-")
+      && (!existingOrderBefore || !existingOrderBefore.coupon_code_used);
+
+    if (shouldIncrementPromotionUsage) {
+      try {
+        const { data: promo } = await supabaseAdmin
+          .from("promotions")
+          .select("id, usage_count, usage_limit")
+          .eq("code", coupon_code_used)
+          .maybeSingle();
+
+        if (promo?.id) {
+          const usageCount = Number(promo.usage_count || 0);
+          const usageLimit = Number(promo.usage_limit || 0);
+          const canIncrement = usageLimit <= 0 || usageCount < usageLimit;
+
+          if (canIncrement) {
+            await supabaseAdmin
+              .from("promotions")
+              .update({ usage_count: usageCount + 1, updated_at: new Date().toISOString() })
+              .eq("id", promo.id);
+          }
+        }
+      } catch (promoUsageErr) {
+        console.error("[stripe-webhook] promotion usage increment failed (non-fatal):", promoUsageErr);
+      }
     }
 
     // ── SMS Attribution ──────────────────────────────────────

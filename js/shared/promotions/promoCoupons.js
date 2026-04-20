@@ -42,6 +42,24 @@ export async function validateCouponCode(code = "", cartItems = []) {
       return { valid: false, promo: null, message: "Coupon is not active." };
     }
 
+    // Minimum order validation (regular promotions)
+    const minOrderAmount = Number(data.min_order_amount || 0);
+    if (minOrderAmount > 0) {
+      const subtotal = cartItems.reduce((sum, it) => {
+        const unit = Number(it?.discounted_price ?? it?.price ?? 0);
+        const qty = Math.max(1, Number(it?.qty || 1));
+        return sum + unit * qty;
+      }, 0);
+
+      if (subtotal < minOrderAmount) {
+        return {
+          valid: false,
+          promo: null,
+          message: `This code requires a $${minOrderAmount.toFixed(2)} minimum order.`,
+        };
+      }
+    }
+
     // Optional scope validation against cart
     const applicable = getApplicablePromotions([data], cartItems);
     if ((data.scope_type || "all") !== "all" && applicable.length === 0) {
