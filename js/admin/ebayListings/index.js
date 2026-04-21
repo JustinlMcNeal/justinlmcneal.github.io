@@ -337,18 +337,20 @@ function enableBtn(id, enabled) {
 function renderVariantPanel(variants, baseCode) {
   const list = document.getElementById("variantList");
   list.innerHTML = variants.map((v, i) => {
-    const suffix = v.option_value.toUpperCase().replace(/[^A-Z0-9]/g, "").substring(0, 6);
-    const sku    = `${baseCode}-${suffix}`;
+    const suffix  = v.option_value.toUpperCase().replace(/[^A-Z0-9]/g, "").substring(0, 6);
+    const sku     = `${baseCode}-${suffix}`;
+    const qty     = v.stock ?? 0;
+    const oosNote = qty === 0 ? `<span class="text-[9px] text-orange-500 font-semibold ml-1">OOS</span>` : "";
     return `<div class="flex items-center gap-2 p-2 rounded-lg border border-gray-200 bg-gray-50">
       <input type="checkbox" class="variant-check accent-pink-500" data-idx="${i}" checked />
       ${v.preview_image_url
         ? `<img src="${v.preview_image_url}" class="w-8 h-8 rounded object-cover border" />`
         : `<div class="w-8 h-8 rounded bg-gray-200 flex items-center justify-center text-[10px]">?</div>`}
       <div class="flex-1 min-w-0">
-        <div class="text-xs font-bold truncate">${esc(v.option_value)}</div>
+        <div class="text-xs font-bold truncate">${esc(v.option_value)}${oosNote}</div>
         <div class="text-[10px] text-gray-400 font-mono">${esc(sku)}</div>
       </div>
-      <input type="number" class="variant-qty w-14 border border-gray-300 rounded px-1 py-0.5 text-xs text-center" value="${v.stock || 1}" min="0" data-idx="${i}" />
+      <input type="number" class="variant-qty w-14 border border-gray-300 rounded px-1 py-0.5 text-xs text-center" value="${qty}" min="0" data-idx="${i}" />
       <span class="text-[10px] text-gray-400">qty</span>
     </div>`;
   }).join("");
@@ -1171,11 +1173,18 @@ document.getElementById("btnCreateItem").addEventListener("click", async () => {
       let created       = 0;
       const errors      = [];
       const createdSkus = [];
-      const validVariants = checked.filter(v => v.quantity > 0);
-      const skippedOos    = checked.filter(v => v.quantity <= 0);
+      // Include all checked variants — even qty=0 (out of stock).
+      // They'll be created on eBay with qty 0 and can be restocked via Edit later.
+      const validVariants = checked;
+      const hasAnyStock   = checked.some(v => v.quantity > 0);
 
       if (!validVariants.length) {
-        status.textContent = "❌ All selected variants have quantity 0 — set at least 1 to a quantity > 0";
+        status.textContent = "❌ Select at least one variant";
+        btn.disabled = false; btn.textContent = "1. Create Items";
+        return;
+      }
+      if (!hasAnyStock) {
+        status.textContent = "❌ At least one variant must have quantity > 0 to publish";
         btn.disabled = false; btn.textContent = "1. Create Items";
         return;
       }
@@ -1202,15 +1211,14 @@ document.getElementById("btnCreateItem").addEventListener("click", async () => {
       }
 
       currentProduct._createdVariantSKUs = createdSkus;
-      const skippedMsg = skippedOos.length ? ` (${skippedOos.length} out-of-stock skipped)` : "";
 
       if (created === validVariants.length && !errors.length) {
-        status.textContent   = `✅ ${created} variant items created${skippedMsg} — now create group + offer`;
+        status.textContent   = `✅ ${created} variant items created — now create group + offer`;
         progressEl.textContent = `All ${created} items created ✓`;
         enableBtn("btnCreateItem",  false);
         enableBtn("btnCreateOffer", true);
       } else if (created > 0) {
-        status.textContent = `⚠️ ${created}/${validVariants.length} created${skippedMsg}. Errors: ${errors.join("; ")}. You can still proceed.`;
+        status.textContent = `⚠️ ${created}/${validVariants.length} created. Errors: ${errors.join("; ")}. You can still proceed.`;
         enableBtn("btnCreateItem",  false);
         enableBtn("btnCreateOffer", true);
       } else {
@@ -1263,9 +1271,9 @@ document.getElementById("btnCreateOffer").addEventListener("click", async () => 
 
   try {
     const checked       = getCheckedVariants();
-    // Always use all active checked variants for group logic — _createdVariantSKUs may be
-    // incomplete on retry (items created in a previous run are not re-created).
-    const allActiveSkus = checked.filter(v => v.quantity > 0).map(v => v.sku);
+    // Always use all active checked SKUs — some may already exist on eBay from a prior run,
+    // and create_group_offer handles 25002 (already exists) gracefully.
+    const allActiveSkus = checked.map(v => v.sku);
     const effectiveSkus = allActiveSkus;
 
     if (isVariantListing && allActiveSkus.length < 2) {
