@@ -1392,9 +1392,13 @@ document.getElementById("btnPublish").addEventListener("click", async () => {
   }
 
   try {
-    const result = isVariantListing
-      ? await callEdge("ebay-manage-listing", { action: "publish_group", inventoryItemGroupKey: groupKey, sku: currentProduct.code })
-      : await callEdge("ebay-manage-listing", { action: "publish", offerId, sku });
+    const categoryId = document.getElementById("modalCatSelect")?.value || "";
+  const price       = parseFloat(document.getElementById("modalPrice").value) || 0;
+  const priceCents  = Math.round(price * 100);
+
+  const result = isVariantListing
+      ? await callEdge("ebay-manage-listing", { action: "publish_group", inventoryItemGroupKey: groupKey, sku: currentProduct.code, categoryId, priceCents })
+      : await callEdge("ebay-manage-listing", { action: "publish", offerId, sku, categoryId, priceCents });
 
     if (result.success) {
       status.textContent = `✅ Published! Listing ID: ${result.listingId}`;

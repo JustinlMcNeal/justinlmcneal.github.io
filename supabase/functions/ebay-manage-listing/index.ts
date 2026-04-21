@@ -285,7 +285,7 @@ serve(async (req) => {
 
     // ── PUBLISH OFFER ───────────────────────────────────────
     if (action === "publish") {
-      const { offerId, sku } = body;
+      const { offerId, sku, categoryId: pubCategoryId, priceCents: pubPriceCents } = body;
       if (!offerId) throw new Error("offerId is required");
 
       let result = await ebayFetch(
@@ -319,14 +319,14 @@ serve(async (req) => {
 
       // Update products table
       if (sku) {
-        await supabase
-          .from("products")
-          .update({
-            ebay_listing_id: listingId,
-            ebay_status: "active",
-            updated_at: new Date().toISOString(),
-          })
-          .eq("code", sku);
+        const pubUpdates: Record<string, unknown> = {
+          ebay_listing_id: listingId,
+          ebay_status: "active",
+          updated_at: new Date().toISOString(),
+        };
+        if (pubCategoryId) pubUpdates.ebay_category_id = pubCategoryId;
+        if (pubPriceCents) pubUpdates.ebay_price_cents = pubPriceCents;
+        await supabase.from("products").update(pubUpdates).eq("code", sku);
       }
 
       return new Response(
@@ -337,7 +337,7 @@ serve(async (req) => {
 
     // ── PUBLISH OFFER BY INVENTORY ITEM GROUP ───────────────
     if (action === "publish_group") {
-      const { inventoryItemGroupKey, sku } = body;
+      const { inventoryItemGroupKey, sku, categoryId: grpCategoryId, priceCents: grpPriceCents } = body;
       if (!inventoryItemGroupKey) throw new Error("inventoryItemGroupKey is required");
 
       let result = await ebayFetch(
@@ -369,14 +369,14 @@ serve(async (req) => {
       const listingId = (result.data as Record<string, unknown>)?.listingId as string | undefined;
 
       if (sku) {
-        await supabase
-          .from("products")
-          .update({
-            ebay_listing_id: listingId || null,
-            ebay_status: "active",
-            updated_at: new Date().toISOString(),
-          })
-          .eq("code", sku);
+        const grpUpdates: Record<string, unknown> = {
+          ebay_listing_id: listingId || null,
+          ebay_status: "active",
+          updated_at: new Date().toISOString(),
+        };
+        if (grpCategoryId) grpUpdates.ebay_category_id = grpCategoryId;
+        if (grpPriceCents) grpUpdates.ebay_price_cents = grpPriceCents;
+        await supabase.from("products").update(grpUpdates).eq("code", sku);
       }
 
       return new Response(
