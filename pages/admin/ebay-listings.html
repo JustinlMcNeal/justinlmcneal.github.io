@@ -1135,7 +1135,7 @@
     }
 
     // ── Push Modal ───────────────────────────────────────
-    window.openPush = function(code) {
+    window.openPush = async function(code) {
       currentProduct = allProducts.find(p => p.code === code);
       if (!currentProduct) return;
 
@@ -1216,6 +1216,70 @@
       enableBtn("btnPublish", false);
 
       document.getElementById("pushModal").classList.remove("hidden");
+
+      // ── Resume draft: pre-load existing eBay item data ──
+      // If the product already has an eBay item (create_item ran) but no offer yet,
+      // fetch the item and overwrite the default-seeded fields so the admin doesn't
+      // have to re-enter title/description/images/etc.
+      const isResumableDraft = currentProduct.ebay_status === "draft"
+        && currentProduct.ebay_sku
+        && !currentProduct.ebay_offer_id;
+
+      if (isResumableDraft) {
+        showStatus("Loading your previous draft from eBay…");
+        try {
+          const itemResult = await callEdge("ebay-manage-listing", { action: "get_item", sku: currentProduct.ebay_sku });
+          if (itemResult.success && itemResult.item) {
+            const ebayItem = itemResult.item;
+            const prod = ebayItem.product || {};
+
+            // Title
+            if (prod.title) document.getElementById("modalTitle").value = prod.title;
+
+            // Description — detect complex HTML, load into the right mode
+            if (prod.description) {
+              if (isComplexHtml(prod.description)) {
+                document.getElementById("modalDescriptionHtml").value = prod.description;
+                toggleDescMode("html", "modal", pushQuill);
+                document.getElementById("btnPushHtml").classList.add("active");
+                document.getElementById("btnPushVisual").classList.remove("active");
+              } else {
+                pushQuill.root.innerHTML = prod.description;
+              }
+            }
+
+            // Condition and quantity
+            if (ebayItem.condition) document.getElementById("modalCondition").value = ebayItem.condition;
+            const qty = ebayItem.availability?.shipToLocationAvailability?.quantity;
+            if (qty !== undefined) document.getElementById("modalQuantity").value = qty;
+
+            // Weight / dimensions
+            const pkg = ebayItem.packageWeightAndSize || {};
+            if (pkg.weight?.value) document.getElementById("modalWeightOz").value = pkg.weight.value;
+
+            // Images — use eBay's image list if available
+            if (prod.imageUrls?.length) {
+              pushImageUrls = [...prod.imageUrls];
+              renderImageStrip("modalImageStrip", pushImageUrls, pushImageUrls);
+            }
+
+            // Mark step 1 as already done, jump to step 2
+            const btn1 = document.getElementById("btnCreateItem");
+            btn1.textContent = "✓ Item Created";
+            btn1.disabled = true;
+            btn1.classList.add("border-gray-300", "bg-gray-100", "text-gray-400");
+            btn1.classList.remove("border-black", "bg-black", "text-white", "hover:bg-kkpink", "hover:border-kkpink", "hover:text-black");
+            enableBtn("btnCreateOffer", true);
+
+            showStatus("📋 Draft resumed — your previous data has been loaded. Continue from Step 2.");
+          } else {
+            showStatus("Could not load previous draft — starting from Step 1.", true);
+          }
+        } catch (e) {
+          console.warn("Resume draft pre-load failed:", e.message);
+          showStatus("Could not load previous draft — starting from Step 1.", true);
+        }
+      }
     };
 
     function enableBtn(id, enabled) {
