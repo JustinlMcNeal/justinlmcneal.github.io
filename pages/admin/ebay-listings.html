@@ -497,6 +497,12 @@
               <div id="editImagePicker" class="img-strip mt-1 hidden"></div>
             </div>
 
+            <div id="editVariantImagesSection" class="hidden border border-gray-200 rounded-lg p-3 bg-gray-50">
+              <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-2 text-black/70">Variant Main Images</label>
+              <div id="editVariantImagesList" class="space-y-2"></div>
+              <p class="text-[9px] text-gray-500 mt-2">Set a lead image per color variant. This controls each variant's primary photo.</p>
+            </div>
+
             <!-- Item Specifics -->
             <div id="editAspectsSection">
               <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-2 text-black/70">Item Specifics</label>
@@ -753,6 +759,7 @@
     let editQuill = null;      // Quill editor for edit modal
     let pushImageUrls = [];    // ordered image URLs for push modal
     let editImageUrls = [];    // ordered image URLs for edit modal
+    let editVariantImageOverrides = {}; // variant SKU -> preferred main image URL in edit modal
     let pushVariants = [];     // active color variants for push modal
     let isVariantListing = false; // whether current push is a variant listing
 
@@ -1901,6 +1908,9 @@
       document.getElementById("editLoading").classList.remove("hidden");
       document.getElementById("editForm").classList.add("hidden");
       document.getElementById("editStatus").textContent = "";
+      editVariantImageOverrides = {};
+      document.getElementById("editVariantImagesSection").classList.add("hidden");
+      document.getElementById("editVariantImagesList").innerHTML = "";
 
       document.getElementById("editProductName").textContent = editProduct.name;
       document.getElementById("editProductCode").textContent = editProduct.code + (isGroupListing ? " (Multi-Variant)" : "");
@@ -1934,6 +1944,8 @@
           // Store group data for save
           editProduct._groupData = group;
           editProduct._isGroup = true;
+
+          await renderEditVariantImageControls(editProduct, group);
 
           // Use stored DB values for offer data (group offers don't filter by SKU)
           offer = {
@@ -2087,6 +2099,10 @@
             const defaults = {};
             for (const [key, val] of Object.entries(existingAspects)) {
               defaults[key] = Array.isArray(val) ? val[0] : val;
+            }
+            if (isGroupListing && !defaults.Color) {
+              const colorSpec = editProduct._groupData?.variesBy?.specifications?.find(s => s?.name === "Color");
+              if (colorSpec?.values?.length) defaults.Color = colorSpec.values.join(", ");
             }
 
             required.forEach(a => reqContainer.appendChild(buildEditAspectField(a, defaults, true)));
@@ -2317,12 +2333,20 @@
             const mergedAspects = { ...sharedAspects };
             if (varAspects.Color) mergedAspects.Color = varAspects.Color;
 
+            const preferredLead = editVariantImageOverrides[vSku];
+            const existingVariantImages = varItem.product?.imageUrls || [];
+            let variantImageUrls = existingVariantImages.length ? [...existingVariantImages] : [...imageUrls];
+            if (imageUrls.length) {
+              const lead = preferredLead || existingVariantImages[0] || imageUrls[0];
+              variantImageUrls = [lead, ...imageUrls.filter(u => u !== lead)].slice(0, 24);
+            }
+
             const variantUpdateProduct = {
                 title,
                 description,
                 condition,
                 quantity: varItem.availability?.shipToLocationAvailability?.quantity ?? quantity,
-                imageUrls: varItem.product?.imageUrls || imageUrls,
+                imageUrls: variantImageUrls,
                 aspects: mergedAspects,
               };
               if (editLotSize > 1) variantUpdateProduct.lotSize = editLotSize;
@@ -2797,10 +2821,71 @@
     function setVolTiers(prefix, tiers) {
       const container = document.getElementById(`${prefix}VolTiers`);
       container.innerHTML = "";
+      const seen = new Set();
       tiers.forEach(t => {
-        const pct = t.discountBenefit?.percentageOffItem || t.percentOff || 5;
-        addVolTier(prefix, t.minQuantity || 2, pct);
+        const qty = t.discountSpecification?.minQuantity ?? t.minQuantity ?? 2;
+        const pct = parseFloat(t.discountBenefit?.percentageOffOrder ?? t.discountBenefit?.percentageOffItem ?? t.percentOff ?? 0) || 0;
+        if (qty <= 1 || pct <= 0) return;
+        if (seen.has(qty)) return;
+        seen.add(qty);
+        addVolTier(prefix, qty, pct);
       });
+    }
+
+    function variantSkuFromOption(baseCode, optionValue) {
+      const suffix = String(optionValue || "").toUpperCase().replace(/[^A-Z0-9]/g, "").substring(0, 6);
+      return `${baseCode}-${suffix}`;
+    }
+
+    async function renderEditVariantImageControls(product, group) {
+      const section = document.getElementById("editVariantImagesSection");
+      const list = document.getElementById("editVariantImagesList");
+      list.innerHTML = "";
+
+      const variantSKUs = group?.variantSKUs || [];
+      if (!variantSKUs.length) {
+        section.classList.add("hidden");
+        return;
+      }
+
+      const variants = (product.product_variants || []).filter(v => v.is_active);
+      const bySku = new Map();
+      variants.forEach(v => {
+        const sku = variantSkuFromOption(product.code, v.option_value);
+        bySku.set(sku, v);
+      });
+
+      const rows = await Promise.all(variantSKUs.map(async (sku) => {
+        const local = bySku.get(sku);
+        let currentLead = local?.preview_image_url || "";
+        try {
+          const r = await callEdge("ebay-manage-listing", { action: "get_item", sku });
+          if (r.success) currentLead = r.item?.product?.imageUrls?.[0] || currentLead;
+        } catch {}
+        editVariantImageOverrides[sku] = currentLead;
+        return {
+          sku,
+          label: local?.option_value || sku,
+          lead: currentLead,
+        };
+      }));
+
+      rows.forEach(r => {
+        const row = document.createElement("div");
+        row.className = "grid grid-cols-[auto_1fr] gap-2 items-center";
+        row.innerHTML = `
+          <div class="text-[10px] font-bold text-gray-700 min-w-[86px]">${esc(r.label)}</div>
+          <input type="text" data-variant-image-sku="${esc(r.sku)}" value="${esc(r.lead || "")}" placeholder="https://..."
+            class="w-full border-2 border-gray-300 px-2 py-1.5 text-xs outline-none focus:border-kkpink transition-colors" />`;
+        const input = row.querySelector("[data-variant-image-sku]");
+        input.addEventListener("input", (e) => {
+          const sku = e.target.dataset.variantImageSku;
+          editVariantImageOverrides[sku] = e.target.value.trim();
+        });
+        list.appendChild(row);
+      });
+
+      section.classList.remove("hidden");
     }
 
     async function loadPoliciesCache() {
