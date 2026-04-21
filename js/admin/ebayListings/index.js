@@ -1297,18 +1297,15 @@ document.getElementById("btnCreateOffer").addEventListener("click", async () => 
       const aspects     = collectAspects();
       delete aspects.Color;
 
-      // Use all active SKUs — items may already exist on eBay from a previous step 1 run
-      const createdSkus = currentProduct._createdVariantSKUs?.length
-        ? currentProduct._createdVariantSKUs
-        : allActiveSkus;
-      if (!createdSkus?.length) {
-        status.textContent = "❌ No variant items found — complete step 1 first";
+      // Always use all active checked SKUs — some may already exist on eBay from a prior run,
+      // and create_group_offer handles 25002 (already exists) gracefully.
+      const variantSKUs = allActiveSkus;
+      if (!variantSKUs.length) {
+        status.textContent = "❌ No active variants found — complete step 1 first";
         btn.disabled = false; btn.textContent = "2. Create Group + Offer";
         return;
       }
-      const createdVariants = checked.filter(v => createdSkus.includes(v.sku));
-      const variantSKUs     = createdSkus;
-      const colorValues     = createdVariants.map(v => v.option_value);
+      const colorValues = checked.filter(v => variantSKUs.includes(v.sku)).map(v => v.option_value);
       const variesBy        = { aspectsImageVariesBy: ["Color"], specifications: [{ name: "Color", values: colorValues }] };
 
       progressEl.textContent = "Creating inventory item group...";

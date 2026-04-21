@@ -248,6 +248,19 @@ serve(async (req) => {
       );
 
       if (!result.ok) {
+        // Handle 25002 "Offer entity already exists" — reuse the existing offer
+        const errData25 = result.data as { errors?: Array<{ errorId?: number; parameters?: Array<{ name: string; value: string }> }> };
+        const dup25 = errData25?.errors?.find((e) => e.errorId === 25002);
+        const existingOfferId = dup25?.parameters?.find((p) => p.name === "offerId")?.value;
+        if (existingOfferId) {
+          await supabase.from("products").update({
+            ebay_offer_id: existingOfferId,
+            ebay_category_id: categoryId,
+            ebay_price_cents: priceCents,
+            updated_at: new Date().toISOString(),
+          }).eq("code", sku);
+          return new Response(JSON.stringify({ success: true, offerId: existingOfferId }), { headers: corsHeaders });
+        }
         throw new Error(`Create offer failed (${result.status}): ${JSON.stringify(result.data)}`);
       }
 
