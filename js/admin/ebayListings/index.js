@@ -734,12 +734,19 @@ window.openEdit = async function openEdit(code) {
     if (lp.returnPolicyId)      document.getElementById("editReturnPolicy").value      = lp.returnPolicyId;
     if (lp.paymentPolicyId)     document.getElementById("editPaymentPolicy").value     = lp.paymentPolicyId;
 
-    // Best Offer
+    // Best Offer — not permitted on group (variant) listings
     const bot = lp.bestOfferTerms || {};
-    document.getElementById("editBestOffer").checked = !!bot.bestOfferEnabled;
-    document.getElementById("editBestOfferFields").classList.toggle("hidden", !bot.bestOfferEnabled);
-    document.getElementById("editAutoAccept").value  = bot.autoAcceptPrice?.value  || "";
-    document.getElementById("editAutoDecline").value = bot.autoDeclinePrice?.value || "";
+    if (isGroupListing) {
+      document.getElementById("editBestOffer").checked = false;
+      document.getElementById("editBestOfferFields").classList.add("hidden");
+      document.getElementById("editBestOffer").closest("div").classList.add("hidden");
+    } else {
+      document.getElementById("editBestOffer").closest("div").classList.remove("hidden");
+      document.getElementById("editBestOffer").checked = !!bot.bestOfferEnabled;
+      document.getElementById("editBestOfferFields").classList.toggle("hidden", !bot.bestOfferEnabled);
+      document.getElementById("editAutoAccept").value  = bot.autoAcceptPrice?.value  || "";
+      document.getElementById("editAutoDecline").value = bot.autoDeclinePrice?.value || "";
+    }
 
     // Store Category — local DB first, eBay GET as fallback
     const storeCats = offer.storeCategoryNames || [];
@@ -1649,7 +1656,7 @@ document.getElementById("btnSaveEdit").addEventListener("click", async () => {
           quantity:         offerRow.availableQuantity ?? quantity,
           categoryId:       editCategoryId || undefined,
           policies:         getSelectedPolicies("edit"),
-          bestOfferTerms:   getBestOfferTerms("edit"),
+          // Best Offer not permitted on group (variant) listings (eBay error 25737)
           storeCategoryNames: editStoreCat ? [editStoreCat] : [],
         });
         if (!offerResult.success) throw new Error(offerResult.error || `Offer update failed for ${vSku}`);
