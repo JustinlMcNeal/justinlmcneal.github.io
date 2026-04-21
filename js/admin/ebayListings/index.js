@@ -201,10 +201,12 @@ function renderTable() {
       <td class="py-2 pr-3">
         <div class="flex items-center gap-2">
           ${p.catalog_image_url ? `<img src="${p.catalog_image_url}" class="w-8 h-8 object-cover rounded" />` : '<div class="w-8 h-8 bg-gray-100 rounded"></div>'}
-          <a href="/pages/product.html?slug=${encodeURIComponent(p.slug || '')}" target="_blank" class="font-medium text-sm line-clamp-1 text-blue-600 hover:underline">${esc(p.name)}</a>
+          <a href="/pages/admin/products.html?q=${encodeURIComponent(p.name)}" target="_blank" class="font-medium text-sm line-clamp-1 text-blue-600 hover:underline">${esc(p.name)}</a>
         </div>
       </td>
-      <td class="py-2 pr-3 text-xs font-mono">${esc(p.code)}</td>
+      <td class="py-2 pr-3 text-xs font-mono">${p.ebay_listing_id
+        ? `<a href="https://www.ebay.com/itm/${esc(p.ebay_listing_id)}" target="_blank" class="text-blue-600 hover:underline">${esc(p.code)}</a>`
+        : esc(p.code)}</td>
       <td class="py-2 pr-3 text-xs">${kkPrice}</td>
       <td class="py-2 pr-3 text-xs">${ebayPrice}</td>
       <td class="py-2 pr-3">
@@ -270,8 +272,10 @@ function renderCards() {
         ${p.catalog_image_url ? `<img src="${p.catalog_image_url}" class="w-full h-full object-cover" />` : '<div class="w-full h-full flex items-center justify-center text-gray-300 text-3xl">📦</div>'}
       </div>
       <div class="p-3">
-        <a href="/pages/product.html?slug=${encodeURIComponent(p.slug || '')}" target="_blank" class="font-bold text-sm line-clamp-2 leading-tight text-blue-600 hover:underline">${esc(p.name)}</a>
-        <p class="text-[10px] font-mono text-gray-400 mt-1">${esc(p.code)}</p>
+        <a href="/pages/admin/products.html?q=${encodeURIComponent(p.name)}" target="_blank" class="font-bold text-sm line-clamp-2 leading-tight text-blue-600 hover:underline">${esc(p.name)}</a>
+        <p class="text-[10px] font-mono text-gray-400 mt-1">${p.ebay_listing_id
+          ? `<a href="https://www.ebay.com/itm/${esc(p.ebay_listing_id)}" target="_blank" class="text-blue-500 hover:underline">${esc(p.code)}</a>`
+          : esc(p.code)}</p>
         <div class="flex items-center justify-between mt-2">
           <div class="text-xs">
             <span class="text-gray-500">KK</span> <span class="font-bold">${kkPrice}</span>

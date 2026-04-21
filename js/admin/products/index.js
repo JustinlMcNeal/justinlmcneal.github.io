@@ -345,6 +345,15 @@ async function boot() {
   populateInventoryPanel(inventoryRows);
 
   refreshTable();
+
+  // Auto-search if ?q= is in the URL (e.g. deep-linked from eBay listings page)
+  const urlQ = new URLSearchParams(window.location.search).get("q");
+  if (urlQ && els.searchInput) {
+    els.searchInput.value = urlQ;
+    document.getElementById("searchClear")?.classList.remove("hidden");
+    document.getElementById("searchIcon")?.classList.add("hidden");
+    refreshTable();
+  }
 }
 
 /**
