@@ -65,18 +65,31 @@ Your job is to generate an optimized eBay listing from product data and images.
 
 STRICT RULES:
 1. TITLE: Create an SEO-optimized eBay title, max 80 characters. Pack with relevant search keywords buyers would use. Do NOT include "Karry Kraze" or brand name in title.
-2. DESCRIPTION: Create a PREMIUM, visually stunning HTML description that looks like a professional eBay storefront listing. Structure:
-   - A branded header banner section with the store name "Karry Kraze" styled with a gradient background, centered text, and a tagline like "Trendy Accessories for the Bold & Beautiful"
-   - A product highlights section with an icon-styled feature list (use emoji or unicode symbols as bullet markers like ✨ 💎 🎀 📦)
-   - A "Why You'll Love It" or "Perfect For" section describing use cases, occasions, gift ideas
-   - A styled divider between sections (use a simple HR with inline styling or a decorative border)
-   - A "Shop With Confidence" trust banner at the bottom with satisfaction guarantee messaging
+2. DESCRIPTION: Create a PREMIUM, visually stunning HTML description that looks like a professional eBay storefront listing. Follow this EXACT structure:
+
+   SECTION 1 — Branded header banner:
+   background: linear-gradient(135deg,#ff9ec9,#8ec5ff); color:#fff; padding:18px; border-radius:10px; text-align:center
+   Store name "Karry Kraze" at 22px bold, then tagline "Streetwear Meets Cute — Accessories That Stand Out" at 14px, opacity 0.95, margin-top 6px.
+
+   SECTION 2 — White product card (background:#ffffff; border-radius:10px; padding:16px; margin-top:14px; border:1px solid #eef2f7):
+     - Product name as a heading (font-size:22px; font-weight:700; margin-bottom:6px)
+     - 1-2 sentence hook description about the product (font-size:14px; color:#555; margin-bottom:12px)
+     - Feature list as <ul style="padding-left:18px;margin:0;color:#333"> with 4-6 <li style="margin:8px 0"> items, each starting with a relevant emoji (✨ 🐰 🧣 🎨 etc.)
+     - An <hr style="border:0;height:1px;background:#f0f4ff;margin:14px 0;border-radius:2px"> divider
+     - "Style It Your Way" section (font-size:16px; font-weight:700; margin-bottom:8px) with 4 use-case lines separated by <br> (font-size:14px; color:#444; line-height:1.5)
+     - "Why You'll Love It" box (margin-top:14px; padding:12px; background:#f8faff; border:1px solid #eef3ff; border-radius:8px) — bold heading + 2 sentences on feel/vibe/value
+
+   SECTION 3 — Trust footer separated by <hr style="border:0;height:1px;background:#eef2f7;margin:16px 0">:
+   (background:#f0f4ff; padding:12px; border-radius:10px; border:1px solid #e6eefc)
+   "Shop With Confidence" as bold heading (font-size:15px; font-weight:700; margin-bottom:8px) + 1-2 sentences about careful packaging and being available for questions.
+
+   RULES:
+   - Wrap everything in: <div style="max-width:680px;margin:12px auto;font-family:Arial, Helvetica, sans-serif;color:#222;background:#f8f9fa;padding:18px;border-radius:12px;">
    - Use inline CSS only (no <style> blocks, no classes). eBay strips <style> tags.
-   - Use clean, modern styling: soft rounded containers, subtle backgrounds (#f8f9fa, #fff5f5, #f0f4ff), gentle borders
-   - Font: sans-serif throughout. Readable font sizes (14-16px body, 20-24px headers)
-   - Mobile-friendly: use max-width containers, responsive-safe inline styles
-   - Do NOT include: shipping info, return policy, payment methods, external links, store URLs
-   - Keep total HTML under 4000 characters
+   - Font: Arial/Helvetica/sans-serif throughout. Body 14px, headings 16-22px.
+   - Mobile-friendly: max-width containers only, no fixed pixel widths for inner elements.
+   - Do NOT include: price, shipping info, return policy, payment methods, external links, store URLs.
+   - Keep total HTML under 4500 characters.
 3. ITEM SPECIFICS: Only fill values you can determine from the data or images.
    - For each specific, indicate your confidence:
      - "certain" = directly from product data
@@ -116,8 +129,6 @@ JSON structure:
     userPrompt += `Product Name: ${productName}\n`;
     if (productCode) userPrompt += `Product Code: ${productCode}\n`;
     if (category) userPrompt += `Store Category: ${category}\n`;
-    if (price) userPrompt += `Price: $${Number(price).toFixed(2)}\n`;
-
     if (existingAspects.length > 0) {
       userPrompt += `\nThe selected eBay category expects these item specifics (fill what you can):\n`;
       userPrompt += existingAspects.map((a: string) => `- ${a}`).join("\n");
@@ -125,7 +136,6 @@ JSON structure:
       userPrompt += `\nFill common item specifics: Brand, Type, Color, Material, Style, Theme (leave unknown ones empty).`;
     }
 
-    userPrompt += `\n\nDescription should be a PREMIUM styled HTML listing with branded header banner ("Karry Kraze" branding with gradient), product highlights with emoji icons, a "Perfect For" section, styled dividers, and a trust/confidence footer. Use inline CSS only. Make it look like a top-tier professional eBay store listing that stands out. Keep HTML under 4000 characters.`;
     userPrompt += `\n\nReturn ONLY valid JSON.`;
 
     console.log(
