@@ -2,12 +2,28 @@
 // Actions: create_item, create_offer, publish, update_item, update_offer,
 //          withdraw, delete_item, get_item, list_items, get_offers, bulk_update, get_policies, setup_location
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   corsHeaders,
   createServiceClient,
   getAccessToken,
   EBAY_API,
 } from "../_shared/ebayUtils.ts";
+
+function decodeJwtRole(authHeader: string | null): string | null {
+  if (!authHeader?.toLowerCase().startsWith("bearer ")) return null;
+  const token = authHeader.slice(7).trim();
+  const parts = token.split(".");
+  if (parts.length !== 3) return null;
+  try {
+    const payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = payload + "=".repeat((4 - (payload.length % 4)) % 4);
+    const parsed = JSON.parse(atob(padded)) as { role?: string };
+    return parsed.role || null;
+  } catch {
+    return null;
+  }
+}
 
 const INV_API = `${EBAY_API}/sell/inventory/v1`;
 const ACCT_API = `${EBAY_API}/sell/account/v1`;
@@ -72,6 +88,27 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // ── Admin auth guard ─────────────────────────────────
+  const authHeader = req.headers.get("authorization");
+  if (!authHeader) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
+  }
+  if (decodeJwtRole(authHeader) !== "service_role") {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
+    const caller = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: userData, error: userErr } = await caller.auth.getUser();
+    if (userErr || !userData?.user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
+    }
+    const { data: isAdmin, error: adminErr } = await caller.rpc("is_admin");
+    if (adminErr || !isAdmin) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: corsHeaders });
+    }
+  }
+
   try {
     const supabase = createServiceClient();
     const accessToken = await getAccessToken(supabase);
@@ -80,18 +117,20 @@ serve(async (req) => {
 
     // ── DELETE INVENTORY ITEM ─────────────────────────────
     if (action === "delete_item") {
-      const { sku } = body;
+      const { sku, baseCode } = body;
       if (!sku) throw new Error("sku is required");
       const result = await ebayFetch(accessToken, "DELETE", `${INV_API}/inventory_item/${encodeURIComponent(sku)}`);
       if (!result.ok && result.status !== 204) {
         throw new Error(`Delete item failed (${result.status}): ${JSON.stringify(result.data)}`);
       }
+      // For variant SKUs (e.g. HAT001-RED), use the parent product code for the DB update
+      const dbKey = baseCode || (sku.includes("-") ? sku.split("-")[0] : sku);
       await supabase.from("products").update({
         ebay_sku: null, ebay_offer_id: null, ebay_listing_id: null,
         ebay_status: "not_listed", ebay_category_id: null, ebay_price_cents: null,
         ebay_item_group_key: null,
         updated_at: new Date().toISOString(),
-      }).eq("code", sku);
+      }).eq("code", dbKey);
       return new Response(JSON.stringify({ success: true, deleted: sku }), { headers: corsHeaders });
     }
 
@@ -348,6 +387,9 @@ serve(async (req) => {
         availableQuantity: quantity ?? existing.availableQuantity,
         categoryId: categoryId || existing.categoryId,
       };
+      // Remove eBay read-only fields that cause 85001 errors on PUT /offer
+      const EBAY_OFFER_READONLY = ["offerId", "listing", "statusEnum", "auditInfo", "format", "marketplaceId"];
+      EBAY_OFFER_READONLY.forEach((k) => delete updatedOffer[k]);
 
       if (priceCents !== undefined) {
         updatedOffer.pricingSummary = {
@@ -559,7 +601,7 @@ serve(async (req) => {
             quantity: item.quantity ?? 0,
           },
         };
-        if (item.priceCents) {
+        if (item.priceCents !== undefined && item.priceCents !== null) {
           req.offers = [
             {
               offerId: item.offerId,
@@ -743,6 +785,12 @@ serve(async (req) => {
         `${EBAY_API}/commerce/notification/v1/config`,
         { alertEmail },
       );
+      if (!configResult.ok) {
+        return new Response(
+          JSON.stringify({ success: false, status: configResult.status, error: JSON.stringify(configResult.data) }),
+          { headers: corsHeaders },
+        );
+      }
       return new Response(
         JSON.stringify({ success: true, action: "setup_webhook_config", data: configResult.data }),
         { headers: corsHeaders },
@@ -757,6 +805,12 @@ serve(async (req) => {
         "DELETE",
         `${EBAY_API}/commerce/notification/v1/destination/${destinationId}`,
       );
+      if (!result.ok && result.status !== 204) {
+        return new Response(
+          JSON.stringify({ success: false, status: result.status, error: JSON.stringify(result.data) }),
+          { headers: corsHeaders },
+        );
+      }
       return new Response(
         JSON.stringify({ success: true, action: "delete_webhook_destination", destinationId, data: result.data }),
         { headers: corsHeaders },
@@ -789,6 +843,18 @@ serve(async (req) => {
       const locationHeader = result.headers?.get?.("location") || "";
       const destinationId = locationHeader.split("/").pop() || (result.data as Record<string, unknown>)?.destinationId || "";
 
+      if (!result.ok) {
+        return new Response(
+          JSON.stringify({ success: false, status: result.status, error: JSON.stringify(result.data) }),
+          { headers: corsHeaders },
+        );
+      }
+      if (!destinationId) {
+        return new Response(
+          JSON.stringify({ success: false, error: "create_webhook_destination: no destinationId in Location header" }),
+          { headers: corsHeaders },
+        );
+      }
       return new Response(
         JSON.stringify({ success: true, action: "create_webhook_destination", destinationId, data: result.data }),
         { headers: corsHeaders },
@@ -821,6 +887,18 @@ serve(async (req) => {
       const locationHeader = result.headers?.get?.("location") || "";
       const subscriptionId = locationHeader.split("/").pop() || (result.data as Record<string, unknown>)?.subscriptionId || "";
 
+      if (!result.ok) {
+        return new Response(
+          JSON.stringify({ success: false, status: result.status, error: JSON.stringify(result.data) }),
+          { headers: corsHeaders },
+        );
+      }
+      if (!subscriptionId) {
+        return new Response(
+          JSON.stringify({ success: false, error: "create_webhook_subscription: no subscriptionId in Location header" }),
+          { headers: corsHeaders },
+        );
+      }
       return new Response(
         JSON.stringify({ success: true, action: "create_webhook_subscription", subscriptionId, topicId, data: result.data }),
         { headers: corsHeaders },
@@ -833,6 +911,12 @@ serve(async (req) => {
         "GET",
         `${EBAY_API}/commerce/notification/v1/subscription`,
       );
+      if (!result.ok) {
+        return new Response(
+          JSON.stringify({ success: false, status: result.status, error: JSON.stringify(result.data) }),
+          { headers: corsHeaders },
+        );
+      }
       return new Response(
         JSON.stringify({ success: true, subscriptions: result.data }),
         { headers: corsHeaders },
@@ -845,6 +929,12 @@ serve(async (req) => {
         "GET",
         `${EBAY_API}/commerce/notification/v1/destination`,
       );
+      if (!result.ok) {
+        return new Response(
+          JSON.stringify({ success: false, status: result.status, error: JSON.stringify(result.data) }),
+          { headers: corsHeaders },
+        );
+      }
       return new Response(
         JSON.stringify({ success: true, destinations: result.data }),
         { headers: corsHeaders },
@@ -857,6 +947,12 @@ serve(async (req) => {
         "GET",
         `${EBAY_API}/commerce/notification/v1/topic`,
       );
+      if (!result.ok) {
+        return new Response(
+          JSON.stringify({ success: false, status: result.status, error: JSON.stringify(result.data) }),
+          { headers: corsHeaders },
+        );
+      }
       return new Response(
         JSON.stringify({ success: true, topics: result.data }),
         { headers: corsHeaders },
@@ -1059,12 +1155,8 @@ serve(async (req) => {
         .sort((a, b) => a.minQuantity - b.minQuantity);
 
       // VOLUME_DISCOUNT requires baseline rule: minQuantity=1 with 0% off.
-      const normalized = [{ minQuantity: 1, percentOff: 0 }, ...sortedTiers]
-        .slice(0, 4)
-        .map((t, idx) => ({
-          minQuantity: idx + 1,
-          percentOff: t.percentOff,
-        }));
+      // Preserve user-provided minQuantity values — do not remap to sequential indices.
+      const normalized = [{ minQuantity: 1, percentOff: 0 }, ...sortedTiers].slice(0, 4);
 
       if (normalized.length < 2) {
         throw new Error("Volume pricing requires at least one tier at quantity 2+");
@@ -1073,7 +1165,7 @@ serve(async (req) => {
       const discountRules = normalized.map((t) => ({
         ruleOrder: t.minQuantity,
         discountSpecification: { minQuantity: t.minQuantity },
-        discountBenefit: { percentageOffOrder: String(t.percentOff) },
+        discountBenefit: { percentageOffOrder: String(Math.round(t.percentOff)) },
       }));
 
       let inventoryCriterion: Record<string, unknown> = {

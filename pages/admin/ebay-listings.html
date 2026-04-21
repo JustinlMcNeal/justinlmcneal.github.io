@@ -748,7 +748,6 @@
 
     const supabase = getSupabaseClient();
     const SUPABASE_URL = "https://yxdzvzscufkvewecvagq.supabase.co";
-    const SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl4ZHp2enNjdWZrdmV3ZWN2YWdxIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NTczNDk0MCwiZXhwIjoyMDgxMzEwOTQwfQ.a3efcbSIIY9u0iIiKteahNQC_d5K6fbKYyk7Oh8LbSw";
 
     let allProducts = [];
     let filteredProducts = [];
@@ -765,12 +764,17 @@
 
     // ── Edge Function Helper ─────────────────────────────
     async function callEdge(fnName, body) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error("Not authenticated — please refresh the page");
       const resp = await fetch(`${SUPABASE_URL}/functions/v1/${fnName}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SERVICE_KEY}` },
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
         body: JSON.stringify(body),
       });
-      return resp.json();
+      if (!resp.ok && !resp.headers.get("content-type")?.includes("application/json")) {
+        return { success: false, error: `HTTP ${resp.status} from ${fnName}` };
+      }
+      return resp.json().catch(() => ({ success: false, error: `Non-JSON response from ${fnName} (HTTP ${resp.status})` }));
     }
 
     // ── Status Bar Helper ────────────────────────────────
@@ -1056,7 +1060,7 @@
               ${status === "draft"
                 ? `<button onclick="openEdit('${esc(p.code)}')" class="bg-blue-600 text-white px-2 py-1 rounded text-[10px] font-bold hover:bg-blue-700 transition-all">Edit</button>
                    ${p.ebay_offer_id
-                     ? `<button onclick="doPublish('${esc(p.code)}', '${esc(p.ebay_offer_id)}')" class="bg-green-600 text-white px-2 py-1 rounded text-[10px] font-bold hover:bg-green-700 transition-all">Publish</button>`
+                     ? `<button onclick="doPublish('${esc(p.code)}', '${esc(p.ebay_offer_id)}', '${esc(p.ebay_item_group_key)}'  )" class="bg-green-600 text-white px-2 py-1 rounded text-[10px] font-bold hover:bg-green-700 transition-all">Publish</button>`
                      : `<button onclick="openPush('${esc(p.code)}')" class="bg-black text-white px-2 py-1 rounded text-[10px] font-bold hover:bg-kkpink hover:text-black transition-all">Resume Push</button>`}`
                 : ""}
               ${status === "ended"
@@ -1095,7 +1099,7 @@
         } else if (status === "draft") {
           actions = `<button onclick="openEdit('${esc(p.code)}')" class="flex-1 bg-blue-600 text-white px-2 py-1.5 rounded text-xs font-bold">Edit</button>
                      ${p.ebay_offer_id
-                       ? `<button onclick="doPublish('${esc(p.code)}', '${esc(p.ebay_offer_id)}')" class="flex-1 bg-green-600 text-white px-2 py-1.5 rounded text-xs font-bold">Publish</button>`
+                       ? `<button onclick="doPublish('${esc(p.code)}', '${esc(p.ebay_offer_id)}', '${esc(p.ebay_item_group_key)}')" class="flex-1 bg-green-600 text-white px-2 py-1.5 rounded text-xs font-bold">Publish</button>`
                        : `<button onclick="openPush('${esc(p.code)}')" class="flex-1 bg-black text-white px-2 py-1.5 rounded text-xs font-bold hover:bg-kkpink hover:text-black transition-all">Resume Push</button>`}`;
         } else if (status === "ended") {
           actions = `<button onclick="openPush('${esc(p.code)}')" class="flex-1 bg-black text-white px-2 py-1.5 rounded text-xs font-bold hover:bg-kkpink hover:text-black transition-all">Re-list</button>`;
@@ -1571,6 +1575,16 @@
           const checked = getCheckedVariants();
           if (!checked.length) {
             status.textContent = "❌ Select at least one variant";
+            btn.disabled = false; btn.textContent = "1. Create Items";
+            return;
+          }
+
+          // Check for duplicate generated SKUs before creating
+          const generatedSkus = checked.map(v => v.sku);
+          const uniqueSkus = new Set(generatedSkus);
+          if (uniqueSkus.size !== generatedSkus.length) {
+            const dupes = [...new Set(generatedSkus.filter((s, i) => generatedSkus.indexOf(s) !== i))];
+            status.textContent = `❌ SKU collision: ${dupes.join(", ")} — rename variant options so the first 6 letters/digits are unique`;
             btn.disabled = false; btn.textContent = "1. Create Items";
             return;
           }
@@ -2377,7 +2391,7 @@
               offerId: offerRow.offerId,
               sku: editProduct.code,
               priceCents,
-              quantity,
+              quantity: offerRow.availableQuantity ?? quantity,
               categoryId: editCategoryId || undefined,
               policies: getSelectedPolicies("edit"),
               bestOfferTerms: getBestOfferTerms("edit"),
@@ -2613,10 +2627,13 @@
     };
 
     // ── Publish (from table for drafts) ──────────────────
-    window.doPublish = async function(code, offerId) {
+    window.doPublish = async function(code, offerId, itemGroupKey) {
       showStatus("Publishing...");
       try {
-        const result = await callEdge("ebay-manage-listing", { action: "publish", offerId, sku: code });
+        const hasGroup = itemGroupKey && String(itemGroupKey).trim();
+        const result = hasGroup
+          ? await callEdge("ebay-manage-listing", { action: "publish_group", inventoryItemGroupKey: String(itemGroupKey).trim(), sku: code })
+          : await callEdge("ebay-manage-listing", { action: "publish", offerId, sku: code });
         if (result.success) {
           showStatus(`✅ Published! Listing ID: ${result.listingId}`);
           loadProducts();
@@ -2763,6 +2780,9 @@
       if (!enabled) return { bestOfferEnabled: false };
       const autoAccept = parseFloat(document.getElementById(`${prefix}AutoAccept`).value);
       const autoDecline = parseFloat(document.getElementById(`${prefix}AutoDecline`).value);
+      if (autoAccept > 0 && autoDecline > 0 && autoAccept <= autoDecline) {
+        throw new Error(`Best Offer: auto-accept ($${autoAccept}) must be higher than auto-decline ($${autoDecline})`);
+      }
       const terms = { bestOfferEnabled: true };
       if (autoAccept > 0) terms.autoAcceptPrice = autoAccept.toFixed(2);
       if (autoDecline > 0) terms.autoDeclinePrice = autoDecline.toFixed(2);
@@ -2808,7 +2828,7 @@
       div.innerHTML = `<span class="text-[9px] text-gray-500">Buy</span>
         <input type="number" min="2" value="${qty}" class="vol-qty w-14 border-2 border-gray-300 px-2 py-1 text-xs outline-none focus:border-kkpink" />
         <span class="text-[9px] text-gray-500">+, get</span>
-        <input type="number" min="1" max="99" value="${pct}" class="vol-pct w-14 border-2 border-gray-300 px-2 py-1 text-xs outline-none focus:border-kkpink" />
+        <input type="number" min="1" max="99" step="1" value="${pct}" class="vol-pct w-14 border-2 border-gray-300 px-2 py-1 text-xs outline-none focus:border-kkpink" />
         <span class="text-[9px] text-gray-500">% off</span>
         <button type="button" class="vol-remove text-red-400 hover:text-red-600 text-xs font-bold" title="Remove tier">✕</button>`;
       div.querySelector(".vol-remove").addEventListener("click", () => div.remove());
@@ -2868,7 +2888,10 @@
         try {
           const r = await callEdge("ebay-manage-listing", { action: "get_item", sku });
           if (r.success) currentLead = r.item?.product?.imageUrls?.[0] || currentLead;
-        } catch {}
+          else console.warn(`get_item failed for ${sku}:`, r.error);
+        } catch (e) {
+          console.warn(`get_item error for ${sku}:`, e.message);
+        }
         editVariantImageOverrides[sku] = currentLead;
         return {
           sku,
