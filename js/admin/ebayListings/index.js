@@ -1252,15 +1252,18 @@ document.getElementById("btnCreateOffer").addEventListener("click", async () => 
 
   try {
     const checked       = getCheckedVariants();
-    const effectiveSkus = currentProduct._createdVariantSKUs || checked.filter(v => v.quantity > 0).map(v => v.sku);
+    // Always use all active checked variants for group logic — _createdVariantSKUs may be
+    // incomplete on retry (items created in a previous run are not re-created).
+    const allActiveSkus = checked.filter(v => v.quantity > 0).map(v => v.sku);
+    const effectiveSkus = allActiveSkus;
 
-    if (isVariantListing && effectiveSkus.length < 2) {
-      if (effectiveSkus.length === 0) {
+    if (isVariantListing && allActiveSkus.length < 2) {
+      if (allActiveSkus.length === 0) {
         status.textContent = "❌ No valid items to create an offer for — check quantities";
         btn.disabled = false; btn.textContent = "2. Create Offer";
         return;
       }
-      const variantItem = checked.find(v => v.sku === effectiveSkus[0]) || checked[0];
+      const variantItem = checked.find(v => v.sku === allActiveSkus[0]) || checked[0];
       const vSku        = variantItem.sku;
       const vQty        = variantItem.quantity || 1;
       const storeCat    = document.getElementById("modalStoreCategory").value;
@@ -1294,9 +1297,12 @@ document.getElementById("btnCreateOffer").addEventListener("click", async () => 
       const aspects     = collectAspects();
       delete aspects.Color;
 
-      const createdSkus = currentProduct._createdVariantSKUs;
+      // Use all active SKUs — items may already exist on eBay from a previous step 1 run
+      const createdSkus = currentProduct._createdVariantSKUs?.length
+        ? currentProduct._createdVariantSKUs
+        : allActiveSkus;
       if (!createdSkus?.length) {
-        status.textContent = "❌ No variant items were created in step 1 — complete step 1 first";
+        status.textContent = "❌ No variant items found — complete step 1 first";
         btn.disabled = false; btn.textContent = "2. Create Group + Offer";
         return;
       }
