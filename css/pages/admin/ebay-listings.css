@@ -1,0 +1,72 @@
+/* ── eBay Listings Admin Page ──────────────────────────────── */
+
+.custom-scrollbar::-webkit-scrollbar { height: 8px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #000; }
+
+.product-row:hover { background: #fafafa; }
+
+.ebay-active     { background: #dcfce7; color: #166534; }
+.ebay-draft      { background: #fef3c7; color: #92400e; }
+.ebay-ended      { background: #fee2e2; color: #991b1b; }
+.ebay-not_listed { background: #f3f4f6; color: #6b7280; }
+
+@media (max-width: 640px) {
+  button, [role="button"] { min-height: 44px; }
+  input, select, textarea { font-size: 16px !important; }
+}
+
+/* ── Image Strip ─────────────────────────────────────────────── */
+.img-strip { display: flex; gap: 6px; overflow-x: auto; padding: 4px 0; }
+
+.img-strip .img-thumb {
+  position: relative;
+  width: 60px;
+  height: 60px;
+  border: 2px solid #e5e7eb;
+  border-radius: 6px;
+  overflow: hidden;
+  flex-shrink: 0;
+  cursor: grab;
+}
+.img-strip .img-thumb.main  { border-color: #ff69b4; }
+.img-strip .img-thumb img   { width: 100%; height: 100%; object-fit: cover; }
+
+.img-strip .img-thumb .img-remove {
+  position: absolute;
+  top: -4px; right: -4px;
+  width: 18px; height: 18px;
+  background: #000; color: #fff;
+  border-radius: 50%;
+  font-size: 11px; line-height: 18px; text-align: center;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.img-strip .img-thumb.picker { border-style: dashed; cursor: pointer; opacity: 0.6; }
+.img-strip .img-thumb.picker:hover { opacity: 1; border-color: #ff69b4; }
+
+/* ── Quill Editor ────────────────────────────────────────────── */
+.ql-container { font-size: 14px; }
+.ql-editor    { min-height: 100px; }
+
+/* ── Description Tabs ────────────────────────────────────────── */
+.desc-tab        { background: #e5e7eb; color: #555; }
+.desc-tab.active { background: #ff69b4; color: #fff; }
+
+/* ── AI Badges ───────────────────────────────────────────────── */
+.ai-badge {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+.ai-badge-generated { background: #ede9fe; color: #6d28d9; }
+.ai-badge-inferred  { background: #fef3c7; color: #92400e; }
+.ai-badge-default   { background: #dcfce7; color: #166534; }
+.ai-badge-from_data { background: #dbeafe; color: #1e40af; }
