@@ -1098,8 +1098,17 @@ serve(async (req) => {
 
         let result = await ebayFetch(accessToken, "POST", `${INV_API}/offer`, offer);
 
-        // If an offer already exists for this SKU, reuse it instead of failing.
+        // If an offer already exists, reuse it instead of failing.
         if (!result.ok) {
+          // Fast path: eBay returns the existing offerId in error 25002 parameters
+          const errData = result.data as { errors?: Array<{ errorId?: number; parameters?: Array<{ name: string; value: string }> }> };
+          const dup = errData?.errors?.find((e) => e.errorId === 25002);
+          const dupOfferId = dup?.parameters?.find((p) => p.name === "offerId")?.value;
+          if (dupOfferId) {
+            offerIds.push(dupOfferId);
+            continue;
+          }
+          // Slow path: look up the existing offer by SKU
           const existing = await ebayFetch(accessToken, "GET", `${INV_API}/offer?sku=${encodeURIComponent(sku)}`);
           const existingOffers = (existing.data as { offers?: Array<{ offerId?: string }> })?.offers || [];
           const existingOfferId = existingOffers[0]?.offerId;
@@ -1107,9 +1116,6 @@ serve(async (req) => {
             offerIds.push(existingOfferId);
             continue;
           }
-        }
-
-        if (!result.ok) {
           throw new Error(`Create group offer failed (${result.status}): ${JSON.stringify(result.data)}`);
         }
 
