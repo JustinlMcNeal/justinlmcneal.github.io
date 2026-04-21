@@ -1201,7 +1201,8 @@ serve(async (req) => {
 
       const updatedPromo: Record<string, unknown> = {
         ...existing,
-        promotionStatus: (existing.promotionStatus as string) || "SCHEDULED",
+        // eBay requires SCHEDULED for update payloads; RUNNING is rejected (38240).
+        promotionStatus: "SCHEDULED",
         discountRules,
       };
 

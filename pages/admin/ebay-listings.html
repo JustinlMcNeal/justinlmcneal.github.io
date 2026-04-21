@@ -1929,7 +1929,7 @@
         let offer = {};
 
         if (isGroupListing) {
-          // Fetch group data (offer data from DB since group offers don't filter by SKU)
+          // Fetch group data, then derive offer fields from one variant SKU.
           const groupResult = await callEdge("ebay-manage-listing", { action: "get_item_group", inventoryItemGroupKey: editProduct.ebay_item_group_key });
 
           if (!groupResult.success) throw new Error(groupResult.error || "Failed to fetch item group");
@@ -1945,14 +1945,14 @@
           editProduct._groupData = group;
           editProduct._isGroup = true;
 
-          await renderEditVariantImageControls(editProduct, group);
-
-          // Use stored DB values for offer data (group offers don't filter by SKU)
-          offer = {
-            pricingSummary: editProduct.ebay_price_cents
-              ? { price: { value: (editProduct.ebay_price_cents / 100).toFixed(2) } }
-              : {},
-          };
+          const firstVariantSku = group.variantSKUs?.[0];
+          if (firstVariantSku) {
+            const offersResult = await callEdge("ebay-manage-listing", { action: "get_offers", sku: firstVariantSku });
+            offer = (offersResult.offers || [])[0] || {};
+          }
+          if (!offer.pricingSummary?.price?.value && editProduct.ebay_price_cents) {
+            offer.pricingSummary = { price: { value: (editProduct.ebay_price_cents / 100).toFixed(2) } };
+          }
         } else {
           // Fetch current item data from eBay (single SKU)
           const sku = editProduct.ebay_sku || editProduct.code;
@@ -2014,6 +2014,10 @@
         const ebayImages = product.imageUrls || [];
         editImageUrls = ebayImages.length ? [...ebayImages] : buildImageUrls(editProduct);
         renderImageStrip("editImageStrip", editImageUrls, editImageUrls);
+
+        if (isGroupListing) {
+          await renderEditVariantImageControls(editProduct, editProduct._groupData);
+        }
 
         const offerPrice = offer.pricingSummary?.price?.value;
         document.getElementById("editPrice").value = offerPrice
@@ -2359,15 +2363,18 @@
             });
           }
 
-          // Step 3: Update offer
-          if (editProduct.ebay_offer_id) {
-            status.textContent = "Updating offer...";
-            const priceCents = Math.round(price * 100);
-            const editStoreCat = document.getElementById("editStoreCategory").value;
-            const editCategoryId = document.getElementById("editCategoryId").value.trim();
+          // Step 3: Update each variant offer (store category/policies/best-offer)
+          status.textContent = "Updating variant offers...";
+          const priceCents = Math.round(price * 100);
+          const editStoreCat = document.getElementById("editStoreCategory").value;
+          const editCategoryId = document.getElementById("editCategoryId").value.trim();
+          for (const vSku of variantSKUs) {
+            const offersResp = await callEdge("ebay-manage-listing", { action: "get_offers", sku: vSku });
+            const offerRow = (offersResp.offers || [])[0];
+            if (!offerRow?.offerId) continue;
             const offerResult = await callEdge("ebay-manage-listing", {
               action: "update_offer",
-              offerId: editProduct.ebay_offer_id,
+              offerId: offerRow.offerId,
               sku: editProduct.code,
               priceCents,
               quantity,
@@ -2376,7 +2383,7 @@
               bestOfferTerms: getBestOfferTerms("edit"),
               storeCategoryNames: editStoreCat ? [editStoreCat] : [],
             });
-            if (!offerResult.success) throw new Error(offerResult.error || "Offer update failed");
+            if (!offerResult.success) throw new Error(offerResult.error || `Offer update failed for ${vSku}`);
           }
         } else {
           // SINGLE ITEM: Update item + offer
@@ -2872,15 +2879,22 @@
 
       rows.forEach(r => {
         const row = document.createElement("div");
-        row.className = "grid grid-cols-[auto_1fr] gap-2 items-center";
+        row.className = "grid grid-cols-[auto_1fr_auto] gap-2 items-center";
+        const candidateImages = [...new Set([r.lead, ...editImageUrls].filter(Boolean))];
+        const options = candidateImages.map((u) => `<option value="${esc(u)}">${esc(u)}</option>`).join("");
         row.innerHTML = `
           <div class="text-[10px] font-bold text-gray-700 min-w-[86px]">${esc(r.label)}</div>
-          <input type="text" data-variant-image-sku="${esc(r.sku)}" value="${esc(r.lead || "")}" placeholder="https://..."
-            class="w-full border-2 border-gray-300 px-2 py-1.5 text-xs outline-none focus:border-kkpink transition-colors" />`;
+          <select data-variant-image-sku="${esc(r.sku)}"
+            class="w-full border-2 border-gray-300 px-2 py-1.5 text-xs outline-none focus:border-kkpink transition-colors">${options}</select>
+          <img data-variant-image-preview="${esc(r.sku)}" src="${esc(r.lead || candidateImages[0] || "")}" class="w-10 h-10 rounded object-cover border" />`;
         const input = row.querySelector("[data-variant-image-sku]");
-        input.addEventListener("input", (e) => {
+        input.value = r.lead || candidateImages[0] || "";
+        input.addEventListener("change", (e) => {
           const sku = e.target.dataset.variantImageSku;
-          editVariantImageOverrides[sku] = e.target.value.trim();
+          const url = e.target.value.trim();
+          editVariantImageOverrides[sku] = url;
+          const img = row.querySelector("[data-variant-image-preview]");
+          if (img) img.src = url;
         });
         list.appendChild(row);
       });
