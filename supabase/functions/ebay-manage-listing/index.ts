@@ -187,13 +187,15 @@ serve(async (req) => {
       }
 
       // Update products table
+      // Only set ebay_status=draft when CREATING — never downgrade an already-published listing
+      const itemDbUpdates: Record<string, unknown> = {
+        ebay_sku: sku,
+        updated_at: new Date().toISOString(),
+      };
+      if (action === "create_item") itemDbUpdates.ebay_status = "draft";
       await supabase
         .from("products")
-        .update({
-          ebay_sku: sku,
-          ebay_status: "draft",
-          updated_at: new Date().toISOString(),
-        })
+        .update(itemDbUpdates)
         .eq("code", sku);
 
       return new Response(
@@ -1000,15 +1002,17 @@ serve(async (req) => {
       }
 
       // Store group key in products table (on the base product code)
+      // Only set ebay_status=draft when CREATING — never downgrade a published listing
       const baseCode = body.baseProductCode;
       if (baseCode) {
+        const groupDbUpdates: Record<string, unknown> = {
+          ebay_item_group_key: inventoryItemGroupKey,
+          updated_at: new Date().toISOString(),
+        };
+        if (action === "create_item_group") groupDbUpdates.ebay_status = "draft";
         await supabase
           .from("products")
-          .update({
-            ebay_item_group_key: inventoryItemGroupKey,
-            ebay_status: "draft",
-            updated_at: new Date().toISOString(),
-          })
+          .update(groupDbUpdates)
           .eq("code", baseCode);
       }
 
