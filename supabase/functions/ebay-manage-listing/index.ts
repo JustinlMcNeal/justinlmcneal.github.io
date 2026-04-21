@@ -1090,13 +1090,7 @@ serve(async (req) => {
           merchantLocationKey: Deno.env.get("EBAY_LOCATION_KEY") || "default",
         };
 
-        if (bestOfferTerms?.bestOfferEnabled) {
-          (offer.listingPolicies as Record<string, unknown>).bestOfferTerms = {
-            bestOfferEnabled: true,
-            ...(bestOfferTerms.autoAcceptPrice ? { autoAcceptPrice: { value: bestOfferTerms.autoAcceptPrice, currency: "USD" } } : {}),
-            ...(bestOfferTerms.autoDeclinePrice ? { autoDeclinePrice: { value: bestOfferTerms.autoDeclinePrice, currency: "USD" } } : {}),
-          };
-        }
+        // Best Offer is not permitted on Inventory Item Group offers (eBay error 25737)
 
         if (storeCategoryNames?.length) {
           offer.storeCategoryNames = storeCategoryNames;

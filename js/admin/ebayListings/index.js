@@ -512,6 +512,10 @@ window.openPush = async function openPush(code) {
     renderVariantPanel(activeVariants, currentProduct.code);
     document.getElementById("btnCreateItem").textContent  = "1. Create Items";
     document.getElementById("btnCreateOffer").textContent = "2. Create Group + Offer";
+    // eBay does not allow Best Offer on group (variant) listings
+    document.getElementById("modalBestOffer").checked = false;
+    document.getElementById("modalBestOfferFields").classList.add("hidden");
+    document.getElementById("modalBestOffer").closest("div").classList.add("hidden");
   } else {
     document.getElementById("variantPanel").classList.add("hidden");
     document.getElementById("variantProgress").classList.add("hidden");
@@ -519,6 +523,7 @@ window.openPush = async function openPush(code) {
     isVariantListing = false;
     document.getElementById("btnCreateItem").textContent  = "1. Create Item";
     document.getElementById("btnCreateOffer").textContent = "2. Create Offer";
+    document.getElementById("modalBestOffer").closest("div").classList.remove("hidden");
   }
 
   enableBtn("btnCreateItem",  true);
