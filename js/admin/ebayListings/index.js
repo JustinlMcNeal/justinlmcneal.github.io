@@ -48,6 +48,7 @@ let editQuill              = null;
 let pushImageUrls          = [];
 let editImageUrls          = [];
 let editVariantImageOverrides = {};
+let editVariantQtyOverrides   = {};
 let pushVariants           = [];
 let isVariantListing       = false;
 let editProduct            = null;
@@ -605,6 +606,7 @@ window.openEdit = async function openEdit(code) {
   document.getElementById("editForm").classList.add("hidden");
   document.getElementById("editStatus").textContent = "";
   editVariantImageOverrides = {};
+  editVariantQtyOverrides   = {};
   document.getElementById("editVariantImagesSection").classList.add("hidden");
   document.getElementById("editVariantImagesList").innerHTML = "";
 
@@ -862,15 +864,19 @@ async function renderEditVariantImageControls(product, group) {
   const rows = await Promise.all(variantSKUs.map(async (sku) => {
     const local       = bySku.get(sku);
     let currentLead   = local?.preview_image_url || "";
+    let currentQty = 0;
     try {
       const r = await callEdge("ebay-manage-listing", { action: "get_item", sku });
-      if (r.success) currentLead = r.item?.product?.imageUrls?.[0] || currentLead;
-      else console.warn(`get_item failed for ${sku}:`, r.error);
+      if (r.success) {
+        currentLead = r.item?.product?.imageUrls?.[0] || currentLead;
+        currentQty  = r.item?.availability?.shipToLocationAvailability?.quantity ?? 0;
+      } else console.warn(`get_item failed for ${sku}:`, r.error);
     } catch (e) {
       console.warn(`get_item error for ${sku}:`, e.message);
     }
     editVariantImageOverrides[sku] = currentLead;
-    return { sku, label: local?.option_value || sku, lead: currentLead };
+    editVariantQtyOverrides[sku]   = currentQty;
+    return { sku, label: local?.option_value || sku, lead: currentLead, qty: currentQty };
   }));
 
   rows.forEach(r => {
@@ -887,7 +893,15 @@ async function renderEditVariantImageControls(product, group) {
     }).join("");
 
     row.innerHTML = `
-      <div class="text-[10px] font-bold text-gray-700 mb-1">${esc(r.label)}</div>
+      <div class="flex items-center gap-3 mb-1">
+        <span class="text-[10px] font-bold text-gray-700">${esc(r.label)}</span>
+        <label class="flex items-center gap-1 ml-auto">
+          <span class="text-[9px] text-gray-500 uppercase font-bold">Qty</span>
+          <input type="number" min="0" value="${r.qty}"
+            data-var-qty-sku="${esc(r.sku)}"
+            class="w-14 border-2 border-gray-300 rounded px-1 py-0.5 text-xs text-center focus:border-kkpink outline-none" />
+        </label>
+      </div>
       <div class="flex flex-wrap gap-1">${thumbsHtml}</div>`;
 
     row.querySelectorAll("[data-variant-thumb-sku]").forEach(thumb => {
@@ -902,6 +916,11 @@ async function renderEditVariantImageControls(product, group) {
           t.classList.toggle("ring-kkpink", sel);
           t.classList.toggle("border-gray-200", !sel);
         });
+      });
+    });
+    row.querySelectorAll("[data-var-qty-sku]").forEach(input => {
+      input.addEventListener("change", () => {
+        editVariantQtyOverrides[input.dataset.varQtySku] = parseInt(input.value) || 0;
       });
     });
     list.appendChild(row);
@@ -1640,8 +1659,9 @@ document.getElementById("btnSaveEdit").addEventListener("click", async () => {
           variantImageUrls = [lead, ...imageUrls.filter(u => u !== lead)].slice(0, 24);
         }
 
+        const resolvedQty          = editVariantQtyOverrides[vSku] ?? varItem.availability?.shipToLocationAvailability?.quantity ?? quantity;
         const variantUpdateProduct = { title, description, condition, imageUrls: variantImageUrls, aspects: mergedAspects,
-          quantity: varItem.availability?.shipToLocationAvailability?.quantity ?? quantity };
+          quantity: resolvedQty };
         if (editLotSize > 1) variantUpdateProduct.lotSize = editLotSize;
 
         await callEdge("ebay-manage-listing", {
@@ -1665,7 +1685,7 @@ document.getElementById("btnSaveEdit").addEventListener("click", async () => {
           offerId:          offerRow.offerId,
           sku:              editProduct.code,
           priceCents,
-          quantity:         offerRow.availableQuantity ?? quantity,
+          quantity:         editVariantQtyOverrides[vSku] ?? offerRow.availableQuantity ?? quantity,
           categoryId:       editCategoryId || undefined,
           policies:         getSelectedPolicies("edit"),
           // Best Offer not permitted on group (variant) listings (eBay error 25737)
