@@ -632,8 +632,12 @@ window.openEdit = async function openEdit(code) {
 
       const firstVariantSku = group.variantSKUs?.[0];
       if (firstVariantSku) {
-        const offersResult = await callEdge("ebay-manage-listing", { action: "get_offers", sku: firstVariantSku });
+        const [offersResult, variantItemResult] = await Promise.all([
+          callEdge("ebay-manage-listing", { action: "get_offers", sku: firstVariantSku }),
+          callEdge("ebay-manage-listing", { action: "get_item",   sku: firstVariantSku }),
+        ]);
         offer = (offersResult.offers || [])[0] || {};
+        if (variantItemResult.success) item = variantItemResult.item;
       }
       if (!offer.pricingSummary?.price?.value && editProduct.ebay_price_cents) {
         offer.pricingSummary = { price: { value: (editProduct.ebay_price_cents / 100).toFixed(2) } };
@@ -707,7 +711,11 @@ window.openEdit = async function openEdit(code) {
         : Number(editProduct.price).toFixed(2);
 
     const pkg = item.packageWeightAndSize || {};
-    if (pkg.weight)     document.getElementById("editWeightOz").value = pkg.weight.value || "";
+    if (pkg.weight) {
+      document.getElementById("editWeightOz").value = pkg.weight.value || "";
+    } else if (editProduct.weight_g) {
+      document.getElementById("editWeightOz").value = (editProduct.weight_g / 28.3495).toFixed(1);
+    }
     if (pkg.dimensions) {
       document.getElementById("editDimL").value = pkg.dimensions.length || "";
       document.getElementById("editDimW").value = pkg.dimensions.width  || "";
