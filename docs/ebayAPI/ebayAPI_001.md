@@ -203,6 +203,7 @@ sell.account.readonly     ← policy reads (added Phase 1)
 2. **🟡 SKU discipline** — CSV imports use `ebay_{orderNumber}` while API uses `ebay_api_{orderId}`. Dedup logic must check both prefixes everywhere. Works but fragile. **Action:** Standardize on API-format IDs going forward; CSV import is legacy.
 3. **No buyer email** — eBay Fulfillment API does not expose buyer email. `orders_raw.customer_email` is always null for eBay orders.
 4. **eBay Client ID exposed in client-side code** — `settings.html` contains the client ID inline. Low risk (it's a public identifier), but the client secret is server-side only.
+5. **~~🔴 Service-role key exposed in `ebay-listings.html` (CRITICAL)~~** ✅ **RESOLVED (April 20, 2026)** — `SERVICE_KEY` constant removed from client-side code. `callEdge` now uses `supabase.auth.getSession()` to obtain the user JWT. `ebay-manage-listing` enforces admin auth via `decodeJwtRole` + `is_admin` RPC; unauthenticated callers receive 401, non-admin callers receive 403. **⚠️ Pending:** Rotate the compromised service-role key in the Supabase dashboard.
 
 ---
 
@@ -1895,32 +1896,167 @@ The edge function returns structured JSON with confidence and source metadata:
 ## Phase 7 — Universal Analytics Dashboard
 
 ### 7.1 Overview
-Unified dashboard aggregating sales, traffic, and product performance across all channels: website (Stripe), eBay, and future platforms (Amazon, Etsy).
+Build a single admin analytics surface that uses the existing ingestion pipeline (Stripe webhook + eBay API/webhook + Amazon import RPC) and adds a daily aggregate layer for fast reporting.
+
+**System audit summary (current state):**
+- Orders are already unified in `orders_raw` + `line_items_raw` across channels:
+  - Website: `stripe_checkout_session_id` like `cs_*` (from `stripe-webhook`)
+  - eBay: `stripe_checkout_session_id` like `ebay_api_*` (and some legacy `ebay_*`)
+  - Amazon: `stripe_checkout_session_id` like `amazon_*` (via `rpc_import_amazon_orders`)
+- Financial support data exists:
+  - eBay fees + non-sale charges are in `expenses` (vendor = `eBay`) from `ebay-sync-finances`
+  - Shipping/fulfillment state is in `fulfillment_shipments`
+- Abandonment signal exists for website in `saved_carts` (`active`, `purchased`, `expired`) and `sms_v_abandoned_cart`.
+- Product performance can already be derived from `line_items_raw` (used by `itemStats` page).
+
+**Current gap:** we do not yet have a dedicated cross-channel analytics table/page/function, and conversion/pageview tracking is incomplete for non-SMS traffic. This phase adds that layer without breaking existing admin pages.
 
 ### 7.2 Key Metrics
 | Metric | Sources |
 |--------|---------|
-| Total Revenue | `orders_raw` (Stripe) + eBay Finances API |
-| Units Sold | `line_items_raw` + eBay Fulfillment API |
-| Conversion Rate | Page views → purchases (per channel) |
-| Top Products | Cross-channel best sellers |
-| Trending | Sales velocity changes over 7/30/90 days |
-| Cart Abandonment | Stripe incomplete sessions + eBay watchers |
-| Average Order Value | Aggregated across channels |
+| Total Revenue | `orders_raw.total_paid_cents` grouped by derived channel |
+| Units Sold | `line_items_raw.quantity` grouped by derived channel |
+| Conversion Proxy (website only, Phase 1) | `saved_carts` activity + purchases |
+| Conversion Rate (website only, Phase 2) | Pageview/session events -> purchases |
+| Top Products | `line_items_raw` + `products` join, grouped by channel/date |
+| Trending | Daily aggregates in `analytics_daily` over 7/30/90-day windows |
+| Cart Abandonment (website only) | `saved_carts` (`active/expired/purchased`) + `sms_v_abandoned_cart` |
+| Average Order Value | `SUM(total_paid_cents)/COUNT(DISTINCT stripe_checkout_session_id)` by channel |
+
+> **Important audit correction:** We should treat `orders_raw` as the canonical revenue source for completed orders. eBay Finances API remains useful for fee/settlement analysis, but not the primary source for top-line order revenue in this dashboard.
 
 ### 7.3 Architecture
-- **Admin Page**: `pages/admin/analytics.html` — interactive charts (Chart.js or lightweight lib)
-- **Edge Function**: `analytics-aggregate` — pulls data from Supabase tables + eBay APIs, returns unified JSON
-- **Cron Job**: Daily aggregation into `analytics_daily` table for fast dashboard loads
-- **AI Insights**: Optional AI-powered suggestions ("Product X selling 3x better on eBay — consider raising price")
+- **Admin Page**: `pages/admin/analytics.html`
+  - Follow existing admin page pattern (`initAdminNav`, `requireAdmin`, Tailwind CDN, Chart.js CDN).
+  - Module entry at `js/admin/analytics/index.js` with small split modules (`api.js`, `charts.js`, `state.js`) similar to `expenses` and `itemStats`.
+
+- **Data Layer**:
+  - New table: `analytics_daily` (pre-aggregated metrics by date + channel + product).
+  - New helper view or SQL CTE in function to normalize channel from `stripe_checkout_session_id`:
+    - `ebay_api_%` or `ebay_%` -> `ebay`
+    - `amazon_%` -> `amazon`
+    - else -> `website`
+
+- **Edge Function**: `analytics-aggregate`
+  - Returns KPI payload + chart series for selected date range.
+  - Reads primarily from `analytics_daily`; falls back to live `orders_raw`/`line_items_raw` if needed.
+  - No heavy external API dependency in request path (fast page loads, fewer runtime failures).
+  - Response split should be explicit:
+    - `channel_kpis` (cross-channel: revenue, orders, units, derived AOV)
+    - `website_funnel` (website-only: abandoned carts, recovered carts, conversion proxy/rate)
+    - `reconciliation` (debug totals + delta for rollout confidence)
+
+- **Daily Job**:
+  - Cron-triggered function (or SQL job) to upsert prior day into `analytics_daily`.
+  - Use existing cron pattern (`pg_cron` + `net.http_post`) already used elsewhere.
+
+- **AI Insights (Optional)**:
+  - Add only after baseline metrics are stable.
+  - Insights read from `analytics_daily` snapshots, not live transactional queries.
 
 ### 7.4 Implementation Steps
-1. Create `analytics_daily` table (date, channel, product_id, revenue, units, views)
-2. Build `analytics-aggregate` edge function
-3. Set up daily cron to populate aggregated data
-4. Build admin dashboard page with charts and KPI cards
-5. Add per-product channel comparison view
-6. (Optional) AI-powered optimization suggestions
+1. **Schema migration (Phase 7a)**
+  - Define aggregation grain explicitly before writing DDL:
+    - **Channel-day grain** for top-line KPIs (`orders_count`, `revenue_cents`, channel-level `units_sold`)
+    - **Product-day grain** for product ranking/comparison (`units_sold`, `revenue_cents` by product bucket)
+  - Use a surrogate primary key (`id uuid`) plus a normalized uniqueness index instead of relying on nullable multi-column uniqueness.
+  - Recommended uniqueness index shape:
+    - `(metric_date, channel, grain_type, product_bucket)`
+    - where `grain_type in ('channel_day','product_day')`
+    - and `product_bucket` is either a real product id string or `'__unmatched__'`.
+   - Recommended columns:
+     - `id uuid primary key default gen_random_uuid()`
+     - `metric_date date not null`
+     - `channel text not null` (`website`, `ebay`, `amazon`, `other`)
+     - `grain_type text not null` (`channel_day`, `product_day`)
+     - `product_bucket text null` (`<product_id>` or `__unmatched__`)
+     - `product_code text null`
+     - `product_id uuid null`
+     - `orders_count int not null default 0`
+     - `units_sold int not null default 0`
+     - `revenue_cents int not null default 0`
+     - `abandoned_carts int not null default 0`
+     - `recovered_carts int not null default 0`
+     - `views int not null default 0` (0 until pageview tracking phase)
+     - `created_at/updated_at timestamptz`
+  - Do **not** persist `aov_cents`; compute AOV at read time from `revenue_cents/orders_count`.
+   - Add indexes on `(metric_date)` and `(channel, metric_date)`.
+  - Add indexes on `(product_code)` and `(product_id)` for product drill-down performance.
+  - Add index on `(grain_type, metric_date, channel)` to keep channel/day reads fast.
+
+2. **Backfill + daily aggregator (Phase 7b)**
+   - Create a SQL/backfill routine that aggregates historical `orders_raw` + `line_items_raw` into `analytics_daily`.
+   - Include channel derivation by session ID prefix.
+   - Include website abandonment/recovery counts from `saved_carts` per day.
+  - Define unmatched line-item policy explicitly:
+    - If `product_code`/`product_id` cannot be resolved, bucket as `product_bucket='__unmatched__'`, `product_id=null`, `product_code='__unmatched__'`.
+    - Include unmatched rows in channel totals, but exclude from top-product ranking cards by default.
+  - Aggregation safety rule:
+    - Never derive top-level `orders_count` by summing product-grain rows.
+    - Top-level KPIs must come from `grain_type='channel_day'` rows (or direct raw-source reconciliation queries).
+
+3. **Edge function: `analytics-aggregate` (Phase 7c)**
+   - Inputs: `range`, optional `channel`, optional `product_code`.
+   - Output:
+    - Channel KPI block (revenue, units, orders, derived AOV)
+     - Time-series block (daily revenue/units)
+     - Top products block (cross-channel and per-channel)
+     - Channel comparison block (website vs eBay vs Amazon)
+    - Website-only funnel block (`abandoned_carts`, `recovered_carts`, conversion proxy/rate)
+    - Reconciliation block:
+     - `raw_totals` (direct sums from source tables)
+     - `aggregate_totals` (sums from `analytics_daily`)
+     - `delta` (difference used for validation)
+   - Keep this function read-only for dashboard requests.
+     - Query discipline:
+      - `channel_kpis` and headline cards read from `grain_type='channel_day'` only.
+      - Product tables/charts read from `grain_type='product_day'` only.
+
+4. **Cron scheduling (Phase 7d)**
+  - Add `pg_cron` schedule to run daily at **08:20 UTC**.
+  - Dependency order for daily snapshot:
+    - `06:00 UTC` eBay finances sync
+    - `08:00 UTC` eBay orders fallback sync
+    - `08:20 UTC` analytics aggregation
+   - Add rerun safety (idempotent upsert by unique key).
+
+5. **Admin UI build (Phase 7e)**
+   - Create `pages/admin/analytics.html` and `js/admin/analytics/index.js`.
+   - Reuse UI conventions already present in admin pages (KPI cards, filters, Chart.js charts, responsive cards/table).
+   - Add navigation link in `page_inserts/admin-nav.html` once page is live.
+  - Label funnel sections explicitly as **Website Only** to avoid cross-channel misinterpretation.
+
+6. **Per-product channel comparison (Phase 7f)**
+   - Add a comparison table/chart that shows each product's revenue, units, and AOV by channel.
+   - Add trend badges (`7d vs previous 7d`) using `analytics_daily`.
+  - Hide `__unmatched__` rows by default, with a debug toggle to inspect mapping gaps.
+
+7. **Traffic + true conversion expansion (Phase 7g, follow-up)**
+   - Introduce lightweight pageview/event capture (website first).
+   - Populate `views` in `analytics_daily` and upgrade conversion from proxy to true conversion.
+   - Keep eBay/Amazon conversion as `n/a` until equivalent traffic signals exist.
+
+8. **Optional AI insights (Phase 7h)**
+   - Generate recommendations from stable aggregates only.
+   - Store insight snapshots for auditability and avoid real-time model calls on every page load.
+
+### 7.5a Recommended Build Order
+1. Schema + backfill
+2. Edge function
+3. Basic admin page
+4. Reconciliation checks
+5. Trend badges and polish
+
+### 7.5 Success Criteria
+- [ ] `analytics_daily` exists with historical backfill and daily updates running idempotently.
+- [ ] `analytics-aggregate` returns unified KPI + timeseries + top-product payload within acceptable latency.
+- [ ] New admin Analytics page is live and linked from admin nav.
+- [ ] Channel comparison supports at least `website`, `ebay`, and `amazon` from existing normalized order data.
+- [ ] Dashboard numbers reconcile with existing admin order totals for the same date range.
+- [ ] Website-only funnel metrics are explicitly labeled and not presented as cross-channel.
+- [ ] Conversion metric is clearly labeled as proxy until pageview tracking is enabled.
+- [ ] Unmatched line-item handling (`__unmatched__`) is implemented and visible in debug mode.
+- [ ] Top-level KPI queries are sourced from channel-day grain (not summed from product-day rows).
 
 ---
 
