@@ -962,7 +962,7 @@
     async function loadProducts() {
       const { data, error } = await supabase
         .from("products")
-        .select("id, code, name, slug, price, weight_g, catalog_image_url, catalog_hover_url, primary_image_url, is_active, ebay_sku, ebay_offer_id, ebay_listing_id, ebay_status, ebay_category_id, ebay_price_cents, ebay_item_group_key, ebay_volume_promo_id, product_gallery_images(url, position, is_active), product_variants(id, option_name, option_value, stock, preview_image_url, sort_order, is_active)")
+        .select("id, code, name, slug, price, weight_g, catalog_image_url, catalog_hover_url, primary_image_url, is_active, ebay_sku, ebay_offer_id, ebay_listing_id, ebay_status, ebay_category_id, ebay_price_cents, ebay_item_group_key, ebay_volume_promo_id, ebay_store_category, product_gallery_images(url, position, is_active), product_variants(id, option_name, option_value, stock, preview_image_url, sort_order, is_active)")
         .order("code");
 
       if (error) {
@@ -2128,9 +2128,9 @@
         document.getElementById("editAutoAccept").value = bot.autoAcceptPrice?.value || "";
         document.getElementById("editAutoDecline").value = bot.autoDeclinePrice?.value || "";
 
-        // Pre-fill Store Category from offer
+        // Pre-fill Store Category — local DB is source of truth; eBay GET response is fallback
         const storeCats = offer.storeCategoryNames || [];
-        document.getElementById("editStoreCategory").value = storeCats[0] || "";
+        document.getElementById("editStoreCategory").value = editProduct.ebay_store_category || storeCats[0] || "";
 
         // Pre-fill Volume Pricing from existing promotion
         const volPromoId = editProduct.ebay_volume_promo_id;
@@ -2501,6 +2501,10 @@
         }
 
         // Handle Volume Pricing
+        // Persist store category locally so pre-fill works reliably on re-open
+        const savedStoreCat = document.getElementById("editStoreCategory").value;
+        await supabase.from("products").update({ ebay_store_category: savedStoreCat || null }).eq("id", editProduct.id);
+
         const volEnabled = document.getElementById("editVolEnabled").checked;
         const volTiers = volEnabled ? getVolTiers("edit") : [];
         const existingPromoId = editProduct._volPromoId || editProduct.ebay_volume_promo_id;
@@ -2966,22 +2970,34 @@
 
       rows.forEach(r => {
         const row = document.createElement("div");
-        row.className = "grid grid-cols-[auto_1fr_auto] gap-2 items-center";
+        row.className = "mb-3";
         const candidateImages = [...new Set([r.lead, ...editImageUrls].filter(Boolean))];
-        const options = candidateImages.map((u) => `<option value="${esc(u)}">${esc(u)}</option>`).join("");
+        const selectedUrl = r.lead || candidateImages[0] || "";
+
+        const thumbsHtml = candidateImages.map((u) => {
+          const isSelected = u === selectedUrl;
+          return `<img src="${esc(u)}" alt="" loading="lazy" data-variant-thumb-sku="${esc(r.sku)}" data-thumb-url="${esc(u)}"
+            class="w-12 h-12 rounded object-cover border-2 cursor-pointer transition-all flex-shrink-0 ${isSelected ? "border-kkpink ring-1 ring-kkpink" : "border-gray-200 hover:border-gray-400"}" />`;
+        }).join("");
+
         row.innerHTML = `
-          <div class="text-[10px] font-bold text-gray-700 min-w-[86px]">${esc(r.label)}</div>
-          <select data-variant-image-sku="${esc(r.sku)}"
-            class="w-full border-2 border-gray-300 px-2 py-1.5 text-xs outline-none focus:border-kkpink transition-colors">${options}</select>
-          <img data-variant-image-preview="${esc(r.sku)}" src="${esc(r.lead || candidateImages[0] || "")}" class="w-10 h-10 rounded object-cover border" />`;
-        const input = row.querySelector("[data-variant-image-sku]");
-        input.value = r.lead || candidateImages[0] || "";
-        input.addEventListener("change", (e) => {
-          const sku = e.target.dataset.variantImageSku;
-          const url = e.target.value.trim();
-          editVariantImageOverrides[sku] = url;
-          const img = row.querySelector("[data-variant-image-preview]");
-          if (img) img.src = url;
+          <div class="text-[10px] font-bold text-gray-700 mb-1">${esc(r.label)}</div>
+          <div class="flex flex-wrap gap-1">${thumbsHtml}</div>`;
+
+        row.querySelectorAll("[data-variant-thumb-sku]").forEach(thumb => {
+          thumb.addEventListener("click", () => {
+            const sku = thumb.dataset.variantThumbSku;
+            const url = thumb.dataset.thumbUrl;
+            editVariantImageOverrides[sku] = url;
+            // Update ring on all thumbs for this sku
+            row.querySelectorAll("[data-variant-thumb-sku]").forEach(t => {
+              const selected = t.dataset.thumbUrl === url;
+              t.classList.toggle("border-kkpink", selected);
+              t.classList.toggle("ring-1", selected);
+              t.classList.toggle("ring-kkpink", selected);
+              t.classList.toggle("border-gray-200", !selected);
+            });
+          });
         });
         list.appendChild(row);
       });
