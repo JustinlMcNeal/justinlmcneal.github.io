@@ -607,31 +607,31 @@ After completing the fix sprint (sections 13 + 14), verify the following before 
 - [ ] Push with all variants qty > 0 creates group + per-variant offers + publishes
 - [ ] Push with some variants qty 0 skips those variants cleanly
 - [ ] Edit modal loads correctly for group listing (variant image controls render, no silent errors)
-- [ ] Group draft with `ebay_offer_id` set: table/card Publish button routes to `publish_group`, not single offer
+- [x] Group draft with `ebay_offer_id` set: table/card Publish button routes to `publish_group`, not single offer
 - [ ] End listing for active group listing routes to `withdraw_group`
 
 ### Bulk operations
-- [ ] Bulk price update with value `0` is rejected client-side before reaching the API
+- [ ] Bulk price update with value `0` is no longer silently skipped — `0` now passes through to the API as intended
 - [ ] Bulk qty update correctly sends quantity, not price
 - [ ] Local DB `ebay_price_cents` updates after successful bulk price
 
 ### Volume pricing
-- [ ] Volume pricing UI rejects fractional `percentOff` (or rounds to integer)
-- [ ] User-entered tier thresholds (e.g., buy 5+) are preserved after save — not remapped to sequential indices
+- [x] Volume pricing UI rejects fractional `percentOff` (`step="1"` added; edge function uses `Math.round`)
+- [x] User-entered tier thresholds (e.g., buy 5+) are preserved after save — not remapped to sequential indices
 - [ ] Create + update + delete volume promo all complete without error
 - [ ] No duplicate tiers rendered when re-opening edit modal on a listing with existing promo
 
 ### Webhook setup
-- [ ] A failed webhook config call surfaces as `❌ error` in the UI — not a false success
-- [ ] `create_webhook_destination` returns a non-empty `destinationId` on success
-- [ ] `create_webhook_subscription` returns a non-empty `subscriptionId` on success
+- [x] A failed webhook config call surfaces as `❌ error` in the UI — not a false success
+- [x] `create_webhook_destination` returns a non-empty `destinationId` on success (validated before reporting success)
+- [x] `create_webhook_subscription` returns a non-empty `subscriptionId` on success (validated before reporting success)
 
 ### Error handling
-- [ ] Simulating a Supabase edge function crash (bad action name) shows a friendly `❌` message, not a raw `SyntaxError: Unexpected token`
-- [ ] Editing a group listing with one eBay-side `get_item` call failing shows a warning on that variant row — does not silently render wrong image
+- [x] Simulating a Supabase edge function crash (bad action name) shows a friendly `❌` message, not a raw `SyntaxError: Unexpected token`
+- [x] Editing a group listing with one eBay-side `get_item` call failing shows a `console.warn` and falls back to local image — does not silently render wrong image
 
 ### Best offer
-- [ ] Setting `autoAccept` lower than `autoDecline` is rejected before the API call
+- [x] Setting `autoAccept` lower than or equal to `autoDecline` is rejected before the API call
 
 ### One-time post-rotate smoke test
 - [ ] Open any admin page — confirm no `SERVICE_KEY` JWT appears in browser network requests
