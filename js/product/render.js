@@ -14,7 +14,7 @@ export function money(n) {
 export function shippingText(shipping_status, variant = null) {
   if (shipping_status === "mto") return "⏳ Made to order · ships in 2–4 weeks";
   if (variant && (variant.stock ?? null) !== null && variant.stock <= 0) {
-    return "📦 Back-order · ships in 4–6 weeks";
+    return "🕐 Shipping time 2–4 weeks";
   }
   return "🚀 In Stock · ships in 1–2 business days";
 }
@@ -26,7 +26,7 @@ export function stockBadgeHtml(variant = null, shipping_status = "") {
   if (!variant || (variant.stock ?? null) === null) return "";
   const stock = variant.stock;
   if (stock <= 0) {
-    return `<span class="inline-block bg-red-100 text-red-800 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">Back-order · 4–6 weeks</span>`;
+    return `<span class="inline-block bg-blue-100 text-blue-800 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">Shipping time 2–4 weeks</span>`;
   }
   if (stock <= 3) {
     return `<span class="inline-block bg-yellow-100 text-yellow-800 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">⚠ Only ${stock} left!</span>`;
@@ -306,8 +306,8 @@ export function renderVariantSwatches(container, variants = [], onSelect) {
       btn.classList.add("ring-1", "ring-inset", "ring-black/10");
     }
 
-    btn.setAttribute("aria-label", `${label || `Color option ${idx + 1}`}${isOutOfStock ? " (back-order)" : ""}`);
-    btn.title = `${label || ""}${isOutOfStock ? " (back-order)" : ""}`;
+    btn.setAttribute("aria-label", `${label || `Color option ${idx + 1}`}${isOutOfStock ? " (2–4 week shipping)" : ""}`);
+    btn.title = `${label || ""}${isOutOfStock ? " (2–4 week shipping)" : ""}`;
 
     btn.onclick = () => {
       if (activeBtn) {

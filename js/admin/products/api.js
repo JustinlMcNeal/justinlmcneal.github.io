@@ -123,10 +123,26 @@ export async function setProductActive(productId, isActive) {
 }
 
 export async function replaceVariants(productId, variants) {
+  if (!variants.length) {
+    const { error: delErr } = await sb().from("product_variants").delete().eq("product_id", productId);
+    await must(true, delErr, "Clear variants failed");
+    return;
+  }
+
+  // Check for duplicate option values before touching the DB
+  const seen = new Set();
+  const dupes = [];
+  for (const v of variants) {
+    const key = (v.option_value || "").trim().toLowerCase();
+    if (seen.has(key)) dupes.push(v.option_value);
+    seen.add(key);
+  }
+  if (dupes.length) {
+    throw new Error(`Duplicate variant option values: "${dupes.join('", "')}" — each variant must have a unique name.`);
+  }
+
   const { error: delErr } = await sb().from("product_variants").delete().eq("product_id", productId);
   await must(true, delErr, "Clear variants failed");
-
-  if (!variants.length) return;
 
   const rows = variants.map((v, idx) => ({
     product_id: productId,
