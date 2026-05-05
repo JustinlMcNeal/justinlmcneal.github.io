@@ -44,6 +44,7 @@ function mobileCardRow(p, onEditId) {
         <div class="flex-1 min-w-0">
           <div class="font-black text-sm leading-tight line-clamp-2">${escapeHtml(p.name || "")}</div>
           ${p.code ? `<div class="text-xs text-gray-500 font-mono mt-1 bg-gray-100 inline-block px-2 py-0.5 rounded">${escapeHtml(p.code)}</div>` : '<div class="text-xs text-gray-400 mt-1">Auto-applied</div>'}
+          ${p.coupon_landing_enabled ? `<div class="text-[10px] font-black uppercase tracking-wider text-pink-600 mt-1">QR page</div>` : ''}
         </div>
         <span class="${statusInfo.class} px-2 py-1 text-[10px] font-bold uppercase tracking-wider rounded-lg flex-shrink-0">
           ${statusInfo.text}
@@ -147,6 +148,7 @@ export function renderTable({
         <tr class="hover:bg-gray-50 transition-colors">
           <td class="px-4 py-3">
             <div class="font-bold text-sm">${escapeHtml(p.name || "")}</div>
+            ${p.coupon_landing_enabled ? `<div class="text-[10px] font-black uppercase tracking-wider text-pink-600 mt-1">QR page · ${escapeHtml(p.coupon_slug || "")}</div>` : ''}
             ${p.description ? `<div class="text-xs text-gray-500 mt-1 line-clamp-1">${escapeHtml(p.description)}</div>` : ''}
           </td>
 

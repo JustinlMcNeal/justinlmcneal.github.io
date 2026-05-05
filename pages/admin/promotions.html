@@ -11,6 +11,7 @@
 
   <!-- Tailwind CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
 
   <!-- Global brand theme (keep) -->
   <link rel="stylesheet" href="/css/theme/base.css">
@@ -197,6 +198,56 @@
             <div>
               <label for="fUsageLimit" class="block text-xs font-black uppercase tracking-[.25em] opacity-70">Usage limit</label>
               <input id="fUsageLimit" type="number" class="mt-2 w-full kk-border px-4 py-3 outline-none" placeholder="Unlimited" />
+            </div>
+          </div>
+
+          <div class="my-6 border-t-4 border-black"></div>
+
+          <!-- Coupon landing page / QR -->
+          <div class="uppercase tracking-[.25em] font-black text-xs text-gray-500 mb-3">Coupon page</div>
+          <div class="border-2 border-gray-300 rounded-xl p-4 space-y-4">
+            <label class="flex items-start gap-3 cursor-pointer">
+              <input id="fCouponLandingEnabled" type="checkbox" class="w-5 h-5 accent-black mt-1" />
+              <div>
+                <span class="font-bold">Create QR coupon page</span>
+                <span class="text-xs text-gray-500 block">Builds a public coupon reveal URL and downloadable QR PNG for printed cards.</span>
+              </div>
+            </label>
+
+            <div id="couponLandingFields" class="hidden space-y-4">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label for="fCouponSlug" class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-2">URL slug</label>
+                  <input id="fCouponSlug" class="w-full border-2 border-gray-300 rounded-xl px-4 py-3 outline-none focus:border-black transition-colors font-mono" placeholder="summer-card-2026" />
+                  <div class="text-xs text-gray-500 mt-2">Letters, numbers, and hyphens only.</div>
+                </div>
+
+                <div>
+                  <label for="fCouponPageTitle" class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-2">Page title</label>
+                  <input id="fCouponPageTitle" class="w-full border-2 border-gray-300 rounded-xl px-4 py-3 outline-none focus:border-black transition-colors" placeholder="Your exclusive Karry Kraze offer" />
+                </div>
+              </div>
+
+              <div>
+                <label for="fCouponPageNote" class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-2">Page note</label>
+                <textarea id="fCouponPageNote" class="w-full border-2 border-gray-300 rounded-xl px-4 py-3 outline-none focus:border-black transition-colors resize-none" rows="2" placeholder="Scan, copy your code, and shop your new favorite accessories."></textarea>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-[1fr_180px] gap-4 items-start">
+                <div>
+                  <label for="couponLandingUrl" class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-2">Coupon URL</label>
+                  <input id="couponLandingUrl" class="w-full border-2 border-gray-300 rounded-xl px-4 py-3 outline-none bg-gray-50 font-mono text-sm" readonly />
+                  <div class="mt-3 flex flex-wrap gap-2">
+                    <button id="btnCopyCouponUrl" type="button" class="border-2 border-black bg-white px-4 py-2 rounded-lg text-xs font-black uppercase tracking-[.1em] hover:bg-black hover:text-white transition-colors">Copy URL</button>
+                    <button id="btnDownloadQr" type="button" class="border-2 border-black bg-black text-white px-4 py-2 rounded-lg text-xs font-black uppercase tracking-[.1em] hover:bg-white hover:text-black transition-colors">Download QR PNG</button>
+                  </div>
+                </div>
+
+                <div class="border-2 border-gray-300 rounded-xl bg-white p-3 text-center">
+                  <img id="couponQrPreview" src="" alt="Coupon QR code preview" class="hidden w-36 h-36 mx-auto image-render-pixel" />
+                  <div id="couponQrEmpty" class="h-36 flex items-center justify-center text-xs font-bold text-gray-400 uppercase tracking-wider">QR Preview</div>
+                </div>
+              </div>
             </div>
           </div>
 

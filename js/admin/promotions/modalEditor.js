@@ -31,6 +31,136 @@ export function bindModal(els, refreshTable) {
     return div.innerHTML;
   }
 
+  function slugify(text) {
+    return String(text || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 80);
+  }
+
+  function getCouponLandingOrigin() {
+    const host = window.location.hostname.toLowerCase();
+    if (host === "karrykraze.com" || host.endsWith(".karrykraze.com")) {
+      return window.location.origin;
+    }
+    return "https://karrykraze.com";
+  }
+
+  function getCouponLandingUrl(slug) {
+    const cleanSlug = slugify(slug);
+    if (!cleanSlug) return "";
+    const url = new URL("/pages/coupon.html", getCouponLandingOrigin());
+    url.searchParams.set("promo", cleanSlug);
+    return url.toString();
+  }
+
+  function getSaveErrorMessage(error) {
+    const message = String(error?.message || error || "");
+    if (
+      message.includes("idx_promotions_coupon_slug_unique") ||
+      (message.toLowerCase().includes("duplicate key") && message.includes("coupon_slug"))
+    ) {
+      return "That coupon page slug is already in use. Choose a different slug.";
+    }
+    return message || "Could not save promotion.";
+  }
+
+  function getCouponQrDataUrl(url) {
+    if (!url) return "";
+    if (typeof window.qrcode !== "function") {
+      throw new Error("QR generator failed to load. Refresh the page and try again.");
+    }
+
+    const qr = window.qrcode(0, "M");
+    qr.addData(url);
+    qr.make();
+
+    const moduleCount = qr.getModuleCount();
+    const cellSize = 12;
+    const margin = 4;
+    const canvasSize = (moduleCount + margin * 2) * cellSize;
+    const canvas = document.createElement("canvas");
+    canvas.width = canvasSize;
+    canvas.height = canvasSize;
+
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvasSize, canvasSize);
+    ctx.fillStyle = "#000000";
+
+    for (let row = 0; row < moduleCount; row += 1) {
+      for (let col = 0; col < moduleCount; col += 1) {
+        if (!qr.isDark(row, col)) continue;
+        ctx.fillRect((col + margin) * cellSize, (row + margin) * cellSize, cellSize, cellSize);
+      }
+    }
+
+    return canvas.toDataURL("image/png");
+  }
+
+  let couponSlugTouched = false;
+
+  function getCouponLandingEls() {
+    return {
+      enabled: document.getElementById("fCouponLandingEnabled"),
+      fields: document.getElementById("couponLandingFields"),
+      slug: document.getElementById("fCouponSlug"),
+      title: document.getElementById("fCouponPageTitle"),
+      note: document.getElementById("fCouponPageNote"),
+      url: document.getElementById("couponLandingUrl"),
+      qrPreview: document.getElementById("couponQrPreview"),
+      qrEmpty: document.getElementById("couponQrEmpty"),
+    };
+  }
+
+  function updateCouponLandingUI({ generateSlug = false } = {}) {
+    const c = getCouponLandingEls();
+    const isEnabled = !!c.enabled?.checked;
+    show(c.fields, isEnabled);
+
+    if (!isEnabled) return;
+
+    if (generateSlug && c.slug && !couponSlugTouched) {
+      const source = els.fCode?.value || els.fName?.value || "coupon";
+      c.slug.value = slugify(source);
+    } else if (c.slug) {
+      c.slug.value = slugify(c.slug.value);
+    }
+
+    const url = getCouponLandingUrl(c.slug?.value || "");
+    if (c.url) c.url.value = url;
+
+    try {
+      const dataUrl = getCouponQrDataUrl(url);
+      if (c.qrPreview) c.qrPreview.src = dataUrl;
+      show(c.qrPreview, !!dataUrl);
+      show(c.qrEmpty, !dataUrl);
+    } catch (error) {
+      console.warn("[Promotions] QR preview failed:", error);
+      show(c.qrPreview, false);
+      show(c.qrEmpty, true);
+    }
+  }
+
+  function downloadCouponQr() {
+    const c = getCouponLandingEls();
+    const url = c.url?.value || getCouponLandingUrl(c.slug?.value || "");
+    if (!url) {
+      setMsg(els.modalMsg, "Add a coupon page slug before downloading the QR code.", true);
+      return;
+    }
+
+    const dataUrl = getCouponQrDataUrl(url);
+    const link = document.createElement("a");
+    link.href = dataUrl;
+    link.download = `karry-kraze-coupon-${slugify(c.slug?.value || "qr")}.png`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }
+
   async function loadScopeOptions() {
     try {
       const [cats, tgs, prods] = await Promise.all([
@@ -344,6 +474,15 @@ export function bindModal(els, refreshTable) {
       els.fPublic.checked = !!full.is_public;
       els.fDescription.value = full.description || "";
 
+      // Coupon landing page
+      couponSlugTouched = !!full.coupon_slug;
+      const couponLanding = getCouponLandingEls();
+      if (couponLanding.enabled) couponLanding.enabled.checked = !!full.coupon_landing_enabled;
+      if (couponLanding.slug) couponLanding.slug.value = full.coupon_slug || "";
+      if (couponLanding.title) couponLanding.title.value = full.coupon_page_title || "";
+      if (couponLanding.note) couponLanding.note.value = full.coupon_page_note || "";
+      updateCouponLandingUI({ generateSlug: false });
+
       // Banner
       const bannerEl = els.fBannerImage || document.getElementById("fBannerImage");
       if (bannerEl) bannerEl.value = full.banner_image_path || "";
@@ -411,6 +550,10 @@ export function bindModal(els, refreshTable) {
       scope_type: "all",
       scope_data: [],
       banner_image_path: null,
+      coupon_landing_enabled: false,
+      coupon_slug: null,
+      coupon_page_title: null,
+      coupon_page_note: null,
     };
 
     els.modalTitle.textContent = "Add Promotion";
@@ -426,6 +569,14 @@ export function bindModal(els, refreshTable) {
     els.fDescription.value = "";
     els.fStartDate.value = "";
     els.fEndDate.value = "";
+
+    couponSlugTouched = false;
+    const couponLanding = getCouponLandingEls();
+    if (couponLanding.enabled) couponLanding.enabled.checked = false;
+    if (couponLanding.slug) couponLanding.slug.value = "";
+    if (couponLanding.title) couponLanding.title.value = "";
+    if (couponLanding.note) couponLanding.note.value = "";
+    updateCouponLandingUI({ generateSlug: false });
 
     const bannerEl = els.fBannerImage || document.getElementById("fBannerImage");
     if (bannerEl) bannerEl.value = "";
@@ -450,6 +601,18 @@ export function bindModal(els, refreshTable) {
       // code optional
       const rawCode = els.fCode.value.trim();
       const code = rawCode ? rawCode.toUpperCase() : null;
+
+      const couponLanding = getCouponLandingEls();
+      const couponLandingEnabled = !!couponLanding.enabled?.checked;
+      const couponSlug = slugify(couponLanding.slug?.value || "");
+
+      if (couponLandingEnabled && !code) {
+        throw new Error("Coupon pages need a code to reveal. Add a code or turn off the coupon page.");
+      }
+
+      if (couponLandingEnabled && !couponSlug) {
+        throw new Error("Coupon pages need a URL slug.");
+      }
 
       // Handle banner - either uploaded file or URL
       let banner_image_path = null;
@@ -479,9 +642,14 @@ export function bindModal(els, refreshTable) {
         end_date: els.fEndDate.value ? new Date(els.fEndDate.value).toISOString() : null,
         is_active: !!els.fActive.checked,
         is_public: !!els.fPublic.checked,
+        requires_code: !!code,
         description: els.fDescription.value.trim() || null,
         scope_type: scopeType,
         scope_data: scopeData,
+        coupon_landing_enabled: couponLandingEnabled,
+        coupon_slug: couponLandingEnabled ? couponSlug : null,
+        coupon_page_title: couponLanding.title?.value?.trim() || null,
+        coupon_page_note: couponLanding.note?.value?.trim() || null,
       };
 
       if (state.editing?.id) payload.id = state.editing.id;
@@ -507,7 +675,7 @@ export function bindModal(els, refreshTable) {
       closeModal();
     } catch (e) {
       console.error(e);
-      setMsg(els.modalMsg, String(e?.message || e), true);
+      setMsg(els.modalMsg, getSaveErrorMessage(e), true);
     }
   }
 
@@ -532,6 +700,37 @@ export function bindModal(els, refreshTable) {
   els.btnSave.addEventListener("click", save);
   els.btnClose.addEventListener("click", closeModal);
   els.btnDelete?.addEventListener("click", deletePromo);
+
+  document.getElementById("fCouponLandingEnabled")?.addEventListener("change", () => {
+    updateCouponLandingUI({ generateSlug: true });
+  });
+
+  document.getElementById("fCouponSlug")?.addEventListener("input", (event) => {
+    couponSlugTouched = true;
+    event.target.value = slugify(event.target.value);
+    updateCouponLandingUI({ generateSlug: false });
+  });
+
+  els.fName?.addEventListener("input", () => updateCouponLandingUI({ generateSlug: true }));
+  els.fCode?.addEventListener("input", () => updateCouponLandingUI({ generateSlug: true }));
+
+  document.getElementById("btnCopyCouponUrl")?.addEventListener("click", async () => {
+    const url = document.getElementById("couponLandingUrl")?.value || "";
+    if (!url) {
+      setMsg(els.modalMsg, "Add a coupon page slug before copying the URL.", true);
+      return;
+    }
+    await navigator.clipboard.writeText(url);
+    setMsg(els.modalMsg, "Coupon URL copied.", true);
+  });
+
+  document.getElementById("btnDownloadQr")?.addEventListener("click", () => {
+    try {
+      downloadCouponQr();
+    } catch (error) {
+      setMsg(els.modalMsg, String(error?.message || error), true);
+    }
+  });
 
   // Live banner preview
   const bannerEl = els.fBannerImage || document.getElementById("fBannerImage");
