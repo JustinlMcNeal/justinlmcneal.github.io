@@ -3,6 +3,27 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
+    // /c/{slug} → coupon share page with OG tags
+    if (path.startsWith("/c/")) {
+      const slug = path.replace(/^\/c\//, "").replace(/\/+$/, "");
+      if (!slug) return Response.redirect("https://karrykraze.com/", 302);
+
+      const supabaseUrl =
+        "https://yxdzvzscufkvewecvagq.supabase.co/functions/v1/share-coupon/" +
+        encodeURIComponent(slug);
+
+      const res = await fetch(supabaseUrl);
+      const html = await res.text();
+
+      return new Response(html, {
+        status: res.status,
+        headers: {
+          "content-type": "text/html; charset=utf-8",
+          "cache-control": "public, max-age=3600",
+        },
+      });
+    }
+
     // /s/img/* → proxy product images from Supabase storage
     if (path.startsWith("/s/img/")) {
       const imagePath = path.replace("/s/img/", "");
