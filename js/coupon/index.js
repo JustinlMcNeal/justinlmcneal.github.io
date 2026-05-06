@@ -21,6 +21,18 @@ function showCouponVisual(yes) {
   el.classList.add("hidden");
   el.classList.toggle("lg:block", yes);
   el.classList.toggle("lg:hidden", !yes);
+
+  // Collapse the grid to a single centered column when there's no visual
+  const section = document.getElementById("couponMainSection");
+  if (section) {
+    if (yes) {
+      section.classList.remove("max-w-xl", "lg:grid-cols-1");
+      section.classList.add("max-w-5xl", "lg:grid-cols-[1.05fr_.95fr]");
+    } else {
+      section.classList.remove("max-w-5xl", "lg:grid-cols-[1.05fr_.95fr]");
+      section.classList.add("max-w-xl", "lg:grid-cols-1");
+    }
+  }
 }
 
 function escapeHtml(text) {
@@ -196,7 +208,7 @@ function renderUpgradeSection(promo) {
   const consent  = $("upgradeConsentText");
 
   if (headline) headline.textContent = `Upgrade from ${baseOffer} → ${offer}`;
-  if (subtext)  subtext.textContent  = `Enter your phone number to receive a personal ${offer} code sent directly to your phone, and join our SMS list for future deals.`;
+  if (subtext)  subtext.textContent  = `Enter your phone number to receive a personal ${offer} code sent directly to your phone.`;
   if (consent)  consent.textContent  = promo.coupon_upgrade_consent ||
     "By entering your number you agree to receive marketing texts from Karry Kraze. Reply STOP to opt out. Msg & data rates may apply.";
 
