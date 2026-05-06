@@ -316,16 +316,32 @@ async function initCouponPage() {
   initFooter();
 
   const slug = getSlug();
-  const copyBtn = $("btnCopy");
+  const copyBtn  = $('btnCopy');
+  const shareBtn = $('btnShare');
 
-  copyBtn?.addEventListener("click", async () => {
+  copyBtn?.addEventListener('click', async () => {
     if (copyBtn.disabled) return;
-    const code = $("couponCode")?.textContent?.trim();
-    if (!code || code === "LOADING") return;
+    const code = $('couponCode')?.textContent?.trim();
+    if (!code || code === 'LOADING') return;
 
     await navigator.clipboard.writeText(code);
-    show($("copyMsg"), true);
-    setTimeout(() => show($("copyMsg"), false), 2400);
+    show($('copyMsg'), true);
+    setTimeout(() => show($('copyMsg'), false), 2400);
+  });
+
+  shareBtn?.addEventListener('click', async () => {
+    const shareUrl = slug ? `https://karrykraze.com/c/${encodeURIComponent(slug)}` : window.location.href;
+    const title = $('couponTitle')?.textContent?.trim() || 'Karry Kraze Coupon';
+    if (navigator.share) {
+      try {
+        await navigator.share({ title, text: 'Check out this deal from Karry Kraze!', url: shareUrl });
+      } catch (_) { /* user dismissed */ }
+    } else {
+      await navigator.clipboard.writeText(shareUrl);
+      show($('copyMsg'), true);
+      $('copyMsg').textContent = 'Share link copied!';
+      setTimeout(() => { show($('copyMsg'), false); $('copyMsg').textContent = 'Copied to clipboard.'; }, 2400);
+    }
   });
 
   if (!slug) {
