@@ -115,6 +115,22 @@ export function bindModal(els, refreshTable) {
     };
   }
 
+  function getCouponUpgradeEls() {
+    return {
+      enabled:  document.getElementById("fCouponUpgradeEnabled"),
+      fields:   document.getElementById("couponUpgradeFields"),
+      value:    document.getElementById("fCouponUpgradeValue"),
+      prefix:   document.getElementById("fCouponUpgradePrefix"),
+      expiry:   document.getElementById("fCouponUpgradeExpiry"),
+      consent:  document.getElementById("fCouponUpgradeConsent"),
+    };
+  }
+
+  function updateCouponUpgradeUI() {
+    const u = getCouponUpgradeEls();
+    show(u.fields, !!u.enabled?.checked);
+  }
+
   function updateCouponLandingUI({ generateSlug = false } = {}) {
     const c = getCouponLandingEls();
     const isEnabled = !!c.enabled?.checked;
@@ -483,6 +499,15 @@ export function bindModal(els, refreshTable) {
       if (couponLanding.note) couponLanding.note.value = full.coupon_page_note || "";
       updateCouponLandingUI({ generateSlug: false });
 
+      // Coupon upgrade
+      const couponUpgrade = getCouponUpgradeEls();
+      if (couponUpgrade.enabled) couponUpgrade.enabled.checked = !!full.coupon_upgrade_enabled;
+      if (couponUpgrade.value) couponUpgrade.value.value = full.coupon_upgrade_value ?? "";
+      if (couponUpgrade.prefix) couponUpgrade.prefix.value = full.coupon_upgrade_prefix || "VIP";
+      if (couponUpgrade.expiry) couponUpgrade.expiry.value = full.coupon_upgrade_expiry_days ?? 7;
+      if (couponUpgrade.consent) couponUpgrade.consent.value = full.coupon_upgrade_consent || "";
+      updateCouponUpgradeUI();
+
       // Banner
       const bannerEl = els.fBannerImage || document.getElementById("fBannerImage");
       if (bannerEl) bannerEl.value = full.banner_image_path || "";
@@ -554,6 +579,11 @@ export function bindModal(els, refreshTable) {
       coupon_slug: null,
       coupon_page_title: null,
       coupon_page_note: null,
+      coupon_upgrade_enabled: false,
+      coupon_upgrade_value: null,
+      coupon_upgrade_prefix: "VIP",
+      coupon_upgrade_expiry_days: 7,
+      coupon_upgrade_consent: null,
     };
 
     els.modalTitle.textContent = "Add Promotion";
@@ -577,6 +607,14 @@ export function bindModal(els, refreshTable) {
     if (couponLanding.title) couponLanding.title.value = "";
     if (couponLanding.note) couponLanding.note.value = "";
     updateCouponLandingUI({ generateSlug: false });
+
+    const couponUpgrade = getCouponUpgradeEls();
+    if (couponUpgrade.enabled) couponUpgrade.enabled.checked = false;
+    if (couponUpgrade.value) couponUpgrade.value.value = "";
+    if (couponUpgrade.prefix) couponUpgrade.prefix.value = "VIP";
+    if (couponUpgrade.expiry) couponUpgrade.expiry.value = "7";
+    if (couponUpgrade.consent) couponUpgrade.consent.value = "";
+    updateCouponUpgradeUI();
 
     const bannerEl = els.fBannerImage || document.getElementById("fBannerImage");
     if (bannerEl) bannerEl.value = "";
@@ -652,6 +690,23 @@ export function bindModal(els, refreshTable) {
         coupon_page_note: couponLanding.note?.value?.trim() || null,
       };
 
+      // Coupon upgrade fields
+      const couponUpgrade = getCouponUpgradeEls();
+      const upgradeEnabled = !!couponUpgrade.enabled?.checked;
+      payload.coupon_upgrade_enabled = upgradeEnabled;
+      if (upgradeEnabled) {
+        const upgradeVal = couponUpgrade.value?.value.trim();
+        payload.coupon_upgrade_value = upgradeVal ? Number(upgradeVal) : null;
+        payload.coupon_upgrade_prefix = (couponUpgrade.prefix?.value.trim().toUpperCase() || "VIP").replace(/[^A-Z0-9]/g, "").slice(0, 8) || "VIP";
+        payload.coupon_upgrade_expiry_days = couponUpgrade.expiry?.value ? Number(couponUpgrade.expiry.value) : 7;
+        payload.coupon_upgrade_consent = couponUpgrade.consent?.value?.trim() || null;
+      } else {
+        payload.coupon_upgrade_value = null;
+        payload.coupon_upgrade_prefix = "VIP";
+        payload.coupon_upgrade_expiry_days = 7;
+        payload.coupon_upgrade_consent = null;
+      }
+
       if (state.editing?.id) payload.id = state.editing.id;
 
       // BOGO reward fields if needed
@@ -703,6 +758,10 @@ export function bindModal(els, refreshTable) {
 
   document.getElementById("fCouponLandingEnabled")?.addEventListener("change", () => {
     updateCouponLandingUI({ generateSlug: true });
+  });
+
+  document.getElementById("fCouponUpgradeEnabled")?.addEventListener("change", () => {
+    updateCouponUpgradeUI();
   });
 
   document.getElementById("fCouponSlug")?.addEventListener("input", (event) => {

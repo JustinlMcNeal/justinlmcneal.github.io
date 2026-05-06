@@ -2,6 +2,7 @@ import { initNavbar } from "../shared/navbar.js";
 import { initFooter } from "../shared/footer.js";
 import { getSupabaseClient } from "../shared/supabaseClient.js";
 import { isWithinDateWindow } from "../shared/promotions/promoUtils.js";
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from "../config/env.js";
 
 const supabase = getSupabaseClient();
 
@@ -161,6 +162,143 @@ function renderCoupon(promo) {
   show($("couponError"), false);
 }
 
+// ── Coupon Upgrade ───────────────────────────────────────────
+
+function formatUpgradeOffer(promo) {
+  const type = String(promo?.type || "").toLowerCase();
+  const val  = Number(promo?.coupon_upgrade_value || 0);
+  if (type === "percentage") return `${val}% off`;
+  if (type === "fixed") return `$${val} off`;
+  return "an exclusive discount";
+}
+
+function formatPhoneInput(raw) {
+  const digits = raw.replace(/\D/g, "").slice(0, 10);
+  if (digits.length <= 3) return digits.length ? `(${digits}` : "";
+  if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+}
+
+function renderUpgradeSection(promo) {
+  const section = $("couponUpgradeSection");
+  if (!section) return;
+
+  if (!promo.coupon_upgrade_enabled || !promo.coupon_upgrade_value) {
+    show(section, false);
+    return;
+  }
+
+  const offer = formatUpgradeOffer(promo);
+  const baseOffer = formatOffer(promo);
+
+  const headline = $("upgradeHeadline");
+  const subtext  = $("upgradeSubtext");
+  const consent  = $("upgradeConsentText");
+
+  if (headline) headline.textContent = `Upgrade from ${baseOffer} → ${offer}`;
+  if (subtext)  subtext.textContent  = `Enter your phone number to receive a personal ${offer} code sent directly to your phone, and join our SMS list for future deals.`;
+  if (consent)  consent.textContent  = promo.coupon_upgrade_consent ||
+    "By entering your number you agree to receive marketing texts from Karry Kraze. Reply STOP to opt out. Msg & data rates may apply.";
+
+  show(section, true);
+}
+
+async function submitUpgrade(promoId, consentText) {
+  const phoneInput = $("upgradePhone");
+  const btn        = $("btnUpgrade");
+  const errEl      = $("upgradeError");
+
+  const rawPhone = phoneInput?.value?.trim() || "";
+  const digits   = rawPhone.replace(/\D/g, "");
+  if (digits.length < 10) {
+    show(errEl, true);
+    if (errEl) errEl.textContent = "Please enter a valid 10-digit US phone number.";
+    return;
+  }
+  show(errEl, false);
+
+  if (btn) { btn.disabled = true; btn.textContent = "Sending…"; }
+
+  try {
+    const resp = await fetch(`${SUPABASE_URL}/functions/v1/coupon-upgrade`, {
+      method:  "POST",
+      headers: {
+        "Content-Type":  "application/json",
+        "apikey":        SUPABASE_ANON_KEY,
+        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({
+        phone:        rawPhone,
+        promo_id:     promoId,
+        consent_text: consentText,
+        page_url:     window.location.href,
+        user_agent:   navigator.userAgent,
+      }),
+    });
+
+    const data = await resp.json();
+
+    if (!resp.ok || data.error) {
+      throw new Error(data.error || "Something went wrong. Please try again.");
+    }
+
+    // Show success state
+    show($("upgradeForm"),    false);
+    show($("upgradeSuccess"), true);
+
+    const codeEl   = $("upgradeCode");
+    const msgEl    = $("upgradeSuccessMsg");
+    if (codeEl) codeEl.textContent = String(data.coupon_code || "").toUpperCase();
+    if (msgEl) {
+      msgEl.textContent = data.already_upgraded
+        ? "You already have an upgrade! Use the code above at checkout."
+        : data.sms_sent
+          ? "Check your phone — your upgraded code is on its way!"
+          : "Here's your upgraded code. Save it and use it at checkout!";
+    }
+
+  } catch (err) {
+    show(errEl, true);
+    if (errEl) errEl.textContent = err?.message || "Something went wrong. Please try again.";
+    if (btn) { btn.disabled = false; btn.textContent = "Upgrade My Code"; }
+  }
+}
+
+function initUpgradeSection(promo) {
+  const phoneInput  = $("upgradePhone");
+  const btn         = $("btnUpgrade");
+  const copyBtn     = $("btnCopyUpgrade");
+  const consentText = $("upgradeConsentText")?.textContent?.trim() || promo.coupon_upgrade_consent || "";
+
+  // Auto-format phone as user types
+  phoneInput?.addEventListener("input", () => {
+    const pos = phoneInput.selectionStart;
+    const prev = phoneInput.value;
+    const next = formatPhoneInput(prev);
+    phoneInput.value = next;
+    // Keep cursor roughly in place
+    const diff = next.length - prev.length;
+    try { phoneInput.setSelectionRange(pos + diff, pos + diff); } catch (_) { /* ignore */ }
+  });
+
+  // Submit on Enter
+  phoneInput?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") submitUpgrade(promo.id, consentText);
+  });
+
+  btn?.addEventListener("click", () => submitUpgrade(promo.id, consentText));
+
+  copyBtn?.addEventListener("click", async () => {
+    const code = $("upgradeCode")?.textContent?.trim();
+    if (!code || code === "—") return;
+    await navigator.clipboard.writeText(code);
+    show($("upgradeCopyMsg"), true);
+    setTimeout(() => show($("upgradeCopyMsg"), false), 2400);
+  });
+}
+
+// ── Page init ────────────────────────────────────────────────
+
 async function initCouponPage() {
   initNavbar();
   initFooter();
@@ -190,6 +328,8 @@ async function initCouponPage() {
       return;
     }
     renderCoupon(promo);
+    renderUpgradeSection(promo);
+    initUpgradeSection(promo);
   } catch (error) {
     console.error("[Coupon Page] Failed to load coupon:", error);
     setError("Something went wrong while loading this coupon.");

@@ -253,6 +253,46 @@
 
           <div class="my-6 border-t-4 border-black"></div>
 
+          <!-- Coupon Upgrade (SMS Enrollment) -->
+          <div class="uppercase tracking-[.25em] font-black text-xs text-gray-500 mb-3">Coupon Upgrade</div>
+          <div class="border-2 border-gray-300 rounded-xl p-4 space-y-4">
+            <label class="flex items-start gap-3 cursor-pointer">
+              <input id="fCouponUpgradeEnabled" type="checkbox" class="w-5 h-5 accent-black mt-1" />
+              <div>
+                <span class="font-bold">Enable coupon upgrade</span>
+                <span class="text-xs text-gray-500 block">Let visitors unlock a better discount by enrolling in SMS marketing. Only works when a coupon page is active.</span>
+              </div>
+            </label>
+
+            <div id="couponUpgradeFields" class="hidden space-y-4">
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label for="fCouponUpgradeValue" class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-2">Upgraded discount value</label>
+                  <input id="fCouponUpgradeValue" type="number" step="0.01" min="0" class="w-full border-2 border-gray-300 rounded-xl px-4 py-3 outline-none focus:border-black transition-colors" placeholder="20" />
+                  <div class="text-xs text-gray-500 mt-1">Same type as base coupon (% or $).</div>
+                </div>
+
+                <div>
+                  <label for="fCouponUpgradePrefix" class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-2">Code prefix</label>
+                  <input id="fCouponUpgradePrefix" type="text" maxlength="8" class="w-full border-2 border-gray-300 rounded-xl px-4 py-3 outline-none focus:border-black transition-colors font-mono uppercase" placeholder="VIP" />
+                  <div class="text-xs text-gray-500 mt-1">e.g. VIP → VIP-X4F9J2</div>
+                </div>
+
+                <div>
+                  <label for="fCouponUpgradeExpiry" class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-2">Expires after (days)</label>
+                  <input id="fCouponUpgradeExpiry" type="number" min="1" max="365" class="w-full border-2 border-gray-300 rounded-xl px-4 py-3 outline-none focus:border-black transition-colors" placeholder="7" />
+                </div>
+              </div>
+
+              <div>
+                <label for="fCouponUpgradeConsent" class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-2">SMS consent text <span class="normal-case font-normal text-gray-400">(shown to customer)</span></label>
+                <textarea id="fCouponUpgradeConsent" class="w-full border-2 border-gray-300 rounded-xl px-4 py-3 outline-none focus:border-black transition-colors resize-none" rows="2" placeholder="By entering your number you agree to receive marketing texts from Karry Kraze. Reply STOP to opt out. Msg &amp; data rates may apply."></textarea>
+              </div>
+            </div>
+          </div>
+
+          <div class="my-6 border-t-4 border-black"></div>
+
           <!-- Banner -->
           <div class="uppercase tracking-[.25em] font-black text-xs text-gray-500 mb-3">Homepage banner</div>
           <div>
