@@ -5,3 +5,7 @@ supabase/_run_migration.mjs
 supabase/_debug_refund.mjs
 test/
 .env*
+
+# Product media is uploaded to Supabase Storage buckets, not versioned here.
+imgs/products/**
+imgs/stl/**
