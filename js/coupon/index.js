@@ -22,15 +22,17 @@ function showCouponVisual(yes) {
   el.classList.toggle("lg:block", yes);
   el.classList.toggle("lg:hidden", !yes);
 
-  // Collapse the grid to a single centered column when there's no visual
   const section = document.getElementById("couponMainSection");
+  const content = document.getElementById("couponContent");
   if (section) {
     if (yes) {
-      section.classList.remove("max-w-xl", "lg:grid-cols-1");
-      section.classList.add("max-w-5xl", "lg:grid-cols-[1.05fr_.95fr]");
+      section.classList.remove("lg:grid-cols-1", "lg:justify-items-center");
+      section.classList.add("max-w-6xl", "lg:grid-cols-[1.05fr_.95fr]");
+      content?.classList.remove("lg:max-w-3xl", "lg:mx-auto");
     } else {
-      section.classList.remove("max-w-5xl", "lg:grid-cols-[1.05fr_.95fr]");
-      section.classList.add("max-w-xl", "lg:grid-cols-1");
+      section.classList.remove("max-w-6xl", "lg:grid-cols-[1.05fr_.95fr]");
+      section.classList.add("max-w-6xl", "lg:grid-cols-1", "lg:justify-items-center");
+      content?.classList.add("lg:max-w-3xl", "lg:mx-auto");
     }
   }
 }
@@ -98,8 +100,8 @@ function renderDetails(promo) {
   $("couponDetails").innerHTML = details
     .map(([label, value]) => `
       <div class="border-2 border-black/15 bg-gray-50 px-3 py-3">
-        <dt class="text-[10px] uppercase tracking-[.18em] font-black text-black/45">${escapeHtml(label)}</dt>
-        <dd class="mt-1 font-black">${escapeHtml(value)}</dd>
+        <dt class="text-[10px] uppercase font-black text-black/45">${escapeHtml(label)}</dt>
+        <dd class="mt-1 font-black text-black">${escapeHtml(value)}</dd>
       </div>
     `)
     .join("");
@@ -272,7 +274,7 @@ async function submitUpgrade(promoId, consentText) {
   } catch (err) {
     show(errEl, true);
     if (errEl) errEl.textContent = err?.message || "Something went wrong. Please try again.";
-    if (btn) { btn.disabled = false; btn.textContent = "Upgrade My Code"; }
+    if (btn) { btn.disabled = false; btn.textContent = "Text Me The Upgrade"; }
   }
 }
 
