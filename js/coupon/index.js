@@ -14,6 +14,14 @@ function show(el, yes) {
   el.classList.toggle("hidden", !yes);
 }
 
+function showCouponVisual(yes) {
+  const el = $("couponVisual");
+  if (!el) return;
+  el.classList.add("hidden");
+  el.classList.toggle("lg:block", yes);
+  el.classList.toggle("lg:hidden", !yes);
+}
+
 function escapeHtml(text) {
   const div = document.createElement("div");
   div.textContent = text ?? "";
@@ -51,9 +59,17 @@ function formatDate(isoString) {
 
 function normalizeImagePath(path) {
   const raw = String(path || "").trim();
-  if (!raw) return "/imgs/brand/placeholder.png";
+  if (!raw) return "";
   if (/^https?:\/\//i.test(raw)) return raw;
   return raw.startsWith("/") ? raw : `/${raw}`;
+}
+
+function isBeforeStartDate(promo) {
+  return Boolean(promo?.start_date && new Date(promo.start_date) > new Date());
+}
+
+function isAfterEndDate(promo) {
+  return Boolean(promo?.end_date && new Date(promo.end_date) < new Date());
 }
 
 function renderDetails(promo) {
@@ -79,11 +95,25 @@ function renderDetails(promo) {
 function setError(message) {
   show($("couponPanel"), false);
   show($("couponActions"), false);
-  show($("couponVisual"), false);
+  showCouponVisual(false);
   show($("couponError"), true);
   $("couponTitle").textContent = "Coupon Not Available";
   $("couponDescription").textContent = "This offer is unavailable right now.";
   $("couponErrorText").textContent = message;
+}
+
+function renderScheduledCoupon(promo) {
+  $("couponTitle").textContent = promo.coupon_page_title || promo.name || "Your Karry Kraze Coupon";
+  $("couponDescription").textContent = `This offer starts ${formatDate(promo.start_date)}. Scan this code again when the celebration begins.`;
+  $("couponCodeLabel").textContent = "Starts Soon";
+  $("couponCode").textContent = formatDate(promo.start_date).toUpperCase();
+  $("btnCopy").disabled = true;
+  $("btnCopy").textContent = "Soon";
+  renderDetails(promo);
+  show($("couponPanel"), true);
+  show($("couponActions"), false);
+  showCouponVisual(false);
+  show($("couponError"), false);
 }
 
 async function fetchCoupon(slug) {
@@ -105,20 +135,29 @@ function renderCoupon(promo) {
     return;
   }
 
-  if (!isWithinDateWindow(promo)) {
-    setError("This coupon is outside its active date window.");
+  if (isBeforeStartDate(promo)) {
+    renderScheduledCoupon(promo);
+    return;
+  }
+
+  if (isAfterEndDate(promo) || !isWithinDateWindow(promo)) {
+    setError("This coupon has expired.");
     return;
   }
 
   const offer = formatOffer(promo);
+  const imagePath = normalizeImagePath(promo.banner_image_path);
   $("couponTitle").textContent = promo.coupon_page_title || promo.name || "Your Karry Kraze Coupon";
   $("couponDescription").textContent = promo.coupon_page_note || promo.description || `Use this code for ${offer} on your next order.`;
+  $("couponCodeLabel").textContent = "Your Code";
   $("couponCode").textContent = String(promo.code || "").toUpperCase();
-  $("couponImage").src = normalizeImagePath(promo.banner_image_path);
+  $("btnCopy").disabled = false;
+  $("btnCopy").textContent = "Copy";
+  if (imagePath) $("couponImage").src = imagePath;
   renderDetails(promo);
   show($("couponPanel"), true);
   show($("couponActions"), true);
-  show($("couponVisual"), true);
+  showCouponVisual(Boolean(imagePath));
   show($("couponError"), false);
 }
 
@@ -130,6 +169,7 @@ async function initCouponPage() {
   const copyBtn = $("btnCopy");
 
   copyBtn?.addEventListener("click", async () => {
+    if (copyBtn.disabled) return;
     const code = $("couponCode")?.textContent?.trim();
     if (!code || code === "LOADING") return;
 

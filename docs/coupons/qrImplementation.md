@@ -61,9 +61,11 @@ Current page behavior:
   - `coupon_landing_enabled` is true.
   - `is_active` is true.
 - Verifies the promotion is within its start/end date window.
+- Shows a Starts Soon state for scheduled promotions instead of a generic unavailable error.
 - Requires a code before revealing the offer.
 - Displays title, note/description, code, offer type, minimum order, end date, usage limit, and banner/placeholder image.
 - Provides Copy, Shop Now, and Go To Checkout actions.
+- Prioritizes the code and CTAs on mobile; promotion images are desktop-only and only shown when the promotion has a real banner image.
 
 ## Admin Promotion Flow
 
@@ -176,6 +178,9 @@ Current admin behavior:
 - [x] Browser-tested Copy on the coupon page; the copied confirmation appears.
 - [x] Verified checkout coupon validation accepts `QRTEST10` through the shared coupon manager and persists the applied coupon.
 - [x] Disabled the temporary `qr-test-coupon` promotion after verification so the test discount is not left active.
+- [x] Added scheduled-promo Starts Soon messaging so future QR coupons do not show as broken/unavailable.
+- [x] Updated mobile coupon layout to prioritize the code and Shop/Checkout CTAs before secondary details or imagery.
+- [x] Updated coupon image behavior: promotion banner images are optional, hidden on mobile, and not replaced with a generic placeholder when absent.
 
 ## Remaining Admin Browser Checks
 
