@@ -1,6 +1,6 @@
 # Coupon QR Landing Page Implementation
 
-Last updated: May 5, 2026
+Last updated: May 6, 2026
 
 ## Goal
 
@@ -10,7 +10,7 @@ Create a flow where admins can attach a public coupon landing page to a promotio
 
 Status: implemented, migrated, and verified against live Supabase data. Admin browser write testing still needs an authenticated admin session.
 
-The interrupted implementation added the public coupon page, the Supabase migration, and the admin QR controls. Follow-up verification confirmed the touched files have no VS Code diagnostics, the JavaScript parses cleanly, the public page handles missing coupon slugs gracefully, and the admin QR UI renders a production-domain QR URL and preview. The coupon landing migration was applied directly to the live Supabase database and the PostgREST schema cache was reloaded, resolving the `coupon_landing_enabled` schema cache error.
+The interrupted implementation added the public coupon page, the Supabase migration, and the admin QR controls. Follow-up verification confirmed the touched files have no VS Code diagnostics, the JavaScript parses cleanly, the public page handles missing coupon slugs gracefully, and the admin QR UI renders a production-domain QR URL and preview. The coupon landing migration was applied directly to the live Supabase database and the PostgREST schema cache was reloaded, resolving the `coupon_landing_enabled` schema cache error. On May 6, the live admin promotions page was rechecked in low-output mode; it loaded promotions but still showed Add Promotion disabled as `Admin only` in this browser session.
 
 ## Files Already Added Or Updated
 
@@ -180,6 +180,8 @@ Current admin behavior:
 ## Remaining Admin Browser Checks
 
 These require an authenticated admin browser session. The current local browser session can read promotions but is not admin-write authorized, so Add Promotion is disabled and save/create cannot be tested through the admin UI here.
+
+May 6 live recheck: `https://karrykraze.com/pages/admin/promotions.html` loaded 98 promotions, but `btnNew` was disabled with title `Admin only`, so admin create/save and QR download testing remain blocked in this browser session.
 
 - In admin, create or edit a promotion with a code and QR page enabled from an authenticated admin session.
 - Confirm slug auto-generation and manual slug editing both behave correctly after saving/reloading in the admin UI.
