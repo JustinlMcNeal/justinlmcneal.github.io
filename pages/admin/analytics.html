@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#f58f86" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/imgs/icons/favicon-32x32.png" />
+  <title>Admin · Analytics</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            kkpink: "#ff6b9d",
+            kkink: "#111827",
+            kkblue: "#2563eb",
+            kkgreen: "#059669",
+            kkorange: "#ea580c"
+          }
+        }
+      }
+    };
+  </script>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+
+  <link rel="stylesheet" href="/css/theme/base.css" />
+  <link rel="stylesheet" href="/css/theme/components.css" />
+
+  <style>
+    .panel {
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 1rem;
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.05);
+    }
+    .kpi {
+      border: 1px solid #e5e7eb;
+      border-radius: 0.75rem;
+      padding: 0.85rem;
+      background: linear-gradient(180deg, #ffffff 0%, #fafafa 100%);
+    }
+    .kpi-label {
+      font-size: 0.66rem;
+      font-weight: 800;
+      letter-spacing: 0.11em;
+      text-transform: uppercase;
+      color: #6b7280;
+    }
+    .kpi-value {
+      font-size: 1.35rem;
+      font-weight: 900;
+      line-height: 1.1;
+      color: #111827;
+      margin-top: 0.35rem;
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid #d1d5db;
+      border-radius: 9999px;
+      font-size: 0.62rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      font-weight: 800;
+      padding: 0.2rem 0.5rem;
+      color: #374151;
+      background: #f9fafb;
+    }
+    table.grid-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+    }
+    table.grid-table th {
+      text-align: left;
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+      color: #6b7280;
+      font-weight: 800;
+      border-bottom: 2px solid #e5e7eb;
+      padding: 0.55rem 0.7rem;
+    }
+    table.grid-table td {
+      border-bottom: 1px solid #f3f4f6;
+      padding: 0.55rem 0.7rem;
+      color: #111827;
+    }
+    table.grid-table tr:hover td {
+      background: #fff7ed;
+    }
+    .btn {
+      border: 2px solid #111827;
+      color: #111827;
+      background: white;
+      border-radius: 0.6rem;
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 900;
+      padding: 0.45rem 0.8rem;
+      transition: all 0.2s ease;
+    }
+    .btn:hover {
+      background: #111827;
+      color: white;
+    }
+    .btn-accent {
+      border-color: #ea580c;
+      color: #ea580c;
+    }
+    .btn-accent:hover {
+      background: #ea580c;
+      color: white;
+    }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen hidden">
+  <div id="kkAdminNavMount"></div>
+
+  <main class="max-w-7xl mx-auto px-4 py-6 space-y-6">
+    <header class="panel p-4 sm:p-5 bg-gradient-to-r from-orange-50 via-amber-50 to-rose-50">
+      <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <div class="text-xs font-black uppercase tracking-[0.18em] text-orange-600">Universal Dashboard</div>
+          <h1 class="text-2xl sm:text-3xl font-black tracking-tight text-gray-900">Analytics</h1>
+          <p class="text-sm text-gray-600 mt-1">Cross-channel KPIs with website funnel and reconciliation checks.</p>
+        </div>
+
+        <div class="flex flex-wrap gap-2 items-center">
+          <label class="text-xs uppercase tracking-wider font-bold text-gray-600">Range</label>
+          <select id="rangeDays" class="border rounded-md px-2 py-1.5 text-sm bg-white">
+            <option value="7">7 days</option>
+            <option value="14">14 days</option>
+            <option value="30" selected>30 days</option>
+            <option value="60">60 days</option>
+            <option value="90">90 days</option>
+          </select>
+          <button id="btnLoad" class="btn">Load</button>
+          <button id="btnRefresh" class="btn btn-accent">Refresh Aggregate</button>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap gap-2 mt-3 text-xs text-gray-500">
+        <span class="chip" id="metaRange">Range: --</span>
+        <span class="chip" id="metaUpdated">Updated: --</span>
+      </div>
+    </header>
+
+    <section id="loading" class="panel p-10 text-center text-sm text-gray-500">Loading analytics...</section>
+
+    <section id="dashboard" class="hidden space-y-6">
+      <div id="kpiGrid" class="grid grid-cols-2 lg:grid-cols-4 gap-3"></div>
+
+      <section class="panel p-4">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-xs uppercase tracking-[0.14em] font-black text-blue-700">Revenue by Channel</h2>
+          <span class="text-xs text-gray-500">Source: channel_day grain</span>
+        </div>
+        <div class="h-[320px]"><canvas id="revenueChart"></canvas></div>
+      </section>
+
+      <div class="grid lg:grid-cols-2 gap-6">
+        <section class="panel p-4">
+          <h2 class="text-xs uppercase tracking-[0.14em] font-black text-emerald-700 mb-3">Channel KPI Totals</h2>
+          <div class="overflow-x-auto">
+            <table class="grid-table" id="channelTable">
+              <thead>
+                <tr>
+                  <th>Channel</th>
+                  <th>Orders</th>
+                  <th>Units</th>
+                  <th>Revenue</th>
+                  <th>AOV</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel p-4">
+          <h2 class="text-xs uppercase tracking-[0.14em] font-black text-orange-700 mb-3">Website Funnel</h2>
+          <div id="websiteFunnel" class="grid grid-cols-2 gap-3"></div>
+        </section>
+      </div>
+
+      <div class="grid lg:grid-cols-2 gap-6">
+        <section class="panel p-4">
+          <h2 class="text-xs uppercase tracking-[0.14em] font-black text-red-700 mb-3">Reconciliation</h2>
+          <div class="overflow-x-auto">
+            <table class="grid-table" id="reconTable">
+              <thead>
+                <tr>
+                  <th>Channel</th>
+                  <th>Orders Δ</th>
+                  <th>Units Δ</th>
+                  <th>Revenue Δ</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel p-4">
+          <h2 class="text-xs uppercase tracking-[0.14em] font-black text-pink-700 mb-3">Top Products</h2>
+          <div class="overflow-x-auto">
+            <table class="grid-table" id="productsTable">
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th>Orders</th>
+                  <th>Units</th>
+                  <th>Revenue</th>
+                  <th>AOV</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <div id="kkFooterMount"></div>
+
+  <script type="module" src="/js/admin/analytics/index.js"></script>
+</body>
+</html>
