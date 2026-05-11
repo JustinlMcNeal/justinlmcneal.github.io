@@ -1,34 +1,30 @@
--- 20260511_ebay_finance_v2.sql
--- Reconciliation fix for v_ebay_order_profit.
+-- 20260511_ebay_finance_v3_cpi.sql
 --
--- Root cause:
---   SALE.amount_cents is the seller payout after eBay deducts only the fees embedded in that
---   SALE transaction (Final Value Fee, Fixed Per Order Fee). Promoted Listing / Ad fees are
---   billed as SEPARATE NON_SALE_CHARGE transactions with the same orderId.  These were
---   previously captured only in the expenses table; they are now also stored in
---   ebay_finance_transactions (transaction_type = 'NON_SALE_CHARGE') by the updated
---   ebay-sync-finances edge function.
+-- Reconciliation: consistent CPI cost basis for eBay profit across all three surfaces.
 --
--- Fix:
---   1. Add `order_charges` CTE that sums all NON_SALE_CHARGE rows per order.
---   2. Redefine ebay_order_earnings_cents = SALE.amount_cents - per_order_charges.
---   3. Expose per_order_ad_fee_cents so the UI can show the exact deduction.
---   4. Tighten finance_status so `complete` requires ad fees explicitly captured.
---      - complete:          SALE + per-order charges row(s) + label
---      - estimated:         SALE + label, NO per-order charge rows
---                           (profit shown with ≈ badge — possible ad fee not yet synced)
---      - partial:           SALE only, no label yet
---      - pending_finances:  label purchased, SALE not yet synced by Finances API
---      - missing:           neither SALE nor label
+-- Audit findings (order EBAY-25-14595-84685):
+--   Table row  : ebay_net_profit_cents = -$0.35 (unit_cost $0.62 only — missing supplier ship)
+--   Modal      : profitCents           = -$1.38 (CPI = unit_cost $0.62 + supplier_ship $1.03 ✓)
+--   KPI        : v_order_financials    = +$2.89 (WRONG — uses total_paid_cents not eBay earnings)
+--
+-- Fix 1: Recreate v_ebay_order_profit with CPI in item_costs.
+--   Supplier shipping formula mirrors js/admin/pStorage/profitCalc.js (EUB/HK-UPS):
+--     EUB    : (88 + weight_g*30*0.12)   * 0.1437 / 30  [totalWeight ≤ 2000g]
+--     HK-UPS : (297 + weight_g*30*0.0523)* 0.1437 / 30  [totalWeight > 2000g]
+--   product_cost_cents = (unit_cost + supplier_ship_per_unit) * quantity
+--
+-- Fix 2: Recreate v_order_summary_plus to override profit_cents for eBay orders.
+--   When finance_status is 'complete' or 'estimated_no_ad_fee', use ebay_net_profit_cents
+--   (which now uses CPI + correct eBay earnings as revenue). All other orders are unchanged.
+--   This fixes the KPI, which sums v_order_summary_plus.profit_cents.
 -- ─────────────────────────────────────────────────────────────────────────────
 
--- DROP the old view first because we are changing column names.
--- Nothing in the DB schema depends on v_ebay_order_profit (only queried by JS frontend).
+-- ── Step 1: Recreate v_ebay_order_profit with CPI ────────────────────────────
+
 DROP VIEW IF EXISTS public.v_ebay_order_profit;
 
 CREATE VIEW public.v_ebay_order_profit AS
 WITH sale_txn AS (
-  -- One SALE row per order (the primary credit to the seller)
   SELECT
     stripe_checkout_session_id,
     ebay_order_id,
@@ -44,8 +40,6 @@ WITH sale_txn AS (
   WHERE transaction_type = 'SALE'
 ),
 order_charges AS (
-  -- Per-order NON_SALE_CHARGE rows (e.g. Promoted Listings - General fee).
-  -- These are DEBITs billed after the sale, not inside the SALE transaction.
   SELECT
     stripe_checkout_session_id,
     SUM(amount_cents)             AS total_charge_cents,
@@ -61,10 +55,25 @@ order_charges AS (
   GROUP BY stripe_checkout_session_id
 ),
 item_costs AS (
+  -- CPI = unit_cost + supplier_ship_per_unit, matching js/admin/pStorage/profitCalc.js.
+  -- Supplier ship uses EUB for totalWeight (weight_g * 30) ≤ 2000g, HK-UPS above that.
+  -- CNY→USD rate: 0.1437 (same constant as JS).
   SELECT
     li.stripe_checkout_session_id,
     ROUND(
-      SUM(COALESCE(p.unit_cost, 0::numeric) * li.quantity::numeric) * 100
+      SUM(
+        (
+          COALESCE(p.unit_cost, 0::numeric)
+          +
+          CASE
+            WHEN COALESCE(p.weight_g, 0::numeric) <= 0 THEN 0
+            WHEN p.weight_g * 30 <= 2000 THEN
+              ((88 + p.weight_g * 30 * 0.12) * 0.1437) / 30
+            ELSE
+              ((297 + p.weight_g * 30 * 0.0523) * 0.1437) / 30
+          END
+        ) * li.quantity::numeric
+      ) * 100
     )::integer AS product_cost_cents
   FROM public.line_items_raw li
   LEFT JOIN public.products p ON p.code = li.product_id
@@ -94,8 +103,6 @@ SELECT
   oc.charge_rows                                           AS ad_fee_breakdown,
 
   -- True eBay seller earnings for this order:
-  --   SALE.amount already deducts eBay-collected tax and embedded FVF.
-  --   We additionally subtract per-order NON_SALE_CHARGE (promoted listing / ad fees).
   CASE
     WHEN st.sale_amount_cents IS NOT NULL
       THEN st.sale_amount_cents - COALESCE(oc.total_charge_cents, 0)
@@ -103,50 +110,30 @@ SELECT
   END                                                      AS ebay_order_earnings_cents,
 
   -- Combined eBay fee total visible to the UI
-  -- (embedded FVF in SALE + separately billed ad fees)
   CASE
     WHEN st.sale_amount_cents IS NOT NULL
       THEN st.sale_fee_cents + COALESCE(oc.total_charge_cents, 0)
     ELSE NULL
   END                                                      AS ebay_total_fee_cents,
 
-  -- Internal seller costs
-  -- NOTE: product_cost_cents here uses unit_cost only (see v3 migration for CPI fix)
+  -- Internal seller costs (CPI = unit_cost + supplier_ship from weight formula)
   COALESCE(ic.product_cost_cents, 0)                       AS product_cost_cents,
   fs.label_cost_cents                                      AS shippo_label_cost_cents,
 
-  -- Net profit:
-  --   Use ebay_order_earnings_cents as revenue (true seller proceeds after all eBay
-  --   order-attributable fees).
-  --   product_cost_cents is DB unit_cost only; modal JS adds supplier shipping per item.
-  --   Returns NULL when finance_status = 'estimated' to avoid overstating profit when
-  --   ad fees may not yet be captured.
+  -- Net profit using CPI cost basis.
+  -- Returns NULL for estimated status (ad fee not yet captured → profit unknown).
   CASE
     WHEN st.sale_amount_cents IS NOT NULL
-         AND (oc.total_charge_cents IS NOT NULL OR -- ad fee explicitly captured
-              st.finance_synced_at < NOW() - INTERVAL '2 days')  -- old enough, assume no ad fee
+         AND (oc.total_charge_cents IS NOT NULL OR
+              st.finance_synced_at < NOW() - INTERVAL '2 days')
          AND fs.label_cost_cents IS NOT NULL
       THEN (st.sale_amount_cents - COALESCE(oc.total_charge_cents, 0))
            - COALESCE(ic.product_cost_cents, 0)
            - COALESCE(fs.label_cost_cents, 0)
-    WHEN st.sale_amount_cents IS NOT NULL
-         AND oc.total_charge_cents IS     NULL  -- ad fee unknown (fresh sale, not yet billed)
-         AND st.finance_synced_at >= NOW() - INTERVAL '2 days'
-         AND fs.label_cost_cents IS NOT NULL
-      -- Return best-case (overstated) as negative sentinel so UI knows to badge it
-      THEN NULL
     ELSE NULL
   END                                                      AS ebay_net_profit_cents,
 
-  -- Finance sync completeness status.
-  -- complete:         SALE + per-order charge rows present + label — profit is reliable
-  -- estimated:        SALE + label, ad fee not yet captured (sale < 2 days old)
-  --                   OR SALE + label, sale is old enough that no ad fee is expected
-  -- estimated_profit: SALE + label, sale is > 2 days old, no ad fee was captured
-  --                   (ad fee either didn't apply or is definitively absent)
-  -- partial:          SALE only, label not yet purchased
-  -- pending_finances: label exists, SALE transaction not yet posted by eBay Finances API
-  -- missing:          neither SALE nor label available
+  -- Finance status
   CASE
     WHEN st.sale_amount_cents IS NOT NULL
          AND oc.total_charge_cents IS NOT NULL
@@ -156,12 +143,12 @@ SELECT
          AND oc.total_charge_cents IS NULL
          AND st.finance_synced_at >= NOW() - INTERVAL '2 days'
          AND fs.label_cost_cents IS NOT NULL
-      THEN 'estimated'  -- ad fee not yet billed by eBay (can take 1-2 days post-sale)
+      THEN 'estimated'
     WHEN st.sale_amount_cents IS NOT NULL
          AND oc.total_charge_cents IS NULL
          AND st.finance_synced_at < NOW() - INTERVAL '2 days'
          AND fs.label_cost_cents IS NOT NULL
-      THEN 'estimated_no_ad_fee'  -- old sale, no ad fee captured → likely not promoted
+      THEN 'estimated_no_ad_fee'
     WHEN st.sale_amount_cents IS NOT NULL
          AND fs.label_cost_cents IS NULL
       THEN 'partial'
@@ -181,3 +168,35 @@ WHERE o.stripe_checkout_session_id LIKE 'ebay_api_%'
    OR o.stripe_checkout_session_id LIKE 'ebay_%';
 
 GRANT SELECT ON public.v_ebay_order_profit TO anon, authenticated, service_role;
+
+
+-- ── Step 2: Recreate v_order_summary_plus to override profit_cents for eBay orders ──
+--
+-- JOIN v_ebay_order_profit and substitute ebay_net_profit_cents for complete/estimated_no_ad_fee
+-- eBay orders. Non-eBay orders are unchanged (use v_order_financials.profit_cents as before).
+-- This fixes the KPI total, which sums this view's profit_cents.
+
+CREATE OR REPLACE VIEW public.v_order_summary_plus AS
+SELECT
+  s.*,
+  f.product_cost_total_cents,
+  f.label_cost_cents,
+  f.label_status,
+  -- For eBay orders where Finance API profit is reliable, use it (correct revenue + CPI).
+  -- For all other orders (non-eBay, or eBay without complete finance data), use the
+  -- standard v_order_financials profit (total_paid_cents - unit_cost - label).
+  COALESCE(
+    CASE
+      WHEN ep.finance_status IN ('complete', 'estimated_no_ad_fee')
+      THEN ep.ebay_net_profit_cents::integer
+    END,
+    f.profit_cents
+  )                              AS profit_cents,
+  f.refund_status,
+  f.refund_reason,
+  f.refund_amount_cents
+FROM public.v_order_summary s
+LEFT JOIN public.v_order_financials  f  USING (stripe_checkout_session_id)
+LEFT JOIN public.v_ebay_order_profit ep USING (stripe_checkout_session_id);
+
+GRANT SELECT ON public.v_order_summary_plus TO anon, authenticated;
