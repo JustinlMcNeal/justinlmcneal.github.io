@@ -18,7 +18,7 @@ export function downloadShipReadyCSV(rows, { filenamePrefix = "ship-ready" } = {
   const stamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   const filename = `${filenamePrefix}-${stamp}.csv`;
 
-  // Pirate Ship can accept many formats; we’ll keep yours + add a few useful shipment fields.
+  // General-purpose order export. Columns: date, IDs, address, weights, status, tracking.
   const header = [
     "date",
     "kk_order_id",

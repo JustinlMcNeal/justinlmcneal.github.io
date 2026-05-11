@@ -8,7 +8,6 @@ export const els = {
   dateTo: document.getElementById("dateTo"),
   btnRefresh: document.getElementById("btnRefresh"),
   btnExportShipReady: document.getElementById("btnExportShipReady"),
-  btnImportPirateShip: document.getElementById("btnImportPirateShip"),
 
   // Amazon import elements
   btnImportAmazon: document.getElementById("btnImportAmazon"),
@@ -28,38 +27,6 @@ export const els = {
   amzBreakdownWrap: document.getElementById("amzBreakdownWrap"),
   amzUnmappedWrap: document.getElementById("amzUnmappedWrap"),
   amzResultClose: document.getElementById("amzResultClose"),
-
-  // eBay import elements
-  btnImportEbay: document.getElementById("btnImportEbay"),
-  btnRematchEbay: document.getElementById("btnRematchEbay"),
-  ebayPreviewPanel: document.getElementById("ebayPreviewPanel"),
-  ebayFileName: document.getElementById("ebayFileName"),
-  ebayTotalRows: document.getElementById("ebayTotalRows"),
-  ebayValidCount: document.getElementById("ebayValidCount"),
-  ebayConfirmBtn: document.getElementById("ebayConfirmBtn"),
-  ebayCancelBtn: document.getElementById("ebayCancelBtn"),
-  ebayResultPanel: document.getElementById("ebayResultPanel"),
-  ebayOrdersCount: document.getElementById("ebayOrdersCount"),
-  ebayLineItemsCount: document.getElementById("ebayLineItemsCount"),
-  ebayRevenue: document.getElementById("ebayRevenue"),
-  ebaySkippedCount: document.getElementById("ebaySkippedCount"),
-  ebayBreakdownWrap: document.getElementById("ebayBreakdownWrap"),
-  ebayResultClose: document.getElementById("ebayResultClose"),
-
-  // import preview panel (confirm before import)
-  importPreviewPanel: document.getElementById("importPreviewPanel"),
-  importFileName: document.getElementById("importFileName"),
-  importRowCount: document.getElementById("importRowCount"),
-  importPreviewBatchId: document.getElementById("importPreviewBatchId"),
-  importConfirmBtn: document.getElementById("importConfirmBtn"),
-  importCancelBtn: document.getElementById("importCancelBtn"),
-
-  // import result panel
-  importResultPanel: document.getElementById("importResultPanel"),
-  importUpdatedCount: document.getElementById("importUpdatedCount"),
-  importSkippedCount: document.getElementById("importSkippedCount"),
-  importBatchId: document.getElementById("importBatchId"),
-  importResultClose: document.getElementById("importResultClose"),
 
   // status + count
   status: document.getElementById("status"),
@@ -94,7 +61,6 @@ export function wireDomHelpers() {
     "dateTo",
     "btnRefresh",
     "btnExportShipReady",
-    "btnImportPirateShip",
     "status",
     "countLabel",
     "ordersRows",
@@ -104,13 +70,6 @@ export function wireDomHelpers() {
 
   const missing = required.filter((k) => !els[k]);
   if (missing.length) console.error("[lineItemsOrders] Missing DOM ids:", missing);
-
-  // Wire close button for import result panel
-  if (els.importResultClose) {
-    els.importResultClose.addEventListener("click", () => {
-      if (els.importResultPanel) els.importResultPanel.classList.add("hidden");
-    });
-  }
 
   // Wire close/cancel for Amazon import panels
   if (els.amzResultClose) {
@@ -124,65 +83,6 @@ export function wireDomHelpers() {
       setStatus("Amazon import canceled.");
     });
   }
-
-  // Wire close/cancel for eBay import panels
-  if (els.ebayResultClose) {
-    els.ebayResultClose.addEventListener("click", () => {
-      if (els.ebayResultPanel) els.ebayResultPanel.classList.add("hidden");
-    });
-  }
-  
-  // Wire cancel button for import preview panel
-  if (els.importCancelBtn) {
-    els.importCancelBtn.addEventListener("click", () => {
-      hideImportPreview();
-      setStatus("Import canceled.");
-    });
-  }
-}
-
-export function showImportPreview({ fileName, rowCount, batchId, onConfirm }) {
-  if (!els.importPreviewPanel) return;
-  
-  // Hide result panel if visible
-  if (els.importResultPanel) els.importResultPanel.classList.add("hidden");
-  
-  if (els.importFileName) els.importFileName.textContent = fileName || "—";
-  if (els.importRowCount) els.importRowCount.textContent = String(rowCount || 0);
-  if (els.importPreviewBatchId) els.importPreviewBatchId.textContent = batchId || "—";
-  
-  els.importPreviewPanel.classList.remove("hidden");
-  
-  // Wire confirm button (remove old listener first)
-  if (els.importConfirmBtn) {
-    const newBtn = els.importConfirmBtn.cloneNode(true);
-    els.importConfirmBtn.parentNode.replaceChild(newBtn, els.importConfirmBtn);
-    els.importConfirmBtn = newBtn;
-    
-    newBtn.addEventListener("click", () => {
-      hideImportPreview();
-      onConfirm?.();
-    });
-  }
-}
-
-export function hideImportPreview() {
-  if (els.importPreviewPanel) els.importPreviewPanel.classList.add("hidden");
-}
-
-export function showImportResult({ updated, skipped, batchId }) {
-  if (!els.importResultPanel) return;
-  
-  if (els.importUpdatedCount) els.importUpdatedCount.textContent = String(updated || 0);
-  if (els.importSkippedCount) els.importSkippedCount.textContent = String(skipped || 0);
-  if (els.importBatchId) els.importBatchId.textContent = batchId || "—";
-  
-  els.importResultPanel.classList.remove("hidden");
-  
-  // Auto-hide after 10 seconds
-  setTimeout(() => {
-    els.importResultPanel.classList.add("hidden");
-  }, 10000);
 }
 
 export function setStatus(msg, isError = false) {

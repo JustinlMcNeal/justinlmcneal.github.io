@@ -497,22 +497,6 @@ export async function fetchOrderKpis({ q = "", status = "", dateFrom = "", dateT
   };
 }
 
-export async function importPirateShipExport({ batchId, rows } = {}) {
-  if (!batchId) throw new Error("Missing batchId");
-  if (!Array.isArray(rows) || rows.length === 0) throw new Error("No rows to import");
-
-  const { data, error } = await supabase.rpc("rpc_import_pirateship_export", {
-    p_batch_id: batchId,
-    p_rows: rows,
-  });
-
-  if (error) throw error;
-
-  // Supabase RPC returns array with one row
-  const r = Array.isArray(data) ? data[0] : data;
-  return r || { updated_count: 0, skipped_count: 0 };
-}
-
 /**
  * Issue a refund via the stripe-refund edge function.
  * @param {string} stripe_checkout_session_id

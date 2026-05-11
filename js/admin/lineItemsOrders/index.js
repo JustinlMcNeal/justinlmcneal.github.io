@@ -1,15 +1,13 @@
 // /js/admin/lineItemsOrders/index.js
 import { initAdminNav } from "/js/shared/adminNav.js";
 import { initFooter } from "/js/shared/footer.js";
-import { els, wireDomHelpers, setStatus, setCountLabel, moneyFromCents, showImportResult, showImportPreview, hideImportPreview } from "./dom.js";
+import { els, wireDomHelpers, setStatus, setCountLabel, moneyFromCents } from "./dom.js";
 import { state } from "./state.js";
-import { fetchOrderSummaryPage, fetchOrderSummaryAllForExport, fetchOrderKpis, importPirateShipExport, fetchOrderDetails, issueRefund, updateRefundReason, buyShippingLabel, voidShippingLabel, fetchPackagePresets, getSignedLabelUrl } from "./api.js";
+import { fetchOrderSummaryPage, fetchOrderSummaryAllForExport, fetchOrderKpis, fetchOrderDetails, issueRefund, updateRefundReason, buyShippingLabel, voidShippingLabel, fetchPackagePresets, getSignedLabelUrl } from "./api.js";
 import { renderOrdersRows } from "./renderTable.js";
 import { downloadShipReadyCSV } from "./shipReadyCsv.js";
 import { bindEditModal } from "./modalEditor.js";
-import { wirePirateShipImport } from "./pirateShipImport.js";
 import { wireAmazonImport } from "./amazonImport.js";
-import { wireEbayImport, rematchEbayProducts } from "./ebayImport.js";
 
 
 wireDomHelpers();
@@ -688,22 +686,6 @@ async function wireLabelButtons(container, order, shipment, row) {
 }
 
 function wireEvents() {
-      // Import Pirate Ship export (updates fulfillment_shipments)
-  wirePirateShipImport({
-    buttonEl: els.btnImportPirateShip,
-    setStatus,
-    showImportPreview,
-    importFn: async ({ batchId, rows }) => {
-      return await importPirateShipExport({ batchId, rows });
-    },
-    onImported: async ({ updated, skipped, batchId }) => {
-      // Show import result panel
-      showImportResult({ updated, skipped, batchId });
-      // refresh list + KPIs after import
-      await reload({ hard: true });
-    },
-  });
-
   // Import Amazon orders (TSV drop)
   wireAmazonImport({
     buttonEl: els.btnImportAmazon,
@@ -772,92 +754,6 @@ function wireEvents() {
     },
   });
 
-  // Import eBay orders (CSV drop)
-  wireEbayImport({
-    buttonEl: els.btnImportEbay,
-    setStatus,
-    showPreview: ({ fileName, parsed, onConfirm }) => {
-      if (els.ebayFileName) els.ebayFileName.textContent = fileName;
-      if (els.ebayTotalRows) els.ebayTotalRows.textContent = parsed.total;
-      if (els.ebayValidCount) els.ebayValidCount.textContent = parsed.valid.length;
-
-      if (els.ebayResultPanel) els.ebayResultPanel.classList.add("hidden");
-      if (els.ebayPreviewPanel) els.ebayPreviewPanel.classList.remove("hidden");
-
-      if (els.ebayConfirmBtn) {
-        const btn = els.ebayConfirmBtn.cloneNode(true);
-        els.ebayConfirmBtn.parentNode.replaceChild(btn, els.ebayConfirmBtn);
-        els.ebayConfirmBtn = btn;
-        btn.addEventListener("click", () => {
-          els.ebayPreviewPanel?.classList.add("hidden");
-          onConfirm();
-        });
-      }
-      if (els.ebayCancelBtn) {
-        const btn = els.ebayCancelBtn.cloneNode(true);
-        els.ebayCancelBtn.parentNode.replaceChild(btn, els.ebayCancelBtn);
-        els.ebayCancelBtn = btn;
-        btn.addEventListener("click", () => {
-          els.ebayPreviewPanel?.classList.add("hidden");
-        });
-      }
-    },
-    onImported: async (result) => {
-      if (els.ebayOrdersCount) els.ebayOrdersCount.textContent = result.ordersInserted;
-      if (els.ebayLineItemsCount) els.ebayLineItemsCount.textContent = result.lineItemsInserted;
-      if (els.ebayRevenue) els.ebayRevenue.textContent = `$${(result.revenue / 100).toFixed(2)}`;
-      if (els.ebaySkippedCount) els.ebaySkippedCount.textContent = result.skippedDuplicates;
-
-      if (els.ebayBreakdownWrap && result.breakdown) {
-        const lines = Object.entries(result.breakdown)
-          .sort((a, b) => b[1].cents - a[1].cents)
-          .map(([code, p]) => `<div>${p.name} — ${p.qty} units — $${(p.cents / 100).toFixed(2)}</div>`);
-        let html = lines.length
-          ? `<div class="font-bold mb-1">Product breakdown:</div>${lines.join("")}`
-          : "";
-        // Show unmapped eBay titles
-        if (result.unmappedTitles?.length) {
-          html += `<div class="font-bold mt-2 text-amber-700">⚠️ Unmapped eBay titles (not linked to products):</div>`;
-          html += result.unmappedTitles.map(t => `<div class="ml-2 text-amber-600">${t}</div>`).join("");
-        }
-        els.ebayBreakdownWrap.innerHTML = html;
-      }
-
-      if (els.ebayResultPanel) els.ebayResultPanel.classList.remove("hidden");
-      setTimeout(() => els.ebayResultPanel?.classList.add("hidden"), 15000);
-
-      await reload({ hard: true });
-    },
-  });
-
-  // Re-match eBay products button
-  if (els.btnRematchEbay) {
-    els.btnRematchEbay.addEventListener("click", async () => {
-      try {
-        els.btnRematchEbay.disabled = true;
-        els.btnRematchEbay.textContent = "⏳ Matching…";
-        setStatus("Re-matching eBay products…");
-
-        const result = await rematchEbayProducts();
-
-        let msg = `Re-match complete: ${result.matched} matched, ${result.unmatched} unmatched out of ${result.total} eBay items.`;
-        if (result.errors.length) msg += ` (${result.errors.length} errors)`;
-        if (result.unmappedTitles?.length) {
-          msg += ` Unmapped: ${result.unmappedTitles.join(", ")}`;
-        }
-        setStatus(msg);
-
-        if (result.matched > 0) await reload({ hard: true });
-      } catch (e) {
-        console.error(e);
-        setStatus(`Re-match failed: ${e?.message || e}`, true);
-      } finally {
-        els.btnRematchEbay.disabled = false;
-        els.btnRematchEbay.textContent = "🔄 Re-match eBay";
-      }
-    });
-  }
-
   // Search (debounced)
   els.searchInput.addEventListener("input", () => {
     clearTimeout(state.searchTimer);
@@ -876,13 +772,13 @@ function wireEvents() {
   // Load more
   els.btnLoadMore.addEventListener("click", () => loadMore());
 
-  // Export ship-ready
+  // Export Orders CSV
   els.btnExportShipReady.addEventListener("click", async () => {
     try {
       setStatus("Preparing CSV…");
       const filters = readFilters();
       const rows = await fetchOrderSummaryAllForExport(filters);
-      downloadShipReadyCSV(rows, { filenamePrefix: "kk-ship-ready" });
+      downloadShipReadyCSV(rows, { filenamePrefix: "kk-orders" });
       setStatus(`CSV downloaded (${rows.length} orders).`);
     } catch (e) {
       console.error(e);

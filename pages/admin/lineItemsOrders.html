@@ -217,17 +217,7 @@
             class="border-4 border-black bg-white text-black px-4 py-2 font-black uppercase tracking-[.12em] text-[10px]
                    hover:bg-black hover:text-white transition-all"
           >
-            📦 Export Ship-Ready CSV
-          </button>
-
-          <button
-            id="btnImportPirateShip"
-            type="button"
-            class="border-4 border-black bg-white text-black px-4 py-2 font-black uppercase tracking-[.12em] text-[10px]
-                   hover:bg-black hover:text-white transition-all
-                   drop-zone"
-          >
-            🏴‍☠️ Import Pirate Ship
+            � Export Orders CSV
           </button>
 
           <button
@@ -240,47 +230,7 @@
             📦 Import Amazon
           </button>
 
-          <button
-            id="btnImportEbay"
-            type="button"
-            class="border-4 border-black bg-white text-black px-4 py-2 font-black uppercase tracking-[.12em] text-[10px]
-                   hover:bg-black hover:text-white transition-all
-                   drop-zone"
-          >
-            🏷️ Import eBay
-          </button>
-
-          <button
-            id="btnRematchEbay"
-            type="button"
-            class="border-4 border-black bg-amber-50 text-black px-4 py-2 font-black uppercase tracking-[.12em] text-[10px]
-                   hover:bg-amber-400 hover:text-black transition-all"
-            title="Re-run product matching on existing eBay orders"
-          >
-            🔄 Re-match eBay
-          </button>
-
           <span class="text-xs text-gray-400 ml-2">Click or drag & drop file</span>
-        </div>
-        
-        <!-- Import Preview Panel (confirm before import) -->
-        <div id="importPreviewPanel" class="hidden mt-4 p-4 border-4 border-amber-500 bg-amber-50 rounded-lg">
-          <div class="flex items-start gap-3">
-            <div class="text-2xl">📦</div>
-            <div class="flex-1">
-              <div class="font-black text-amber-800">Ready to Import</div>
-              <div class="mt-2 text-sm text-amber-700">
-                <div>File: <span id="importFileName" class="font-bold"></span></div>
-                <div>Rows detected: <span id="importRowCount" class="font-bold"></span></div>
-                <div class="text-xs mt-1">Batch ID: <code id="importPreviewBatchId" class="bg-amber-100 px-1 py-0.5 rounded"></code></div>
-              </div>
-              <div class="text-xs text-amber-600 mt-2">This will update fulfillment_shipments (status, tracking, label cost, printed_at).</div>
-              <div class="flex gap-2 mt-3">
-                <button id="importConfirmBtn" type="button" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-1.5 rounded font-bold text-sm transition-colors">✓ Confirm Import</button>
-                <button id="importCancelBtn" type="button" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-1.5 rounded font-bold text-sm transition-colors">Cancel</button>
-              </div>
-            </div>
-          </div>
         </div>
         
         <!-- Amazon Import Preview Panel -->
@@ -335,79 +285,6 @@
           </div>
         </div>
 
-        <!-- eBay Import Preview Panel -->
-        <div id="ebayPreviewPanel" class="hidden mt-4 p-4 border-4 border-blue-500 bg-blue-50 rounded-lg">
-          <div class="flex items-start gap-3">
-            <div class="text-2xl">🏷️</div>
-            <div class="flex-1">
-              <div class="font-black text-blue-800">eBay Import Ready</div>
-              <div class="mt-2 text-sm text-blue-700">
-                <div>File: <span id="ebayFileName" class="font-bold"></span></div>
-                <div>Total rows: <span id="ebayTotalRows" class="font-bold"></span></div>
-                <div>Valid orders: <span id="ebayValidCount" class="font-bold text-emerald-700"></span></div>
-              </div>
-              <div class="text-xs text-blue-600 mt-2">This will insert new orders + line items into orders_raw & line_items_raw. Duplicates are skipped automatically.</div>
-              <div class="flex gap-2 mt-3">
-                <button id="ebayConfirmBtn" type="button" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-1.5 rounded font-bold text-sm transition-colors">✓ Confirm Import</button>
-                <button id="ebayCancelBtn" type="button" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-1.5 rounded font-bold text-sm transition-colors">Cancel</button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- eBay Import Result Panel -->
-        <div id="ebayResultPanel" class="hidden mt-4 p-4 border-4 border-emerald-500 bg-emerald-50 rounded-lg">
-          <div class="flex items-start gap-3">
-            <div class="text-2xl">✅</div>
-            <div class="flex-1">
-              <div class="font-black text-emerald-800">eBay Import Complete</div>
-              <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-2 text-sm">
-                <div>
-                  <span class="text-emerald-600">Orders:</span>
-                  <span id="ebayOrdersCount" class="font-bold">0</span>
-                </div>
-                <div>
-                  <span class="text-emerald-600">Line Items:</span>
-                  <span id="ebayLineItemsCount" class="font-bold">0</span>
-                </div>
-                <div>
-                  <span class="text-emerald-600">Revenue:</span>
-                  <span id="ebayRevenue" class="font-bold">$0</span>
-                </div>
-                <div>
-                  <span class="text-gray-500">Skipped (dup):</span>
-                  <span id="ebaySkippedCount" class="font-bold">0</span>
-                </div>
-              </div>
-              <div id="ebayBreakdownWrap" class="mt-3 text-xs text-emerald-700"></div>
-            </div>
-            <button id="ebayResultClose" type="button" class="text-emerald-600 hover:text-emerald-800 text-lg font-bold">×</button>
-          </div>
-        </div>
-
-        <!-- Import Result Panel (hidden by default) -->
-        <div id="importResultPanel" class="hidden mt-4 p-4 border-4 border-emerald-500 bg-emerald-50 rounded-lg">
-          <div class="flex items-start gap-3">
-            <div class="text-2xl">✅</div>
-            <div class="flex-1">
-              <div class="font-black text-emerald-800">Import Complete</div>
-              <div class="grid grid-cols-2 gap-4 mt-2 text-sm">
-                <div>
-                  <span class="text-emerald-600">Updated:</span>
-                  <span id="importUpdatedCount" class="font-bold">0</span>
-                </div>
-                <div>
-                  <span class="text-gray-500">Skipped:</span>
-                  <span id="importSkippedCount" class="font-bold">0</span>
-                </div>
-              </div>
-              <div class="text-xs text-emerald-600 mt-2">
-                Batch ID: <code id="importBatchId" class="bg-emerald-100 px-1 py-0.5 rounded"></code>
-              </div>
-            </div>
-            <button id="importResultClose" type="button" class="text-emerald-600 hover:text-emerald-800 text-lg font-bold">×</button>
-          </div>
-        </div>
       </div>
     </section>
 
