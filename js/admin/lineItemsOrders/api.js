@@ -116,6 +116,23 @@ export async function fetchOrderDetails(stripe_checkout_session_id) {
     .then(r => r)
     .catch(() => ({ data: null }));
 
+  // For eBay orders: fetch Finance API earnings for accurate profit calculation.
+  // v_ebay_order_profit joins ebay_finance_transactions (upserted by ebay-sync-finances).
+  const isEbayOrder = String(stripe_checkout_session_id).startsWith("ebay_api_");
+  let ebayFinancials = null;
+  if (isEbayOrder) {
+    const { data: ebayFin, error: ebayFinErr } = await supabase
+      .from("v_ebay_order_profit")
+      .select("*")
+      .eq("stripe_checkout_session_id", stripe_checkout_session_id)
+      .maybeSingle();
+    if (ebayFinErr) {
+      console.warn("[fetchOrderDetails] v_ebay_order_profit fetch failed:", ebayFinErr.message);
+    } else {
+      ebayFinancials = ebayFin || null;
+    }
+  }
+
   // Cost & profit for the modal.
   // Use JS-calculated CPI (sum of per-item costs) so section 5 matches the
   // per-item CPI display. Fall back to view values for orders where products
@@ -128,9 +145,27 @@ export async function fetchOrderDetails(stripe_checkout_session_id) {
   const refundReason = refund?.refund_reason || orderData.refund_reason || null;
   const totalPaid = Number(orderData.total_paid_cents || 0);
 
-  // Smart profit based on refund reason (mirrors v_order_financials logic)
+  // Smart profit based on order type and refund reason.
+  // eBay: use Finance API earnings as revenue (ebay_order_earnings_cents already nets
+  //   out the SALE-embedded FVF AND any separately-billed per-order NON_SALE_CHARGE fees).
+  //   When finance_status is 'estimated' (ad fee not yet captured), the view returns NULL
+  //   for ebay_net_profit_cents to avoid overstating — we mirror that here.
+  // Standard: use total_paid_cents minus all costs.
   let profitCents;
-  if (orderData.refund_status === "full" && (!refundReason || refundReason === "cancelled_before_ship")) {
+  const ebayFinStatus = ebayFinancials?.finance_status;
+  const isEstimatedEbay = ebayFinStatus === "estimated"; // ad fee not yet captured
+  if (isEbayOrder && ebayFinancials?.ebay_order_earnings_cents != null && !isEstimatedEbay) {
+    const earnings = Number(ebayFinancials.ebay_order_earnings_cents);
+    if (orderData.refund_status === "full" && (!refundReason || refundReason === "cancelled_before_ship")) {
+      profitCents = 0;
+    } else {
+      // earnings excludes eBay fees (FVF + per-order ad fees) and eBay-collected tax
+      profitCents = earnings - productCpiCents - labelCostCents - refundCents;
+    }
+  } else if (isEbayOrder && isEstimatedEbay) {
+    // Ad fee not yet billed by eBay — profit unknown; set null so UI shows estimate badge
+    profitCents = null;
+  } else if (orderData.refund_status === "full" && (!refundReason || refundReason === "cancelled_before_ship")) {
     // Never shipped / cancelled → no costs incurred → $0 profit
     profitCents = 0;
   } else if (refundReason === "returned") {
@@ -147,6 +182,7 @@ export async function fetchOrderDetails(stripe_checkout_session_id) {
     profit_cents: profitCents,
     refund: refund || null,
     refund_reason: refundReason,
+    ebay_financials: ebayFinancials,
   };
 
   return {
@@ -228,6 +264,52 @@ async function getRefundsMap(sessionIds) {
   if (error) {
     // Gracefully degrade if view doesn't exist yet (migration not run)
     console.warn("[api] v_order_refunds fetch failed (migration may not be applied yet):", error.message);
+    return new Map();
+  }
+
+  const m = new Map();
+  for (const row of data || []) m.set(row.stripe_checkout_session_id, row);
+  return m;
+}
+
+/**
+ * Batch-fetch eBay Finance API data from v_ebay_order_profit for a set of session IDs.
+ * Only queries for session IDs that look like eBay orders (start with "ebay_api_").
+ * Returns Map<session_id, ebay_finance_row>
+ */
+async function getEbayFinancesMap(sessionIds) {
+  if (!sessionIds?.length) return new Map();
+
+  const ebayIds = sessionIds.filter((id) => id?.startsWith("ebay_api_"));
+  if (!ebayIds.length) return new Map();
+
+  const { data, error } = await supabase
+    .from("v_ebay_order_profit")
+    .select(
+      [
+        "stripe_checkout_session_id",
+        "ebay_order_earnings_cents",
+        "ebay_total_fee_cents",
+        "fee_final_value_cents",
+        "per_order_ad_fee_cents",
+        "fee_regulatory_cents",
+        "fee_international_cents",
+        "fee_other_cents",
+        "product_cost_cents",
+        "shippo_label_cost_cents",
+        "ebay_net_profit_cents",
+        "finance_status",
+        "finance_synced_at",
+        "buyer_total_cents",
+        "sale_fee_breakdown",
+        "ad_fee_breakdown",
+      ].join(",")
+    )
+    .in("stripe_checkout_session_id", ebayIds);
+
+  if (error) {
+    // Gracefully degrade if view doesn't exist yet (migration not applied)
+    console.warn("[api] v_ebay_order_profit fetch failed (migration may not be applied):", error.message);
     return new Map();
   }
 
@@ -368,14 +450,16 @@ export async function fetchOrderSummaryPage({
   const shipMap = await getShipmentsMap(sessionIds);
   const refundMap = await getRefundsMap(sessionIds);
   const reviewMap = await getReviewCountsMap(sessionIds);
+  const ebayFinanceMap = await getEbayFinancesMap(sessionIds);
 
   // Cost & profit come from the v_order_summary_plus view (via v_order_financials).
-  // The view already handles legacy stored cost vs dynamic CPI correctly.
+  // For eBay orders, ebay_finance provides Finance API earnings for accurate profit.
   const merged = rows.map((r) => {
     const shipment = shipMap.get(r.stripe_checkout_session_id) || null;
     const refund = refundMap.get(r.stripe_checkout_session_id) || null;
     const review_count = reviewMap.get(r.stripe_checkout_session_id) || 0;
-    return { ...r, shipment, refund, review_count };
+    const ebay_finance = ebayFinanceMap.get(r.stripe_checkout_session_id) || null;
+    return { ...r, shipment, refund, review_count, ebay_finance };
   });
 
   const totalCount = Number(count ?? 0);

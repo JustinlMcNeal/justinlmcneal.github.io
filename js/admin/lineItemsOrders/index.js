@@ -296,6 +296,155 @@ function renderOrderDetailsHtml(order, lineItems, shipment) {
 
     <div class="border-t-4 border-gray-100"></div>
 
+    <!-- Order Summary / eBay Financials -->
+    ${(() => {
+      const isEbay = order.stripe_checkout_session_id?.startsWith("ebay_api_");
+      const ef = order.ebay_financials;
+
+      if (isEbay) {
+        // ─── eBay Section 4: Buyer Summary ────────────────────────────────
+        const finStatus = ef?.finance_status || "missing";
+        const hasEarnings = ef?.ebay_order_earnings_cents != null;
+        const isEstimated = finStatus === "estimated"; // ad fee not yet billed (< 2 days)
+        const isEstNoAdFee = finStatus === "estimated_no_ad_fee"; // old sale, no ad fee found
+        const statusBadge = {
+          complete:              '<span class="ml-2 border-[2px] border-emerald-500 text-emerald-600 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider">✓ COMPLETE</span>',
+          estimated:             '<span class="ml-2 border-[2px] border-amber-400 text-amber-700 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider">≈ EST · Ad fee pending</span>',
+          estimated_no_ad_fee:   '<span class="ml-2 border-[2px] border-amber-300 text-amber-600 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider">≈ EST · No ad fee</span>',
+          partial:               '<span class="ml-2 border-[2px] border-amber-400 text-amber-600 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider">≈ PARTIAL</span>',
+          pending_finances:      '<span class="ml-2 border-[2px] border-blue-300 text-blue-600 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider">🕐 PENDING FINANCES</span>',
+          missing:               '<span class="ml-2 border-[2px] border-gray-300 text-gray-500 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider">? NO DATA</span>',
+        }[finStatus] || "";
+
+        let section4 = `
+        <section>
+          <div class="text-[11px] font-black uppercase tracking-[.25em] flex items-center gap-2 mb-4">
+            <span class="w-5 h-5 bg-black text-white text-[10px] flex items-center justify-center">4</span>
+            eBay Order Summary${statusBadge}
+          </div>
+          <div class="grid sm:grid-cols-3 gap-4">
+            <div class="border-4 border-black p-4">
+              <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">Buyer Subtotal</div>
+              <div class="font-black text-lg">${money(order.subtotal_paid_cents)}</div>
+              <div class="text-[9px] text-black/40 mt-1">From eBay Fulfillment API</div>
+            </div>
+            <div class="border-4 border-black p-4">
+              <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">eBay Tax (Buyer)</div>
+              <div class="font-black text-lg text-gray-500">${money(order.tax_cents)}</div>
+              <div class="text-[9px] text-black/40 mt-1">eBay collects & remits — not our revenue</div>
+            </div>
+            <div class="border-4 border-black p-4 bg-black text-white">
+              <div class="text-[10px] font-black uppercase tracking-[.18em] text-white/60 mb-1">Buyer Total</div>
+              <div class="font-black text-lg">${money(order.total_paid_cents)}</div>
+            </div>
+          </div>
+          ${hasEarnings ? `
+          <div class="mt-4 grid sm:grid-cols-4 gap-4">
+            <div class="border-4 border-black p-4">
+              <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">eBay Fees Total</div>
+              <div class="font-black text-lg text-red-600">${money(ef.ebay_total_fee_cents)}</div>
+              <div class="text-[9px] text-black/40 mt-1">FVF${ef.per_order_ad_fee_cents > 0 ? " + Promo" : ""}</div>
+            </div>
+            <div class="border-4 border-black p-4">
+              <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">Final Value Fee</div>
+              <div class="font-black text-red-600">${money(ef.fee_final_value_cents)}</div>
+              <div class="text-[9px] text-black/40 mt-1">In SALE transaction</div>
+            </div>
+            <div class="border-4 ${isEstimated ? "border-amber-300 bg-amber-50" : "border-black"} p-4">
+              <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">Promoted Listing</div>
+              ${isEstimated
+                ? `<div class="font-black text-amber-600">—</div><div class="text-[9px] text-amber-600 mt-1">Not yet billed (1-2 day lag)</div>`
+                : `<div class="font-black text-red-600">${money(ef.per_order_ad_fee_cents || 0)}</div><div class="text-[9px] text-black/40 mt-1">Separate NON_SALE_CHARGE</div>`
+              }
+            </div>
+            <div class="border-4 border-black p-4">
+              <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">Other Fees</div>
+              <div class="font-black text-red-600">${money((ef.fee_regulatory_cents || 0) + (ef.fee_international_cents || 0) + (ef.fee_other_cents || 0))}</div>
+              <div class="text-[9px] text-black/40 mt-1">Regulatory + Intl + Other</div>
+            </div>
+          </div>
+          <div class="mt-3 border-4 ${isEstimated ? "border-amber-300 bg-amber-50" : "border-emerald-200 bg-emerald-50"} p-4 flex items-center justify-between">
+            <div>
+              <div class="text-[10px] font-black uppercase tracking-[.18em] ${isEstimated ? "text-amber-700/70" : "text-emerald-700/70"} mb-1">
+                eBay Seller Earnings${isEstimated ? " (BEFORE promo fee)" : ""}
+              </div>
+              <div class="font-black text-xl ${isEstimated ? "text-amber-700" : "text-emerald-700"}">${money(ef.ebay_order_earnings_cents)}</div>
+              <div class="text-[9px] ${isEstimated ? "text-amber-600/60" : "text-emerald-600/60"} mt-1">
+                SALE.amount ${ef.per_order_ad_fee_cents > 0 ? "− Promoted listing fee" : ""} · ${ef.finance_synced_at ? new Date(ef.finance_synced_at).toLocaleDateString() : "—"}
+              </div>
+              ${isEstimated ? `<div class="text-[9px] text-amber-700 mt-1 font-black">⚠ Promoted listing fee not yet captured — final earnings will be lower</div>` : ""}
+            </div>
+            <div class="text-[10px] font-black uppercase tracking-[.18em] ${isEstimated ? "text-amber-700/50" : "text-emerald-700/50"}">
+              = SALE − ${isEstimated ? "?" : "all"} fees
+            </div>
+          </div>` : `
+          <div class="mt-4 border-4 border-blue-200 bg-blue-50 p-4">
+            <div class="font-black text-sm text-blue-700 uppercase tracking-wider">eBay Finance Data Not Yet Available</div>
+            <div class="text-xs text-blue-600 mt-1">eBay Finance API transactions are typically available 1–2 days after a sale. Run the eBay Finance sync to populate this data. Until then, profit estimates use total_paid_cents which overstates revenue.</div>
+          </div>`}
+        </section>`;
+
+        // ─── eBay Section 5: Cost & eBay Profit ──────────────────────────
+        const profitCents = order.profit_cents; // null when estimated (ad fee unknown)
+        const profitKnown = profitCents != null;
+        const profitColor = Number(profitCents) > 0 ? "text-emerald-600" : "text-red-600";
+
+        let section5 = `
+        <section>
+          <div class="text-[11px] font-black uppercase tracking-[.25em] flex items-center gap-2 mb-4">
+            <span class="w-5 h-5 bg-black text-white text-[10px] flex items-center justify-center">5</span>
+            Cost & eBay Net Profit
+          </div>
+          ${isEstimated ? `
+          <div class="mb-4 border-4 border-amber-400 bg-amber-50 p-3 flex items-center gap-3">
+            <span class="text-lg">⚠</span>
+            <div class="text-[11px] text-amber-800">
+              <strong>Promoted listing fee pending</strong> — eBay typically bills the ad fee 1-2 days after a sale. Profit cannot be accurately computed until it is captured. Re-run the eBay Finance sync tomorrow.
+            </div>
+          </div>` : ""}
+          <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="border-4 border-black p-4">
+              <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">Product CPI</div>
+              <div class="font-black text-lg text-red-600">${money(order.product_cpi_cents)}</div>
+              <div class="text-[9px] text-black/50 mt-1">Unit + China Ship</div>
+            </div>
+            <div class="border-4 border-black p-4">
+              <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">USPS Label</div>
+              <div class="font-black text-lg text-red-600">${money(shipment?.label_cost_cents)}</div>
+            </div>
+            <div class="border-4 border-black p-4">
+              <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">eBay Earnings</div>
+              <div class="font-black text-lg ${hasEarnings ? (isEstimated ? "text-amber-700" : "text-emerald-700") : "text-gray-400"}">
+                ${hasEarnings ? money(ef.ebay_order_earnings_cents) : "—"}
+              </div>
+              <div class="text-[9px] text-black/50 mt-1">
+                ${isEstimated ? "Before promo fee" : (hasEarnings ? "After all eBay fees" : "Not yet synced")}
+              </div>
+            </div>
+            <div class="border-4 border-black p-4 ${profitKnown ? "bg-emerald-50" : "bg-amber-50 border-amber-300"}">
+              <div class="text-[10px] font-black uppercase tracking-[.18em] ${profitKnown ? "text-emerald-700/60" : "text-amber-700/70"} mb-1">
+                ${profitKnown ? "Net Profit" : "Profit (pending)"}
+              </div>
+              <div class="font-black text-lg ${profitKnown ? profitColor : "text-amber-600"}">
+                ${profitKnown ? money(profitCents) : "—"}
+              </div>
+              ${!profitKnown ? '<div class="text-[9px] text-amber-700 mt-1">Ad fee not yet captured</div>' : ""}
+            </div>
+          </div>
+          ${profitKnown ? `
+          <div class="mt-3 text-[10px] text-black/50 leading-relaxed">
+            <strong>Formula:</strong> eBay earnings (${money(ef.ebay_order_earnings_cents)}) − Product CPI (${money(order.product_cpi_cents)}) − USPS label (${money(shipment?.label_cost_cents)})${order.refund ? ` − Refund (${money(order.refund?.refund_amount_cents)})` : ""} = <strong>${money(profitCents)}</strong>
+          </div>` : `
+          <div class="mt-3 text-[10px] text-amber-700 leading-relaxed border-l-4 border-amber-400 pl-3">
+            Best case (ignoring promo fee): ${money(ef.ebay_order_earnings_cents)} − ${money(order.product_cpi_cents)} − ${money(shipment?.label_cost_cents)} = <strong>${money((ef.ebay_order_earnings_cents || 0) - (order.product_cpi_cents || 0) - (shipment?.label_cost_cents || 0))}</strong> (overstated until ad fee is synced)
+          </div>`}
+        </section>`;
+
+        return section4 + '\n    <div class="border-t-4 border-gray-100"></div>\n' + section5;
+      }
+
+      // ─── Standard (non-eBay) Sections 4 & 5 ────────────────────────────
+      return `
     <!-- Order Summary -->
     <section>
       <div class="text-[11px] font-black uppercase tracking-[.25em] flex items-center gap-2 mb-4">
@@ -354,7 +503,8 @@ function renderOrderDetailsHtml(order, lineItems, shipment) {
           <div class="font-black text-lg text-emerald-600">${money(order.profit_cents)}</div>
         </div>
       </div>
-    </section>
+    </section>`;
+    })()}
 
     <div class="border-t-4 border-gray-100"></div>
 

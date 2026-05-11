@@ -100,6 +100,58 @@ interface FinTransaction {
       amount: { value: string; currency: string };
     }>;
   }>;
+  // eBay uses `references` array on NON_SALE_CHARGE transactions (instead of orderId directly)
+  // to link the charge to the originating sale order.
+  references?: Array<{ referenceId: string; referenceType: string }>;
+}
+
+interface ClassifiedFees {
+  fee_final_value_cents: number;
+  fee_ad_cents: number;
+  fee_regulatory_cents: number;
+  fee_international_cents: number;
+  fee_other_cents: number;
+}
+
+/**
+ * Classify marketplace fees by type into bucketed columns.
+ * Unrecognised fee types go into fee_other_cents so they are preserved and visible.
+ */
+function classifyFees(
+  orderLineItems: FinTransaction["orderLineItems"]
+): ClassifiedFees {
+  const result: ClassifiedFees = {
+    fee_final_value_cents: 0,
+    fee_ad_cents: 0,
+    fee_regulatory_cents: 0,
+    fee_international_cents: 0,
+    fee_other_cents: 0,
+  };
+
+  for (const oli of orderLineItems || []) {
+    for (const fee of oli.marketplaceFees || []) {
+      const cents = absAmountCents(fee.amount);
+      const type = (fee.feeType || "").toUpperCase();
+
+      if (
+        type === "FINAL_VALUE_FEE" ||
+        type === "FINAL_VALUE_FEE_FIXED_PER_ORDER" ||
+        type === "FINAL_VALUE_SHIPPING_FEE"
+      ) {
+        result.fee_final_value_cents += cents;
+      } else if (type === "AD_FEES" || type === "PROMOTED_LISTING_FEE") {
+        result.fee_ad_cents += cents;
+      } else if (type === "REGULATORY_OP_FEE") {
+        result.fee_regulatory_cents += cents;
+      } else if (type === "INTERNATIONAL_FEE") {
+        result.fee_international_cents += cents;
+      } else {
+        result.fee_other_cents += cents;
+      }
+    }
+  }
+
+  return result;
 }
 
 /** Fetch financial transactions from eBay Finances API */
@@ -208,6 +260,9 @@ serve(async (req) => {
       { totalCents: number; orderCount: number; feeBreakdown: Map<string, number> }
     > = new Map();
 
+    // Collect per-order SALE transactions for upsert to ebay_finance_transactions
+    const saleUpsertRows: object[] = [];
+
     // Track shipping label costs per order
     const labelCosts: Map<string, number> = new Map();
     let labelUpdated = 0;
@@ -223,7 +278,7 @@ serve(async (req) => {
       const monthKey = txnDate.slice(0, 7); // "YYYY-MM"
 
       if (txn.transactionType === "SALE") {
-        // Aggregate fees per month from SALE transactions
+        // Aggregate fees per month from SALE transactions (existing accounting path)
         const totalFee = absAmountCents(txn.totalFeeAmount);
         if (totalFee > 0) {
           if (!monthlyFees.has(monthKey)) {
@@ -237,7 +292,7 @@ serve(async (req) => {
           month.totalCents += totalFee;
           month.orderCount++;
 
-          // Collect fee breakdown
+          // Collect fee breakdown for monthly expenses note
           for (const oli of txn.orderLineItems || []) {
             for (const fee of oli.marketplaceFees || []) {
               const feeType = fee.feeType || "OTHER";
@@ -248,6 +303,36 @@ serve(async (req) => {
               );
             }
           }
+        }
+
+        // NEW: collect per-order row for ebay_finance_transactions upsert
+        // Only SALE transactions with an orderId can be linked to a local order.
+        if (txn.orderId) {
+          const classified = classifyFees(txn.orderLineItems);
+          const feeArr: object[] = (txn.orderLineItems || []).flatMap(
+            (oli) => (oli.marketplaceFees || []).map((f) => ({
+              feeType: f.feeType,
+              amount: f.amount,
+              lineItemId: oli.lineItemId,
+            }))
+          );
+
+          saleUpsertRows.push({
+            transaction_id: txn.transactionId,
+            ebay_order_id: txn.orderId,
+            stripe_checkout_session_id: `ebay_api_${txn.orderId}`,
+            transaction_type: txn.transactionType,
+            transaction_status: txn.transactionStatus || null,
+            transaction_date: txn.transactionDate || null,
+            booking_entry: txn.bookingEntry || null,
+            amount_cents: absAmountCents(txn.amount),
+            total_fee_cents: absAmountCents(txn.totalFeeAmount),
+            ...classified,
+            fee_breakdown: feeArr,
+            raw_payload: txn,
+            synced_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
         }
       } else if (txn.transactionType === "SHIPPING_LABEL") {
         // Track label costs per order for fulfillment_shipments update
@@ -262,7 +347,41 @@ serve(async (req) => {
         const amountCents = absAmountCents(txn.amount);
         if (amountCents === 0) continue;
 
-        // Dedup check
+        // Resolve the order ID for this charge.
+        // SALE transactions carry orderId directly.
+        // NON_SALE_CHARGE transactions (e.g. Promoted Listings - General fee) may use
+        // the `references` array with referenceType: "ORDER_ID" instead of orderId.
+        const referenceOrderId =
+          txn.references?.find((r) => r.referenceType === "ORDER_ID")?.referenceId || null;
+        const chargeOrderId = txn.orderId || referenceOrderId;
+
+        // If this charge is tied to a specific order, capture it in ebay_finance_transactions
+        // so v_ebay_order_profit can subtract it from the SALE.amount.
+        // The expenses insert below is kept separately for the accounting ledger.
+        if (chargeOrderId) {
+          saleUpsertRows.push({
+            transaction_id: txn.transactionId,
+            ebay_order_id: chargeOrderId,
+            stripe_checkout_session_id: `ebay_api_${chargeOrderId}`,
+            transaction_type: txn.transactionType,
+            transaction_status: txn.transactionStatus || null,
+            transaction_date: txn.transactionDate || null,
+            booking_entry: txn.bookingEntry || null,
+            amount_cents: amountCents,
+            total_fee_cents: amountCents,
+            fee_final_value_cents: 0,
+            fee_ad_cents: amountCents,
+            fee_regulatory_cents: 0,
+            fee_international_cents: 0,
+            fee_other_cents: 0,
+            fee_breakdown: txn.transactionMemo ? [{ memo: txn.transactionMemo, amount: txn.amount }] : [],
+            raw_payload: txn,
+            synced_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+        }
+
+        // Dedup check for expenses ledger
         const { data: existingFee } = await supabase
           .from("expenses")
           .select("id")
@@ -293,6 +412,26 @@ serve(async (req) => {
       }
       // REFUND and CREDIT types are informational — order refund tracking is
       // already handled in orders_raw via the order sync or admin UI
+    }
+
+    // Batch upsert per-order SALE transactions to ebay_finance_transactions
+    let ebayFinUpserted = 0;
+    if (saleUpsertRows.length > 0) {
+      const { error: upsertErr } = await supabase
+        .from("ebay_finance_transactions")
+        .upsert(saleUpsertRows, { onConflict: "transaction_id" });
+
+      if (upsertErr) {
+        console.error(
+          "[ebay-fin] ebay_finance_transactions upsert error:",
+          upsertErr.message
+        );
+      } else {
+        ebayFinUpserted = saleUpsertRows.length;
+        console.log(
+          `[ebay-fin] Upserted ${ebayFinUpserted} per-order finance transactions`
+        );
+      }
     }
 
     // Insert aggregated monthly selling fees
@@ -373,6 +512,7 @@ serve(async (req) => {
     const result = {
       success: true,
       transactions_processed: transactions.length,
+      ebay_fin_txns_upserted: ebayFinUpserted,
       fee_months_inserted: feeMonthsInserted,
       non_sale_charges_inserted: nonSaleInserted,
       label_costs_updated: labelUpdated,

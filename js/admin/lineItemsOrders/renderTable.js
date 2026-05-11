@@ -79,6 +79,52 @@ function reviewBadgeHtml(reviewCount) {
   return `<span class="inline-flex items-center border-[3px] border-gray-200 bg-gray-50 text-gray-400 px-2 py-1 text-[10px] font-black uppercase tracking-[.14em] whitespace-nowrap">No reviews</span>`;
 }
 
+/**
+ * Badge shown on eBay order rows when Finance API data is not yet complete.
+ * Returns empty string when data is complete (reliable profit shown as-is).
+ */
+function ebayFinanceBadgeHtml(r) {
+  const ef = r.ebay_finance;
+  if (!ef) return "";
+  const status = ef.finance_status || "missing";
+  if (status === "complete") return "";
+  if (status === "estimated") {
+    return `<span class="inline-flex items-center border-[3px] border-amber-400 bg-amber-50 text-amber-700 px-2 py-1 text-[10px] font-black uppercase tracking-[.14em] whitespace-nowrap ml-1" title="eBay Promoted Listing fee not yet billed (1-2 day lag) — profit unknown until synced">≈ AD FEE PENDING</span>`;
+  }
+  if (status === "estimated_no_ad_fee") {
+    return `<span class="inline-flex items-center border-[3px] border-amber-300 bg-amber-50 text-amber-600 px-2 py-1 text-[10px] font-black uppercase tracking-[.14em] whitespace-nowrap ml-1" title="No promoted listing fee detected for this order — earnings based on SALE only">≈ EST</span>`;
+  }
+  if (status === "partial") {
+    return `<span class="inline-flex items-center border-[3px] border-amber-400 bg-amber-50 text-amber-700 px-2 py-1 text-[10px] font-black uppercase tracking-[.14em] whitespace-nowrap ml-1" title="eBay Finance API synced — Shippo label not yet purchased; label cost not subtracted">≈ PARTIAL</span>`;
+  }
+  if (status === "pending_finances") {
+    return `<span class="inline-flex items-center border-[3px] border-blue-300 bg-blue-50 text-blue-700 px-2 py-1 text-[10px] font-black uppercase tracking-[.14em] whitespace-nowrap ml-1" title="eBay Finance API transaction not yet synced (may take up to 1 day after sale)">🕐 PENDING</span>`;
+  }
+  // missing
+  return `<span class="inline-flex items-center border-[3px] border-gray-300 bg-gray-50 text-gray-500 px-2 py-1 text-[10px] font-black uppercase tracking-[.14em] whitespace-nowrap ml-1" title="eBay Finance data not available">? EBAY</span>`;
+}
+
+/**
+ * For eBay orders: resolve the correct profit cents to display.
+ * Uses Finance API earnings when available; falls back to view profit.
+ * Returns null when profit is genuinely unknown (estimated status — ad fee pending).
+ */
+function resolveEbayProfit(r) {
+  const ef = r.ebay_finance;
+  if (!ef) return { cents: r.profit_cents, isEstimate: false };
+  const status = ef.finance_status || "missing";
+  // complete or estimated_no_ad_fee: Finance API earnings available, use ebay_net_profit_cents
+  if ((status === "complete" || status === "estimated_no_ad_fee") && ef.ebay_net_profit_cents != null) {
+    return { cents: ef.ebay_net_profit_cents, isEstimate: status === "estimated_no_ad_fee" };
+  }
+  // estimated: ad fee pending, profit unknown — show null (prevents overstating)
+  if (status === "estimated") {
+    return { cents: null, isEstimate: true };
+  }
+  // pending_finances or missing: Finance API not synced yet, fall back to view profit
+  return { cents: r.profit_cents, isEstimate: false };
+}
+
 /* -------------------------
    MOBILE RENDER (CARDS)
 -------------------------- */
@@ -96,8 +142,10 @@ function renderMobileCards(rows = []) {
       const items = r.total_items ?? r.li_total_items ?? "—";
 
       const paid = moneyFromCents(r.total_paid_cents);
-      const profit = moneyFromCents(r.profit_cents);
-      const profitColor = Number(r.profit_cents) > 0 ? 'text-emerald-600' : 'text-red-600';
+      const isEbay = r.stripe_checkout_session_id?.startsWith("ebay_api_");
+      const { cents: profitCents } = isEbay ? resolveEbayProfit(r) : { cents: r.profit_cents };
+      const profit = profitCents != null ? moneyFromCents(profitCents) : "—";
+      const profitColor = profitCents == null ? 'text-amber-600' : (Number(profitCents) > 0 ? 'text-emerald-600' : 'text-red-600');
 
       const labelStatus = ship?.label_status || "pending";
 
@@ -159,7 +207,7 @@ function renderMobileCards(rows = []) {
 
                 <div class="border-[3px] border-black p-3">
                   <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60">Profit</div>
-                  <div class="mt-1 font-black ${profitColor}">${esc(profit)}</div>
+                  <div class="mt-1 font-black ${profitColor}">${esc(profit)}${isEbay ? ebayFinanceBadgeHtml(r) : ""}</div>
                 </div>
 
                 <div class="border-[3px] border-black p-3">
@@ -189,7 +237,10 @@ function renderDesktopRows(rows = []) {
       const items = r.total_items ?? r.li_total_items ?? "—";
 
       const paid = moneyFromCents(r.total_paid_cents);
-      const profit = moneyFromCents(r.profit_cents);
+      const isEbay = r.stripe_checkout_session_id?.startsWith("ebay_api_");
+      const { cents: profitCents } = isEbay ? resolveEbayProfit(r) : { cents: r.profit_cents };
+      const profit = profitCents != null ? moneyFromCents(profitCents) : "—";
+      const profitColor = profitCents == null ? 'text-amber-600' : (Number(profitCents) > 0 ? 'text-emerald-600' : 'text-red-600');
 
       const labelStatus = ship?.label_status || "pending";
 
@@ -222,8 +273,8 @@ function renderDesktopRows(rows = []) {
             ${esc(paid)}
           </td>
 
-          <td class="px-4 py-3 text-sm whitespace-nowrap font-black text-right ${Number(r.profit_cents) > 0 ? 'text-emerald-600' : 'text-red-600'}">
-            ${esc(profit)}
+          <td class="px-4 py-3 text-sm whitespace-nowrap font-black text-right ${Number(profitCents) > 0 ? 'text-emerald-600' : 'text-red-600'}">
+            ${esc(profit)}${isEbay ? ebayFinanceBadgeHtml(r) : ""}
           </td>
 
           <td class="px-4 py-3">
