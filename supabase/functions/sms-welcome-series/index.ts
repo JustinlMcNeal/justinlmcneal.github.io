@@ -6,10 +6,6 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const supabaseUrl  = Deno.env.get("SUPABASE_URL")!;
 const serviceKey   = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const TWILIO_SID   = Deno.env.get("TWILIO_ACCOUNT_SID")!;
-const TWILIO_TOKEN = Deno.env.get("TWILIO_AUTH_TOKEN")!;
-const TWILIO_FROM  = Deno.env.get("TWILIO_FROM_NUMBER")!;
-const WEBHOOK_URL  = Deno.env.get("TWILIO_WEBHOOK_URL") || "";
 
 const cors = {
   "Access-Control-Allow-Origin":  "*",
@@ -41,104 +37,39 @@ function generateCouponCode(prefix: string): string {
   return `${prefix}-${code}`;
 }
 
-function isQuietHours(): boolean {
-  const now = new Date();
-  const etHour = (now.getUTCHours() - 4 + 24) % 24;
-  return etHour >= 21 || etHour < 9;
-}
-
-/** Check 6-hour gap between marketing SMS */
-async function passesFrequencyCap(
-  sb: ReturnType<typeof createClient>,
-  contactId: string
-): Promise<boolean> {
-  const { data } = await sb
-    .from("customer_contacts")
-    .select("last_sms_sent_at")
-    .eq("id", contactId)
-    .single();
-
-  if (data?.last_sms_sent_at) {
-    const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);
-    if (new Date(data.last_sms_sent_at) > sixHoursAgo) return false;
-  }
-  return true;
-}
-
-/** Send SMS and log to sms_messages + sms_sends */
-async function sendAndLog(
-  sb: ReturnType<typeof createClient>,
-  opts: {
-    phone: string;
-    contactId: string;
-    smsBody: string;
-    shortCode: string;
-    targetUrl: string;
-    campaign: string;
-    flow: string;
-    sendReason: string;
-    messageType: string;
-    snapshot: Record<string, unknown>;
-  }
-): Promise<boolean> {
-  const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_SID}/Messages.json`;
-  const formData = new URLSearchParams();
-  formData.set("To", opts.phone);
-  formData.set("From", TWILIO_FROM);
-  formData.set("Body", opts.smsBody);
-  if (WEBHOOK_URL) formData.set("StatusCallback", WEBHOOK_URL);
-
-  const twilioResp = await fetch(twilioUrl, {
-    method: "POST",
-    headers: {
-      "Authorization": "Basic " + btoa(`${TWILIO_SID}:${TWILIO_TOKEN}`),
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: formData.toString(),
-  });
-
-  const twilioData = await twilioResp.json();
-  const status = twilioResp.ok ? "sent" : "failed";
-
-  const { data: msgRow } = await sb.from("sms_messages").insert({
-    phone:               opts.phone,
-    contact_id:          opts.contactId,
-    message_body:        opts.smsBody,
-    message_type:        opts.messageType,
-    campaign:            opts.campaign,
-    status,
-    provider_message_sid: twilioData.sid || null,
-    error_code:          !twilioResp.ok ? String(twilioData.code || twilioResp.status) : null,
-    error_message:       !twilioResp.ok ? (twilioData.message || "Twilio API error") : null,
-    sent_at:             twilioResp.ok ? new Date().toISOString() : null,
-    short_code:          opts.shortCode,
-    redirect_url:        opts.targetUrl,
-  }).select("id").single();
-
-  if (msgRow) {
-    await sb.from("sms_sends").insert({
-      phone:           opts.phone,
-      contact_id:      opts.contactId,
-      campaign:        opts.campaign,
-      flow:            opts.flow,
-      send_reason:     opts.sendReason,
-      intent:          "marketing",
-      outcome:         "pending",
-      cost:            0.0079,
-      sms_message_id:  msgRow.id,
-      user_state_snapshot: opts.snapshot,
+/** Route an SMS through the send-sms edge function. Returns 'sent', 'skipped', or 'failed'. */
+async function sendViaSendSms(opts: {
+  to: string;
+  body: string;
+  message_type: string;
+  intent: string;
+  campaign: string;
+  contact_id: string;
+  flow: string;
+  send_reason: string;
+  short_code: string;
+  redirect_url: string;
+  user_state_snapshot: Record<string, unknown>;
+}): Promise<"sent" | "skipped" | "failed"> {
+  try {
+    const res = await fetch(`${supabaseUrl}/functions/v1/send-sms`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${serviceKey}`,
+      },
+      body: JSON.stringify(opts),
     });
+    const data = await res.json();
+    if (data.blocked === true) return "skipped";
+    if (res.ok && data.success === true) return "sent";
+    console.warn("[sms-welcome-series] send-sms did not succeed:", JSON.stringify(data));
+    return "failed";
+  } catch (err: unknown) {
+    console.error("[sms-welcome-series] send-sms call failed:",
+      err instanceof Error ? err.message : String(err));
+    return "failed";
   }
-
-  if (twilioResp.ok) {
-    await sb.from("customer_contacts")
-      .update({ last_sms_sent_at: new Date().toISOString() })
-      .eq("id", opts.contactId);
-  } else {
-    console.error(`[sms-welcome-series] Failed to send to ${opts.phone}:`, twilioData.message);
-  }
-
-  return twilioResp.ok;
 }
 
 /** Check if a specific welcome step was already sent to this contact */
@@ -187,10 +118,6 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
   try {
-    if (isQuietHours()) {
-      return json({ skipped: true, reason: "quiet_hours" });
-    }
-
     const sb = createClient(supabaseUrl, serviceKey);
     const now = Date.now();
     const results = { day2_sent: 0, day5_sent: 0, skipped: 0 };
@@ -230,12 +157,6 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // ── Frequency cap ──────────────────────────────────────
-      if (!(await passesFrequencyCap(sb, contact.id))) {
-        results.skipped++;
-        continue;
-      }
-
       // ── Skip if abandoned cart flow is active ──────────────
       if (await hasActiveAbandonedCart(sb, contact.id)) {
         results.skipped++;
@@ -254,20 +175,21 @@ Deno.serve(async (req) => {
 
         const smsBody = `Karry Kraze: See what everyone's grabbing right now \u{1F440}\n${trackingUrl}\nReply STOP to opt out`;
 
-        const sent = await sendAndLog(sb, {
-          phone: contact.phone,
-          contactId: contact.id,
-          smsBody,
-          shortCode,
-          targetUrl,
-          campaign: "welcome_series",
-          flow: "welcome_series",
-          sendReason: "welcome_day_2",
-          messageType: "welcome_discovery",
-          snapshot,
+        const result = await sendViaSendSms({
+          to:                  contact.phone,
+          body:                smsBody,
+          message_type:        "welcome_discovery",
+          intent:              "marketing",
+          campaign:            "welcome_series",
+          contact_id:          contact.id,
+          flow:                "welcome_series",
+          send_reason:         "welcome_day_2",
+          short_code:          shortCode,
+          redirect_url:        targetUrl,
+          user_state_snapshot: snapshot,
         });
 
-        if (sent) results.day2_sent++;
+        if (result === "sent") results.day2_sent++; else results.skipped++;
         continue; // Don't check Day 5 in same run
       }
 
@@ -331,20 +253,21 @@ Deno.serve(async (req) => {
 
         const smsBody = `Karry Kraze: Still thinking about it? Here's 10% off — just for you. Use ${couponCode} at checkout: ${trackingUrl}\nExpires in 48hrs. Reply STOP to opt out`;
 
-        const sent = await sendAndLog(sb, {
-          phone: contact.phone,
-          contactId: contact.id,
-          smsBody,
-          shortCode,
-          targetUrl,
-          campaign: "welcome_series",
-          flow: "welcome_series",
-          sendReason: "welcome_day_5",
-          messageType: "welcome_conversion",
-          snapshot: { ...snapshot, coupon_code: couponCode },
+        const result = await sendViaSendSms({
+          to:                  contact.phone,
+          body:                smsBody,
+          message_type:        "welcome_conversion",
+          intent:              "marketing",
+          campaign:            "welcome_series",
+          contact_id:          contact.id,
+          flow:                "welcome_series",
+          send_reason:         "welcome_day_5",
+          short_code:          shortCode,
+          redirect_url:        targetUrl,
+          user_state_snapshot: { ...snapshot, coupon_code: couponCode },
         });
 
-        if (sent) results.day5_sent++;
+        if (result === "sent") results.day5_sent++; else results.skipped++;
       }
     }
 

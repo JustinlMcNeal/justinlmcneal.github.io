@@ -7,10 +7,6 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const supabaseUrl  = Deno.env.get("SUPABASE_URL")!;
 const serviceKey   = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const TWILIO_SID   = Deno.env.get("TWILIO_ACCOUNT_SID")!;
-const TWILIO_TOKEN = Deno.env.get("TWILIO_AUTH_TOKEN")!;
-const TWILIO_FROM  = Deno.env.get("TWILIO_FROM_NUMBER")!;
-const WEBHOOK_URL  = Deno.env.get("TWILIO_WEBHOOK_URL") || "";
 
 const cors = {
   "Access-Control-Allow-Origin":  "*",
@@ -42,104 +38,39 @@ function generateCouponCode(prefix: string): string {
   return `${prefix}-${code}`;
 }
 
-function isQuietHours(): boolean {
-  const now = new Date();
-  const etHour = (now.getUTCHours() - 4 + 24) % 24;
-  return etHour >= 21 || etHour < 9;
-}
-
-/** Check 6hr gap */
-async function passesFrequencyCap(
-  sb: ReturnType<typeof createClient>,
-  contactId: string
-): Promise<boolean> {
-  const { data } = await sb
-    .from("customer_contacts")
-    .select("last_sms_sent_at")
-    .eq("id", contactId)
-    .single();
-
-  if (data?.last_sms_sent_at) {
-    const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);
-    if (new Date(data.last_sms_sent_at) > sixHoursAgo) return false;
-  }
-  return true;
-}
-
-/** Send SMS and log to sms_messages + sms_sends */
-async function sendAndLog(
-  sb: ReturnType<typeof createClient>,
-  opts: {
-    phone: string;
-    contactId: string;
-    smsBody: string;
-    shortCode: string;
-    targetUrl: string;
-    campaign: string;
-    flow: string;
-    sendReason: string;
-    messageType: string;
-    snapshot: Record<string, unknown>;
-  }
-): Promise<boolean> {
-  const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_SID}/Messages.json`;
-  const formData = new URLSearchParams();
-  formData.set("To", opts.phone);
-  formData.set("From", TWILIO_FROM);
-  formData.set("Body", opts.smsBody);
-  if (WEBHOOK_URL) formData.set("StatusCallback", WEBHOOK_URL);
-
-  const twilioResp = await fetch(twilioUrl, {
-    method: "POST",
-    headers: {
-      "Authorization": "Basic " + btoa(`${TWILIO_SID}:${TWILIO_TOKEN}`),
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: formData.toString(),
-  });
-
-  const twilioData = await twilioResp.json();
-  const status = twilioResp.ok ? "sent" : "failed";
-
-  const { data: msgRow } = await sb.from("sms_messages").insert({
-    phone:               opts.phone,
-    contact_id:          opts.contactId,
-    message_body:        opts.smsBody,
-    message_type:        opts.messageType,
-    campaign:            opts.campaign,
-    status,
-    provider_message_sid: twilioData.sid || null,
-    error_code:          !twilioResp.ok ? String(twilioData.code || twilioResp.status) : null,
-    error_message:       !twilioResp.ok ? (twilioData.message || "Twilio API error") : null,
-    sent_at:             twilioResp.ok ? new Date().toISOString() : null,
-    short_code:          opts.shortCode,
-    redirect_url:        opts.targetUrl,
-  }).select("id").single();
-
-  if (msgRow) {
-    await sb.from("sms_sends").insert({
-      phone:           opts.phone,
-      contact_id:      opts.contactId,
-      campaign:        opts.campaign,
-      flow:            opts.flow,
-      send_reason:     opts.sendReason,
-      intent:          "marketing",
-      outcome:         "pending",
-      cost:            0.0079,
-      sms_message_id:  msgRow.id,
-      user_state_snapshot: opts.snapshot,
+/** Route SMS through send-sms wrapper */
+async function sendViaSendSms(opts: {
+  to: string;
+  body: string;
+  message_type: string;
+  intent: string;
+  campaign: string;
+  contact_id: string;
+  flow: string;
+  send_reason: string;
+  short_code: string;
+  redirect_url: string;
+  user_state_snapshot: Record<string, unknown>;
+}): Promise<"sent" | "skipped" | "failed"> {
+  try {
+    const res = await fetch(`${supabaseUrl}/functions/v1/send-sms`, {
+      method: "POST",
+      headers: {
+        "Content-Type":  "application/json",
+        "Authorization": `Bearer ${serviceKey}`,
+      },
+      body: JSON.stringify(opts),
     });
+    const data = await res.json();
+    if (data.blocked === true) return "skipped";
+    if (res.ok && data.success === true) return "sent";
+    console.warn("[sms-abandoned-cart] send-sms did not succeed:", JSON.stringify(data));
+    return "failed";
+  } catch (err: unknown) {
+    console.error("[sms-abandoned-cart] send-sms call failed:",
+      err instanceof Error ? err.message : String(err));
+    return "failed";
   }
-
-  if (twilioResp.ok) {
-    await sb.from("customer_contacts")
-      .update({ last_sms_sent_at: new Date().toISOString() })
-      .eq("id", opts.contactId);
-  } else {
-    console.error(`[sms-abandoned-cart] Failed to send to ${opts.phone}:`, twilioData.message);
-  }
-
-  return twilioResp.ok;
 }
 
 // ── Cart item name for SMS body ─────────────────────────────
@@ -157,10 +88,6 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
   try {
-    if (isQuietHours()) {
-      return json({ skipped: true, reason: "quiet_hours" });
-    }
-
     const sb = createClient(supabaseUrl, serviceKey);
     const now = Date.now();
     const results = { step1: 0, step2: 0, step3: 0, skipped: 0, purchased: 0, expired: 0 };
@@ -235,12 +162,6 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // ── Frequency cap check ────────────────────────────────
-      if (!(await passesFrequencyCap(sb, cart.contact_id))) {
-        results.skipped++;
-        continue;
-      }
-
       // ── Determine which step to execute ────────────────────
       const cartItems = topItemName(cart.cart_data as Array<{name?: string}>);
       const cartValue = (cart.cart_value_cents / 100).toFixed(2);
@@ -255,24 +176,25 @@ Deno.serve(async (req) => {
         minutes_since_update: Math.round(sinceUpdate / 60000),
       };
 
-      let sent = false;
-
       // ── STEP 1: 30min reminder (no discount) ──────────────
       if (cart.abandoned_step === 0 && sinceUpdate >= 30 * 60 * 1000) {
         const smsBody = `Karry Kraze: You left ${cartItems} in your cart ($${cartValue}). Complete your order: ${trackingUrl}\nReply STOP to opt out`;
 
-        sent = await sendAndLog(sb, {
-          phone: cart.phone,
-          contactId: cart.contact_id,
-          smsBody,
-          shortCode,
-          targetUrl,
-          campaign: "abandoned_cart",
-          flow: "abandoned_cart",
-          sendReason: "cart_abandoned_30min",
-          messageType: "abandoned_cart_reminder",
-          snapshot,
+        const result = await sendViaSendSms({
+          to:                  cart.phone,
+          body:                smsBody,
+          message_type:        "abandoned_cart_reminder",
+          intent:              "marketing",
+          campaign:            "abandoned_cart",
+          contact_id:          cart.contact_id,
+          flow:                "abandoned_cart",
+          send_reason:         "cart_abandoned_30min",
+          short_code:          shortCode,
+          redirect_url:        targetUrl,
+          user_state_snapshot: snapshot,
         });
+        const sent = result === "sent";
+        if (!sent) results.skipped++;
 
         if (sent) {
           const sentAt = new Date().toISOString();
@@ -293,18 +215,21 @@ Deno.serve(async (req) => {
 
         const smsBody = `Karry Kraze: Almost gone \ud83d\udc40 ${cartItems} been selling fast. Don't miss out: ${trackingUrl}\nReply STOP to opt out`;
 
-        sent = await sendAndLog(sb, {
-          phone: cart.phone,
-          contactId: cart.contact_id,
-          smsBody,
-          shortCode,
-          targetUrl,
-          campaign: "abandoned_cart",
-          flow: "abandoned_cart",
-          sendReason: "cart_abandoned_6hr_urgency",
-          messageType: "abandoned_cart_urgency",
-          snapshot,
+        const result = await sendViaSendSms({
+          to:                  cart.phone,
+          body:                smsBody,
+          message_type:        "abandoned_cart_urgency",
+          intent:              "marketing",
+          campaign:            "abandoned_cart",
+          contact_id:          cart.contact_id,
+          flow:                "abandoned_cart",
+          send_reason:         "cart_abandoned_6hr_urgency",
+          short_code:          shortCode,
+          redirect_url:        targetUrl,
+          user_state_snapshot: snapshot,
         });
+        const sent = result === "sent";
+        if (!sent) results.skipped++;
 
         if (sent) {
           const sentAt = new Date().toISOString();
@@ -395,18 +320,21 @@ Deno.serve(async (req) => {
           : `Use ${couponCode} for 15% off orders $40+`;
         const smsBody = `Karry Kraze: We saved your cart! ${offerText}. Expires in 48hrs: ${trackingUrl}\nReply STOP to opt out`;
 
-        sent = await sendAndLog(sb, {
-          phone: cart.phone,
-          contactId: cart.contact_id,
-          smsBody,
-          shortCode,
-          targetUrl,
-          campaign: "abandoned_cart",
-          flow: "abandoned_cart",
-          sendReason: "cart_abandoned_24hr_discount",
-          messageType: "abandoned_cart_discount",
-          snapshot: { ...snapshot, coupon_code: couponCode, high_value: isHighValue },
+        const result = await sendViaSendSms({
+          to:                  cart.phone,
+          body:                smsBody,
+          message_type:        "abandoned_cart_discount",
+          intent:              "marketing",
+          campaign:            "abandoned_cart",
+          contact_id:          cart.contact_id,
+          flow:                "abandoned_cart",
+          send_reason:         "cart_abandoned_24hr_discount",
+          short_code:          shortCode,
+          redirect_url:        targetUrl,
+          user_state_snapshot: { ...snapshot, coupon_code: couponCode, high_value: isHighValue },
         });
+        const sent = result === "sent";
+        if (!sent) results.skipped++;
 
         if (sent) {
           const sentAt = new Date().toISOString();

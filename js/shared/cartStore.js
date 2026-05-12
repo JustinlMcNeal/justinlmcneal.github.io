@@ -40,7 +40,24 @@ function lineKey(id, variant) {
   return `${String(id)}::${normVariant(variant)}`;
 }
 
-function findLineIndex(id, variant) {
+/**
+ * Find a cart line by identity.
+ *
+ * Phase 2: prefers variant_id (UUID) when provided and present on an existing
+ * line. Falls back to the legacy product-UUID + variant-text key so old carts
+ * without variant_id still resolve correctly.
+ *
+ * @param {string} id         - product UUID
+ * @param {string} variant    - variant text (e.g. "Black")
+ * @param {string|null} variantId - variant UUID (optional, preferred)
+ */
+function findLineIndex(id, variant, variantId = null) {
+  // Prefer direct variant UUID match when both sides carry it
+  if (variantId) {
+    const byUuid = cart.findIndex((it) => it.variant_id && it.variant_id === variantId);
+    if (byUuid >= 0) return byUuid;
+  }
+  // Legacy fallback: product UUID + normalized variant text
   const key = lineKey(id, variant);
   return cart.findIndex((it) => lineKey(it.id, it.variant) === key);
 }
@@ -80,9 +97,24 @@ export function addToCart(payload) {
   const sku = (payload.product_id ?? "").toString().trim() || null;
 
   const variant = normVariant(payload.variant);
+
+  // Phase 2: durable variant identity fields. Preserved when sent by
+  // buildCartPayload() (product page) and any other caller that supplies them.
+  // Absent in legacy add-to-cart calls → stored as null, handled gracefully.
+  const variantId    = payload.variant_id    ?? null;
+  const variantSku   = payload.variant_sku   ?? null;
+  const variantTitle = payload.variant_title ?? null;
+  // selected_options must be a plain object or null — do not store other types
+  const selectedOptions =
+    payload.selected_options &&
+    typeof payload.selected_options === "object" &&
+    !Array.isArray(payload.selected_options)
+      ? payload.selected_options
+      : null;
+
   const qtyToAdd = Math.max(1, Number(payload.qty || 1));
 
-  const idx = findLineIndex(id, variant);
+  const idx = findLineIndex(id, variant, variantId);
 
   if (idx >= 0) {
     cart[idx].qty = Math.max(1, Number(cart[idx].qty || 1) + qtyToAdd);
@@ -98,6 +130,12 @@ export function addToCart(payload) {
       price: Number(payload.price || 0),
       image: payload.image || "",
       variant,
+
+      // Phase 2: durable variant identity
+      variant_id:      variantId,
+      variant_sku:     variantSku,
+      variant_title:   variantTitle,
+      selected_options: selectedOptions,
 
       // qty
       qty: qtyToAdd,
@@ -122,16 +160,35 @@ export function removeFromCart(index) {
   saveCart();
 }
 
-export function removeItem(id, variant = "") {
-  const idx = findLineIndex(id, variant);
+/**
+ * Remove a cart line by identity.
+ * Phase 2: accepts optional variantId (UUID) for preferred exact-match lookup.
+ * Falls back to legacy id::variant key when variantId is absent.
+ *
+ * @param {string} id
+ * @param {string} [variant]
+ * @param {string|null} [variantId]
+ */
+export function removeItem(id, variant = "", variantId = null) {
+  const idx = findLineIndex(id, variant, variantId);
   if (idx >= 0) {
     cart.splice(idx, 1);
     saveCart();
   }
 }
 
-export function setQty(id, variant = "", qty = 1) {
-  const idx = findLineIndex(id, variant);
+/**
+ * Set quantity for a cart line.
+ * Phase 2: accepts optional variantId (UUID) for preferred exact-match lookup.
+ * Falls back to legacy id::variant key when variantId is absent.
+ *
+ * @param {string} id
+ * @param {string} [variant]
+ * @param {number} [qty]
+ * @param {string|null} [variantId]
+ */
+export function setQty(id, variant = "", qty = 1, variantId = null) {
+  const idx = findLineIndex(id, variant, variantId);
   if (idx < 0) return;
 
   const q = Math.floor(Number(qty));

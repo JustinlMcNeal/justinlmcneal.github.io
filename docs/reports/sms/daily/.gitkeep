@@ -1,0 +1,7 @@
+# Reports are saved here by scripts/openclaw/run-sms-report.mjs
+# Format: YYYY-MM-DD.md
+#
+# To keep reports out of git, add to .gitignore:
+#   docs/reports/sms/daily/
+#
+# To keep a git history of reports, remove that line from .gitignore.

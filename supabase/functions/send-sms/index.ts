@@ -31,13 +31,18 @@ function isQuietHours(): boolean {
 }
 
 interface SendRequest {
-  to:            string;   // E.164 phone
-  body:          string;   // message text
-  message_type:  string;   // 'coupon_delivery' | 'reminder' | 'campaign' | 'transactional'
-  intent?:       string;   // 'marketing' | 'transactional' | 'system' — defaults to 'marketing'
-  campaign?:     string;   // e.g. 'sms_signup_coupon'
-  contact_id?:   string;   // UUID of customer_contacts row
-  skip_caps?:    boolean;  // caller already checked caps (e.g. sms-subscribe first message)
+  to:                    string;   // E.164 phone
+  body:                  string;   // message text
+  message_type:          string;   // 'coupon_delivery' | 'reminder' | 'campaign' | 'transactional'
+  intent?:               string;   // 'marketing' | 'transactional' | 'system' — defaults to 'marketing'
+  campaign?:             string;   // e.g. 'sms_signup_coupon'
+  contact_id?:           string;   // UUID of customer_contacts row
+  skip_caps?:            boolean;  // caller already checked caps (e.g. sms-subscribe first message)
+  flow?:                 string;   // explicit flow name written to sms_sends; overrides 'campaign || message_type'
+  send_reason?:          string;   // written to sms_sends.send_reason; overrides message_type
+  short_code?:           string;   // click-tracking short code; written to sms_messages
+  redirect_url?:         string;   // destination URL for short code; written to sms_messages
+  user_state_snapshot?:  Record<string, unknown>;  // audit metadata written to sms_sends
 }
 
 Deno.serve(async (req) => {
@@ -135,6 +140,41 @@ Deno.serve(async (req) => {
     if (!twilioResp.ok) {
       console.error("[send-sms] Twilio error:", JSON.stringify(twilioData));
 
+      // ── 21610: synchronous opt-out (attempted send to unsubscribed recipient) ──
+      if (Number(twilioData.code) === 21610) {
+        console.warn("[send-sms] 21610 detected — marking contact unsubscribed");
+        const now = new Date().toISOString();
+        let updated = false;
+
+        if (contact_id) {
+          const { data: rows } = await sb.from("customer_contacts").update({
+            status:       "unsubscribed",
+            sms_consent:  false,
+            opted_out_at: now,
+          }).eq("id", contact_id).eq("sms_consent", true).select("id");
+          updated = Array.isArray(rows) && rows.length > 0;
+        } else {
+          const { data: rows } = await sb.from("customer_contacts").update({
+            status:       "unsubscribed",
+            sms_consent:  false,
+            opted_out_at: now,
+          }).eq("phone", to).eq("sms_consent", true).select("id");
+          updated = Array.isArray(rows) && rows.length > 0;
+        }
+
+        if (updated) {
+          await sb.from("sms_consent_logs").insert({
+            phone:        to,
+            consent_type: "opt_out",
+            consent_text: "Twilio error 21610: attempted send to unsubscribed recipient",
+            source:       "send_sms_21610",
+          });
+        } else {
+          console.warn("[send-sms] 21610: contact already unsubscribed or not found — skipping consent log");
+        }
+      }
+      // ────────────────────────────────────────────────────────────────────────
+
       // Log the failed attempt
       await sb.from("sms_messages").insert({
         phone:        to,
@@ -145,6 +185,8 @@ Deno.serve(async (req) => {
         status:       "failed",
         error_code:   String(twilioData.code   || twilioResp.status),
         error_message: twilioData.message || "Twilio API error",
+        short_code:   payload.short_code   ?? null,
+        redirect_url: payload.redirect_url ?? null,
       });
 
       return json({ error: "SMS send failed", details: twilioData.message }, 502);
@@ -160,6 +202,8 @@ Deno.serve(async (req) => {
       status:              "sent",
       provider_message_sid: twilioData.sid,
       sent_at:             new Date().toISOString(),
+      short_code:          payload.short_code   ?? null,
+      redirect_url:        payload.redirect_url ?? null,
     }).select("id").single();
 
     if (dbErr) console.error("[send-sms] DB log error:", dbErr.message);
@@ -167,15 +211,16 @@ Deno.serve(async (req) => {
     // Log to sms_sends for analytics
     if (msgRow) {
       await sb.from("sms_sends").insert({
-        phone:          to,
-        contact_id:     contact_id || null,
-        campaign:       campaign || null,
-        flow:           campaign || message_type,
-        send_reason:    message_type,
+        phone:               to,
+        contact_id:          contact_id || null,
+        campaign:            campaign || null,
+        flow:                payload.flow        ?? campaign ?? message_type,
+        send_reason:         payload.send_reason ?? message_type,
         intent,
-        outcome:        "pending",
-        cost:           0.0079,
-        sms_message_id: msgRow.id,
+        outcome:             "pending",
+        cost:                0.0079,
+        sms_message_id:      msgRow.id,
+        user_state_snapshot: payload.user_state_snapshot ?? null,
       });
     }
 

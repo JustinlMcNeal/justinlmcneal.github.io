@@ -1,14 +1,13 @@
 // supabase/functions/send-review-request/index.ts
-// Generates review JWT, sends SMS via Twilio, logs to sms_sends + review_requests.
+// Generates review JWT, sends SMS via send-sms, logs to review_requests.
 // Called from admin panel "Send Review Requests" button.
+// SMS is routed through the shared send-sms edge function so sms_messages rows
+// are created with provider_message_sid, enabling twilio-webhook delivery tracking
+// and correct sms_v_flow_performance delivered counts.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const supabaseUrl  = Deno.env.get("SUPABASE_URL")!;
 const serviceKey   = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const TWILIO_SID   = Deno.env.get("TWILIO_ACCOUNT_SID")!;
-const TWILIO_TOKEN = Deno.env.get("TWILIO_AUTH_TOKEN")!;
-const TWILIO_FROM  = Deno.env.get("TWILIO_FROM_NUMBER")!;
-const WEBHOOK_URL  = Deno.env.get("TWILIO_WEBHOOK_URL") || "";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -64,28 +63,6 @@ async function sha256hex(input: string): Promise<string> {
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
-/* ── SMS via Twilio ── */
-async function sendSms(phone: string, body: string): Promise<{ ok: boolean; sid?: string }> {
-  const url = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_SID}/Messages.json`;
-  const form = new URLSearchParams();
-  form.set("To", phone);
-  form.set("From", TWILIO_FROM);
-  form.set("Body", body);
-  if (WEBHOOK_URL) form.set("StatusCallback", WEBHOOK_URL);
-
-  const resp = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: "Basic " + btoa(`${TWILIO_SID}:${TWILIO_TOKEN}`),
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: form.toString(),
-  });
-
-  const data = await resp.json();
-  return { ok: resp.ok, sid: data.sid };
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
@@ -102,7 +79,7 @@ Deno.serve(async (req) => {
     // Single: { order_session_id, product_id, phone, email, first_name, product_name }
     // Batch:  { batch: true, days_ago?: number } — auto-finds eligible orders
     if (body.batch) {
-      return await handleBatch(sb, reviewSecret, body.days_ago);
+      return await handleBatch(sb, reviewSecret, body.days_ago, body.session_id);
     }
 
     return await handleSingle(sb, reviewSecret, body);
@@ -206,8 +183,41 @@ async function handleSingle(
     : "";
   const smsBody = `Karry Kraze: Hi ${name}! How are you liking your ${prodName}${dateLine}? We'd love to hear your thoughts — leave a quick review & get ${discountText} off your next order:\n${link}\n\nReply STOP to opt out`;
 
-  // Send SMS
-  const smsResult = await sendSms(phone, smsBody);
+  // Route through shared send-sms edge function.
+  // send-sms handles: Twilio REST call, sms_messages insert (with provider_message_sid),
+  // sms_sends insert (with sms_message_id FK), and StatusCallback registration so
+  // twilio-webhook can update delivery status → sms_v_flow_performance delivered count.
+  let smsSent = false;
+  let smsSid: string | null = null;
+  try {
+    const smsRes = await fetch(
+      `${supabaseUrl}/functions/v1/send-sms`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${serviceKey}`,
+        },
+        body: JSON.stringify({
+          to: e164Phone,
+          body: smsBody,
+          message_type: "transactional",
+          intent: "transactional",
+          campaign: "review_request",
+          contact_id: contact.id,
+        }),
+      }
+    );
+    const smsData = await smsRes.json();
+    smsSent = smsRes.ok && smsData.success === true;
+    smsSid = smsData.message_sid ?? null;
+    if (!smsSent) {
+      console.warn("[send-review-request] send-sms did not succeed:", JSON.stringify(smsData));
+    }
+  } catch (smsErr: unknown) {
+    console.error("[send-review-request] send-sms call failed:",
+      smsErr instanceof Error ? smsErr.message : String(smsErr));
+  }
 
   // Insert review_requests row
   const { error: insertErr } = await sb
@@ -219,39 +229,25 @@ async function handleSingle(
       token_hash: tokenHash,
       short_code: shortCode,
       sent_at: new Date().toISOString(),
-      status: smsResult.ok ? "sent" : "failed",
+      status: smsSent ? "sent" : "failed",
     });
 
   if (insertErr) {
     console.error("[send-review-request] review_requests insert failed:", insertErr);
   }
 
-  // Log to sms_sends
-  if (smsResult.ok) {
-    await sb.from("sms_sends").insert({
-      phone,
-      campaign: "review_request",
-      flow: "review_request",
-      send_reason: `Review request for ${prodName}`,
-      intent: "marketing",
-      outcome: "pending",
-      cost: 0.0079,
-    }).then(({ error }) => {
-      if (error) console.warn("[send-review-request] sms_sends log failed:", error);
-    });
-  }
-
   return json({
     success: true,
-    sent: smsResult.ok,
-    twilio_sid: smsResult.sid,
+    sent: smsSent,
+    twilio_sid: smsSid,
   });
 }
 
 async function handleBatch(
   sb: ReturnType<typeof createClient>,
   reviewSecret: string,
-  daysAgo?: number
+  daysAgo?: number,
+  sessionId?: string,
 ): Promise<Response> {
   // Get review settings for delay
   const { data: settingsRows } = await sb
@@ -279,13 +275,21 @@ async function handleBatch(
   const cutoffMto = new Date();
   cutoffMto.setDate(cutoffMto.getDate() - mtoDelay);
 
-  // Get orders from the appropriate time window
-  const { data: orders, error: ordErr } = await sb
+  // Get orders — either a single session (from shippo-webhook) or the normal time window
+  let ordersQuery = sb
     .from("orders_raw")
-    .select("stripe_checkout_session_id, email, first_name, phone_number, order_date")
-    .lte("order_date", cutoffNormal.toISOString().split("T")[0])
-    .order("order_date", { ascending: false })
-    .limit(100);
+    .select("stripe_checkout_session_id, email, first_name, phone_number, order_date");
+
+  if (sessionId) {
+    ordersQuery = ordersQuery.eq("stripe_checkout_session_id", sessionId);
+  } else {
+    ordersQuery = ordersQuery
+      .lte("order_date", cutoffNormal.toISOString().split("T")[0])
+      .order("order_date", { ascending: false })
+      .limit(100);
+  }
+
+  const { data: orders, error: ordErr } = await ordersQuery;
 
   if (ordErr || !orders?.length) {
     return json({ success: true, sent: 0, message: "No eligible orders found" });

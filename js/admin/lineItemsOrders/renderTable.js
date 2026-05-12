@@ -125,6 +125,19 @@ function resolveEbayProfit(r) {
   return { cents: r.profit_cents, isEstimate: false };
 }
 
+function mobileCardStatusAccent(labelStatus, refund) {
+  if (refund?.refund_status) return 'border-l-red-500';
+  switch (String(labelStatus || 'pending').toLowerCase()) {
+    case 'pending':         return 'border-l-amber-400';
+    case 'label_purchased': return 'border-l-blue-400';
+    case 'shipped':         return 'border-l-blue-600';
+    case 'delivered':       return 'border-l-emerald-500';
+    case 'voided':
+    case 'returned':        return 'border-l-gray-400';
+    default:                return 'border-l-transparent';
+  }
+}
+
 /* -------------------------
    MOBILE RENDER (CARDS)
 -------------------------- */
@@ -148,19 +161,21 @@ function renderMobileCards(rows = []) {
       const profitColor = profitCents == null ? 'text-amber-600' : (Number(profitCents) > 0 ? 'text-emerald-600' : 'text-red-600');
 
       const labelStatus = ship?.label_status || "pending";
+      const statusAccent = mobileCardStatusAccent(labelStatus, r.refund);
+      const channelBadge = isEbay
+        ? `<span class="border-[3px] border-black bg-black text-white px-2 py-0.5 text-[9px] font-black uppercase tracking-[.14em]">eBay</span>`
+        : `<span class="border-[3px] border-kkpink bg-kkpink text-black px-2 py-0.5 text-[9px] font-black uppercase tracking-[.14em]">KK</span>`;
 
       return `
         <tr>
           <td colspan="8" class="p-0">
-            <div class="border-b border-black/15 px-4 py-4">
+            <div class="border-b border-black/15 border-l-[4px] ${statusAccent} px-4 py-4 cursor-pointer" data-view="${idx}">
               <!-- top line -->
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0">
-                  <div class="text-[11px] font-black uppercase tracking-[.18em] text-black/60">
-                    ${esc(date)} · 
-                    <button type="button" data-view="${idx}" class="text-kkpink hover:underline cursor-pointer" title="${esc(orderId)}">
-                      ${truncateId(orderId)}
-                    </button>
+                  <div class="flex items-center gap-2 text-[11px] font-black uppercase tracking-[.18em] text-black/60">
+                    <span>${esc(date)} · <button type="button" class="text-kkpink hover:underline" title="${esc(orderId)}">${truncateId(orderId)}</button></span>
+                    ${channelBadge}
                   </div>
 
                   <div class="mt-2">
@@ -335,7 +350,8 @@ export function renderOrdersRows({ tbodyEl, rows = [], onEdit, onView, countLabe
 
   // bind edit
   tbodyEl.querySelectorAll("[data-edit]").forEach((btn) => {
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
       const idx = Number(btn.getAttribute("data-edit"));
       const row = rows[idx];
       if (row) onEdit?.(row);

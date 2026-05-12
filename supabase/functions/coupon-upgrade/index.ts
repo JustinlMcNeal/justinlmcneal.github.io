@@ -4,10 +4,6 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const supabaseUrl  = Deno.env.get("SUPABASE_URL")!;
 const serviceKey   = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const TWILIO_SID   = Deno.env.get("TWILIO_ACCOUNT_SID")!;
-const TWILIO_TOKEN = Deno.env.get("TWILIO_AUTH_TOKEN")!;
-const TWILIO_FROM  = Deno.env.get("TWILIO_FROM_NUMBER")!;
-const WEBHOOK_URL  = Deno.env.get("TWILIO_WEBHOOK_URL") || "";
 
 const cors = {
   "Access-Control-Allow-Origin":  "*",
@@ -217,6 +213,7 @@ Deno.serve(async (req) => {
           opted_in_at:     now.toISOString(),
           opted_out_at:    null,
           last_sms_sent_at: now.toISOString(),
+          coupon_code:     upgradeCode,
         })
         .eq("id", contact.id)
         .select("id")
@@ -264,59 +261,39 @@ Deno.serve(async (req) => {
       `Karry Kraze: Your upgraded code ${upgradeCode} gets you ${discountLabel}! ` +
       `Expires in ${expiryDays * 24}hrs. Shop: ${trackingUrl}\nReply STOP to opt out`;
 
-    // ── Send via Twilio ────────────────────────────────────
-    const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_SID}/Messages.json`;
-    const formData  = new URLSearchParams();
-    formData.set("To",   phone);
-    formData.set("From", TWILIO_FROM);
-    formData.set("Body", smsBody);
-    if (WEBHOOK_URL) formData.set("StatusCallback", WEBHOOK_URL);
-
-    const twilioResp = await fetch(twilioUrl, {
+    // ── Send via send-sms wrapper ──────────────────────────
+    const smsRes = await fetch(`${supabaseUrl}/functions/v1/send-sms`, {
       method: "POST",
       headers: {
-        "Authorization": "Basic " + btoa(`${TWILIO_SID}:${TWILIO_TOKEN}`),
-        "Content-Type":  "application/x-www-form-urlencoded",
+        "Content-Type":  "application/json",
+        "Authorization": `Bearer ${serviceKey}`,
       },
-      body: formData.toString(),
-    });
-
-    const twilioData = await twilioResp.json();
-    const smsSent = twilioResp.ok;
-
-    // ── Log sms_messages ───────────────────────────────────
-    const { data: msgRow } = await sb.from("sms_messages").insert({
-      phone,
-      contact_id:           contactId,
-      message_body:         smsBody,
-      message_type:         "coupon_delivery",
-      campaign:             "coupon_upgrade",
-      status:               smsSent ? "sent" : "failed",
-      provider_message_sid: smsSent ? twilioData.sid : null,
-      error_code:           !smsSent ? String(twilioData.code || twilioResp.status) : null,
-      error_message:        !smsSent ? (twilioData.message || "Twilio error") : null,
-      sent_at:              smsSent ? now.toISOString() : null,
-      short_code:           shortCode,
-      redirect_url:         "https://karrykraze.com/pages/catalog.html",
-    }).select("id").single();
-
-    // ── Log sms_sends ──────────────────────────────────────
-    if (msgRow) {
-      await sb.from("sms_sends").insert({
-        phone,
-        contact_id:          contactId,
+      body: JSON.stringify({
+        to:                  phone,
+        body:                smsBody,
+        message_type:        "coupon_delivery",
+        intent:              "marketing",
         campaign:            "coupon_upgrade",
+        contact_id:          contactId,
         flow:                "upgrade",
         send_reason:         "coupon_upgrade_enrollment",
-        intent:              "marketing",
-        outcome:             "pending",
-        sms_message_id:      msgRow.id,
+        short_code:          shortCode,
+        redirect_url:        "https://karrykraze.com/pages/catalog.html",
         user_state_snapshot: { promo_id, source: "coupon_upgrade" },
-      });
-    }
+        skip_caps:           true,
+      }),
+    });
 
-    if (!smsSent) {
-      console.error("[coupon-upgrade] Twilio error:", JSON.stringify(twilioData));
+    let smsSent = false;
+    try {
+      const smsData = await smsRes.json();
+      smsSent = smsRes.ok && smsData.success === true;
+      if (!smsSent) {
+        console.error("[coupon-upgrade] send-sms did not succeed:", JSON.stringify(smsData));
+      }
+    } catch (err: unknown) {
+      console.error("[coupon-upgrade] send-sms response parse error:",
+        err instanceof Error ? err.message : String(err));
     }
 
     return json({

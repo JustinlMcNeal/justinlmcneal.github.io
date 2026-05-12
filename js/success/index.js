@@ -78,7 +78,7 @@ async function loadOrderDetails(oid) {
     // Fetch line items
     const { data: items } = await sb
       .from("line_items_raw")
-      .select("product_name, variant, quantity, unit_price_cents, post_discount_unit_price_cents")
+      .select("product_name, variant, variant_title, quantity, unit_price_cents, post_discount_unit_price_cents")
       .eq("stripe_checkout_session_id", order.stripe_checkout_session_id);
 
     // Render items
@@ -88,7 +88,7 @@ async function loadOrderDetails(oid) {
         <div class="flex justify-between items-start gap-2">
           <div class="min-w-0 flex-1">
             <div class="text-sm font-bold truncate">${escHtml(item.product_name)}</div>
-            ${item.variant ? `<div class="text-[10px] text-gray-500">${escHtml(item.variant)}</div>` : ""}
+            ${(item.variant_title || item.variant) ? `<div class="text-[10px] text-gray-500">${escHtml(item.variant_title || item.variant)}</div>` : ""}
             <div class="text-[10px] text-gray-400">Qty: ${item.quantity}</div>
           </div>
           <div class="text-sm font-bold whitespace-nowrap">

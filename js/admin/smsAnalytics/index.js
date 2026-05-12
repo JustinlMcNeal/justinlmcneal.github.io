@@ -40,6 +40,44 @@ async function fetchView(viewName) {
   return data || [];
 }
 
+async function fetchDatedFlow() {
+  const toETDate = (d) => new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(d);
+  const today = toETDate(new Date());
+  const sevenDaysAgo = toETDate(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
+  const { data, error } = await sb
+    .from('sms_v_flow_performance_dated')
+    .select('*')
+    .gte('sent_date', sevenDaysAgo)
+    .lte('sent_date', today);
+  if (error) { console.error('[smsAnalytics] sms_v_flow_performance_dated:', error.message); return []; }
+  return data || [];
+}
+
+function aggregateDatedFlows(rows) {
+  const map = {};
+  for (const r of rows) {
+    const key = r.flow || 'unknown';
+    if (!map[key]) map[key] = {
+      flow: key, total_sends: 0, delivered: 0, unique_clicks: 0,
+      conversions: 0, sms_cost: 0, attributed_revenue: 0, estimated_profit: 0,
+    };
+    map[key].total_sends       += Number(r.total_sends || 0);
+    map[key].delivered         += Number(r.delivered || 0);
+    map[key].unique_clicks     += Number(r.unique_clicks || 0);
+    map[key].conversions       += Number(r.conversions || 0);
+    map[key].sms_cost          += Number(r.sms_cost || 0);
+    map[key].attributed_revenue += Number(r.attributed_revenue || 0);
+    map[key].estimated_profit  += Number(r.estimated_profit || 0);
+  }
+  return Object.values(map).map(f => ({
+    ...f,
+    profit_per_sms: f.total_sends > 0 ? f.estimated_profit / f.total_sends : 0,
+    conversion_rate_pct: f.total_sends > 0 ? (f.conversions / f.total_sends * 100).toFixed(2) : '0.00',
+  })).sort((a, b) => b.total_sends - a.total_sends);
+}
+
 // ── Day Comparison ───────────────────────────────────────────
 async function fetchDayDeltas(clickRows) {
   const now = new Date();
@@ -55,8 +93,8 @@ async function fetchDayDeltas(clickRows) {
       sb.from("sms_events").select("event_type").gte("created_at", ydayUTC).lt("created_at", todayUTC),
     ]);
     sendsDelta = (sToday.count || 0) - (sYday.count || 0);
-    const cT = (eToday.data || []).filter(r => r.event_type === "click").length;
-    const cY = (eYday.data || []).filter(r => r.event_type === "click").length;
+    const cT = (eToday.data || []).filter(r => r.event_type === "sms_clicked").length;
+    const cY = (eYday.data || []).filter(r => r.event_type === "sms_clicked").length;
     clicksDelta = cT - cY;
   } catch (e) { console.warn("[smsAnalytics] day deltas skipped:", e.message); }
 
@@ -89,41 +127,42 @@ function renderTopFlow(flows) {
   el.innerHTML = `<span class="text-lg mr-1">🔥</span> <strong>Top flow:</strong> ${best.flow} — <span class="font-black text-emerald-700">$${dec(best.estimated_profit)}</span> profit`;
 }
 
-function renderKPIs(flows, abandoned, funnel, deltas) {
-  const totalSends = flows.reduce((s, f) => s + Number(f.total_sends || 0), 0);
-  const totalRevenue = flows.reduce((s, f) => s + Number(f.attributed_revenue || 0), 0);
-  const totalConversions = flows.reduce((s, f) => s + Number(f.conversions || 0), 0);
-  const totalClicks = flows.reduce((s, f) => s + Number(f.unique_clicks || 0), 0);
-  const totalProfit = flows.reduce((s, f) => s + Number(f.estimated_profit || 0), 0);
+function renderKPIs(recentFlows, funnel, deltas) {
+  const totalSends = recentFlows.reduce((s, f) => s + Number(f.total_sends || 0), 0);
+  const totalRevenue = recentFlows.reduce((s, f) => s + Number(f.attributed_revenue || 0), 0);
+  const totalConversions = recentFlows.reduce((s, f) => s + Number(f.conversions || 0), 0);
+  const totalClicks = recentFlows.reduce((s, f) => s + Number(f.unique_clicks || 0), 0);
+  const totalProfit = recentFlows.reduce((s, f) => s + Number(f.estimated_profit || 0), 0);
 
   const subscriberCount = funnel.length > 0 ? Number(funnel[0].total_subscribers || 0) : 0;
 
   $("kpiStrip").innerHTML = [
-    kpiCard(num(totalSends), "Total Sends", "text-gray-900", fmtDelta(deltas.sends)),
+    kpiCard(num(totalSends), "Sends (7d)", "text-gray-900", fmtDelta(deltas.sends)),
     kpiCard(num(subscriberCount), "Subscribers", "text-blue-600"),
-    kpiCard(num(totalClicks), "Clicks", "text-purple-600", fmtDelta(deltas.clicks)),
-    kpiCard(num(totalConversions), "Conversions", "green", fmtDelta(deltas.conversions)),
-    kpiCard("$" + dec(totalRevenue), "Revenue", "green", fmtDelta(deltas.revenue, true)),
-    kpiCard("$" + dec(totalProfit), "Est. Profit", totalProfit >= 0 ? "green" : "red", fmtDelta(deltas.profit, true)),
+    kpiCard(num(totalClicks), "Clicks (7d)", "text-purple-600", fmtDelta(deltas.clicks)),
+    kpiCard(num(totalConversions), "Conversions (7d)", "green", fmtDelta(deltas.conversions)),
+    kpiCard("$" + dec(totalRevenue), "Revenue (7d)", "green", fmtDelta(deltas.revenue, true)),
+    kpiCard("$" + dec(totalProfit), "Profit (7d)", totalProfit >= 0 ? "green" : "red", fmtDelta(deltas.profit, true)),
   ].join("");
 }
 
 function renderFlowTable(flows) {
   const tbody = $("flowTable").querySelector("tbody");
   if (!flows.length) {
-    tbody.innerHTML = `<tr><td colspan="8" class="text-center text-gray-400 py-4">No data yet</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" class="text-center text-gray-400 py-4">No data yet</td></tr>`;
     return;
   }
 
   tbody.innerHTML = flows.map(f => {
     const rev = Number(f.attributed_revenue || 0);
-    const cost = Number(f.total_sms_cost || 0);
+    const cost = Number(f.sms_cost || 0);
     const profit = Number(f.estimated_profit || 0);
     const profitPerSms = Number(f.profit_per_sms || 0);
 
     return `<tr>
       <td class="font-bold">${f.flow || "—"}</td>
       <td>${num(f.total_sends)}</td>
+      <td>${num(f.delivered)}</td>
       <td>${num(f.unique_clicks)}</td>
       <td>${num(f.conversions)}</td>
       <td class="green">$${dec(rev)}</td>
@@ -254,8 +293,8 @@ async function loadDashboard() {
   $("loading").classList.remove("hidden");
   $("dashboard").classList.add("hidden");
 
-  const [flows, abandoned, cohorts, funnel, fatigue, clicks] = await Promise.all([
-    fetchView("sms_v_flow_performance"),
+  const [datedFlowRows, abandoned, cohorts, funnel, fatigue, clicks] = await Promise.all([
+    fetchDatedFlow(),
     fetchView("sms_v_abandoned_cart"),
     fetchView("sms_v_coupon_cohorts"),
     fetchView("sms_v_subscriber_funnel"),
@@ -263,11 +302,12 @@ async function loadDashboard() {
     fetchView("sms_v_click_to_purchase"),
   ]);
 
+  const recentFlows = aggregateDatedFlows(datedFlowRows);
   const deltas = await fetchDayDeltas(clicks);
 
-  renderTopFlow(flows);
-  renderKPIs(flows, abandoned, funnel, deltas);
-  renderFlowTable(flows);
+  renderTopFlow(recentFlows);
+  renderKPIs(recentFlows, funnel, deltas);
+  renderFlowTable(recentFlows);
   renderAbandonedCart(abandoned);
   renderCouponTable(cohorts);
   renderFunnel(funnel);

@@ -43,6 +43,16 @@ function uniqStrings(arr: unknown[]): string[] {
   return Array.from(out);
 }
 
+// ── Phase 2: variant lookup type ─────────────────────────────────────────────
+type VariantLookup = {
+  product_id: string;         // UUID of the parent product
+  sku: string | null;
+  title: string | null;
+  option_values: Record<string, string> | null;
+  price_override_cents: number | null;
+  weight_g_override: number | null;
+};
+
 // Shipping rate IDs from Stripe Dashboard
 // Replace these with your actual Stripe shipping rate IDs after creating them
 // Valid format: shr_XXXXXXXXXXXXXXXXXX (starts with "shr_")
@@ -227,6 +237,46 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ── Phase 2: variant lookup by variant_id ─────────────────────────────
+    // When items carry variant_id, fetch the variant row server-side so we can
+    // embed authoritative identity in Stripe metadata and apply weight overrides.
+    // This does NOT change the anti-tamper subtotal check (still product-level).
+    const variantIds = uniqStrings(
+      items.map((it: any) => it?.variant_id).filter((v: any) => typeof v === "string")
+    );
+    const variantMap = new Map<string, VariantLookup>();
+
+    if (variantIds.length) {
+      const { data: vRows, error: vErr } = await supabaseAdmin
+        .from("product_variants")
+        .select("id, product_id, sku, title, option_values, price_override_cents, weight_g_override")
+        .in("id", variantIds);
+
+      if (vErr) {
+        // Non-fatal: missing variant rows fall back to product-level data
+        console.warn("[create-checkout-session] variant lookup failed (non-fatal):", vErr.message);
+      } else {
+        for (const v of vRows || []) {
+          const vid = String((v as any).id ?? "").trim();
+          if (!vid) continue;
+          variantMap.set(vid, {
+            product_id:           String((v as any).product_id ?? ""),
+            sku:                  (v as any).sku  ? String((v as any).sku)  : null,
+            title:                (v as any).title ? String((v as any).title) : null,
+            option_values:        (v as any).option_values && typeof (v as any).option_values === "object"
+                                    ? (v as any).option_values as Record<string, string>
+                                    : null,
+            price_override_cents: (v as any).price_override_cents != null
+                                    ? Number((v as any).price_override_cents)
+                                    : null,
+            weight_g_override:    (v as any).weight_g_override != null
+                                    ? Number((v as any).weight_g_override)
+                                    : null,
+          });
+        }
+      }
+    }
+
     // Authoritative subtotal calculations
     const cartSubtotalOriginalCents = items.reduce((sum: number, it: any) => {
       const sku = String(it?.product_id || it?.id || "").trim();
@@ -344,29 +394,39 @@ Deno.serve(async (req) => {
       if (uuids.length) {
         const { data: variantRows } = await supabaseAdmin
           .from("product_variants")
-          .select("product_id, option_value, stock")
+          .select("id, product_id, option_value, stock")
           .in("product_id", uuids)
           .eq("is_active", true);
 
-        // Build a map of product_uuid → variant → stock
-        const stockMap = new Map<string, Map<string, number>>();
+        // Build a map of product_uuid → variant → stock AND variant_id → stock
+        const stockByProduct = new Map<string, Map<string, number>>();
+        const stockByVariantId = new Map<string, number>();
         for (const v of variantRows || []) {
           const pid = String(v.product_id);
-          if (!stockMap.has(pid)) stockMap.set(pid, new Map());
-          stockMap.get(pid)!.set(String(v.option_value || "").toLowerCase(), v.stock ?? 0);
+          if (!stockByProduct.has(pid)) stockByProduct.set(pid, new Map());
+          stockByProduct.get(pid)!.set(String(v.option_value || "").toLowerCase(), v.stock ?? 0);
+          if (v.id) stockByVariantId.set(String(v.id), v.stock ?? 0);
         }
 
         // Check each cart item for back-order
         for (const it of items) {
           const sku = String(it?.product_id || it?.id || "").trim();
+          const variantId = String(it?.variant_id || "").trim();
           const variant = String(it?.variant || "").trim().toLowerCase();
           const uuid = productUuidMap.get(sku);
-          if (!uuid) continue;
 
-          const variants = stockMap.get(uuid);
+          // Phase 2: prefer variant_id for direct stock check
+          if (variantId && stockByVariantId.has(variantId)) {
+            if ((stockByVariantId.get(variantId) ?? 0) <= 0) {
+              backOrderSkus.add(sku);
+            }
+            continue;
+          }
+
+          if (!uuid) continue;
+          const variants = stockByProduct.get(uuid);
           if (!variants) continue;
 
-          // If specific variant has stock 0, or product has no stock at all
           const variantStock = variant ? (variants.get(variant) ?? null) : null;
           const totalStock = [...variants.values()].reduce((s, v) => s + v, 0);
 
@@ -400,7 +460,29 @@ Deno.serve(async (req) => {
       const originalUnitCents = toCents(originalUnit);
       const finalUnitCents = toCents(finalUnit);
 
-      const itemWeightG = weightMap.get(productId) ?? 0;
+      // ── Phase 2: resolve variant-level weight override ─────────────────
+      const resolvedVariantId = metaStr(it?.variant_id || "", 80);
+      const resolvedVariant = resolvedVariantId ? variantMap.get(resolvedVariantId) : undefined;
+
+      // Weight: prefer variant weight_g_override when set; else product-level weight
+      const productWeightG = weightMap.get(productId) ?? 0;
+      const itemWeightG =
+        resolvedVariant?.weight_g_override != null && resolvedVariant.weight_g_override >= 0
+          ? resolvedVariant.weight_g_override
+          : productWeightG;
+
+      // ── Phase 2: enriched variant metadata for Stripe ──────────────────
+      const variantSku   = metaStr(it?.variant_sku   || resolvedVariant?.sku   || "", 80);
+      const variantTitle = metaStr(it?.variant_title || resolvedVariant?.title || "", 120);
+
+      // Serialize selected_options → JSON string for Stripe metadata
+      const selectedOptionsObj =
+        it?.selected_options && typeof it.selected_options === "object" && !Array.isArray(it.selected_options)
+          ? it.selected_options
+          : (resolvedVariant?.option_values ?? null);
+      const selectedOptionsMeta = selectedOptionsObj
+        ? metaStr(JSON.stringify(selectedOptionsObj), 200)
+        : "";
 
       const imageUrl =
         typeof it?.image === "string" && it.image.startsWith("http")
@@ -415,8 +497,8 @@ Deno.serve(async (req) => {
           product_data: {
             name,
             ...(imageUrl ? { images: [imageUrl] } : {}),
-            // ✅ THIS IS ALLOWED
             metadata: {
+              // ── Existing fields (kept for backward compat) ──
               kk_product_id: productId,
               kk_variant: variant,
               kk_order_id,
@@ -425,6 +507,12 @@ Deno.serve(async (req) => {
               kk_post_discount_unit_price_cents: String(finalUnitCents),
               kk_item_weight_g: String(itemWeightG),
               ...(backOrderSkus.has(productId) ? { kk_back_order: "true" } : {}),
+
+              // ── Phase 2: durable variant identity ──
+              ...(resolvedVariantId ? { kk_variant_id: resolvedVariantId } : {}),
+              ...(variantSku        ? { kk_variant_sku: variantSku }       : {}),
+              ...(variantTitle      ? { kk_variant_title: variantTitle }    : {}),
+              ...(selectedOptionsMeta ? { kk_selected_options: selectedOptionsMeta } : {}),
             },
           },
         },

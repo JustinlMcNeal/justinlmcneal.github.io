@@ -22,10 +22,13 @@ import {
   renderSlideIndicators,
   renderTags,
   renderVariantSwatches,
+  renderSizeButtons,
   renderDetailsSections,
   renderMainCarousel,
   renderPairsCarousel,
 } from "./render.js";
+
+import { isOptionTypeSize } from "../shared/variantUtils.js";
 
 import { getProductPromotions } from "/js/shared/promotionLoader.js";
 import { fetchProductReviewStats } from "/js/shared/reviewStats.js";
@@ -37,6 +40,30 @@ import { renderProductPromoPanel, applyProductPriceWithPromos } from "./promos.j
 import { initProductReviewSection } from "./reviewSection.js";
 
 let selectedVariant = null;
+
+// Phase 4: tracks whether this product is in size mode (explicit selection required).
+// Set inside initProductPage once variants are fetched.
+let variantMode = "simple"; // "simple" | "color" | "size"
+
+/**
+ * Phase 4 — detect the rendering mode for a product's active variants.
+ *
+ * Rules:
+ *   - No active variants        → "simple"  (no selection UI)
+ *   - All option_name === Size  → "size"    (pill buttons, explicit select)
+ *   - Otherwise                 → "color"   (swatches, auto-select first)
+ *
+ * Mixed-mode products (Size + Color rows) fall through to "color" for now.
+ * Full size+color matrix support is deferred to Phase 5.
+ *
+ * @param {object[]} activeVariants - variants with is_active !== false
+ * @returns {"simple"|"color"|"size"}
+ */
+function detectVariantMode(activeVariants) {
+  if (!activeVariants || activeVariants.length === 0) return "simple";
+  if (activeVariants.every((v) => isOptionTypeSize(v.option_name))) return "size";
+  return "color";
+}
 
 /* ---------------- utils ---------------- */
 
@@ -389,26 +416,52 @@ async function initProductPage() {
     // Tags
     renderTags(els.tagRow, (tags || []).map((t) => t.name));
 
-    // Variants (color boxes) - hide section if no variants
+    // Phase 4: filter soft-disabled variants (is_active === false) before rendering.
+    // Legacy rows without the is_active column (null/undefined) are treated as active.
+    const activeVariants = (variants || []).filter((v) => v.is_active !== false);
+
+    // Phase 4: determine rendering mode for this product's variants.
+    variantMode = detectVariantMode(activeVariants);
+
     const variantSection = document.getElementById("variantSection");
     const variantDivider = document.getElementById("variantDivider");
-    
-    if (!variants || variants.length === 0) {
-      // Hide the variant section and divider if no variants
+    const variantLabel   = document.getElementById("variantLabel");
+
+    if (variantMode === "simple") {
+      // No variants — hide the options section entirely.
       if (variantSection) variantSection.style.display = "none";
       if (variantDivider) variantDivider.style.display = "none";
-    } else {
-      // Show and render variants
+
+    } else if (variantMode === "size") {
+      // Size product — pill buttons, no auto-select, explicit selection required.
       if (variantSection) variantSection.style.display = "";
       if (variantDivider) variantDivider.style.display = "";
-      
-      renderVariantSwatches(els.variantSwatches, variants, (v) => {
+      if (variantLabel)   variantLabel.textContent = "Select Size";
+
+      renderSizeButtons(els.variantSwatches, activeVariants, (v) => {
         selectedVariant = v || null;
-
-        // Update stock badge + shipping text dynamically
         updateStockDisplay(v);
+        // Jump to variant image if present
+        if (v?.preview_image_url) {
+          const idx = uniqueImgs.indexOf(v.preview_image_url);
+          if (idx >= 0) {
+            carousel?.setIndex(idx);
+            thumbsM?.setActive(idx);
+            thumbsD?.setActive(idx);
+            slideDots?.setActive(idx);
+          }
+        }
+      });
 
-        // jump to matching variant image
+    } else {
+      // Color / legacy — swatches with auto-select-first (existing behavior preserved).
+      if (variantSection) variantSection.style.display = "";
+      if (variantDivider) variantDivider.style.display = "";
+      if (variantLabel)   variantLabel.textContent = "Select Color";
+
+      renderVariantSwatches(els.variantSwatches, activeVariants, (v) => {
+        selectedVariant = v || null;
+        updateStockDisplay(v);
         if (v?.preview_image_url) {
           const idx = uniqueImgs.indexOf(v.preview_image_url);
           if (idx >= 0) {
@@ -427,6 +480,12 @@ async function initProductPage() {
     // Add to cart
     if (els.addBtn) {
       els.addBtn.onclick = () => {
+        // Phase 4: size products require explicit selection before add-to-cart.
+        if (variantMode === "size" && !selectedVariant) {
+          setActionMsg(els, "Please select a size.", true);
+          return;
+        }
+
         const payload = buildCartPayload(els, product, tags, selectedVariant);
         emitAddToCart(payload);
         setActionMsg(els, "Added to cart.");

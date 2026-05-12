@@ -4,10 +4,6 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const supabaseUrl  = Deno.env.get("SUPABASE_URL")!;
 const serviceKey   = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const TWILIO_SID   = Deno.env.get("TWILIO_ACCOUNT_SID")!;
-const TWILIO_TOKEN = Deno.env.get("TWILIO_AUTH_TOKEN")!;
-const TWILIO_FROM  = Deno.env.get("TWILIO_FROM_NUMBER")!;
-const WEBHOOK_URL  = Deno.env.get("TWILIO_WEBHOOK_URL") || "";
 
 const cors = {
   "Access-Control-Allow-Origin":  "*",
@@ -31,13 +27,6 @@ function generateShortCode(): string {
   return code;
 }
 
-/** Check if current time is within quiet hours (9 PM - 9 AM ET) */
-function isQuietHours(): boolean {
-  const now = new Date();
-  const etHour = (now.getUTCHours() - 4 + 24) % 24;
-  return etHour >= 21 || etHour < 9;
-}
-
 /** Generate a unique coupon code */
 function generateCouponCode(prefix: string): string {
   const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -48,108 +37,45 @@ function generateCouponCode(prefix: string): string {
   return `${prefix}-${code}`;
 }
 
-/** Send SMS via Twilio, log to sms_messages + sms_sends, update last_sms_sent_at */
-async function sendAndLog(
-  sb: ReturnType<typeof createClient>,
-  opts: {
-    phone: string;
-    contactId: string;
-    smsBody: string;
-    shortCode: string;
-    targetUrl: string;
-    campaign: string;
-    flow: string;
-    sendReason: string;
-    messageType: string;
-    snapshot: Record<string, unknown>;
-  }
-): Promise<boolean> {
-  const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_SID}/Messages.json`;
-  const formData = new URLSearchParams();
-  formData.set("To", opts.phone);
-  formData.set("From", TWILIO_FROM);
-  formData.set("Body", opts.smsBody);
-  if (WEBHOOK_URL) formData.set("StatusCallback", WEBHOOK_URL);
-
-  const twilioResp = await fetch(twilioUrl, {
-    method: "POST",
-    headers: {
-      "Authorization": "Basic " + btoa(`${TWILIO_SID}:${TWILIO_TOKEN}`),
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: formData.toString(),
-  });
-
-  const twilioData = await twilioResp.json();
-  const status = twilioResp.ok ? "sent" : "failed";
-
-  const { data: msgRow } = await sb.from("sms_messages").insert({
-    phone:               opts.phone,
-    contact_id:          opts.contactId,
-    message_body:        opts.smsBody,
-    message_type:        opts.messageType,
-    campaign:            opts.campaign,
-    status,
-    provider_message_sid: twilioData.sid || null,
-    error_code:          !twilioResp.ok ? String(twilioData.code || twilioResp.status) : null,
-    error_message:       !twilioResp.ok ? (twilioData.message || "Twilio API error") : null,
-    sent_at:             twilioResp.ok ? new Date().toISOString() : null,
-    short_code:          opts.shortCode,
-    redirect_url:        opts.targetUrl,
-  }).select("id").single();
-
-  if (msgRow) {
-    await sb.from("sms_sends").insert({
-      phone:           opts.phone,
-      contact_id:      opts.contactId,
-      campaign:        opts.campaign,
-      flow:            opts.flow,
-      send_reason:     opts.sendReason,
-      intent:          "marketing",
-      outcome:         "pending",
-      cost:            0.0079,
-      sms_message_id:  msgRow.id,
-      user_state_snapshot: opts.snapshot,
+/** Route an SMS through the send-sms edge function. Returns 'sent', 'skipped', or 'failed'. */
+async function sendViaSendSms(opts: {
+  to: string;
+  body: string;
+  message_type: string;
+  intent: string;
+  campaign: string;
+  contact_id: string;
+  flow: string;
+  send_reason: string;
+  short_code: string;
+  redirect_url: string;
+  user_state_snapshot: Record<string, unknown>;
+}): Promise<"sent" | "skipped" | "failed"> {
+  try {
+    const res = await fetch(`${supabaseUrl}/functions/v1/send-sms`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${serviceKey}`,
+      },
+      body: JSON.stringify(opts),
     });
+    const data = await res.json();
+    if (data.blocked === true) return "skipped";
+    if (res.ok && data.success === true) return "sent";
+    console.warn("[sms-coupon-reminder] send-sms did not succeed:", JSON.stringify(data));
+    return "failed";
+  } catch (err: unknown) {
+    console.error("[sms-coupon-reminder] send-sms call failed:",
+      err instanceof Error ? err.message : String(err));
+    return "failed";
   }
-
-  if (twilioResp.ok) {
-    await sb.from("customer_contacts")
-      .update({ last_sms_sent_at: new Date().toISOString() })
-      .eq("id", opts.contactId);
-  } else {
-    console.error(`[sms-coupon-reminder] Failed to send to ${opts.phone}:`, twilioData.message);
-  }
-
-  return twilioResp.ok;
-}
-
-/** Check if contact passes frequency cap (6hr gap) */
-async function passesFrequencyCap(
-  sb: ReturnType<typeof createClient>,
-  contactId: string
-): Promise<boolean> {
-  const { data } = await sb
-    .from("customer_contacts")
-    .select("last_sms_sent_at")
-    .eq("id", contactId)
-    .single();
-
-  if (data?.last_sms_sent_at) {
-    const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);
-    if (new Date(data.last_sms_sent_at) > sixHoursAgo) return false;
-  }
-  return true;
 }
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
   try {
-    if (isQuietHours()) {
-      return json({ skipped: true, reason: "quiet_hours" });
-    }
-
     const sb = createClient(supabaseUrl, serviceKey);
     const results = { reminders: { sent: 0, skipped: 0 }, escalations: { sent: 0, skipped: 0 } };
 
@@ -161,7 +87,7 @@ Deno.serve(async (req) => {
 
     const { data: reminderContacts } = await sb
       .from("customer_contacts")
-      .select("id, phone, coupon_code")
+      .select("id, phone, coupon_code, opted_in_at")
       .eq("status", "active")
       .eq("sms_consent", true)
       .not("coupon_code", "is", null)
@@ -192,11 +118,6 @@ Deno.serve(async (req) => {
         results.reminders.skipped++; continue;
       }
 
-      // Frequency cap
-      if (!(await passesFrequencyCap(sb, contact.id))) {
-        results.reminders.skipped++; continue;
-      }
-
       const shortCode = generateShortCode();
       const trackingUrl = `karrykraze.com/r/?c=${shortCode}`;
       const targetUrl = "https://karrykraze.com/pages/catalog.html";
@@ -205,20 +126,21 @@ Deno.serve(async (req) => {
         `It expires soon. Shop now: ${trackingUrl}\n` +
         `Reply STOP to opt out`;
 
-      const ok = await sendAndLog(sb, {
-        phone: contact.phone,
-        contactId: contact.id,
-        smsBody,
-        shortCode,
-        targetUrl,
-        campaign: "coupon_reminder",
-        flow: "coupon_reminder",
-        sendReason: "unused_coupon_24h",
-        messageType: "reminder",
-        snapshot: { coupon_code: contact.coupon_code, hours_since_signup: 24 },
+      const result = await sendViaSendSms({
+        to:                  contact.phone,
+        body:                smsBody,
+        message_type:        "reminder",
+        intent:              "marketing",
+        campaign:            "coupon_reminder",
+        contact_id:          contact.id,
+        flow:                "coupon_reminder",
+        send_reason:         "unused_coupon_24h",
+        short_code:          shortCode,
+        redirect_url:        targetUrl,
+        user_state_snapshot: { coupon_code: contact.coupon_code, hours_since_signup: 24 },
       });
 
-      if (ok) results.reminders.sent++; else results.reminders.skipped++;
+      if (result === "sent") results.reminders.sent++; else results.reminders.skipped++;
     }
 
     // ═══════════════════════════════════════════════════════
@@ -229,7 +151,7 @@ Deno.serve(async (req) => {
 
     const { data: allActive } = await sb
       .from("customer_contacts")
-      .select("id, phone, coupon_code")
+      .select("id, phone, coupon_code, opted_in_at")
       .eq("status", "active")
       .eq("sms_consent", true)
       .not("coupon_code", "is", null);
@@ -258,11 +180,6 @@ Deno.serve(async (req) => {
         .eq("flow", "coupon_escalation");
 
       if ((escalationCount ?? 0) > 0) { results.escalations.skipped++; continue; }
-
-      // Frequency cap
-      if (!(await passesFrequencyCap(sb, contact.id))) {
-        results.escalations.skipped++; continue;
-      }
 
       // Generate new escalated coupon: 20% off $40+, 48hr expiry
       let newCode = "";
@@ -322,25 +239,28 @@ Deno.serve(async (req) => {
         `orders $${promo.min_order_amount ?? 40}+. Expires in 48hrs! ${trackingUrl}\n` +
         `Reply STOP to opt out`;
 
-      const ok = await sendAndLog(sb, {
-        phone: contact.phone,
-        contactId: contact.id,
-        smsBody,
-        shortCode,
-        targetUrl,
-        campaign: "coupon_escalation",
-        flow: "coupon_escalation",
-        sendReason: "expired_coupon_upgrade",
-        messageType: "coupon_delivery",
-        snapshot: {
+      const result = await sendViaSendSms({
+        to:                  contact.phone,
+        body:                smsBody,
+        message_type:        "coupon_delivery",
+        intent:              "marketing",
+        campaign:            "coupon_escalation",
+        contact_id:          contact.id,
+        flow:                "coupon_escalation",
+        send_reason:         "expired_coupon_upgrade",
+        short_code:          shortCode,
+        redirect_url:        targetUrl,
+        user_state_snapshot: {
           original_coupon: promo.code,
           original_value: promo.value,
           escalated_value: 20,
-          hours_since_signup: Math.round((Date.now() - new Date(contact.coupon_code).getTime()) / 3600000) || "unknown",
+          hours_since_signup: contact.opted_in_at
+            ? Math.round((Date.now() - new Date(contact.opted_in_at).getTime()) / 3600000)
+            : "unknown",
         },
       });
 
-      if (ok) results.escalations.sent++; else results.escalations.skipped++;
+      if (result === "sent") results.escalations.sent++; else results.escalations.skipped++;
     }
 
     console.log(`[sms-coupon-reminder] Done:`, JSON.stringify(results));

@@ -73,7 +73,7 @@ Deno.serve(async (req) => {
     // Fetch all line items for these orders in one query
     const { data: allItems } = await sb
       .from("line_items_raw")
-      .select("stripe_checkout_session_id, product_id, product_name, variant, quantity")
+      .select("stripe_checkout_session_id, product_id, product_name, variant, variant_title, quantity")
       .in("stripe_checkout_session_id", sessionIds);
 
     // Group items by session ID
@@ -85,6 +85,7 @@ Deno.serve(async (req) => {
         product_id: item.product_id,
         product_name: item.product_name,
         variant: item.variant,
+        variant_title: item.variant_title || item.variant || null,
         quantity: item.quantity,
       });
     }

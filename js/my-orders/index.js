@@ -165,7 +165,7 @@ function showOrderDetail(order) {
       </div>
       <div class="flex-1 min-w-0">
         <div class="font-bold text-sm truncate">${escHtml(item.product_name || item.product_id || "Unknown")}</div>
-        ${item.variant ? `<div class="text-[10px] text-gray-500">${escHtml(item.variant)}</div>` : ""}
+        ${(item.variant_title || item.variant) ? `<div class="text-[10px] text-gray-500">${escHtml(item.variant_title || item.variant)}</div>` : ""}
         <div class="text-[10px] text-gray-400">Qty: ${item.quantity}</div>
       </div>
       <div class="text-right flex-shrink-0">

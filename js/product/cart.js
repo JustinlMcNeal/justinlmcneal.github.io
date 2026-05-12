@@ -1,4 +1,5 @@
 // /js/product/cart.js
+import { effectiveOptionValues } from "../shared/variantUtils.js";
 
 export function wireQtyControls(els) {
   if (!els?.qty || !els?.qtyMinus || !els?.qtyPlus) return;
@@ -36,6 +37,10 @@ export function buildCartPayload(els, product, tags = [], selectedVariant = null
     image,
     variant: selectedVariant?.option_value || "",
     variant_id: selectedVariant?.id || null,
+    // Phase 4: include full identity fields for Phase 2 pipeline alignment.
+    variant_sku: selectedVariant?.sku || null,
+    variant_title: selectedVariant?.title || selectedVariant?.option_value || null,
+    selected_options: selectedVariant ? effectiveOptionValues(selectedVariant) : null,
     qty,
 
     category_id: product.category_id || null,

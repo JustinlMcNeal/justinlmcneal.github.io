@@ -16,6 +16,13 @@ export function addVariantRow(
 
   const uniqueId = `var-${Date.now()}-${Math.random().toString(36).substring(7)}`;
 
+  // Phase 3: resolve stored option_name (default to "Color" for legacy rows)
+  const optionName = v.option_name || "Color";
+  const OPTION_NAMES = ["Color", "Size", "Other"];
+  const optionNameOptions = OPTION_NAMES
+    .map((n) => `<option value="${n}" ${n === optionName ? "selected" : ""}>${n}</option>`)
+    .join("");
+
   row.innerHTML = `
     <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
       <!-- Preview image thumbnail -->
@@ -27,11 +34,18 @@ export function addVariantRow(
       
       <!-- Hidden file input -->
       <input type="file" accept="image/*" data-v="file" style="display:none;" />
+
+      <!-- Phase 3: option_name select (Color / Size / Other) -->
+      <div style="width: 80px;">
+        <select class="kk-input" style="padding: 6px 8px; font-size: 12px; border-width: 2px;" data-v="option-name">
+          ${optionNameOptions}
+        </select>
+      </div>
       
-      <!-- Color input -->
+      <!-- Value input -->
       <div style="flex: 1; min-width: 100px;">
         <input class="kk-input" style="padding: 8px 10px; font-size: 13px; border-width: 2px;" 
-               placeholder="Color name" value="${escapeAttr(v.option_value || "")}" data-v="value" />
+               placeholder="Value" value="${escapeAttr(v.option_value || "")}" data-v="value" />
       </div>
       
       <!-- Stock input -->
@@ -42,6 +56,9 @@ export function addVariantRow(
       
       <!-- Hidden URL storage -->
       <input type="hidden" value="${escapeAttr(v.preview_image_url || "")}" data-v="img" />
+
+      <!-- Phase 3: hidden variant id for stable upsert -->
+      <input type="hidden" value="${escapeAttr(v.id || "")}" data-v="variant-id" />
       
       <!-- Remove button -->
       <button type="button" class="kk-btn-ghost" data-v="del" style="padding: 6px 10px; font-size: 10px;">
@@ -85,9 +102,14 @@ export function collectVariants(variantListEl) {
   return rows
     .map((row, idx) => {
       const option_value = row.querySelector('[data-v="value"]').value.trim();
+      const option_name  = row.querySelector('[data-v="option-name"]')?.value?.trim() || "Color";
       const stock = Number(row.querySelector('[data-v="stock"]').value || 0);
       const preview_image_url = row.querySelector('[data-v="img"]').value.trim();
+      // Phase 3: carry existing id for stable upsert
+      const id = row.querySelector('[data-v="variant-id"]')?.value?.trim() || null;
       return {
+        id: id || undefined,   // omit if empty so upsertVariants treats it as new
+        option_name,
         option_value,
         stock: Math.max(0, stock),
         preview_image_url: preview_image_url || null,

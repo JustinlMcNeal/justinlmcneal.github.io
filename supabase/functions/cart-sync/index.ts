@@ -21,10 +21,13 @@ function json(body: unknown, status = 200) {
   });
 }
 
-/** Deterministic cart hash: sorted by id, only identity+qty fields */
+/** Deterministic cart hash: sorted by id, only identity+qty fields.
+ *  Phase 2: prefers variant_id for the variant segment when present so items
+ *  with the same product but different variant_ids hash distinctly.
+ */
 async function computeCartHash(cart: Array<Record<string, unknown>>): Promise<string> {
   const normalized = cart
-    .map(item => `${item.id}:${item.variant || ""}:${item.qty || 1}`)
+    .map(item => `${item.id}:${item.variant_id || item.variant || ""}:${item.qty || 1}`)
     .sort()
     .join("|");
   const encoder = new TextEncoder();
@@ -72,16 +75,26 @@ Deno.serve(async (req) => {
       return sum + Math.max(1, Number(item.qty || 1));
     }, 0);
 
-    // Sanitize cart_data: only keep fields needed for SMS messaging
+    // Sanitize cart_data: only keep fields needed for SMS messaging.
+    // Phase 2: also preserve variant identity fields for richer abandonment context.
     const sanitizedCart = cart.map((item: Record<string, unknown>) => ({
-      id:         item.id || null,
-      product_id: item.product_id || null,
-      name:       item.name || "Item",
-      price:      Number(item.price || 0),
-      variant:    item.variant || "",
-      qty:        Math.max(1, Number(item.qty || 1)),
-      image:      item.image || "",
-      slug:       item.slug || null,
+      id:              item.id || null,
+      product_id:      item.product_id || null,
+      name:            item.name || "Item",
+      price:           Number(item.price || 0),
+      variant:         item.variant || "",
+      variant_id:      item.variant_id    || null,
+      variant_title:   item.variant_title || null,
+      // selected_options must be object or null
+      selected_options:
+        item.selected_options &&
+        typeof item.selected_options === "object" &&
+        !Array.isArray(item.selected_options)
+          ? item.selected_options
+          : null,
+      qty:             Math.max(1, Number(item.qty || 1)),
+      image:           item.image || "",
+      slug:            item.slug || null,
     }));
 
     // ── Handle empty cart = mark purchased or clear ─────────

@@ -4,10 +4,6 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const supabaseUrl  = Deno.env.get("SUPABASE_URL")!;
 const serviceKey   = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const TWILIO_SID   = Deno.env.get("TWILIO_ACCOUNT_SID")!;
-const TWILIO_TOKEN = Deno.env.get("TWILIO_AUTH_TOKEN")!;
-const TWILIO_FROM  = Deno.env.get("TWILIO_FROM_NUMBER")!;
-const WEBHOOK_URL  = Deno.env.get("TWILIO_WEBHOOK_URL") || "";
 
 const cors = {
   "Access-Control-Allow-Origin":  "*",
@@ -277,7 +273,7 @@ Deno.serve(async (req) => {
       .eq("phone", phone)
       .single();
 
-    // ── Compose & send SMS via Twilio directly ──────────────
+    // ── Compose SMS body ────────────────────────────────────
     let discountLabel = "";
     if (couponType === "percentage") {
       discountLabel = `${couponValue}% off`;
@@ -296,108 +292,56 @@ Deno.serve(async (req) => {
     if (minOrderAmount > 0) smsBody += ` orders $${minOrderAmount}+`;
     smsBody += `! Expires in ${expiryDays * 24}hrs. Shop now: ${trackingUrl}\nReply STOP to opt out`;
 
-    const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_SID}/Messages.json`;
-    const formData  = new URLSearchParams();
-    formData.set("To",   phone);
-    formData.set("From", TWILIO_FROM);
-    formData.set("Body", smsBody);
-    if (WEBHOOK_URL) formData.set("StatusCallback", WEBHOOK_URL);
-
-    const twilioResp = await fetch(twilioUrl, {
-      method: "POST",
-      headers: {
-        "Authorization": "Basic " + btoa(`${TWILIO_SID}:${TWILIO_TOKEN}`),
-        "Content-Type":  "application/x-www-form-urlencoded",
-      },
-      body: formData.toString(),
-    });
-
-    const twilioData = await twilioResp.json();
-
-    if (!twilioResp.ok) {
-      console.error("[sms-subscribe] Twilio error:", JSON.stringify(twilioData));
-
-      // Log failed attempt
-      const { data: failedMsg } = await sb.from("sms_messages").insert({
-        phone,
-        contact_id:    contact?.id || null,
-        message_body:  smsBody,
-        message_type:  "coupon_delivery",
-        campaign:      "sms_signup_coupon",
-        status:        "failed",
-        error_code:    String(twilioData.code || twilioResp.status),
-        error_message: twilioData.message || "Twilio API error",
-        short_code:    shortCode,
-        redirect_url:  targetUrl,
-      }).select("id").single();
-
-      // Log sms_sends for failed attempt too
-      if (failedMsg) {
-        await sb.from("sms_sends").insert({
-          phone,
-          contact_id:     contact?.id || null,
-          campaign:       "sms_signup_coupon",
-          flow:           "signup",
-          send_reason:    "new_subscriber_coupon",
-          intent:         "marketing",
-          outcome:        "pending",
-          sms_message_id: failedMsg.id,
-          user_state_snapshot: { source: "landing_page_coupon", is_resubscribe: !!existing },
-        });
+    // ── Route through send-sms wrapper ─────────────────────
+    // send-sms handles: Twilio call, sms_messages insert, sms_sends insert,
+    // last_sms_sent_at update, and StatusCallback registration.
+    // skip_caps: true — the subscribe event is the consent action itself;
+    // the welcome SMS must always send regardless of prior send history.
+    let smsSent = false;
+    try {
+      const sendRes = await fetch(
+        `${supabaseUrl}/functions/v1/send-sms`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${serviceKey}`,
+          },
+          body: JSON.stringify({
+            to:                  phone,
+            body:                smsBody,
+            message_type:        "coupon_delivery",
+            intent:              "marketing",
+            campaign:            "sms_signup_coupon",
+            contact_id:          contact?.id ?? null,
+            skip_caps:           true,
+            flow:                "signup",
+            send_reason:         "new_subscriber_coupon",
+            short_code:          shortCode,
+            redirect_url:        targetUrl,
+            user_state_snapshot: { source: "landing_page_coupon", is_resubscribe: !!existing },
+          }),
+        }
+      );
+      const sendData = await sendRes.json();
+      smsSent = sendRes.ok && sendData.success === true;
+      if (!smsSent) {
+        console.warn("[sms-subscribe] send-sms did not succeed:", JSON.stringify(sendData));
       }
-
-      return json({
-        success: true,
-        contact_id: contact?.id || null,
-        coupon_code: couponCode,
-        sms_sent: false,
-        was_unsubscribed: wasUnsubscribed,
-        message: "Coupon created but SMS delivery failed. Use your code at checkout!",
-      });
+    } catch (smsErr: unknown) {
+      console.error("[sms-subscribe] send-sms call failed:",
+        smsErr instanceof Error ? smsErr.message : String(smsErr));
     }
-
-    // Log sent message
-    const { data: sentMsg } = await sb.from("sms_messages").insert({
-      phone,
-      contact_id:          contact?.id || null,
-      message_body:        smsBody,
-      message_type:        "coupon_delivery",
-      campaign:            "sms_signup_coupon",
-      status:              "sent",
-      provider_message_sid: twilioData.sid,
-      sent_at:             new Date().toISOString(),
-      short_code:          shortCode,
-      redirect_url:        targetUrl,
-    }).select("id").single();
-
-    // Log sms_sends (analytics layer)
-    if (sentMsg) {
-      await sb.from("sms_sends").insert({
-        phone,
-        contact_id:     contact?.id || null,
-        campaign:       "sms_signup_coupon",
-        flow:           "signup",
-        send_reason:    "new_subscriber_coupon",
-        intent:         "marketing",
-        outcome:        "pending",
-        cost:           0.0079,   // estimated toll-free SMS cost
-        sms_message_id: sentMsg.id,
-        user_state_snapshot: { source: "landing_page_coupon", is_resubscribe: !!existing },
-      });
-    }
-
-    // Update last_sms_sent_at for frequency caps
-    await sb.from("customer_contacts")
-      .update({ last_sms_sent_at: new Date().toISOString() })
-      .eq("phone", phone);
 
     return json({
       success: true,
       contact_id: contact?.id || null,
       coupon_code: couponCode,
-      sms_sent: true,
+      sms_sent: smsSent,
       was_unsubscribed: wasUnsubscribed,
-      message: "Check your phone for your coupon code!",
+      message: smsSent
+        ? "Check your phone for your coupon code!"
+        : "Coupon created but SMS delivery failed. Use your code at checkout!",
     });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);

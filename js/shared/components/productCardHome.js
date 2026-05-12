@@ -16,10 +16,20 @@ function money(n) {
   return num.toLocaleString(undefined, { style: "currency", currency: "USD" });
 }
 
-function pickVariants(variants = []) {
+function pickColorVariants(variants = []) {
   if (!Array.isArray(variants) || !variants.length) return [];
+  // Phase 5: size variants must not be rendered as color swatches.
+  // parseColorValue("S") / ("M") etc. returns #cccccc — visually broken.
+  // Return empty so the swatch row is suppressed for size-only products.
+  if (variants.every(v => String(v.option_name || "").toLowerCase().trim() === "size")) return [];
   const colors = variants.filter(v => String(v.option_name || "").toLowerCase().trim() === "color");
   return colors.length ? colors : variants;
+}
+
+// Phase 5: detect whether a product's variants are all size-typed.
+function isSizeOnlyProduct(variants = []) {
+  if (!Array.isArray(variants) || !variants.length) return false;
+  return variants.every(v => String(v.option_name || "").toLowerCase().trim() === "size");
 }
 
 export function renderHomeCard(product, variants = [], opts = {}) {
@@ -31,9 +41,12 @@ export function renderHomeCard(product, variants = [], opts = {}) {
   const name = product?.name || "Product";
   const price = money(product?.price);
 
-  const vlist = pickVariants(variants);
+  const vlist = pickColorVariants(variants);
   const shown = vlist.slice(0, variantLimit);
   const moreCount = Math.max(0, vlist.length - shown.length);
+
+  // Phase 5: detect size-only products to substitute appropriate UI.
+  const sizeOnly = isSizeOnlyProduct(variants);
 
   const swatchesHtml = shown.map(v => {
     const { background, isMultiColor } = parseColorValue(v.option_value);
@@ -62,9 +75,13 @@ export function renderHomeCard(product, variants = [], opts = {}) {
     ? `<span class="text-[11px] font-bold text-black/60 leading-[20px] px-1.5 border border-black/10 bg-black/5 shrink-0 select-none">+${moreCount}</span>` 
     : "";
 
-  const variantsRow = (shown.length || moreCount)
-    ? `<div class="mt-3 flex flex-wrap gap-1.5 relative z-20 items-center min-h-[22px]">${swatchesHtml}${moreHtml}</div>`
-    : `<div class="mt-3 min-h-[22px]"></div>`; // Keep layout stable even without variants
+  // Phase 5: for size-only products show a text hint instead of (broken) color swatches.
+  // For color products, render swatches. For products with no variants, keep stable spacing.
+  const variantsRow = sizeOnly
+    ? `<div class="mt-3 min-h-[22px] text-[11px] font-semibold uppercase tracking-wide text-black/50">Sizes available</div>`
+    : (shown.length || moreCount)
+      ? `<div class="mt-3 flex flex-wrap gap-1.5 relative z-20 items-center min-h-[22px]">${swatchesHtml}${moreHtml}</div>`
+      : `<div class="mt-3 min-h-[22px]"></div>`;
 
   // Sale price logic (optional if you have compare_at_price data)
   const isSale = product.compare_at_price &&  Number(product.compare_at_price) > Number(product.price);
@@ -81,23 +98,21 @@ export function renderHomeCard(product, variants = [], opts = {}) {
   let quickAddBtn = "";
   
   if (canQuickAdd) {
-    // If it has only 1 variant (or 0, implying just the base product), we can add directly.
-    // If multiple options, we redirect.
-    // Note: 'variants' arg here is often just the colors for swatches.
-    // Ideally we check total variant count. For visual card purposes, we can trust the passed variants length somewhat, 
-    // but usually products always have at least 1 variant row in Supabase if active.
-    
-    // We'll store data attributes for the handler to read.
-    // If > 1 variant, the handler will see that and redirect.
+    // Phase 5: size-only products must ALWAYS show "Choose Options" and redirect to
+    // the product page, regardless of variant count, to enforce explicit size selection.
+    // Other multi-variant products also redirect. Only single-variant non-size products
+    // allow direct add.
+    const isChooseOptions = sizeOnly || variants.length > 1;
     quickAddBtn = `
       <button 
         type="button"
         class="quick-add-btn absolute bottom-0 left-0 right-0 bg-white/90 backdrop-blur text-black font-black uppercase text-xs py-3 translate-y-full group-hover:translate-y-0 transition-transform duration-300 z-30 border-t border-black hover:bg-black hover:text-white"
         data-id="${esc(product.id)}"
-        data-has-variants="${variants.length > 1 ? 'true' : 'false'}"
-        title="${variants.length > 1 ? 'Choose Options' : 'Add to Cart'}"
+        data-slug="${esc(product.slug || "")}"
+        data-has-variants="${isChooseOptions ? 'true' : 'false'}"
+        title="${isChooseOptions ? 'Choose Options' : 'Add to Cart'}"
       >
-        ${variants.length > 1 ? 'Choose Options' : 'Add to Cart +'}
+        ${isChooseOptions ? 'Choose Options' : 'Add to Cart +'}
       </button>
     `;
   }

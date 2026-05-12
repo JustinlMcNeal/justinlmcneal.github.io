@@ -1,7 +1,7 @@
 // supabase/functions/twilio-webhook/index.ts
 // Receives Twilio callbacks: delivery status updates + inbound STOP messages
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { hmac } from "https://deno.land/x/hmac@v2.0.1/mod.ts";
+// No external HMAC import — uses built-in Web Crypto API (Deno global)
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const serviceKey  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -11,7 +11,7 @@ const STOP_WORDS = new Set(["STOP", "STOPALL", "UNSUBSCRIBE", "CANCEL", "END", "
 
 // ── Twilio signature validation ─────────────────────────────
 
-function validateTwilioSignature(url: string, params: Record<string, string>, signature: string): boolean {
+async function validateTwilioSignature(url: string, params: Record<string, string>, signature: string): Promise<boolean> {
   // Build the data string: URL + sorted params concatenated
   const keys = Object.keys(params).sort();
   let data = url;
@@ -19,7 +19,17 @@ function validateTwilioSignature(url: string, params: Record<string, string>, si
     data += key + params[key];
   }
 
-  const computed = hmac("sha1", TWILIO_TOKEN, data, "utf8", "base64") as string;
+  const enc = new TextEncoder();
+  const cryptoKey = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(TWILIO_TOKEN),
+    { name: "HMAC", hash: "SHA-1" },
+    false,
+    ["sign"],
+  );
+  const sig = await crypto.subtle.sign("HMAC", cryptoKey, enc.encode(data));
+  const computed = btoa(String.fromCharCode(...new Uint8Array(sig)));
+
   // Constant-time comparison
   if (computed.length !== signature.length) return false;
   let result = 0;
@@ -57,7 +67,7 @@ Deno.serve(async (req) => {
     const signature = req.headers.get("X-Twilio-Signature") || "";
     const webhookUrl = `${supabaseUrl}/functions/v1/twilio-webhook`;
 
-    if (!validateTwilioSignature(webhookUrl, params, signature)) {
+    if (!await validateTwilioSignature(webhookUrl, params, signature)) {
       console.warn("[twilio-webhook] Invalid signature — rejecting request");
       return new Response("Forbidden", { status: 403 });
     }
@@ -142,11 +152,40 @@ Deno.serve(async (req) => {
           console.log(`[twilio-webhook] Message ${messageSid} → ${mappedStatus}`);
         }
 
-        // If message bounced, mark contact as bounced
+        // If message failed/undelivered, update contact status based on error code
         if (mappedStatus === "undelivered" || mappedStatus === "failed") {
           const errorCode = params.ErrorCode || "";
-          // 30005 = unknown destination, 30006 = landline, 21610 = unsubscribed
-          if (["30005", "30006", "21610"].includes(errorCode)) {
+
+          if (errorCode === "21610") {
+            // 21610 = attempted send to unsubscribed recipient
+            // Twilio already processed the opt-out; record it as unsubscribed (not bounced)
+            const { data: msgRow } = await sb
+              .from("sms_messages")
+              .select("phone")
+              .eq("provider_message_sid", messageSid)
+              .maybeSingle();
+
+            if (msgRow?.phone) {
+              await sb
+                .from("customer_contacts")
+                .update({
+                  status:       "unsubscribed",
+                  sms_consent:  false,
+                  opted_out_at: new Date().toISOString(),
+                })
+                .eq("phone", msgRow.phone);
+
+              await sb.from("sms_consent_logs").insert({
+                phone:        msgRow.phone,
+                consent_type: "opt_out",
+                consent_text: "Twilio error 21610: attempted send to unsubscribed recipient",
+                source:       "twilio_21610",
+              });
+
+              console.log(`[twilio-webhook] Contact ${msgRow.phone} marked unsubscribed (21610)`);
+            }
+          } else if (["30005", "30006"].includes(errorCode)) {
+            // 30005 = unknown destination, 30006 = landline — delivery failure, not opt-out
             const { data: msgRow } = await sb
               .from("sms_messages")
               .select("phone")

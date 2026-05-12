@@ -72,6 +72,9 @@ function isMto(productId) {
 function renderItemCard(item, stock, madeToOrder) {
   const id = String(item.id || "");
   const variant = normVariant(item.variant);
+  // Phase 2: prefer variant_title for display; keep variant text as fallback
+  const variantLabel = normVariant(item.variant_title) || variant;
+  const variantId = String(item.variant_id || "");
   const qty = Math.max(1, Number(item.qty || 1));
   const img = item.image || "/imgs/placeholder.png";
   const name = esc(item.name || "Item");
@@ -105,7 +108,7 @@ function renderItemCard(item, stock, madeToOrder) {
       <div class="flex justify-between items-start gap-2">
         <div>
           <a href="/pages/product.html?slug=${esc(slug)}" class="font-bold text-sm leading-tight line-clamp-2 hover:underline">${name}</a>
-          ${variant ? `<p class="text-xs text-black/50 mt-0.5">${esc(variant)}</p>` : ""}
+          ${variantLabel ? `<p class="text-xs text-black/50 mt-0.5">${esc(variantLabel)}</p>` : ""}
           ${isBackorder ? `<p class="text-xs font-bold text-amber-600 mt-1">${shipNote}</p>` : ""}
           ${lowStock ? `<p class="text-xs font-bold text-red-500 mt-1">Only ${stock} left!</p>` : ""}
         </div>
@@ -117,6 +120,7 @@ function renderItemCard(item, stock, madeToOrder) {
           data-checkout-remove
           data-id="${esc(id)}"
           data-variant="${esc(variant)}"
+          data-variant-id="${esc(variantId)}"
           aria-label="Remove item"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -135,6 +139,7 @@ function renderItemCard(item, stock, madeToOrder) {
             data-checkout-qty-minus
             data-id="${esc(id)}"
             data-variant="${esc(variant)}"
+            data-variant-id="${esc(variantId)}"
             aria-label="Decrease quantity"
           >
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
@@ -148,6 +153,7 @@ function renderItemCard(item, stock, madeToOrder) {
             data-checkout-qty-plus
             data-id="${esc(id)}"
             data-variant="${esc(variant)}"
+            data-variant-id="${esc(variantId)}"
             aria-label="Increase quantity"
           >
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
@@ -220,9 +226,11 @@ export function wireItemControls(container, onCartChange) {
 
     const id = btn.dataset.id;
     const variant = btn.dataset.variant || "";
+    // Phase 2: pick up variant_id when embedded in button dataset
+    const variantId = btn.dataset.variantId || null;
 
     if (btn.hasAttribute("data-checkout-remove")) {
-      removeItem(id, variant);
+      removeItem(id, variant, variantId);
       onCartChange();
       return;
     }
@@ -230,9 +238,9 @@ export function wireItemControls(container, onCartChange) {
     if (btn.hasAttribute("data-checkout-qty-minus")) {
       const current = parseInt(btn.closest("article")?.querySelector(".text-center")?.textContent || "1", 10);
       if (current > 1) {
-        setQty(id, variant, current - 1);
+        setQty(id, variant, current - 1, variantId);
       } else {
-        removeItem(id, variant);
+        removeItem(id, variant, variantId);
       }
       onCartChange();
       return;
@@ -240,7 +248,7 @@ export function wireItemControls(container, onCartChange) {
 
     if (btn.hasAttribute("data-checkout-qty-plus")) {
       const current = parseInt(btn.closest("article")?.querySelector(".text-center")?.textContent || "1", 10);
-      setQty(id, variant, current + 1);
+      setQty(id, variant, current + 1, variantId);
       onCartChange();
     }
   });

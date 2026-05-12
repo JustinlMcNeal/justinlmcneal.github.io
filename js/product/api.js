@@ -47,14 +47,36 @@ export async function fetchCategoryName(categoryId) {
 export async function fetchVariants(productId) {
   const sb = getSupabaseClient();
 
+  // Phase 1 (sizes foundation): includes new columns added by
+  // 20260718_product_variants_phase1_schema.sql. Existing consumers
+  // receive these fields transparently — rendering code still reads
+  // option_value / option_name as before. New fields (title, option_values,
+  // sku, is_default) are used by variantUtils.js helpers and future phases.
+  //
+  // Safety fallback: if the extended query fails (e.g. migration not yet
+  // applied on this environment), falls back to the legacy column set so the
+  // product page remains functional. The new fields will simply be absent
+  // until the migration runs.
   const { data, error } = await sb
     .from("product_variants")
-    .select("id, product_id, option_value, stock, preview_image_url, sort_order")
+    .select(
+      "id, product_id, option_name, option_value, sku, title, option_values, " +
+      "stock, preview_image_url, sort_order, is_active, is_default"
+    )
     .eq("product_id", productId)
     .order("sort_order", { ascending: true });
 
-  if (error) return [];
-  return data || [];
+  if (!error) return data || [];
+
+  // Fallback: query only the legacy columns that are guaranteed to exist.
+  // This keeps the product page functional if new columns are not yet migrated.
+  const { data: fallback } = await sb
+    .from("product_variants")
+    .select("id, product_id, option_name, option_value, stock, preview_image_url, sort_order, is_active")
+    .eq("product_id", productId)
+    .order("sort_order", { ascending: true });
+
+  return fallback || [];
 }
 
 export async function fetchGallery(productId) {

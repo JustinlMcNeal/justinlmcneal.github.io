@@ -72,6 +72,7 @@ export async function fetchProductFull(productId) {
     .from("product_variants")
     .select("*")
     .eq("product_id", productId)
+    .eq("is_active", true)      // only show active variants in admin edit modal
     .order("sort_order", { ascending: true })
     .order("option_value", { ascending: true });
 
@@ -122,40 +123,96 @@ export async function setProductActive(productId, isActive) {
   await must(true, error, "Update active flag failed");
 }
 
-export async function replaceVariants(productId, variants) {
-  if (!variants.length) {
-    const { error: delErr } = await sb().from("product_variants").delete().eq("product_id", productId);
-    await must(true, delErr, "Clear variants failed");
-    return;
-  }
-
-  // Check for duplicate option values before touching the DB
+/**
+ * Phase 3: Stable variant upsert — replaces the old destructive replaceVariants.
+ *
+ * Strategy:
+ *   1. Fetch current variant IDs for the product.
+ *   2. For each incoming variant with a known id → UPDATE in place (UUID preserved).
+ *   3. For each incoming variant with no id → INSERT (DB assigns new UUID).
+ *   4. For each existing id NOT in the incoming set → soft-disable (is_active = false).
+ *
+ * This preserves variant_id values that may already be stored in:
+ *   - localStorage carts (kk_cart_v1)
+ *   - line_items_raw.variant_id (order history)
+ *   - stock_ledger.variant_id
+ *
+ * @param {string} productId
+ * @param {Array<{
+ *   id?: string,
+ *   option_name?: string,
+ *   option_value: string,
+ *   title?: string,
+ *   stock?: number,
+ *   preview_image_url?: string|null,
+ *   sort_order?: number,
+ *   is_active?: boolean,
+ *   is_default?: boolean,
+ * }>} variants
+ */
+export async function upsertVariants(productId, variants) {
+  // Duplicate check: option_name + option_value must be unique per product
   const seen = new Set();
   const dupes = [];
   for (const v of variants) {
-    const key = (v.option_value || "").trim().toLowerCase();
+    const key = `${(v.option_name || "Color").trim().toLowerCase()}::${(v.option_value || "").trim().toLowerCase()}`;
     if (seen.has(key)) dupes.push(v.option_value);
     seen.add(key);
   }
   if (dupes.length) {
-    throw new Error(`Duplicate variant option values: "${dupes.join('", "')}" — each variant must have a unique name.`);
+    throw new Error(`Duplicate variant values: "${dupes.join('", "')}" — each variant must be unique within its option type.`);
   }
 
-  const { error: delErr } = await sb().from("product_variants").delete().eq("product_id", productId);
-  await must(true, delErr, "Clear variants failed");
+  // Fetch current variant IDs to determine what exists
+  const { data: existing, error: fetchErr } = await sb()
+    .from("product_variants")
+    .select("id")
+    .eq("product_id", productId);
+  await must(true, fetchErr, "Fetch existing variants failed");
 
-  const rows = variants.map((v, idx) => ({
-    product_id: productId,
-    option_name: "Color",
-    option_value: v.option_value,
-    stock: Number(v.stock || 0),
-    preview_image_url: v.preview_image_url || null,
-    sort_order: Number(v.sort_order ?? idx),
-    is_active: true,
-  }));
+  const existingIds = new Set((existing || []).map((r) => r.id));
+  const incomingIds = new Set(variants.filter((v) => v.id && existingIds.has(v.id)).map((v) => v.id));
 
-  const { error } = await sb().from("product_variants").insert(rows);
-  await must(true, error, "Save variants failed");
+  // Soft-disable variants that were removed in admin
+  const toDisable = [...existingIds].filter((id) => !incomingIds.has(id));
+  if (toDisable.length) {
+    const { error: disableErr } = await sb()
+      .from("product_variants")
+      .update({ is_active: false })
+      .in("id", toDisable);
+    await must(true, disableErr, "Soft-disable removed variants failed");
+  }
+
+  // Update existing and insert new variants
+  for (let idx = 0; idx < variants.length; idx++) {
+    const v = variants[idx];
+    const rowData = {
+      product_id:        productId,
+      option_name:       (v.option_name || "Color").trim(),
+      option_value:      (v.option_value || "").trim(),
+      title:             v.title ? String(v.title).trim() : null,
+      stock:             Math.max(0, Number(v.stock || 0)),
+      preview_image_url: v.preview_image_url || null,
+      sort_order:        Number(v.sort_order ?? idx),
+      is_active:         v.is_active !== false, // default true
+      is_default:        !!v.is_default,
+    };
+
+    if (v.id && existingIds.has(v.id)) {
+      // UPDATE in place — UUID preserved
+      const { error: upErr } = await sb()
+        .from("product_variants")
+        .update(rowData)
+        .eq("id", v.id);
+      await must(true, upErr, `Update variant ${v.id} failed`);
+    } else {
+      // INSERT — DB assigns a fresh UUID
+      const { error: insErr } = await sb()
+        .from("product_variants")
+        .insert(rowData);
+      await must(true, insErr, "Insert new variant failed");
+    }
+  }
 }
 
 export async function replaceGallery(productId, gallery) {

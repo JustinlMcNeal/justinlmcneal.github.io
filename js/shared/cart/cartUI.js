@@ -150,6 +150,9 @@ export function renderCartItems(items = [], totals = {}, els = {}) {
     .map((it) => {
       const id = String(it.id || "");
       const variant = normVariant(it.variant);
+      // Phase 2: prefer variant_title for display; keep variant text as fallback
+      const variantLabel = normVariant(it.variant_title) || variant;
+      const variantId = String(it.variant_id || "");
       const qty = Math.max(1, Number(it.qty || 1));
       const img = it.image || "/imgs/placeholder.png";
       const name = esc(it.name || "Item");
@@ -173,7 +176,7 @@ export function renderCartItems(items = [], totals = {}, els = {}) {
     <div class="flex-1 min-w-0 flex flex-col justify-between">
       <div>
         <h4 class="font-bold text-sm leading-tight line-clamp-2">${name}</h4>
-        ${variant ? `<p class="text-xs text-black/50 mt-0.5">${esc(variant)}</p>` : ""}
+        ${variantLabel ? `<p class="text-xs text-black/50 mt-0.5">${esc(variantLabel)}</p>` : ""}
       </div>
       
       <div class="flex items-center justify-between mt-2">
@@ -185,6 +188,7 @@ export function renderCartItems(items = [], totals = {}, els = {}) {
             data-kk-qty-minus
             data-id="${esc(id)}"
             data-variant="${esc(variant)}"
+            data-kk-variant-id="${esc(variantId)}"
             data-qty="${qty}"
             aria-label="Decrease quantity"
           >
@@ -199,6 +203,7 @@ export function renderCartItems(items = [], totals = {}, els = {}) {
             data-kk-qty-plus
             data-id="${esc(id)}"
             data-variant="${esc(variant)}"
+            data-kk-variant-id="${esc(variantId)}"
             data-qty="${qty}"
             aria-label="Increase quantity"
           >
@@ -223,6 +228,7 @@ export function renderCartItems(items = [], totals = {}, els = {}) {
       data-kk-remove
       data-id="${esc(id)}"
       data-variant="${esc(variant)}"
+      data-kk-variant-id="${esc(variantId)}"
       aria-label="Remove item"
     >
       <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">

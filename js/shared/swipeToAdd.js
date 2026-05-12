@@ -181,6 +181,16 @@ async function addToCartQuick(productId, card) {
       return;
     }
 
+    // Phase 5: if any variant is size-typed, redirect to product page instead
+    // of silently adding a default size. Explicit selection is required for size products.
+    const isSizeProduct = (product.variants || []).some(
+      (v) => String(v.option_name || "").toLowerCase().trim() === "size"
+    );
+    if (isSizeProduct && product.slug) {
+      window.location.href = `/pages/product.html?slug=${encodeURIComponent(product.slug)}`;
+      return;
+    }
+
     // Find default variant (first with stock)
     const variant = product.variants?.find(v => (v.stock ?? 0) > 0) || product.variants?.[0];
     

@@ -17,12 +17,18 @@ export function bindCartControls() {
     const btn = e.target.closest("button");
     if (!btn) return;
 
+    // Phase 2: pick up variant_id from button dataset when available.
+    // data-kk-variant-id → btn.dataset.kkVariantId (camelCase via dataset API).
+    // Falls back to null for legacy buttons that do not carry the attribute.
+    const variantId = btn.dataset.kkVariantId || null;
+
     // Qty -
     if (btn.hasAttribute("data-kk-qty-minus")) {
       setQty(
         btn.dataset.id,
         btn.dataset.variant || "",
-        Number(btn.dataset.qty) - 1
+        Number(btn.dataset.qty) - 1,
+        variantId
       );
       return renderCartDrawer();
     }
@@ -32,14 +38,15 @@ export function bindCartControls() {
       setQty(
         btn.dataset.id,
         btn.dataset.variant || "",
-        Number(btn.dataset.qty) + 1
+        Number(btn.dataset.qty) + 1,
+        variantId
       );
       return renderCartDrawer();
     }
 
     // Remove
     if (btn.hasAttribute("data-kk-remove")) {
-      removeItem(btn.dataset.id, btn.dataset.variant || "");
+      removeItem(btn.dataset.id, btn.dataset.variant || "", variantId);
       return renderCartDrawer();
     }
 

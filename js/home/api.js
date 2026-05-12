@@ -165,18 +165,40 @@ export async function fetchVariantsForProducts(productIds = []) {
   const ids = Array.from(new Set((productIds || []).filter(Boolean)));
   if (!ids.length) return new Map();
 
+  // Phase 1 (sizes foundation): includes new columns added by
+  // 20260718_product_variants_phase1_schema.sql. Card rendering still uses
+  // option_name / option_value for color swatch logic (unchanged). New fields
+  // (sku, title, option_values, is_default) are available for variantUtils.js
+  // helpers and future phase renders.
   const { data, error } = await supabase
     .from("product_variants")
-    .select("id,product_id,option_name,option_value,stock,preview_image_url,sort_order,is_active")
+    .select(
+      "id,product_id,option_name,option_value,sku,title,option_values," +
+      "stock,preview_image_url,sort_order,is_active,is_default"
+    )
     .in("product_id", ids)
     .eq("is_active", true)
     .order("sort_order", { ascending: true })
     .order("created_at", { ascending: true });
 
-  if (error) throw error;
+  // Safety fallback: if extended query fails (migration not yet applied),
+  // fall back to legacy columns so card rendering stays intact.
+  let rows = data;
+  if (error) {
+    const { data: fallback, error: fallbackError } = await supabase
+      .from("product_variants")
+      .select("id,product_id,option_name,option_value,stock,preview_image_url,sort_order,is_active")
+      .in("product_id", ids)
+      .eq("is_active", true)
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true });
+
+    if (fallbackError) throw fallbackError;
+    rows = fallback;
+  }
 
   const map = new Map();
-  for (const row of (data || [])) {
+  for (const row of (rows || [])) {
     const key = row.product_id;
     if (!map.has(key)) map.set(key, []);
     map.get(key).push(row);

@@ -77,7 +77,7 @@ export function renderProductCard(product) {
         ${
           colors.length
             ? `<div class="mt-2 flex items-center gap-1">${dotsHtml}${extraHtml}</div>`
-            : `<div class="mt-2 text-[11px] uppercase tracking-wide text-black/45">Select a color to add to cart</div>`
+            : `<div class="mt-2 text-[11px] uppercase tracking-wide text-black/45">See options to add to cart</div>`
         }
       </div>
     </a>

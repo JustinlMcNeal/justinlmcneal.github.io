@@ -233,7 +233,7 @@ async function triggerReviewRequest(sessionId: string) {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
     },
-    body: JSON.stringify({ order_session_id: sessionId }),
+    body: JSON.stringify({ batch: true, session_id: sessionId }),
   });
 
   const result = await res.json();

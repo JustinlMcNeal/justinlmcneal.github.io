@@ -203,45 +203,57 @@ if (req.method === "GET") {
           // Get original line items for this order
           const { data: orderLines } = await supabaseAdmin
             .from("line_items_raw")
-            .select("product_id, variant, quantity")
+            .select("product_id, variant, variant_id, quantity")
             .eq("stripe_checkout_session_id", orderSessionId);
 
           for (const li of orderLines || []) {
-            if (!li.product_id) continue;
-
-            // Look up product UUID from SKU code
-            const { data: prodRow } = await supabaseAdmin
-              .from("products")
-              .select("id")
-              .eq("code", li.product_id)
-              .single();
-
-            if (!prodRow?.id) continue;
-
-            // Find variant
-            const vQuery = supabaseAdmin
-              .from("product_variants")
-              .select("id, stock, product_id")
-              .eq("product_id", prodRow.id);
-
-            if (li.variant) vQuery.eq("option_value", li.variant);
-
-            const { data: vRows } = await vQuery.limit(1);
-            if (!vRows?.length) continue;
-
-            const v = vRows[0];
-            const stockBefore = v.stock ?? 0;
             const qty = li.quantity || 1;
+            let variantRow: { id: string; stock: number; product_id: string } | null = null;
+
+            // ── Phase 2: prefer variant_id for direct lookup ─────────────
+            if (li.variant_id) {
+              const { data: byId } = await supabaseAdmin
+                .from("product_variants")
+                .select("id, stock, product_id")
+                .eq("id", li.variant_id)
+                .limit(1);
+              if (byId?.length) variantRow = byId[0] as typeof variantRow;
+            }
+
+            // ── Legacy fallback: SKU → product UUID → option_value match ──
+            if (!variantRow && li.product_id) {
+              const { data: prodRow } = await supabaseAdmin
+                .from("products")
+                .select("id")
+                .eq("code", li.product_id)
+                .single();
+
+              if (prodRow?.id) {
+                const vQuery = supabaseAdmin
+                  .from("product_variants")
+                  .select("id, stock, product_id")
+                  .eq("product_id", prodRow.id);
+
+                if (li.variant) vQuery.eq("option_value", li.variant);
+
+                const { data: vRows } = await vQuery.limit(1);
+                if (vRows?.length) variantRow = vRows[0] as typeof variantRow;
+              }
+            }
+
+            if (!variantRow) continue;
+
+            const stockBefore = variantRow.stock ?? 0;
             const stockAfter = stockBefore + qty;
 
             await supabaseAdmin
               .from("product_variants")
               .update({ stock: stockAfter })
-              .eq("id", v.id);
+              .eq("id", variantRow.id);
 
             await supabaseAdmin.from("stock_ledger").insert({
-              variant_id: v.id,
-              product_id: prodRow.id,
+              variant_id: variantRow.id,
+              product_id: variantRow.product_id,
               change: qty,
               reason: "refund",
               reference_id: orderSessionId,
@@ -249,7 +261,7 @@ if (req.method === "GET") {
               stock_after: stockAfter,
             });
 
-            console.log(`[stripe-webhook] stock refund: ${li.product_id}/${li.variant} ${stockBefore} → ${stockAfter} (+${qty})`);
+            console.log(`[stripe-webhook] stock refund: ${li.product_id || li.variant_id}/${li.variant} ${stockBefore} → ${stockAfter} (+${qty})`);
           }
         } catch (stockRefundErr) {
           console.error("[stripe-webhook] stock re-increment on refund failed (non-fatal):", stockRefundErr);
@@ -401,6 +413,25 @@ if (req.method === "GET") {
       const product_id = safeStr(productMeta.kk_product_id).trim() || null;
       const variant = safeStr(productMeta.kk_variant).trim() || null;
 
+      // ── Phase 2: read durable variant identity from Stripe metadata ──
+      const variant_id    = safeStr(productMeta.kk_variant_id).trim()    || null;
+      const variant_sku   = safeStr(productMeta.kk_variant_sku).trim()   || null;
+      const variant_title = safeStr(productMeta.kk_variant_title).trim() || null;
+      // selected_options is stored as a JSON string in Stripe metadata
+      let selected_options: Record<string, string> | null = null;
+      const selectedOptionsStr = safeStr(productMeta.kk_selected_options).trim();
+      if (selectedOptionsStr) {
+        try {
+          const parsed = JSON.parse(selectedOptionsStr);
+          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+            selected_options = parsed as Record<string, string>;
+          }
+        } catch {
+          // Malformed JSON — leave null; don't block order processing
+          console.warn("[stripe-webhook] kk_selected_options parse failed (non-fatal)");
+        }
+      }
+
       const quantity = Math.max(1, li.quantity ?? 1);
 
       // Paid total for this line from Stripe
@@ -437,6 +468,12 @@ if (req.method === "GET") {
         product_id,
         product_name,
         variant,
+
+        // Phase 2: durable variant identity (nullable; absent for legacy sessions)
+        variant_id,
+        variant_sku,
+        variant_title,
+        selected_options,
 
         quantity,
         item_weight_g,
@@ -541,8 +578,8 @@ if (req.method === "GET") {
       let smsSendId: string | null = null;
       let smsClickAt: string | null = null;
 
-      // Method 1: Direct attribution — coupon code starts with "SMS-"
-      if (coupon_code_used && coupon_code_used.startsWith("SMS-")) {
+      // Method 1: Direct attribution — coupon code starts with "SMS-" or "VIP-"
+      if (coupon_code_used && (coupon_code_used.startsWith("SMS-") || coupon_code_used.startsWith("VIP-"))) {
         smsAttributed = true;
 
         // Find the sms_send that delivered this coupon
@@ -553,11 +590,12 @@ if (req.method === "GET") {
           .maybeSingle();
 
         if (contact) {
+          const sendFlow = coupon_code_used.startsWith("VIP-") ? "upgrade" : "signup";
           const { data: send } = await supabaseAdmin
             .from("sms_sends")
             .select("id")
             .eq("contact_id", contact.id)
-            .eq("flow", "signup")
+            .eq("flow", sendFlow)
             .order("created_at", { ascending: false })
             .limit(1)
             .maybeSingle();
@@ -622,7 +660,7 @@ if (req.method === "GET") {
             session_id: sessionId,
             coupon_code: coupon_code_used,
             total_paid_cents,
-            attribution_method: coupon_code_used?.startsWith("SMS-") ? "coupon" : "click_window",
+            attribution_method: (coupon_code_used?.startsWith("SMS-") || coupon_code_used?.startsWith("VIP-")) ? "coupon" : "click_window",
           },
         });
 
@@ -634,8 +672,8 @@ if (req.method === "GET") {
             .eq("id", smsSendId);
         }
 
-        // Log coupon redemption event if SMS coupon
-        if (coupon_code_used?.startsWith("SMS-")) {
+        // Log coupon redemption event if SMS or VIP coupon
+        if (coupon_code_used?.startsWith("SMS-") || coupon_code_used?.startsWith("VIP-")) {
           await supabaseAdmin.from("sms_events").insert({
             event_type:  "coupon_redeemed",
             phone:       orderPhone,
@@ -648,7 +686,7 @@ if (req.method === "GET") {
           });
         }
 
-        console.log(`[stripe-webhook] SMS attribution: order ${kk_order_id} attributed to SMS (method: ${coupon_code_used?.startsWith("SMS-") ? "coupon" : "click_window"}, send: ${smsSendId})`);
+        console.log(`[stripe-webhook] SMS attribution: order ${kk_order_id} attributed to SMS (method: ${(coupon_code_used?.startsWith("SMS-") || coupon_code_used?.startsWith("VIP-")) ? "coupon" : "click_window"}, send: ${smsSendId})`);  
       }
     } catch (smsErr) {
       console.error("[stripe-webhook] SMS attribution failed (non-fatal):", smsErr);
@@ -712,46 +750,69 @@ if (fErr) {
         const variantName = row.variant;
         const qty = row.quantity || 1;
 
-        if (!sku) continue;
-        const lookup = skuMap.get(sku);
-        if (!lookup?.product_uuid) continue;
+        if (!sku && !row.variant_id) continue;
 
-        // Find the variant by product UUID + option_value
-        const variantQuery = supabaseAdmin
-          .from("product_variants")
-          .select("id, stock, product_id")
-          .eq("product_id", lookup.product_uuid);
+        let variantRow: { id: string; stock: number; product_id: string } | null = null;
 
-        // Match variant by name if present, otherwise take first active
-        if (variantName) {
-          variantQuery.eq("option_value", variantName);
+        // ── Phase 2: prefer direct variant_id lookup ─────────────────────
+        if (row.variant_id) {
+          const { data: byId, error: idErr } = await supabaseAdmin
+            .from("product_variants")
+            .select("id, stock, product_id")
+            .eq("id", row.variant_id)
+            .limit(1);
+
+          if (!idErr && byId?.length) {
+            variantRow = byId[0] as typeof variantRow;
+          } else if (idErr) {
+            console.warn(`[stripe-webhook] stock: variant_id lookup failed for ${row.variant_id}:`, idErr.message);
+          }
         }
 
-        const { data: variantRows, error: vErr } = await variantQuery.limit(1);
-        if (vErr || !variantRows?.length) {
-          console.warn(`[stripe-webhook] stock: variant not found for ${sku}/${variantName}`);
-          continue;
+        // ── Legacy fallback: SKU + option_value text match ───────────────
+        if (!variantRow && sku) {
+          const lookup = skuMap.get(sku);
+          if (!lookup?.product_uuid) {
+            console.warn(`[stripe-webhook] stock: product not found for SKU ${sku}`);
+            continue;
+          }
+
+          const variantQuery = supabaseAdmin
+            .from("product_variants")
+            .select("id, stock, product_id")
+            .eq("product_id", lookup.product_uuid);
+
+          if (variantName) variantQuery.eq("option_value", variantName);
+
+          const { data: byText, error: tErr } = await variantQuery.limit(1);
+          if (tErr || !byText?.length) {
+            console.warn(`[stripe-webhook] stock: variant not found for ${sku}/${variantName}`);
+            continue;
+          }
+          variantRow = byText[0] as typeof variantRow;
         }
 
-        const variant = variantRows[0];
-        const stockBefore = variant.stock ?? 0;
+        if (!variantRow) continue;
+
+        const stockBefore = variantRow.stock ?? 0;
         const stockAfter = Math.max(0, stockBefore - qty);
 
-        // Decrement stock
         const { error: updateErr } = await supabaseAdmin
           .from("product_variants")
           .update({ stock: stockAfter })
-          .eq("id", variant.id);
+          .eq("id", variantRow.id);
 
         if (updateErr) {
-          console.error(`[stripe-webhook] stock decrement failed for variant ${variant.id}:`, updateErr);
+          console.error(`[stripe-webhook] stock decrement failed for variant ${variantRow.id}:`, updateErr);
           continue;
         }
 
-        // Audit log
+        // Resolve product UUID for ledger (from variant row or skuMap)
+        const productUuid = variantRow.product_id || (sku ? skuMap.get(sku)?.product_uuid : null) || "";
+
         await supabaseAdmin.from("stock_ledger").insert({
-          variant_id: variant.id,
-          product_id: lookup.product_uuid,
+          variant_id: variantRow.id,
+          product_id: productUuid,
           change: -qty,
           reason: "order",
           reference_id: kk_order_id || sessionId,
@@ -759,7 +820,7 @@ if (fErr) {
           stock_after: stockAfter,
         });
 
-        console.log(`[stripe-webhook] stock: ${sku}/${variantName} ${stockBefore} → ${stockAfter} (-${qty})`);
+        console.log(`[stripe-webhook] stock: ${sku || row.variant_id}/${variantName} ${stockBefore} → ${stockAfter} (-${qty})`);
       }
     } catch (stockErr) {
       console.error("[stripe-webhook] stock decrement failed (non-fatal):", stockErr);

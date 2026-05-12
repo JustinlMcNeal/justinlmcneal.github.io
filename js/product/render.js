@@ -332,6 +332,81 @@ export function renderVariantSwatches(container, variants = [], onSelect) {
 
 
 
+/**
+ * Phase 4 — SIZE BUTTONS
+ *
+ * Renders size variants as pill-style text buttons.
+ * Intentionally does NOT auto-select any variant — explicit customer
+ * selection is required. The caller is responsible for blocking add-to-cart
+ * until onSelect has fired at least once.
+ *
+ * Out-of-stock sizes are still rendered (back-orderable) but visually dimmed.
+ *
+ * @param {HTMLElement|null} container
+ * @param {Array<object>} variants - active product_variants rows
+ * @param {(variant: object) => void} [onSelect]
+ */
+export function renderSizeButtons(container, variants = [], onSelect) {
+  if (!container) return;
+  container.innerHTML = "";
+
+  let activeBtn = null;
+
+  variants.forEach((variant) => {
+    const label = esc(variant.option_value || variant.title || "");
+    if (!label) return;
+
+    const isOutOfStock =
+      (variant.stock ?? null) !== null && variant.stock <= 0;
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = label;
+
+    btn.className = [
+      "px-4 py-2 min-w-[3rem]",
+      "text-sm font-bold uppercase tracking-wider",
+      "border-2 border-black/20",
+      "rounded-lg",
+      "transition-all duration-150",
+      "hover:border-black focus:border-black",
+      "outline-none focus:outline-none",
+    ].join(" ");
+
+    if (isOutOfStock) {
+      btn.style.opacity = "0.6";
+      btn.setAttribute(
+        "title",
+        `${variant.option_value || ""} (2–4 week shipping)`
+      );
+      btn.setAttribute(
+        "aria-label",
+        `${variant.option_value || ""} (2–4 week shipping)`
+      );
+    } else {
+      btn.setAttribute("aria-label", variant.option_value || label);
+    }
+
+    btn.addEventListener("click", () => {
+      if (activeBtn) {
+        activeBtn.classList.remove("border-black", "bg-black", "text-white");
+        activeBtn.classList.add("border-black/20");
+      }
+
+      btn.classList.remove("border-black/20");
+      btn.classList.add("border-black", "bg-black", "text-white");
+
+      activeBtn = btn;
+      onSelect?.(variant);
+    });
+
+    container.appendChild(btn);
+  });
+
+  // INTENTIONALLY no auto-select for size mode.
+  // Explicit customer action is required before add-to-cart.
+}
+
 export function renderDetailsSections(containerEl, items = []) {
   if (!containerEl) return;
   containerEl.innerHTML = "";

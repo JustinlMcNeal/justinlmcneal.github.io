@@ -151,6 +151,12 @@ async function handleCheckout(btn) {
         product_id: item.product_id || item.id,
         name: item.name,
         variant: item.variant || "",
+        // Phase 2: forward durable variant identity to the server.
+        // Server will validate/enrich these; they are not trusted for pricing.
+        variant_id:      item.variant_id      || null,
+        variant_sku:     item.variant_sku     || null,
+        variant_title:   item.variant_title   || null,
+        selected_options: item.selected_options || null,
         price: unitPrice,
         discounted_price,
         qty,

@@ -78,10 +78,12 @@ Deno.serve(async (req) => {
       if (error) console.error("[sms-redirect] event insert failed:", error.message);
     });
 
-    // Update customer_contacts.last_click_at (for attribution window)
+    // Update customer_contacts.last_clicked_at (dedicated click timestamp)
+    // NOTE: do NOT write last_sms_sent_at here — that field is the frequency-cap
+    // timer for send scheduling and must only be updated when a send is delivered.
     if (msg.phone) {
       sb.from("customer_contacts")
-        .update({ last_sms_sent_at: new Date().toISOString() })
+        .update({ last_clicked_at: new Date().toISOString() })
         .eq("phone", msg.phone)
         .then(({ error }) => {
           if (error) console.error("[sms-redirect] contact update failed:", error.message);

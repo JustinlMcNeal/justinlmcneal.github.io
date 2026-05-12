@@ -2,7 +2,7 @@ import {
   fetchProductFull,
   fetchProducts,
   upsertProduct,
-  replaceVariants,
+  upsertVariants,
   replaceGallery,
   replaceProductTags,
   setProductActive,
@@ -161,7 +161,7 @@ export function bindModal(els, refreshTable, sectionApi = {}) {
     els.fTags.value = (full.tags || []).map((t) => t.name).join(", ");
 
     clearLists();
-    (full.variants || []).forEach((v) => addVariantRow(els.variantList, v));
+    (full.variants || []).filter((v) => v.is_active !== false).forEach((v) => addVariantRow(els.variantList, v));
     (full.gallery || []).forEach((g) => addGalleryRow(els.galleryList, g));
 
     // Sections
@@ -290,7 +290,7 @@ export function bindModal(els, refreshTable, sectionApi = {}) {
         .map((s) => s.trim())
         .filter(Boolean);
 
-      await replaceVariants(saved.id, variants);
+      await upsertVariants(saved.id, variants);
       await replaceGallery(saved.id, gallery);
       await replaceProductTags(saved.id, tags);
 
