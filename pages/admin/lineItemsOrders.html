@@ -64,6 +64,9 @@
       button, [role="button"] { min-height: 44px; }
       input, select, textarea { font-size: 16px !important; }
     }
+
+    /* Sticky toolbar offset — set by JS after admin nav renders */
+    .sticky-below-nav { top: 48px; }
   </style>
 </head>
 
@@ -88,41 +91,41 @@
           </p>
         </div>
 
-        <!-- KPI Cards -->
-        <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 mt-2">
-          <div class="bg-gray-50 rounded-xl p-3 sm:p-4 border border-gray-100">
+        <!-- KPI Cards: scrollable strip on mobile, 5-col grid on desktop -->
+        <div class="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-5 mt-2">
+          <div class="flex-shrink-0 w-[130px] sm:w-auto bg-gray-50 rounded-xl p-3 sm:p-4 border border-gray-100">
             <div class="text-[9px] sm:text-[10px] font-black uppercase tracking-[.18em] text-gray-500">Orders</div>
-            <div id="kpiOrders" class="text-lg sm:text-2xl font-black mt-1">—</div>
+            <div id="kpiOrders" class="text-lg sm:text-2xl font-black mt-1"><div class="h-6 w-16 bg-gray-200 animate-pulse rounded"></div></div>
           </div>
-          <div class="bg-gray-50 rounded-xl p-3 sm:p-4 border border-gray-100">
+          <div class="flex-shrink-0 w-[130px] sm:w-auto bg-gray-50 rounded-xl p-3 sm:p-4 border border-gray-100">
             <div class="text-[9px] sm:text-[10px] font-black uppercase tracking-[.18em] text-gray-500">Revenue</div>
-            <div id="kpiRevenue" class="text-lg sm:text-2xl font-black mt-1 text-green-600">—</div>
+            <div id="kpiRevenue" class="text-lg sm:text-2xl font-black mt-1 text-green-600"><div class="h-6 w-16 bg-gray-200 animate-pulse rounded"></div></div>
           </div>
-          <div class="bg-gray-50 rounded-xl p-3 sm:p-4 border border-gray-100">
+          <div class="flex-shrink-0 w-[130px] sm:w-auto bg-gray-50 rounded-xl p-3 sm:p-4 border border-gray-100">
             <div class="text-[9px] sm:text-[10px] font-black uppercase tracking-[.18em] text-gray-500">Profit</div>
-            <div id="kpiProfit" class="text-lg sm:text-2xl font-black mt-1 text-emerald-600">—</div>
+            <div id="kpiProfit" class="text-lg sm:text-2xl font-black mt-1 text-emerald-600"><div class="h-6 w-16 bg-gray-200 animate-pulse rounded"></div></div>
           </div>
-          <div class="bg-gray-50 rounded-xl p-3 sm:p-4 border border-gray-100">
+          <div class="flex-shrink-0 w-[130px] sm:w-auto bg-gray-50 rounded-xl p-3 sm:p-4 border border-gray-100">
             <div class="text-[9px] sm:text-[10px] font-black uppercase tracking-[.18em] text-gray-500">Unfulfilled</div>
-            <div id="kpiUnfulfilled" class="text-lg sm:text-2xl font-black mt-1 text-amber-600">—</div>
+            <div id="kpiUnfulfilled" class="text-lg sm:text-2xl font-black mt-1 text-amber-600"><div class="h-6 w-16 bg-gray-200 animate-pulse rounded"></div></div>
           </div>
-          <div class="bg-gray-50 rounded-xl p-3 sm:p-4 border border-gray-100">
+          <div class="flex-shrink-0 w-[130px] sm:w-auto bg-gray-50 rounded-xl p-3 sm:p-4 border border-gray-100">
             <div class="text-[9px] sm:text-[10px] font-black uppercase tracking-[.18em] text-gray-500">Refunded</div>
-            <div id="kpiRefunded" class="text-lg sm:text-2xl font-black mt-1 text-red-500">—</div>
+            <div id="kpiRefunded" class="text-lg sm:text-2xl font-black mt-1 text-red-500"><div class="h-6 w-16 bg-gray-200 animate-pulse rounded"></div></div>
           </div>
         </div>
       </div>
     </header>
 
-    <!-- Filters Section -->
-    <section class="bg-white rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4 mb-4 sm:mb-6">
-      <div class="text-[11px] font-black uppercase tracking-[.25em] text-gray-400 mb-3">Filters</div>
+    <!-- Toolbar (sticky below admin nav) -->
+    <section id="toolbar" class="bg-white rounded-2xl border border-gray-200 px-3 py-3 mb-4 sm:mb-6 sticky sticky-below-nav z-30">
+      <!-- Main flex row -->
+      <div class="flex flex-wrap items-end gap-2">
 
-      <div class="grid gap-3 md:grid-cols-2">
-        <!-- Search -->
-        <div>
+        <!-- Search (full-width mobile, flex-1 desktop) -->
+        <div class="w-full sm:flex-1 sm:min-w-[200px]">
           <label for="searchInput"
-                 class="block text-[9px] sm:text-[10px] font-black uppercase tracking-[.18em] mb-1 sm:mb-2 text-gray-500">
+                 class="block text-[9px] sm:text-[10px] font-black uppercase tracking-[.18em] mb-1 text-gray-500">
             Search
           </label>
           <div class="relative">
@@ -131,21 +134,27 @@
               type="search"
               placeholder="Order / email / name / coupon / tracking..."
               autocomplete="off"
-              class="w-full border-4 border-black px-3 sm:px-4 py-2 sm:py-3 text-sm outline-none pr-10 focus:border-kkpink transition-colors"
+              class="w-full border-4 border-black px-3 sm:px-4 py-2 text-sm outline-none pr-10 focus:border-kkpink transition-colors"
             />
-            <svg class="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg id="iconSearch" class="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
             </svg>
+            <button
+              id="btnSearchClear"
+              type="button"
+              class="hidden absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center text-gray-400 hover:text-black font-black text-sm cursor-pointer"
+              aria-label="Clear search"
+            >✕</button>
           </div>
         </div>
 
-        <!-- Status -->
-        <div>
+        <!-- Status (desktop only) -->
+        <div class="hidden sm:block w-40">
           <label for="statusFilter"
-                 class="block text-[9px] sm:text-[10px] font-black uppercase tracking-[.18em] mb-1 sm:mb-2 text-gray-500">
+                 class="block text-[9px] sm:text-[10px] font-black uppercase tracking-[.18em] mb-1 text-gray-500">
             Status
           </label>
-          <select id="statusFilter" class="w-full border-4 border-black px-3 py-2 sm:py-3 text-sm outline-none bg-white focus:border-kkpink transition-colors">
+          <select id="statusFilter" class="w-full border-4 border-black px-3 py-2 text-sm outline-none bg-white focus:border-kkpink transition-colors">
             <option value="">All Statuses</option>
             <option value="pending">Pending</option>
             <option value="label_purchased">Label Purchased</option>
@@ -157,136 +166,246 @@
             <option value="partial_refund">Refunded (Partial)</option>
           </select>
         </div>
-      </div>
 
-      <div class="grid gap-3 mt-3 md:grid-cols-4 items-end">
-        <!-- Review Status -->
-        <div>
+        <!-- Reviews (desktop only) -->
+        <div class="hidden sm:block w-36">
           <label for="reviewFilter"
-                 class="block text-[9px] sm:text-[10px] font-black uppercase tracking-[.18em] mb-1 sm:mb-2 text-gray-500">
+                 class="block text-[9px] sm:text-[10px] font-black uppercase tracking-[.18em] mb-1 text-gray-500">
             Reviews
           </label>
-          <select id="reviewFilter" class="w-full border-4 border-black px-3 py-2 sm:py-3 text-sm outline-none bg-white focus:border-kkpink transition-colors">
+          <select id="reviewFilter" class="w-full border-4 border-black px-3 py-2 text-sm outline-none bg-white focus:border-kkpink transition-colors">
             <option value="">All Orders</option>
             <option value="reviewed">Has Reviews</option>
             <option value="no_reviews">No Reviews</option>
           </select>
         </div>
 
-        <!-- Date From -->
-        <div>
+        <!-- Date From (desktop only) -->
+        <div class="hidden sm:block w-32">
           <label for="dateFrom"
-                 class="block text-[9px] sm:text-[10px] font-black uppercase tracking-[.18em] mb-1 sm:mb-2 text-gray-500">
-            Date From
+                 class="block text-[9px] sm:text-[10px] font-black uppercase tracking-[.18em] mb-1 text-gray-500">
+            From
           </label>
-          <input id="dateFrom" type="date" class="w-full border-4 border-black px-3 py-2 sm:py-3 text-sm outline-none focus:border-kkpink transition-colors" />
+          <input id="dateFrom" type="date" class="w-full border-4 border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors" />
         </div>
 
-        <!-- Date To -->
-        <div>
+        <!-- Date To (desktop only) -->
+        <div class="hidden sm:block w-32">
           <label for="dateTo"
-                 class="block text-[9px] sm:text-[10px] font-black uppercase tracking-[.18em] mb-1 sm:mb-2 text-gray-500">
-            Date To
+                 class="block text-[9px] sm:text-[10px] font-black uppercase tracking-[.18em] mb-1 text-gray-500">
+            To
           </label>
-          <input id="dateTo" type="date" class="w-full border-4 border-black px-3 py-2 sm:py-3 text-sm outline-none focus:border-kkpink transition-colors" />
+          <input id="dateTo" type="date" class="w-full border-4 border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors" />
         </div>
 
-        <!-- Actions -->
-        <div class="flex flex-col gap-2">
+        <!-- Refresh (desktop only) -->
+        <div class="hidden sm:flex flex-col gap-1">
+          <div class="h-[18px]"></div>
           <button
             id="btnRefresh"
             type="button"
-            class="border-4 border-black bg-black text-white px-4 py-2 sm:py-3 font-black uppercase tracking-[.12em] text-xs
+            class="border-4 border-black bg-black text-white px-4 py-2 font-black uppercase tracking-[.12em] text-xs
                    hover:bg-white hover:text-black transition-all"
           >
-            Refresh
+            ↻ Refresh
           </button>
-          <div class="flex items-center justify-between text-xs text-gray-500">
-            <span id="countLabel">0 rows</span>
-            <span id="status"></span>
+        </div>
+
+        <!-- Mobile: Filters toggle -->
+        <button id="btnFilterToggle" type="button"
+          class="sm:hidden border-4 border-black bg-white text-black px-3 py-2 font-black uppercase tracking-[.12em] text-[10px]
+                 hover:bg-black hover:text-white transition-all flex items-center gap-1.5 min-h-[44px]">
+          Filters
+          <span id="filterBadge"
+            class="hidden bg-kkpink text-black text-[8px] font-black rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center leading-none"></span>
+          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M19 9l-7 7-7-7"></path></svg>
+        </button>
+
+        <!-- Export dropdown (always visible) -->
+        <div class="relative ml-auto sm:ml-0">
+          <div class="hidden sm:block h-[18px]"></div>
+          <button id="btnExportDropdown" type="button"
+            class="border-4 border-black bg-white px-3 sm:px-4 py-2 font-black uppercase tracking-[.12em] text-[10px]
+                   hover:bg-black hover:text-white transition-all flex items-center gap-1.5 min-h-[44px]">
+            ⬇ Export
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M19 9l-7 7-7-7"></path></svg>
+          </button>
+          <div id="exportDropdownPanel"
+            class="hidden absolute right-0 top-full mt-1 z-40 bg-white border-4 border-black shadow-[4px_4px_0_0_rgba(0,0,0,0.1)] min-w-[160px]">
+            <button id="btnExportShipReady" type="button"
+              class="w-full text-left px-4 py-3 font-black uppercase tracking-[.12em] text-[10px]
+                     hover:bg-black hover:text-white transition-all block">
+              ⬇ Export CSV
+            </button>
+            <div class="border-t border-gray-200"></div>
+            <button id="btnAmazonImportOpen" type="button"
+              class="w-full text-left px-4 py-3 font-black uppercase tracking-[.12em] text-[10px]
+                     hover:bg-black hover:text-white transition-all block">
+              📦 Import Amazon…
+            </button>
           </div>
         </div>
+
       </div>
 
-      <!-- Export Buttons -->
-      <div class="border-t border-gray-200 mt-4 pt-4">
-        <div class="flex flex-wrap gap-2 items-center">
-          <button
-            id="btnExportShipReady"
-            type="button"
-            class="border-4 border-black bg-white text-black px-4 py-2 font-black uppercase tracking-[.12em] text-[10px]
-                   hover:bg-black hover:text-white transition-all"
-          >
-            � Export Orders CSV
-          </button>
-
-          <button
-            id="btnImportAmazon"
-            type="button"
-            class="border-4 border-black bg-white text-black px-4 py-2 font-black uppercase tracking-[.12em] text-[10px]
-                   hover:bg-black hover:text-white transition-all
-                   drop-zone"
-          >
-            📦 Import Amazon
-          </button>
-
-          <span class="text-xs text-gray-400 ml-2">Click or drag & drop file</span>
-        </div>
-        
-        <!-- Amazon Import Preview Panel -->
-        <div id="amazonPreviewPanel" class="hidden mt-4 p-4 border-4 border-orange-500 bg-orange-50 rounded-lg">
-          <div class="flex items-start gap-3">
-            <div class="text-2xl">📦</div>
-            <div class="flex-1">
-              <div class="font-black text-orange-800">Amazon Import Ready</div>
-              <div class="mt-2 text-sm text-orange-700">
-                <div>File: <span id="amzFileName" class="font-bold"></span></div>
-                <div>Total rows: <span id="amzTotalRows" class="font-bold"></span></div>
-                <div>Valid orders: <span id="amzValidCount" class="font-bold text-emerald-700"></span></div>
-                <div id="amzCancelledWrap" class="hidden">Cancelled (skipped): <span id="amzCancelledCount" class="font-bold text-red-600"></span></div>
-              </div>
-              <div class="text-xs text-orange-600 mt-2">This will insert new orders + line items into orders_raw & line_items_raw. Duplicates are skipped automatically.</div>
-              <div class="flex gap-2 mt-3">
-                <button id="amzConfirmBtn" type="button" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-1.5 rounded font-bold text-sm transition-colors">✓ Confirm Import</button>
-                <button id="amzCancelBtn" type="button" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-1.5 rounded font-bold text-sm transition-colors">Cancel</button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Amazon Import Result Panel -->
-        <div id="amazonResultPanel" class="hidden mt-4 p-4 border-4 border-emerald-500 bg-emerald-50 rounded-lg">
-          <div class="flex items-start gap-3">
-            <div class="text-2xl">✅</div>
-            <div class="flex-1">
-              <div class="font-black text-emerald-800">Amazon Import Complete</div>
-              <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-2 text-sm">
-                <div>
-                  <span class="text-emerald-600">Orders:</span>
-                  <span id="amzOrdersCount" class="font-bold">0</span>
-                </div>
-                <div>
-                  <span class="text-emerald-600">Line Items:</span>
-                  <span id="amzLineItemsCount" class="font-bold">0</span>
-                </div>
-                <div>
-                  <span class="text-emerald-600">Revenue:</span>
-                  <span id="amzRevenue" class="font-bold">$0</span>
-                </div>
-                <div>
-                  <span class="text-gray-500">Skipped (dup):</span>
-                  <span id="amzSkippedCount" class="font-bold">0</span>
-                </div>
-              </div>
-              <div id="amzBreakdownWrap" class="mt-3 text-xs text-emerald-700"></div>
-              <div id="amzUnmappedWrap" class="hidden mt-2 text-xs text-amber-700"></div>
-            </div>
-            <button id="amzResultClose" type="button" class="text-emerald-600 hover:text-emerald-800 text-lg font-bold">×</button>
-          </div>
-        </div>
-
+      <!-- Count + status bar -->
+      <div class="flex items-center justify-between mt-2 text-xs text-gray-500">
+        <span id="countLabel">0 rows</span>
+        <span id="status"></span>
       </div>
     </section>
+
+    <!-- Mobile Filter Bottom Sheet -->
+    <div id="filterSheet"
+         class="hidden fixed inset-0 z-40"
+         role="dialog" aria-modal="true" aria-label="Filters">
+      <div class="absolute inset-0 bg-black/40" id="filterSheetBackdrop"></div>
+      <div class="absolute inset-x-0 bottom-0 bg-white border-t-4 border-black">
+        <div class="flex justify-center pt-3 pb-1">
+          <div class="w-10 h-1 bg-gray-300 rounded"></div>
+        </div>
+        <div class="flex items-center justify-between px-4 pt-1 pb-3 border-b border-gray-100">
+          <span class="text-[11px] font-black uppercase tracking-[.25em]">Filters</span>
+          <button id="btnFilterSheetClose" type="button"
+            class="border-4 border-black bg-white w-9 h-9 flex items-center justify-center font-black text-sm
+                   hover:bg-black hover:text-white transition-colors"
+            aria-label="Close filters">✕</button>
+        </div>
+        <div class="p-4 grid grid-cols-2 gap-3">
+          <div class="col-span-2">
+            <label for="mfsStatus"
+                   class="block text-[9px] font-black uppercase tracking-[.18em] mb-1 text-gray-500">Status</label>
+            <select id="mfsStatus" class="w-full border-4 border-black px-3 py-2 text-sm outline-none bg-white focus:border-kkpink transition-colors">
+              <option value="">All Statuses</option>
+              <option value="pending">Pending</option>
+              <option value="label_purchased">Label Purchased</option>
+              <option value="shipped">Shipped</option>
+              <option value="delivered">Delivered</option>
+              <option value="voided">Voided</option>
+              <option value="returned">Returned</option>
+              <option value="refunded">Refunded (Full)</option>
+              <option value="partial_refund">Refunded (Partial)</option>
+            </select>
+          </div>
+          <div class="col-span-2">
+            <label for="mfsReview"
+                   class="block text-[9px] font-black uppercase tracking-[.18em] mb-1 text-gray-500">Reviews</label>
+            <select id="mfsReview" class="w-full border-4 border-black px-3 py-2 text-sm outline-none bg-white focus:border-kkpink transition-colors">
+              <option value="">All Orders</option>
+              <option value="reviewed">Has Reviews</option>
+              <option value="no_reviews">No Reviews</option>
+            </select>
+          </div>
+          <div>
+            <label for="mfsDateFrom"
+                   class="block text-[9px] font-black uppercase tracking-[.18em] mb-1 text-gray-500">From</label>
+            <input id="mfsDateFrom" type="date"
+                   class="w-full border-4 border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors" />
+          </div>
+          <div>
+            <label for="mfsDateTo"
+                   class="block text-[9px] font-black uppercase tracking-[.18em] mb-1 text-gray-500">To</label>
+            <input id="mfsDateTo" type="date"
+                   class="w-full border-4 border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors" />
+          </div>
+        </div>
+        <div class="flex items-center justify-between px-4 pb-6">
+          <button id="btnFilterClearAll" type="button"
+            class="text-[10px] font-black uppercase tracking-[.12em] text-gray-500 hover:text-black underline">
+            Clear All
+          </button>
+          <div class="flex items-center gap-2">
+            <button id="btnRefreshMobile" type="button"
+              class="border-4 border-black bg-white text-black px-3 py-2 font-black uppercase tracking-[.12em] text-[10px]
+                     hover:bg-gray-100 transition-all">
+              ↻ Refresh
+            </button>
+            <button id="btnFilterApply" type="button"
+              class="border-4 border-black bg-black text-white px-4 py-2 font-black uppercase tracking-[.12em] text-[10px]
+                     hover:bg-kkpink hover:border-kkpink hover:text-black transition-all">
+              Apply Filters
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Amazon Import Modal -->
+    <div id="amazonImportModal"
+         class="hidden fixed inset-0 z-[250]"
+         role="dialog" aria-modal="true" aria-label="Import Amazon Orders">
+      <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" id="amazonImportModalBackdrop"></div>
+      <div class="relative h-full w-full flex items-center justify-center p-4 sm:p-6">
+        <div class="w-full max-w-sm bg-white border-4 border-black shadow-[8px_8px_0_0_rgba(0,0,0,0.1)]">
+          <div class="flex items-center justify-between p-4 border-b-4 border-black">
+            <div>
+              <div class="inline-block bg-black text-white px-2 py-0.5 text-[9px] font-black uppercase tracking-[.2em] mb-1">Import</div>
+              <div class="font-black text-lg">Amazon Orders</div>
+            </div>
+            <button id="btnAmazonImportModalClose" type="button"
+              class="border-4 border-black bg-white w-10 h-10 flex items-center justify-center font-black text-lg
+                     hover:bg-black hover:text-white transition-colors"
+              aria-label="Close">✕</button>
+          </div>
+          <div class="p-4">
+            <button id="btnImportAmazon" type="button"
+              class="drop-zone w-full py-6 border-4 border-dashed border-gray-300 hover:border-black transition-colors
+                     cursor-pointer flex flex-col items-center gap-2">
+              <span class="text-3xl">📦</span>
+              <span class="border-4 border-black bg-white text-black px-4 py-2 font-black uppercase tracking-[.12em] text-[10px]">
+                Click or Drop TSV File
+              </span>
+              <span class="text-xs text-gray-400">Amazon &ldquo;All Orders&rdquo; TSV export</span>
+            </button>
+
+            <div id="amazonPreviewPanel" class="hidden mt-4 p-4 border-4 border-orange-500 bg-orange-50">
+              <div class="flex items-start gap-3">
+                <div class="text-2xl">📦</div>
+                <div class="flex-1">
+                  <div class="font-black text-orange-800">Amazon Import Ready</div>
+                  <div class="mt-2 text-sm text-orange-700">
+                    <div>File: <span id="amzFileName" class="font-bold"></span></div>
+                    <div>Total rows: <span id="amzTotalRows" class="font-bold"></span></div>
+                    <div>Valid orders: <span id="amzValidCount" class="font-bold text-emerald-700"></span></div>
+                    <div id="amzCancelledWrap" class="hidden">Cancelled: <span id="amzCancelledCount" class="font-bold text-red-600"></span></div>
+                  </div>
+                  <div class="text-xs text-orange-600 mt-2">Inserts into orders_raw &amp; line_items_raw. Duplicates skipped automatically.</div>
+                  <div class="flex gap-2 mt-3">
+                    <button id="amzConfirmBtn" type="button"
+                      class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-1.5 rounded font-bold text-sm transition-colors">
+                      ✓ Confirm Import
+                    </button>
+                    <button id="amzCancelBtn" type="button"
+                      class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-1.5 rounded font-bold text-sm transition-colors">
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div id="amazonResultPanel" class="hidden mt-4 p-4 border-4 border-emerald-500 bg-emerald-50">
+              <div class="flex items-start gap-3">
+                <div class="text-2xl">✅</div>
+                <div class="flex-1">
+                  <div class="font-black text-emerald-800">Amazon Import Complete</div>
+                  <div class="grid grid-cols-2 gap-3 mt-2 text-sm">
+                    <div><span class="text-emerald-600">Orders:</span> <span id="amzOrdersCount" class="font-bold">0</span></div>
+                    <div><span class="text-emerald-600">Line Items:</span> <span id="amzLineItemsCount" class="font-bold">0</span></div>
+                    <div><span class="text-emerald-600">Revenue:</span> <span id="amzRevenue" class="font-bold">$0</span></div>
+                    <div><span class="text-gray-500">Skipped:</span> <span id="amzSkippedCount" class="font-bold">0</span></div>
+                  </div>
+                  <div id="amzBreakdownWrap" class="mt-2 text-xs text-emerald-700"></div>
+                  <div id="amzUnmappedWrap" class="hidden mt-2 text-xs text-amber-700"></div>
+                </div>
+                <button id="amzResultClose" type="button"
+                  class="text-emerald-600 hover:text-emerald-800 text-lg font-bold flex-shrink-0">×</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- Table -->
     <section id="tableWrap" class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">

@@ -3,6 +3,7 @@
 export const els = {
   // controls
   searchInput: document.getElementById("searchInput"),
+  btnSearchClear: document.getElementById("btnSearchClear"),
   statusFilter: document.getElementById("statusFilter"),
   dateFrom: document.getElementById("dateFrom"),
   dateTo: document.getElementById("dateTo"),
@@ -48,6 +49,17 @@ export const els = {
 
   // review filter
   reviewFilter: document.getElementById("reviewFilter"),
+
+  // Export dropdown
+  btnExportDropdown: document.getElementById("btnExportDropdown"),
+  exportDropdownPanel: document.getElementById("exportDropdownPanel"),
+
+  // Filter toggle + bottom sheet
+  btnFilterToggle: document.getElementById("btnFilterToggle"),
+  filterSheet: document.getElementById("filterSheet"),
+
+  // Amazon Import modal
+  amazonImportModal: document.getElementById("amazonImportModal"),
 
   // modal
   modal: document.getElementById("modal"),

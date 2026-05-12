@@ -17,6 +17,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   await initAdminNav("Orders");
   initFooter();
 
+  // Set sticky toolbar top to match admin nav height
+  requestAnimationFrame(() => {
+    const navMount = document.getElementById('kkAdminNavMount');
+    const toolbar = document.getElementById('toolbar');
+    if (navMount && toolbar) toolbar.style.top = `${navMount.offsetHeight}px`;
+  });
+
   // Defaults — check URL for ?q= search param (used by admin reviews order links)
   const urlQ = new URLSearchParams(window.location.search).get("q") || "";
   els.searchInput.value = urlQ;
@@ -896,8 +903,14 @@ function wireEvents() {
 
       if (els.amazonResultPanel) els.amazonResultPanel.classList.remove("hidden");
 
+      // Keep modal open so user can see the result; it auto-hides after 15s
+      if (els.amazonImportModal) els.amazonImportModal.classList.remove("hidden");
+
       // auto-hide after 15s
-      setTimeout(() => els.amazonResultPanel?.classList.add("hidden"), 15000);
+      setTimeout(() => {
+        els.amazonResultPanel?.classList.add("hidden");
+        els.amazonImportModal?.classList.add("hidden");
+      }, 15000);
 
       // refresh the orders table
       await reload({ hard: true });
@@ -910,11 +923,29 @@ function wireEvents() {
     state.searchTimer = setTimeout(() => reload({ hard: true }), 250);
   });
 
-  // Filters
-  els.statusFilter.addEventListener("change", () => reload({ hard: true }));
-  els.dateFrom.addEventListener("change", () => reload({ hard: true }));
-  els.dateTo.addEventListener("change", () => reload({ hard: true }));
-  if (els.reviewFilter) els.reviewFilter.addEventListener("change", () => reload({ hard: true }));
+  // Search clear button
+  if (els.btnSearchClear) {
+    const updateSearchClearBtn = () => {
+      const hasValue = els.searchInput.value.length > 0;
+      els.btnSearchClear.classList.toggle('hidden', !hasValue);
+      const iconSearch = document.getElementById('iconSearch');
+      if (iconSearch) iconSearch.classList.toggle('hidden', hasValue);
+    };
+    els.searchInput.addEventListener('input', updateSearchClearBtn);
+    els.btnSearchClear.addEventListener('click', () => {
+      els.searchInput.value = '';
+      updateSearchClearBtn();
+      reload({ hard: true });
+    });
+    // Initialize (e.g. if URL has ?q= pre-filled)
+    updateSearchClearBtn();
+  }
+
+  // Filters — also update mobile badge count on change
+  els.statusFilter.addEventListener("change", () => { reload({ hard: true }); updateFilterBadge(); });
+  els.dateFrom.addEventListener("change", () => { reload({ hard: true }); updateFilterBadge(); });
+  els.dateTo.addEventListener("change", () => { reload({ hard: true }); updateFilterBadge(); });
+  if (els.reviewFilter) els.reviewFilter.addEventListener("change", () => { reload({ hard: true }); updateFilterBadge(); });
 
   // Manual refresh
   els.btnRefresh.addEventListener("click", () => reload({ hard: true }));
@@ -924,6 +955,7 @@ function wireEvents() {
 
   // Export Orders CSV
   els.btnExportShipReady.addEventListener("click", async () => {
+    els.exportDropdownPanel?.classList.add('hidden');
     try {
       setStatus("Preparing CSV…");
       const filters = readFilters();
@@ -935,6 +967,107 @@ function wireEvents() {
       setStatus(`Export failed: ${e?.message || e}`, true);
     }
   });
+
+  // ── Export dropdown toggle ────────────────────────────────────
+  if (els.btnExportDropdown && els.exportDropdownPanel) {
+    els.btnExportDropdown.addEventListener('click', (e) => {
+      e.stopPropagation();
+      els.exportDropdownPanel.classList.toggle('hidden');
+    });
+    document.addEventListener('click', () => {
+      els.exportDropdownPanel?.classList.add('hidden');
+    });
+  }
+
+  // ── Amazon Import modal ───────────────────────────────────────
+  const openAmazonImportModal = () => {
+    els.exportDropdownPanel?.classList.add('hidden');
+    els.amazonImportModal?.classList.remove('hidden');
+  };
+  const closeAmazonImportModal = () => {
+    els.amazonImportModal?.classList.add('hidden');
+  };
+  document.getElementById('btnAmazonImportOpen')?.addEventListener('click', openAmazonImportModal);
+  document.getElementById('btnAmazonImportModalClose')?.addEventListener('click', closeAmazonImportModal);
+  document.getElementById('amazonImportModalBackdrop')?.addEventListener('click', closeAmazonImportModal);
+
+  // Auto-open the modal on import complete so result panel shows
+  // (already handled in onImported — just keep it visible in the modal)
+
+  // ── Mobile Filter Bottom Sheet ────────────────────────────────
+  function updateFilterBadge() {
+    if (!els.btnFilterToggle) return;
+    const badge = document.getElementById('filterBadge');
+    if (!badge) return;
+    const count = [
+      els.statusFilter?.value,
+      els.reviewFilter?.value,
+      els.dateFrom?.value,
+      els.dateTo?.value,
+    ].filter(Boolean).length;
+    badge.textContent = String(count);
+    badge.classList.toggle('hidden', count === 0);
+  }
+
+  const closeFilterSheet = () => {
+    els.filterSheet?.classList.add('hidden');
+    document.body.classList.remove('overflow-hidden');
+  };
+
+  if (els.btnFilterToggle && els.filterSheet) {
+    els.btnFilterToggle.addEventListener('click', () => {
+      // Sync current toolbar values into the sheet inputs
+      const mfsStatus = document.getElementById('mfsStatus');
+      const mfsReview = document.getElementById('mfsReview');
+      const mfsDateFrom = document.getElementById('mfsDateFrom');
+      const mfsDateTo = document.getElementById('mfsDateTo');
+      if (mfsStatus) mfsStatus.value = els.statusFilter?.value || '';
+      if (mfsReview) mfsReview.value = els.reviewFilter?.value || '';
+      if (mfsDateFrom) mfsDateFrom.value = els.dateFrom?.value || '';
+      if (mfsDateTo) mfsDateTo.value = els.dateTo?.value || '';
+      els.filterSheet.classList.remove('hidden');
+      document.body.classList.add('overflow-hidden');
+    });
+  }
+
+  document.getElementById('btnFilterSheetClose')?.addEventListener('click', closeFilterSheet);
+  document.getElementById('filterSheetBackdrop')?.addEventListener('click', closeFilterSheet);
+
+  document.getElementById('btnFilterApply')?.addEventListener('click', () => {
+    const mfsStatus = document.getElementById('mfsStatus');
+    const mfsReview = document.getElementById('mfsReview');
+    const mfsDateFrom = document.getElementById('mfsDateFrom');
+    const mfsDateTo = document.getElementById('mfsDateTo');
+    if (mfsStatus && els.statusFilter) els.statusFilter.value = mfsStatus.value;
+    if (mfsReview && els.reviewFilter) els.reviewFilter.value = mfsReview.value;
+    if (mfsDateFrom && els.dateFrom) els.dateFrom.value = mfsDateFrom.value;
+    if (mfsDateTo && els.dateTo) els.dateTo.value = mfsDateTo.value;
+    closeFilterSheet();
+    reload({ hard: true });
+    updateFilterBadge();
+  });
+
+  document.getElementById('btnFilterClearAll')?.addEventListener('click', () => {
+    if (els.statusFilter) els.statusFilter.value = '';
+    if (els.reviewFilter) els.reviewFilter.value = '';
+    if (els.dateFrom) els.dateFrom.value = '';
+    if (els.dateTo) els.dateTo.value = '';
+    ['mfsStatus', 'mfsReview', 'mfsDateFrom', 'mfsDateTo'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    closeFilterSheet();
+    reload({ hard: true });
+    updateFilterBadge();
+  });
+
+  document.getElementById('btnRefreshMobile')?.addEventListener('click', () => {
+    closeFilterSheet();
+    reload({ hard: true });
+  });
+
+  // Initialize badge on load (handles URL ?q= pre-fill or other restored state)
+  updateFilterBadge();
 }
 
 function readFilters() {
@@ -959,10 +1092,17 @@ async function updateKpisServer() {
     if (els.kpiOrders) els.kpiOrders.textContent = String(k?.orders_count ?? 0);
     if (els.kpiRevenue) els.kpiRevenue.textContent = moneyFromCents(k?.revenue_cents ?? 0);
     if (els.kpiProfit) els.kpiProfit.textContent = moneyFromCents(k?.profit_cents ?? 0);
-    if (els.kpiUnfulfilled) els.kpiUnfulfilled.textContent = String(k?.unfulfilled_count ?? 0);
+    if (els.kpiUnfulfilled) {
+      const unfulfilled = Number(k?.unfulfilled_count ?? 0);
+      els.kpiUnfulfilled.textContent = String(unfulfilled);
+      els.kpiUnfulfilled.classList.remove('text-amber-600', 'text-gray-400');
+      els.kpiUnfulfilled.classList.add(unfulfilled > 0 ? 'text-amber-600' : 'text-gray-400');
+    }
     if (els.kpiRefunded) {
       const cnt = Number(k?.refunded_count ?? 0);
       els.kpiRefunded.textContent = cnt > 0 ? `${cnt} (${moneyFromCents(k?.refunded_cents ?? 0)})` : '0';
+      els.kpiRefunded.classList.remove('text-red-500', 'text-gray-400');
+      els.kpiRefunded.classList.add(cnt > 0 ? 'text-red-500' : 'text-gray-400');
     }
   } catch (e) {
     console.error(e);
@@ -980,6 +1120,7 @@ async function reload({ hard = false } = {}) {
       els.ordersRows.innerHTML = "";
       setCountLabel(0, null);
       els.loadMoreStatus.textContent = "";
+      els.btnLoadMore.classList.remove('hidden');
     }
 
     // ✅ Refresh KPIs for the full matching result set
@@ -998,6 +1139,7 @@ async function loadMore({ reset = false } = {}) {
   try {
     setStatus("Loading…");
     els.btnLoadMore.disabled = true;
+    els.btnLoadMore.innerHTML = '<svg class="animate-spin inline w-4 h-4 mr-1 -mt-0.5" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg> Loading…';
 
     const filters = readFilters();
 
@@ -1024,11 +1166,13 @@ async function loadMore({ reset = false } = {}) {
     setCountLabel(state.rows.length, state.totalCount);
 
     if (!state.hasMore) {
-      els.loadMoreStatus.textContent = "End of results.";
+      els.loadMoreStatus.textContent = `All ${state.rows.length} orders loaded`;
+      els.btnLoadMore.classList.add('hidden');
     } else {
       els.loadMoreStatus.textContent =
-        `Loaded ${state.rows.length}` +
-        (state.totalCount != null ? ` / ${state.totalCount}` : "");
+        `Showing ${state.rows.length}` +
+        (state.totalCount != null ? ` of ${state.totalCount} orders` : ' orders');
+      els.btnLoadMore.classList.remove('hidden');
     }
 
     setStatus("✓");
@@ -1036,6 +1180,7 @@ async function loadMore({ reset = false } = {}) {
     console.error(e);
     setStatus(String(e?.message || e), true);
   } finally {
+    els.btnLoadMore.innerHTML = 'Load More ↓';
     els.btnLoadMore.disabled = !state.hasMore;
   }
 }
