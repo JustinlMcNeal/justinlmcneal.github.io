@@ -448,218 +448,61 @@
 
   </main>
 
-  <!-- EDIT MODAL -->
-  <div id="modal" class="hidden fixed inset-0 z-[200]" aria-hidden="true">
+  <!-- ORDER WORKSPACE -->
+  <div id="orderWorkspace" class="hidden fixed inset-0 z-[200]" aria-hidden="true">
     <!-- Backdrop -->
-    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" data-modal-close></div>
+    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" data-ws-backdrop></div>
 
-    <!-- Stage -->
-    <div class="relative h-full w-full overflow-y-auto">
-      <div class="min-h-full flex items-end sm:items-center justify-center p-0 sm:p-6">
-        <!-- Card -->
-        <div class="w-full sm:max-w-3xl bg-white border-0 sm:border-4 border-black shadow-none sm:shadow-[8px_8px_0_0_rgba(0,0,0,0.1)] min-h-screen sm:min-h-0">
-          <!-- Head -->
-          <div class="sticky top-0 z-10 flex items-center justify-between gap-3 p-3 sm:p-5 border-b-4 border-black bg-white">
-            <div class="min-w-0">
-              <div id="modalKicker" class="inline-block bg-blue-500 text-white px-2 py-0.5 text-[8px] sm:text-[9px] font-black uppercase tracking-[.2em] mb-1">
-                Order
+    <!-- Stage: flex column, full viewport height -->
+    <div class="relative h-full w-full flex items-end sm:items-center justify-center p-0 sm:p-6">
+      <!-- Card: flex column, full height mobile / bounded desktop -->
+      <div id="wsCard"
+        class="relative flex flex-col w-full h-full sm:h-auto sm:max-h-[90vh] sm:max-w-4xl
+               bg-white border-0 sm:border-4 border-black
+               shadow-none sm:shadow-[8px_8px_0_0_rgba(0,0,0,0.1)]">
+
+        <!-- HEADER -->
+        <div id="wsHeader" class="flex-shrink-0 bg-white border-b-4 border-black p-3 sm:p-5 z-10">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span id="wsKicker"></span>
+                <span id="wsStatusBadge"></span>
               </div>
-              <h3 id="modalTitle" class="text-lg sm:text-2xl font-black tracking-tight truncate">
-                Edit Shipment
-              </h3>
-              <div id="modalSub" class="text-xs text-gray-500">Update label + tracking info</div>
+              <h2 id="wsTitle" class="text-lg sm:text-2xl font-black tracking-tight truncate mt-1">Loading…</h2>
+              <div id="wsSubtitle" class="text-xs text-gray-500 mt-0.5 truncate"></div>
             </div>
-
-            <button
-              id="btnClose"
-              type="button"
+            <button id="btnWsClose" type="button"
               class="border-4 border-black bg-white w-10 h-10 flex items-center justify-center font-black text-lg
                      hover:bg-black hover:text-white transition-colors flex-shrink-0"
-              aria-label="Close"
-            >
-              ✕
-            </button>
-          </div>
-
-          <!-- Body -->
-          <div class="p-3 sm:p-6 space-y-6 pb-24 sm:pb-6">
-            <!-- Message -->
-            <div id="modalMsg" class="hidden p-3 border-4 border-red-300 bg-red-50 text-red-700 text-sm"></div>
-
-            <!-- Identifiers Section -->
-            <section>
-              <div class="text-[11px] font-black uppercase tracking-[.25em] flex items-center gap-2 mb-4">
-                <span class="w-5 h-5 bg-black text-white text-[10px] flex items-center justify-center">1</span>
-                Order Info
-              </div>
-
-              <div class="grid sm:grid-cols-2 gap-4">
-                <div>
-                  <label for="fSessionId" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
-                    Stripe Session ID
-                  </label>
-                  <input id="fSessionId" type="text" readonly class="w-full border-[4px] border-gray-300 bg-gray-50 px-3 py-2 text-sm outline-none" />
-                </div>
-
-                <div>
-                  <label for="fKkOrderId" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
-                    KK Order ID
-                  </label>
-                  <input id="fKkOrderId" type="text" readonly class="w-full border-[4px] border-gray-300 bg-gray-50 px-3 py-2 text-sm outline-none" />
-                </div>
-              </div>
-            </section>
-
-            <div class="border-t-4 border-gray-100"></div>
-
-            <!-- Shipment Section -->
-            <section>
-              <div class="text-[11px] font-black uppercase tracking-[.25em] flex items-center gap-2 mb-4">
-                <span class="w-5 h-5 bg-black text-white text-[10px] flex items-center justify-center">2</span>
-                Shipment Details
-              </div>
-
-              <div class="grid sm:grid-cols-2 gap-4">
-                <div>
-                  <label for="fLabelStatus" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
-                    Label Status
-                  </label>
-                  <select id="fLabelStatus" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none bg-white focus:border-kkpink transition-colors">
-                    <option value="pending">Pending</option>
-                    <option value="label_purchased">Label Purchased</option>
-                    <option value="shipped">Shipped</option>
-                    <option value="delivered">Delivered</option>
-                    <option value="voided">Voided</option>
-                    <option value="returned">Returned</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label for="fTrackingNumber" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
-                    Tracking Number
-                  </label>
-                  <input id="fTrackingNumber" type="text" placeholder="9400..." class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors" />
-                </div>
-
-                <div>
-                  <label for="fCarrier" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
-                    Carrier
-                  </label>
-                  <input id="fCarrier" type="text" placeholder="USPS / UPS / FedEx" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors" />
-                </div>
-
-                <div>
-                  <label for="fService" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
-                    Service
-                  </label>
-                  <input id="fService" type="text" placeholder="Ground Advantage, Priority..." class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors" />
-                </div>
-
-                <div>
-                  <label for="fBatchId" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
-                    Batch ID
-                  </label>
-                  <input id="fBatchId" type="text" placeholder="2025-12-25-A" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors" />
-                </div>
-
-                <div>
-                  <label for="fPrintedAt" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
-                    Printed At
-                  </label>
-                  <input id="fPrintedAt" type="datetime-local" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors" />
-                </div>
-
-                <div>
-                  <label for="fLabelCost" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
-                    Label Cost ($)
-                  </label>
-                  <input id="fLabelCost" type="number" step="0.01" placeholder="4.23" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors" />
-                </div>
-
-                <div>
-                  <label for="fPackageWeightGFinal" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
-                    Final Package Weight (g)
-                  </label>
-                  <input id="fPackageWeightGFinal" type="number" step="1" placeholder="320" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors" />
-                </div>
-
-                <div class="sm:col-span-2">
-                  <label for="fPirateShipShipmentId" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
-                    Pirate Ship Shipment ID
-                  </label>
-                  <input id="fPirateShipShipmentId" type="text" placeholder="pship_..." class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors" />
-                </div>
-
-                <div class="sm:col-span-2">
-                  <label for="fNotes" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
-                    Notes
-                  </label>
-                  <textarea id="fNotes" rows="3" placeholder="Any fulfillment notes..." class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none resize-y focus:border-kkpink transition-colors"></textarea>
-                </div>
-              </div>
-            </section>
-          </div>
-
-          <!-- Foot -->
-          <div class="sticky bottom-0 flex items-center justify-end gap-3 p-3 sm:p-5 border-t-4 border-black bg-gray-50">
-            <button
-              id="btnCancel"
-              type="button"
-              class="border-4 border-black bg-white text-black px-4 py-2 font-black uppercase tracking-[.12em] text-xs
-                     hover:bg-gray-100 transition-all"
-            >
-              Cancel
-            </button>
-            <button
-              id="btnSave"
-              type="button"
-              class="border-4 border-black bg-black text-white px-6 py-2 font-black uppercase tracking-[.12em] text-xs
-                     hover:bg-kkpink hover:border-kkpink hover:text-black transition-all"
-            >
-              Save
-            </button>
+              aria-label="Close">✕</button>
           </div>
         </div>
-      </div>
-    </div>
-  </div>
 
-  <!-- VIEW DETAILS MODAL -->
-  <div id="viewModal" class="hidden fixed inset-0 z-[200]" aria-hidden="true">
-    <!-- Backdrop -->
-    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" data-view-modal-close></div>
+        <!-- TAB BAR -->
+        <div id="wsTabBar"
+          class="flex-shrink-0 bg-white border-b-2 border-gray-200 flex overflow-x-auto z-10">
+          <!-- JS renders tab buttons -->
+        </div>
 
-    <!-- Stage -->
-    <div class="relative h-full w-full overflow-y-auto">
-      <div class="min-h-full flex items-end sm:items-center justify-center p-0 sm:p-6">
-        <!-- Card -->
-        <div class="w-full sm:max-w-4xl bg-white border-0 sm:border-4 border-black shadow-none sm:shadow-[8px_8px_0_0_rgba(0,0,0,0.1)] min-h-screen sm:min-h-0 sm:max-h-[90vh] overflow-y-auto">
-          <!-- Head -->
-          <div class="sticky top-0 z-10 flex items-center justify-between gap-3 p-3 sm:p-5 border-b-4 border-black bg-white">
-            <div class="min-w-0">
-              <div class="inline-block bg-green-500 text-white px-2 py-0.5 text-[8px] sm:text-[9px] font-black uppercase tracking-[.2em] mb-1">
-                Order Details
-              </div>
-              <h3 id="viewModalTitle" class="text-lg sm:text-2xl font-black tracking-tight truncate">
-                Loading...
-              </h3>
-            </div>
+        <!-- BODY (scrollable) -->
+        <div id="wsBody" class="flex-1 overflow-y-auto min-h-0">
+          <!-- tab content injected by JS -->
+        </div>
 
-            <button
-              id="btnViewClose"
-              type="button"
-              class="border-4 border-black bg-white w-10 h-10 flex items-center justify-center font-black text-lg
-                     hover:bg-black hover:text-white transition-colors flex-shrink-0"
-              aria-label="Close"
-            >
-              ✕
-            </button>
-          </div>
-
-          <!-- Body -->
-          <div id="viewModalBody" class="p-3 sm:p-6 space-y-6">
-            <div class="text-center py-8 text-gray-500">Loading order details...</div>
-          </div>
+        <!-- FOOTER (Fulfillment tab only) -->
+        <div id="wsFooter"
+          class="hidden flex-shrink-0 bg-gray-50 border-t-4 border-black p-3 sm:p-4 flex items-center justify-between gap-3">
+          <button id="btnWsCancel" type="button"
+            class="border-4 border-black bg-white text-black px-4 py-2 font-black uppercase tracking-[.12em] text-xs
+                   hover:bg-gray-100 transition-all">
+            Cancel
+          </button>
+          <button id="btnWsSave" type="button"
+            class="border-4 border-black bg-black text-white px-6 py-2 font-black uppercase tracking-[.12em] text-xs
+                   hover:bg-kkpink hover:border-kkpink hover:text-black transition-all">
+            Save Changes
+          </button>
         </div>
       </div>
     </div>
@@ -667,26 +510,6 @@
 
   <!-- Footer mount -->
   <div id="kkFooterMount"></div>
-
-  <!-- Click backdrop to close -->
-  <script>
-    (function () {
-      const modal = document.getElementById("modal");
-      const backdrop = modal?.querySelector("[data-modal-close]");
-      const closeBtn = document.getElementById("btnClose");
-      if (!modal || !backdrop || !closeBtn) return;
-      backdrop.addEventListener("click", () => closeBtn.click());
-    })();
-    
-    // View modal backdrop
-    (function () {
-      const modal = document.getElementById("viewModal");
-      const backdrop = modal?.querySelector("[data-view-modal-close]");
-      const closeBtn = document.getElementById("btnViewClose");
-      if (!modal || !backdrop || !closeBtn) return;
-      backdrop.addEventListener("click", () => closeBtn.click());
-    })();
-  </script>
 
   <script type="module" src="/js/admin/lineItemsOrders/index.js"></script>
 <script type="module" src="/js/shared/pwa.js"></script>

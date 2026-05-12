@@ -61,8 +61,13 @@ export const els = {
   // Amazon Import modal
   amazonImportModal: document.getElementById("amazonImportModal"),
 
-  // modal
-  modal: document.getElementById("modal"),
+  // Order Workspace
+  orderWorkspace: document.getElementById("orderWorkspace"),
+  wsBody: document.getElementById("wsBody"),
+  wsFooter: document.getElementById("wsFooter"),
+  btnWsClose: document.getElementById("btnWsClose"),
+  btnWsSave: document.getElementById("btnWsSave"),
+  btnWsCancel: document.getElementById("btnWsCancel"),
 };
 
 export function wireDomHelpers() {
