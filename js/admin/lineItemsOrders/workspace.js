@@ -55,7 +55,9 @@ let _onSaved = null;
 let _currentRow = null;
 let _currentTab = "overview";
 let _wsDirty = false;
-let _detail = null; // { order, lineItems, shipment }
+let _detail = null;       // { order, lineItems, shipment }
+let _focusTrigger = null; // element to restore focus to on close
+let _presetsCache = null; // package presets — cached for session lifetime
 
 const STATUS_COLORS = {
   pending: "bg-amber-500",
@@ -85,9 +87,12 @@ export function initWorkspace({ onSaved } = {}) {
     ?.addEventListener("click", _safeClose);
 
   document.addEventListener("keydown", (e) => {
-    if (e.key !== "Escape") return;
-    const ws = document.getElementById("orderWorkspace");
-    if (ws && !ws.classList.contains("hidden")) _safeClose();
+    if (e.key === "Escape") {
+      const ws = document.getElementById("orderWorkspace");
+      if (ws && !ws.classList.contains("hidden")) _safeClose();
+    } else if (e.key === "Tab") {
+      _trapFocus(e);
+    }
   });
 }
 
@@ -99,6 +104,10 @@ export async function openWorkspace(row, { tab = "overview" } = {}) {
   _detail = null;
 
   const ws = document.getElementById("orderWorkspace");
+  // Capture triggering element — only on initial open, not internal re-renders
+  if (ws?.classList.contains("hidden")) {
+    _focusTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  }
   ws?.classList.remove("hidden");
   ws?.removeAttribute("aria-hidden");
   document.body.classList.add("overflow-hidden");
@@ -114,6 +123,7 @@ export async function openWorkspace(row, { tab = "overview" } = {}) {
   try {
     _detail = await fetchOrderDetails(row.stripe_checkout_session_id);
     _renderTabBody(tab);
+    requestAnimationFrame(() => document.getElementById("btnWsClose")?.focus());
   } catch (err) {
     console.error(err);
     if (wsBody)
@@ -128,6 +138,8 @@ export function closeWorkspace() {
   ws?.classList.add("hidden");
   ws?.setAttribute("aria-hidden", "true");
   document.body.classList.remove("overflow-hidden");
+  try { _focusTrigger?.focus(); } catch (_) {}
+  _focusTrigger = null;
   _currentRow = null;
   _detail = null;
   _wsDirty = false;
@@ -1033,6 +1045,42 @@ function _safeClose() {
   closeWorkspace();
 }
 
+// ── focus trap ────────────────────────────────────────────────
+function _trapFocus(e) {
+  const ws = document.getElementById("orderWorkspace");
+  if (!ws || ws.classList.contains("hidden")) return;
+
+  const focusable = Array.from(
+    ws.querySelectorAll(
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    )
+  ).filter((el) => el.offsetParent !== null);
+
+  if (focusable.length === 0) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+
+  if (e.shiftKey) {
+    if (document.activeElement === first || !ws.contains(document.activeElement)) {
+      e.preventDefault();
+      last.focus();
+    }
+  } else {
+    if (document.activeElement === last || !ws.contains(document.activeElement)) {
+      e.preventDefault();
+      first.focus();
+    }
+  }
+}
+
+// ── dirty-state guard for workspace-refreshing actions ────────────────
+function _warnIfDirty(actionLabel) {
+  if (!_wsDirty) return true;
+  return confirm(
+    `⚠ You have unsaved shipment edits that will be discarded.\n\nContinue with ${actionLabel}?`
+  );
+}
+
 // ── wire refund buttons ───────────────────────────────────────────
 function _wireRefundButtons(container, order) {
   const btnFull = container.querySelector("[data-refund-full]");
@@ -1057,6 +1105,7 @@ function _wireRefundButtons(container, order) {
     btn.addEventListener("click", async () => {
       const reason = btn.getAttribute("data-set-reason");
       if (reason === order.refund_reason) return;
+      if (!_warnIfDirty("changing the refund reason")) return;
       btn.textContent = "Saving…";
       try {
         await updateRefundReason(order.stripe_checkout_session_id, reason);
@@ -1075,7 +1124,7 @@ function _wireRefundButtons(container, order) {
       const dollars = (remainingCents / 100).toFixed(2);
       if (
         !confirm(
-          `Issue a FULL refund of $${dollars} for order ${order.kk_order_id || order.stripe_checkout_session_id}?\n\nReason: ${reason || order.refund_reason || "—"}\n\nThis cannot be undone.`
+          `Issue a FULL refund of $${dollars} for order ${order.kk_order_id || order.stripe_checkout_session_id}?\n\nReason: ${reason || order.refund_reason || "—"}\n\n${_wsDirty ? "⚠ Unsaved shipment edits will be lost.\n\n" : ""}This cannot be undone.`
         )
       )
         return;
@@ -1118,7 +1167,7 @@ function _wireRefundButtons(container, order) {
       }
       if (
         !confirm(
-          `Issue a partial refund of $${val.toFixed(2)} for order ${order.kk_order_id || order.stripe_checkout_session_id}?\n\nReason: ${reason || order.refund_reason || "—"}\n\nThis cannot be undone.`
+          `Issue a partial refund of $${val.toFixed(2)} for order ${order.kk_order_id || order.stripe_checkout_session_id}?\n\nReason: ${reason || order.refund_reason || "—"}\n\n${_wsDirty ? "⚠ Unsaved shipment edits will be lost.\n\n" : ""}This cannot be undone.`
         )
       )
         return;
@@ -1150,8 +1199,8 @@ async function _wireLabelButtons(container, order, shipment) {
   const presetSelect = container.querySelector("[data-preset-select]");
   if (presetSelect) {
     try {
-      const presets = await fetchPackagePresets();
-      presetSelect.innerHTML = presets
+      if (!_presetsCache) _presetsCache = await fetchPackagePresets();
+      presetSelect.innerHTML = _presetsCache
         .map(
           (p) =>
             `<option value="${p.id}" ${p.is_default ? "selected" : ""}>${p.name} (${p.length_in}×${p.width_in}${p.height_in ? "×" + p.height_in : ""})</option>`
@@ -1159,6 +1208,7 @@ async function _wireLabelButtons(container, order, shipment) {
         .join("");
     } catch {
       presetSelect.innerHTML = '<option value="">Failed to load</option>';
+      _presetsCache = null; // allow retry on next open
     }
   }
 
@@ -1166,6 +1216,7 @@ async function _wireLabelButtons(container, order, shipment) {
   if (btnBuy) {
     btnBuy.addEventListener("click", async () => {
       const presetId = presetSelect?.value || null;
+      if (!_warnIfDirty("buying this label")) return;
       btnBuy.disabled = true;
       btnBuy.textContent = "⏳ Buying…";
       try {
@@ -1237,7 +1288,7 @@ async function _wireLabelButtons(container, order, shipment) {
     btnVoid.addEventListener("click", async () => {
       if (
         !confirm(
-          `Void label for order ${order.kk_order_id || sessionId}?\n\nTracking: ${shipment.tracking_number}\n\nThis will request a refund from the carrier.`
+          `Void label for order ${order.kk_order_id || sessionId}?\n\nTracking: ${shipment.tracking_number}\n\n${_wsDirty ? "⚠ Unsaved shipment edits will be lost.\n\n" : ""}This will request a refund from the carrier.`
         )
       )
         return;
