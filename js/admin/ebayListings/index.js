@@ -32,6 +32,7 @@ import {
 
 import { renderImageStrip, showGalleryPicker } from "./images.js";
 import { addVolTier, getVolTiers, setVolTiers } from "./volPricing.js";
+import { buildEstimate, renderPreview } from "./profitPreview.js";
 
 // ── Init Supabase ─────────────────────────────────────────────
 const supabase    = getSupabaseClient();
@@ -185,7 +186,7 @@ function wsChips(p) {
 async function loadProducts() {
   const { data, error } = await supabase
     .from("products")
-    .select("id, code, name, slug, price, weight_g, catalog_image_url, catalog_hover_url, primary_image_url, is_active, ebay_sku, ebay_offer_id, ebay_listing_id, ebay_status, ebay_category_id, ebay_price_cents, ebay_item_group_key, ebay_volume_promo_id, ebay_store_category, product_gallery_images(url, position, is_active), product_variants(id, option_name, option_value, stock, preview_image_url, sort_order, is_active)")
+    .select("id, code, name, slug, price, weight_g, unit_cost, catalog_image_url, catalog_hover_url, primary_image_url, is_active, ebay_sku, ebay_offer_id, ebay_listing_id, ebay_status, ebay_category_id, ebay_price_cents, ebay_item_group_key, ebay_volume_promo_id, ebay_store_category, product_gallery_images(url, position, is_active), product_variants(id, option_name, option_value, stock, preview_image_url, sort_order, is_active)")
     .order("code");
 
   if (error) {
@@ -667,6 +668,8 @@ window.openPush = async function openPush(code) {
       showStatus("Could not load previous draft — starting from Step 1.", true);
     }
   }
+
+  refreshPushPreview();
 };
 
 // ── Edit Modal ────────────────────────────────────────────────
@@ -897,6 +900,7 @@ window.openEdit = async function openEdit(code) {
 
     document.getElementById("editLoading").classList.add("hidden");
     document.getElementById("editForm").classList.remove("hidden");
+    refreshEditPreview();
   } catch (e) {
     document.getElementById("editLoading").textContent = "❌ " + e.message;
   }
@@ -1055,6 +1059,34 @@ function renderMigrateResults(items) {
   panel.classList.remove("hidden");
 }
 
+// ── Profit Preview Helpers (Phase 2) ───────────────────────────────────────
+
+function refreshPushPreview() {
+  if (!currentProduct) return;
+  const priceVal = parseFloat(document.getElementById("modalPrice")?.value);
+  const ozVal    = parseFloat(document.getElementById("modalWeightOz")?.value);
+  renderPreview("modalProfitPreview", buildEstimate({
+    priceCents:   isNaN(priceVal) ? null : Math.round(priceVal * 100),
+    kkPriceCents: currentProduct.price      ? Math.round(Number(currentProduct.price) * 100) : null,
+    unitCostUsd:  currentProduct.unit_cost != null ? Number(currentProduct.unit_cost) : null,
+    weightG:      currentProduct.weight_g  ?? null,
+    labelWeightG: isNaN(ozVal) ? null : Math.round(ozVal * 28.3495),
+  }));
+}
+
+function refreshEditPreview() {
+  if (!editProduct) return;
+  const priceVal = parseFloat(document.getElementById("editPrice")?.value);
+  const ozVal    = parseFloat(document.getElementById("editWeightOz")?.value);
+  renderPreview("editProfitPreview", buildEstimate({
+    priceCents:   isNaN(priceVal) ? null : Math.round(priceVal * 100),
+    kkPriceCents: editProduct.price      ? Math.round(Number(editProduct.price) * 100) : null,
+    unitCostUsd:  editProduct.unit_cost != null ? Number(editProduct.unit_cost) : null,
+    weightG:      editProduct.weight_g  ?? null,
+    labelWeightG: isNaN(ozVal) ? null : Math.round(ozVal * 28.3495),
+  }));
+}
+
 // ── Event Listeners ────────────────────────────────────────────
 
 // Search
@@ -1082,6 +1114,10 @@ document.getElementById("btnCloseModal").addEventListener("click", () => {
   document.getElementById("modalImagePicker").classList.add("hidden");
   currentProduct = null;
 });
+
+// Push Modal — profit preview live update
+document.getElementById("modalPrice").addEventListener("input", refreshPushPreview);
+document.getElementById("modalWeightOz").addEventListener("input", refreshPushPreview);
 
 // Push Modal — Add image
 document.getElementById("btnAddImgPush").addEventListener("click", () => {
@@ -1559,6 +1595,10 @@ document.getElementById("btnCloseEdit").addEventListener("click", () => {
   document.getElementById("editImagePicker").classList.add("hidden");
   editProduct = null;
 });
+
+// Edit Modal — profit preview live update
+document.getElementById("editPrice").addEventListener("input", refreshEditPreview);
+document.getElementById("editWeightOz").addEventListener("input", refreshEditPreview);
 
 // Edit Modal — Add image
 document.getElementById("btnAddImgEdit").addEventListener("click", () => {

@@ -93,3 +93,27 @@
 .ws-chip-date  { background: #f3f4f6; color: #374151; }
 .ws-chip-promo { background: #ede9fe; color: #6d28d9; }
 .ws-chip-issue { background: #fee2e2; color: #991b1b; cursor: help; }
+
+/* ── Profit Preview Panel (Phase 2) ──────────────────────────────────────────── */
+.profit-preview { background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; font-size: 11px; margin-bottom: 8px; }
+.pp-header { font-weight: 800; font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: #64748b; margin-bottom: 8px; }
+.pp-rows { display: flex; flex-direction: column; gap: 3px; }
+.pp-row { display: flex; justify-content: space-between; align-items: baseline; }
+.pp-hr { border-bottom: 1px solid #e2e8f0; margin: 3px 0; }
+.pp-val { font-weight: 700; font-family: monospace; }
+.pp-ref { color: #64748b; }
+.pp-cost { color: #64748b; }
+.pp-ok   { color: #166534; }
+.pp-low  { color: #92400e; }
+.pp-warn { color: #b45309; }
+.pp-neg  { color: #991b1b; }
+.pp-unknown { color: #9ca3af; }
+.pp-row-profit span:first-child { font-weight: 700; }
+.pp-warnings { margin-bottom: 8px; }
+.pp-warning { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; border-radius: 4px; padding: 4px 8px; margin-bottom: 3px; font-size: 10px; }
+.pp-note { font-size: 9px; color: #64748b; margin-top: 4px; }
+.pp-empty { font-size: 10px; color: #9ca3af; text-align: center; padding: 8px 0; }
+.pp-assumptions { margin-top: 8px; font-size: 9px; color: #94a3b8; }
+.pp-assumptions summary { cursor: pointer; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; }
+.pp-assumptions ul { margin: 4px 0 0 12px; padding: 0; }
+.pp-assumptions li { margin-bottom: 1px; }
