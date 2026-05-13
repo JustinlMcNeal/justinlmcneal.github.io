@@ -370,6 +370,11 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/verify-review-token/index.ts"
 
+[functions.sms-subscribe]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/sms-subscribe/index.ts"
+
 [functions.send-review-request]
 enabled = true
 verify_jwt = false
