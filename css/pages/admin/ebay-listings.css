@@ -135,3 +135,24 @@
 .health-warn     { background: #fed7aa; color: #9a3412; }
 .health-critical { background: #fee2e2; color: #991b1b; }
 .health-na       { background: #f3f4f6; color: #9ca3af; }
+
+/* ── Underpriced grid chip (Phase 5) ──────────────────────────────────────── */
+.ws-chip-underpriced { background: #fef3c7; color: #92400e; }
+
+/* ── Internal Price Reference Panel (Phase 5) ────────────────────────────── */
+.price-ref { background: #f0fdf4; border: 1.5px solid #bbf7d0; border-radius: 8px; padding: 10px 12px; font-size: 11px; margin-bottom: 8px; }
+.pr-header { font-weight: 800; font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: #166534; margin-bottom: 8px; }
+.pr-rows   { display: flex; flex-direction: column; gap: 3px; }
+.pr-row    { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.pr-label  { color: #374151; font-size: 10px; flex: 1; min-width: 0; }
+.pr-label em { font-style: normal; color: #64748b; }
+.pr-val    { font-weight: 700; font-family: monospace; white-space: nowrap; }
+.pr-hr     { border-bottom: 1px solid #bbf7d0; margin: 3px 0; }
+.pr-obs    { font-size: 9px; font-weight: 400; color: #64748b; margin-left: 2px; }
+.pr-dim    { color: #9ca3af; font-size: 10px; }
+.pr-warn   { color: #b45309; }
+.pr-warnings { margin-bottom: 6px; }
+.pr-warning  { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; border-radius: 4px; padding: 4px 8px; margin-bottom: 3px; font-size: 10px; }
+.pr-notes    { margin-top: 6px; }
+.pr-note-item { font-size: 9px; color: #64748b; }
+.pr-footer    { margin-top: 6px; font-size: 9px; color: #94a3b8; font-style: italic; }

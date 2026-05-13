@@ -35,6 +35,7 @@ import { addVolTier, getVolTiers, setVolTiers } from "./volPricing.js";
 import { buildEstimate, renderPreview } from "./profitPreview.js";
 import { computeHealth } from "./listingHealth.js";
 import { openSalesHistory, closeSalesHistory } from "./salesHistory.js";
+import { buildPriceRef, renderPriceRef, fetchSalesMetrics } from "./priceReference.js";
 
 // ── Init Supabase ─────────────────────────────────────────────
 const supabase    = getSupabaseClient();
@@ -59,6 +60,8 @@ let editAspects            = [];
 let cachedPolicies         = null;
 let bulkMode               = "price";
 let searchTimeout;
+let pushSalesMetrics = null;   // Phase 5: cached per push-modal session
+let editSalesMetrics = null;   // Phase 5: cached per edit-modal session
 
 // ── Edge Function Helper ──────────────────────────────────────
 async function callEdge(fnName, body) {
@@ -175,6 +178,17 @@ function wsChips(p, health = null) {
   }
   if (p.ebay_volume_promo_id) {
     chips.push(`<span class="ws-chip ws-chip-promo" title="Has volume promotion">PROMO</span>`);
+  }
+  // Phase 5: underpriced vs internal avg sold (only for active/draft, ≥2 obs)
+  const priceStatus = p.ebay_status || "not_listed";
+  if (["active", "draft"].includes(priceStatus)) {
+    const avgSold90d = ws.avg_sold_price_cents_90d;
+    const soldQty90d = ws.sold_qty_90d ?? 0;
+    if (p.ebay_price_cents && avgSold90d != null && soldQty90d >= 2 && p.ebay_price_cents < avgSold90d) {
+      const kkFmt  = `$${(p.ebay_price_cents / 100).toFixed(2)}`;
+      const avgFmt = `$${(avgSold90d / 100).toFixed(2)}`;
+      chips.push(`<span class="ws-chip ws-chip-underpriced" title="eBay price (${kkFmt}) is below recent avg sold (${avgFmt})">&#8595; avg</span>`);
+    }
   }
   const issues = health ? health.flags.length : (ws.issue_count ?? 0);
   if (issues > 0) {
@@ -708,6 +722,8 @@ window.openPush = async function openPush(code) {
   }
 
   refreshPushPreview();
+  pushSalesMetrics = null;
+  loadAndRenderPriceRef("modalPriceRef", currentProduct, "push");
 };
 
 // ── Edit Modal ────────────────────────────────────────────────
@@ -939,6 +955,8 @@ window.openEdit = async function openEdit(code) {
     document.getElementById("editLoading").classList.add("hidden");
     document.getElementById("editForm").classList.remove("hidden");
     refreshEditPreview();
+    editSalesMetrics = null;
+    loadAndRenderPriceRef("editPriceRef", editProduct, "edit");
   } catch (e) {
     document.getElementById("editLoading").textContent = "❌ " + e.message;
   }
@@ -1125,6 +1143,72 @@ function refreshEditPreview() {
   }));
 }
 
+// ── Price Reference Helpers (Phase 5) ─────────────────────────────────────────
+
+/** Re-render push modal price reference using the current price input value. */
+function refreshPushRef() {
+  if (!currentProduct) return;
+  const priceVal = parseFloat(document.getElementById("modalPrice")?.value);
+  const ref = buildPriceRef(
+    currentProduct,
+    pushSalesMetrics,
+    isNaN(priceVal) ? null : Math.round(priceVal * 100),
+  );
+  // loading=true only while metrics are still being fetched (pushSalesMetrics===null)
+  renderPriceRef("modalPriceRef", ref, pushSalesMetrics === null);
+}
+
+/** Re-render edit modal price reference using the current price input value. */
+function refreshEditRef() {
+  if (!editProduct) return;
+  const priceVal = parseFloat(document.getElementById("editPrice")?.value);
+  const ref = buildPriceRef(
+    editProduct,
+    editSalesMetrics,
+    isNaN(priceVal) ? null : Math.round(priceVal * 100),
+  );
+  renderPriceRef("editPriceRef", ref, editSalesMetrics === null);
+}
+
+/**
+ * Load sales metrics async, then re-render the price reference panel.
+ * Renders immediately with loading=true, then again with full data once fetched.
+ *
+ * @param {string} containerId — 'modalPriceRef' or 'editPriceRef'
+ * @param {object} product     — the product being opened
+ * @param {string} type        — 'push' or 'edit'
+ */
+async function loadAndRenderPriceRef(containerId, product, type) {
+  // Initial render — instant data only, loading=true for async range
+  const priceInput = document.getElementById(type === "push" ? "modalPrice" : "editPrice");
+  const priceVal0  = parseFloat(priceInput?.value);
+  const initRef    = buildPriceRef(
+    product,
+    null,
+    isNaN(priceVal0) ? null : Math.round(priceVal0 * 100),
+  );
+  renderPriceRef(containerId, initRef, true);
+
+  // Async fetch min/max from v_ebay_product_recent_sales
+  const metrics = await fetchSalesMetrics(product.code);
+  if (type === "push") pushSalesMetrics = metrics;
+  else                  editSalesMetrics = metrics;
+
+  // Guard: only update if the same product is still open
+  const stillActive = type === "push"
+    ? currentProduct?.code === product.code
+    : editProduct?.code    === product.code;
+  if (!stillActive) return;
+
+  const priceVal = parseFloat(priceInput?.value);
+  const fullRef  = buildPriceRef(
+    product,
+    metrics,
+    isNaN(priceVal) ? null : Math.round(priceVal * 100),
+  );
+  renderPriceRef(containerId, fullRef, false);
+}
+
 // ── Event Listeners ────────────────────────────────────────────
 
 // Search
@@ -1153,8 +1237,9 @@ document.getElementById("btnCloseModal").addEventListener("click", () => {
   currentProduct = null;
 });
 
-// Push Modal — profit preview live update
+// Push Modal — profit preview + price reference live update
 document.getElementById("modalPrice").addEventListener("input", refreshPushPreview);
+document.getElementById("modalPrice").addEventListener("input", refreshPushRef);
 document.getElementById("modalWeightOz").addEventListener("input", refreshPushPreview);
 
 // Push Modal — Add image
@@ -1634,8 +1719,9 @@ document.getElementById("btnCloseEdit").addEventListener("click", () => {
   editProduct = null;
 });
 
-// Edit Modal — profit preview live update
+// Edit Modal — profit preview + price reference live update
 document.getElementById("editPrice").addEventListener("input", refreshEditPreview);
+document.getElementById("editPrice").addEventListener("input", refreshEditRef);
 document.getElementById("editWeightOz").addEventListener("input", refreshEditPreview);
 
 // Sales History Modal — delegated from stable section parents (table and cards containers)
