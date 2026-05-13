@@ -33,6 +33,7 @@ import {
 import { renderImageStrip, showGalleryPicker } from "./images.js";
 import { addVolTier, getVolTiers, setVolTiers } from "./volPricing.js";
 import { buildEstimate, renderPreview } from "./profitPreview.js";
+import { computeHealth } from "./listingHealth.js";
 
 // ── Init Supabase ─────────────────────────────────────────────
 const supabase    = getSupabaseClient();
@@ -157,7 +158,8 @@ function formatRelativeDate(dtStr) {
 
 // Build compact workspace chip HTML for a product row/card.
 // Returns empty string when _ws is null (view unavailable) — no crash, no badge.
-function wsChips(p) {
+// health parameter (optional) — if provided, improves the issue chip tooltip/label.
+function wsChips(p, health = null) {
   const ws = p._ws;
   if (!ws) return "";
   const chips = [];
@@ -173,10 +175,13 @@ function wsChips(p) {
   if (p.ebay_volume_promo_id) {
     chips.push(`<span class="ws-chip ws-chip-promo" title="Has volume promotion">PROMO</span>`);
   }
-  const issues = ws.issue_count ?? 0;
+  const issues = health ? health.flags.length : (ws.issue_count ?? 0);
   if (issues > 0) {
-    const flagNames = ws.issue_flags ? Object.keys(ws.issue_flags).join(", ") : "";
-    chips.push(`<span class="ws-chip ws-chip-issue" title="${esc(flagNames)}">⚠ ${issues}</span>`);
+    // Use human-readable flag labels from health object if available; fall back to raw flag keys.
+    const tooltip = health?.flagLabels?.length
+      ? health.flagLabels.join(" | ")
+      : ws.issue_flags ? Object.keys(ws.issue_flags).join(", ") : "";
+    chips.push(`<span class="ws-chip ws-chip-issue" title="${esc(tooltip)}">⚠ ${issues}</span>`);
   }
   if (!chips.length) return "";
   return `<div class="ws-chips">${chips.join("")}</div>`;
@@ -222,6 +227,16 @@ function applyFilters() {
       if (p._ws && (p._ws.sold_qty_30d ?? 0) > 0) return false;
     } else if (quickVal === "has_promo") {
       if (!p.ebay_volume_promo_id) return false;
+    } else if (quickVal === "low_score") {
+      const h = computeHealth(p);
+      if (h.score === null || h.score >= 60) return false;
+    } else if (quickVal === "draft_stalled") {
+      if (p.ebay_status !== "draft" || p.ebay_offer_id) return false;
+    } else if (quickVal === "missing_basics") {
+      const basicFlags = ["missing_category", "missing_ebay_price", "missing_listing_id"];
+      const wsFlags    = p._ws?.issue_flags || {};
+      const hasMissing = basicFlags.some(f => !!wsFlags[f]);
+      if (!hasMissing) return false;
     }
     return true;
   });
@@ -267,6 +282,11 @@ function renderTable() {
     const statusLabel = { active: "Active", draft: "Draft", ended: "Ended", not_listed: "Not Listed" }[status] || status;
     const isListed    = status === "active" || status === "draft";
 
+    const health      = computeHealth(p);
+    const scoreBadge  = health.score !== null
+      ? `<span class="health-badge health-${health.severity}" title="${esc(health.primaryLabel ? `${health.primaryLabel} — ${health.actionLabel}` : 'No issues found')}">${health.score}</span>`
+      : "";
+
     return `<tr class="product-row border-b border-gray-100">
       <td class="py-2 pr-2">
         ${isListed ? `<input type="checkbox" class="bulk-check accent-kkpink" data-code="${esc(p.code)}" data-offer="${esc(p.ebay_offer_id || '')}" data-sku="${esc(p.ebay_sku || p.code)}" />` : ""}
@@ -276,7 +296,7 @@ function renderTable() {
           ${p.catalog_image_url ? `<img src="${p.catalog_image_url}" class="w-8 h-8 object-cover rounded flex-shrink-0" />` : '<div class="w-8 h-8 bg-gray-100 rounded flex-shrink-0"></div>'}
           <div>
             <a href="/pages/admin/products.html?q=${encodeURIComponent(p.name)}" target="_blank" class="font-medium text-sm line-clamp-1 text-blue-600 hover:underline">${esc(p.name)}</a>
-            ${wsChips(p)}
+            ${wsChips(p, health)}
           </div>
         </div>
       </td>
@@ -286,7 +306,10 @@ function renderTable() {
       <td class="py-2 pr-3 text-xs">${kkPrice}</td>
       <td class="py-2 pr-3 text-xs">${ebayPrice}</td>
       <td class="py-2 pr-3">
-        <span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase ebay-${status}">${statusLabel}</span>
+        <div class="flex flex-col items-start gap-0.5">
+          <span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase ebay-${status}">${statusLabel}</span>
+          ${scoreBadge}
+        </div>
       </td>
       <td class="py-2">
         <div class="flex gap-1">
@@ -328,6 +351,11 @@ function renderCards() {
     const status      = p.ebay_status || "not_listed";
     const statusLabel = { active: "Active", draft: "Draft", ended: "Ended", not_listed: "Not Listed" }[status] || status;
 
+    const health     = computeHealth(p);
+    const scoreBadge = health.score !== null
+      ? `<span class="health-badge health-${health.severity}" title="${esc(health.primaryLabel ? `${health.primaryLabel} — ${health.actionLabel}` : 'No issues found')}">${health.score}</span>`
+      : "";
+
     let actions = "";
     if (status === "not_listed") {
       actions = `<button onclick="openPush('${esc(p.code)}')" class="flex-1 bg-black text-white px-2 py-1.5 rounded text-xs font-bold hover:bg-kkpink hover:text-black transition-all">Push</button>`;
@@ -358,9 +386,12 @@ function renderCards() {
             <span class="text-gray-300 mx-1">|</span>
             <span class="text-gray-500">eBay</span> <span class="font-bold">${ebayPrice}</span>
           </div>
-          <span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase ebay-${status}">${statusLabel}</span>
+          <div class="flex items-center gap-1 flex-wrap">
+            <span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase ebay-${status}">${statusLabel}</span>
+            ${scoreBadge}
+          </div>
         </div>
-        ${wsChips(p)}
+        ${wsChips(p, health)}
         <div class="flex gap-1 mt-3">${actions}</div>
       </div>
     </div>`;
