@@ -588,23 +588,57 @@ function setAssignedVariantImages(row, urls) {
   if (container) renderVariantAssignedImages(container, [...new Set(urls.filter(Boolean))].slice(0, 24));
 }
 
+function renderVariantCandidatePicker(urls) {
+  const unique = [...new Set(urls.filter(Boolean))];
+  if (!unique.length) return `<div class="text-[10px] text-gray-400 border border-dashed border-gray-200 rounded px-2 py-3">No candidate images available</div>`;
+  return `
+    <div class="grid grid-cols-2 gap-1" data-variant-candidate-list>
+      ${unique.map((url, i) => `
+        <button type="button" data-add-candidate-url="${esc(url)}" class="variant-candidate flex items-center gap-2 text-left border border-gray-200 rounded p-1 bg-white hover:border-kkpink hover:bg-pink-50 transition-colors">
+          <img src="${esc(url)}" alt="" loading="lazy" class="w-9 h-9 rounded object-cover border border-gray-100 flex-shrink-0" />
+          <span class="text-[9px] leading-tight text-gray-600 truncate">${esc(imageOptionLabel(url, i))}</span>
+        </button>`).join("")}
+    </div>
+    <div data-no-variant-candidates class="hidden text-[10px] text-gray-400 border border-dashed border-gray-200 rounded px-2 py-3">All candidate images are already assigned.</div>`;
+}
+
+function refreshVariantCandidateButtons(row) {
+  const assigned = new Set(getAssignedVariantImages(row));
+  const buttons = [...row.querySelectorAll("[data-add-candidate-url]")];
+  let visible = 0;
+  buttons.forEach(btn => {
+    const isAssigned = assigned.has(btn.dataset.addCandidateUrl);
+    btn.classList.toggle("hidden", isAssigned);
+    if (!isAssigned) visible++;
+  });
+  row.querySelector("[data-no-variant-candidates]")?.classList.toggle("hidden", visible !== 0);
+}
+
 function wireVariantImageSetControls(row, onChange) {
   row.addEventListener("click", (e) => {
+    const toggle = e.target?.closest?.("[data-toggle-variant-picker]");
+    if (toggle) {
+      row.querySelector("[data-variant-picker]")?.classList.toggle("hidden");
+      return;
+    }
+    const candidate = e.target?.closest?.("[data-add-candidate-url]");
+    if (candidate) {
+      setAssignedVariantImages(row, [...getAssignedVariantImages(row), candidate.dataset.addCandidateUrl]);
+      row.querySelector("[data-variant-picker]")?.classList.add("hidden");
+      refreshVariantCandidateButtons(row);
+      onChange?.(getAssignedVariantImages(row));
+      return;
+    }
     const removeUrl = e.target?.dataset?.removeAssignedUrl;
     const mainUrl = e.target?.dataset?.setMainUrl;
     if (!removeUrl && !mainUrl) return;
     const urls = getAssignedVariantImages(row);
     if (removeUrl) setAssignedVariantImages(row, urls.filter(u => u !== removeUrl));
     if (mainUrl) setAssignedVariantImages(row, [mainUrl, ...urls.filter(u => u !== mainUrl)]);
+    refreshVariantCandidateButtons(row);
     onChange?.(getAssignedVariantImages(row));
   });
-  row.querySelector("[data-add-variant-image]")?.addEventListener("change", (e) => {
-    const url = e.target.value;
-    if (!url) return;
-    setAssignedVariantImages(row, [...getAssignedVariantImages(row), url]);
-    e.target.value = "";
-    onChange?.(getAssignedVariantImages(row));
-  });
+  refreshVariantCandidateButtons(row);
 }
 
 function renderVariantPanel(variants, baseCode) {
@@ -616,9 +650,7 @@ function renderVariantPanel(variants, baseCode) {
     const qty     = v.stock ?? 0;
     const oosNote = qty === 0 ? `<span class="text-[9px] text-orange-500 font-semibold ml-1">OOS</span>` : "";
     const assignedImages = v.preview_image_url ? [v.preview_image_url] : [];
-    const imageOptions = [...new Set([...availableImages, ...assignedImages].filter(Boolean))]
-      .map((url, imgIdx) => `<option value="${esc(url)}">Image ${imgIdx + 1} — ${esc(imageOptionLabel(url, imgIdx))}</option>`)
-      .join("");
+    const candidatePicker = renderVariantCandidatePicker([...availableImages, ...assignedImages]);
     return `<div class="p-2 rounded-lg border border-gray-200 bg-gray-50">
       <div class="flex items-center gap-2">
         <input type="checkbox" class="variant-check accent-pink-500" data-idx="${i}" checked />
@@ -632,10 +664,8 @@ function renderVariantPanel(variants, baseCode) {
       <div class="mt-2">
         <div class="text-[9px] text-gray-500 uppercase font-bold mb-1">Images assigned to ${esc(v.option_value)}</div>
         <div class="flex flex-wrap gap-1 mb-2" data-variant-assigned-images data-idx="${i}"></div>
-        <select class="w-full border border-gray-300 rounded px-2 py-1 text-[10px] bg-white" data-add-variant-image data-idx="${i}">
-        <option value="">+ Add image from shared/gallery candidates</option>
-        ${imageOptions}
-        </select>
+        <button type="button" class="text-[10px] font-bold text-blue-600 hover:text-kkpink" data-toggle-variant-picker>+ Add image</button>
+        <div class="hidden mt-2 rounded border border-gray-200 bg-white p-2" data-variant-picker>${candidatePicker}</div>
       </div>
     </div>`;
   }).join("");
@@ -1200,7 +1230,7 @@ async function renderEditVariantImageControls(product, group) {
     row.className   = "mb-3";
     const assignedImages = [...new Set((r.images || []).filter(Boolean))];
     const candidateImages = [...new Set([...editImageUrls, ...assignedImages].filter(Boolean))];
-    const optionsHtml = candidateImages.map((u, i) => `<option value="${esc(u)}">Image ${i + 1} — ${esc(imageOptionLabel(u, i))}</option>`).join("");
+    const candidatePicker = renderVariantCandidatePicker(candidateImages);
 
     row.innerHTML = `
       <div class="flex items-center gap-3 mb-1">
@@ -1216,10 +1246,8 @@ async function renderEditVariantImageControls(product, group) {
       </div>
       <div class="text-[9px] text-gray-500 mb-1">Images assigned to this variant. First image is the eBay main image for this variant.</div>
       <div class="flex flex-wrap gap-1 mb-2" data-variant-assigned-images></div>
-      <select class="w-full border border-gray-300 rounded px-2 py-1 text-[10px] bg-white" data-add-variant-image>
-        <option value="">+ Add image from shared/gallery candidates</option>
-        ${optionsHtml}
-      </select>`;
+      <button type="button" class="text-[10px] font-bold text-blue-600 hover:text-kkpink" data-toggle-variant-picker>+ Add image</button>
+      <div class="hidden mt-2 rounded border border-gray-200 bg-white p-2" data-variant-picker>${candidatePicker}</div>`;
 
     setAssignedVariantImages(row, assignedImages);
     wireVariantImageSetControls(row, (urls) => { editVariantImageOverrides[r.sku] = urls; });
