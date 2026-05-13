@@ -727,7 +727,29 @@ serve(async (req) => {
       );
 
       if (!result.ok) {
-        throw new Error(`Get offers failed (${result.status}): ${JSON.stringify(result.data)}`);
+        const errors = getEbayErrors(result.data);
+        const message = errors[0]?.message || `Get offers failed (${result.status})`;
+        console.warn("[ebay-listing] get_offers failed", {
+          sku,
+          inventoryItemGroupKey,
+          status: result.status,
+          upstream: result.data,
+        });
+        return new Response(
+          JSON.stringify({
+            success: false,
+            action: "get_offers",
+            code: "GET_OFFERS_FAILED",
+            message,
+            error: message,
+            sku,
+            inventoryItemGroupKey,
+            status: 200,
+            upstreamStatus: result.status,
+            upstream: result.data,
+          }),
+          { headers: corsHeaders }
+        );
       }
 
       return new Response(

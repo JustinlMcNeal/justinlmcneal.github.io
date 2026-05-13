@@ -63,6 +63,7 @@ let searchTimeout;
 let pushSalesMetrics = null;   // Phase 5: cached per push-modal session
 let editSalesMetrics = null;   // Phase 5: cached per edit-modal session
 let pageAdRatePct    = 0;      // Phase 6: assumed promoted listing ad rate for main-page estimates
+let editOfferLookupCache = new Map();
 
 // ── Edge Function Helper ──────────────────────────────────────
 async function callEdge(fnName, body) {
@@ -76,7 +77,19 @@ async function callEdge(fnName, body) {
   if (!resp.ok && !resp.headers.get("content-type")?.includes("application/json")) {
     return { success: false, error: `HTTP ${resp.status} from ${fnName}` };
   }
-  return resp.json().catch(() => ({ success: false, error: `Non-JSON response from ${fnName} (HTTP ${resp.status})` }));
+  const data = await resp.json().catch(() => ({ success: false, error: `Non-JSON response from ${fnName} (HTTP ${resp.status})` }));
+  if (!data?.success && fnName === "ebay-manage-listing") {
+    console.warn("[ebay-listing] edge action failed", {
+      action: body?.action,
+      sku: body?.sku,
+      offerId: body?.offerId,
+      inventoryItemGroupKey: body?.inventoryItemGroupKey,
+      code: data?.code,
+      status: data?.status || data?.upstreamStatus || resp.status,
+      message: data?.message || data?.error,
+    });
+  }
+  return data;
 }
 
 function shortDelay(ms) {
@@ -124,6 +137,31 @@ async function getItemForEdit(sku) {
       return { success: false, error: retryErr.message, retried: true, fallback: true };
     }
   }
+}
+
+async function getOffersForEdit(sku, context = "edit") {
+  const key = String(sku || "").trim();
+  if (!key) return { success: false, offers: [], error: "sku is required", cached: false };
+  if (editOfferLookupCache.has(key)) {
+    return { ...editOfferLookupCache.get(key), cached: true };
+  }
+
+  const result = await callEdge("ebay-manage-listing", { action: "get_offers", sku: key });
+  const normalized = result?.success
+    ? { ...result, cached: false }
+    : {
+        ...result,
+        success: false,
+        offers: [],
+        cached: false,
+        error: result?.message || result?.error || "Offer lookup failed",
+      };
+
+  editOfferLookupCache.set(key, normalized);
+  if (!normalized.success) {
+    console.warn(`[edit:${context}] get_offers failed for ${key}; cached failure to avoid repeated requests`, normalized);
+  }
+  return normalized;
 }
 
 function offerUpdateErrorMessage(result, fallback) {
@@ -938,6 +976,7 @@ window.openEdit = async function openEdit(code) {
   document.getElementById("editQuantityField").classList.toggle("hidden", isGroupListing);
   document.getElementById("editQuantity").disabled = isGroupListing;
   document.getElementById("editVariantQtyNote").classList.toggle("hidden", !isGroupListing);
+  editOfferLookupCache = new Map();
   editVariantImageOverrides = {};
   editVariantQtyOverrides   = {};
   document.getElementById("editVariantImagesSection").classList.add("hidden");
@@ -981,7 +1020,7 @@ window.openEdit = async function openEdit(code) {
       const firstVariantSku = group.variantSKUs?.[0];
       if (firstVariantSku) {
         const [offersResult, variantItemResult] = await Promise.all([
-          callEdge("ebay-manage-listing", { action: "get_offers", sku: firstVariantSku }),
+          getOffersForEdit(firstVariantSku, "open"),
           getItemForEdit(firstVariantSku),
         ]);
         offer = (offersResult.offers || [])[0] || {};
@@ -995,7 +1034,7 @@ window.openEdit = async function openEdit(code) {
       const [itemResult, offerResult] = await Promise.all([
         callEdge("ebay-manage-listing", { action: "get_item", sku }),
         editProduct.ebay_offer_id
-          ? callEdge("ebay-manage-listing", { action: "get_offers", sku })
+          ? getOffersForEdit(sku, "open")
           : Promise.resolve({ success: true, offers: [] }),
       ]);
 
@@ -1157,6 +1196,10 @@ window.openEdit = async function openEdit(code) {
 
     document.getElementById("editLoading").classList.add("hidden");
     document.getElementById("editForm").classList.remove("hidden");
+    const offerLookupFailures = [...editOfferLookupCache.values()].filter(r => !r.success);
+    if (offerLookupFailures.length) {
+      document.getElementById("editStatus").textContent = "⚠️ eBay offer details could not be loaded for part of this listing. The modal remains usable, but offer updates may need a refresh/relink if this persists.";
+    }
     if (variantFetchSummary?.failures?.length) {
       document.getElementById("editStatus").textContent = `⚠️ ${variantFetchSummary.failures.length} variant eBay detail lookup(s) failed. Fallback image/qty controls are shown where available; you can still edit and save.`;
     }
@@ -2134,9 +2177,21 @@ document.getElementById("btnSaveEdit").addEventListener("click", async () => {
       const priceCents   = Math.round(price * 100);
       const editStoreCat = document.getElementById("editStoreCategory").value;
       const editCategoryId = document.getElementById("editCategoryId").value.trim();
+      const offerLookupFailures = [];
+      const variantOfferRows = [];
       for (const vSku of variantSKUs) {
-        const offersResp = await callEdge("ebay-manage-listing", { action: "get_offers", sku: vSku });
+        const offersResp = await getOffersForEdit(vSku, "save");
+        if (!offersResp.success) {
+          offerLookupFailures.push(vSku);
+          continue;
+        }
         const offerRow   = (offersResp.offers || [])[0];
+        variantOfferRows.push({ vSku, offerRow });
+      }
+      if (offerLookupFailures.length) {
+        throw new Error(`Could not load eBay offers for ${offerLookupFailures.join(", ")}. This was cached to avoid repeated failing requests; refresh/relink the listing if it persists.`);
+      }
+      for (const { vSku, offerRow } of variantOfferRows) {
         if (!offerRow?.offerId) continue;
         const offerResult = await callEdge("ebay-manage-listing", {
           action:           "update_offer",
