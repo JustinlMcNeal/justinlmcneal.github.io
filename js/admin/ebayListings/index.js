@@ -34,6 +34,7 @@ import { renderImageStrip, showGalleryPicker } from "./images.js";
 import { addVolTier, getVolTiers, setVolTiers } from "./volPricing.js";
 import { buildEstimate, renderPreview } from "./profitPreview.js";
 import { computeHealth } from "./listingHealth.js";
+import { openSalesHistory, closeSalesHistory } from "./salesHistory.js";
 
 // ── Init Supabase ─────────────────────────────────────────────
 const supabase    = getSupabaseClient();
@@ -329,6 +330,9 @@ function renderTable() {
           ${status === "ended"
             ? `<button onclick="openPush('${esc(p.code)}')" class="bg-black text-white px-2 py-1 rounded text-[10px] font-bold hover:bg-kkpink hover:text-black transition-all">Re-list</button>`
             : ""}
+          ${status !== "not_listed"
+            ? `<button class="border border-gray-200 text-gray-400 px-1.5 py-1 rounded text-[10px] hover:bg-gray-100 hover:text-black transition-all" data-action="open-sales" data-code="${esc(p.code)}" title="Sales history">📊</button>`
+            : ""}
         </div>
       </td>
     </tr>`;
@@ -393,6 +397,9 @@ function renderCards() {
         </div>
         ${wsChips(p, health)}
         <div class="flex gap-1 mt-3">${actions}</div>
+        ${status !== "not_listed"
+          ? `<button class="w-full mt-1 border border-gray-100 text-gray-400 py-1 rounded text-[9px] font-semibold hover:bg-gray-50 hover:text-black transition-all" data-action="open-sales" data-code="${esc(p.code)}">📊 Sales History</button>`
+          : ""}
       </div>
     </div>`;
   }).join("");
@@ -1630,6 +1637,23 @@ document.getElementById("btnCloseEdit").addEventListener("click", () => {
 // Edit Modal — profit preview live update
 document.getElementById("editPrice").addEventListener("input", refreshEditPreview);
 document.getElementById("editWeightOz").addEventListener("input", refreshEditPreview);
+
+// Sales History Modal — delegated from stable section parents (table and cards containers)
+// Uses data-action="open-sales" on buttons generated inside renderTable/renderCards.
+// Delegated to stable parents so listeners survive re-renders without re-binding.
+document.getElementById("tableSection").addEventListener("click", e => {
+  const btn = e.target.closest("[data-action='open-sales']");
+  if (!btn) return;
+  const product = allProducts.find(p => p.code === btn.dataset.code);
+  if (product) openSalesHistory(product);
+});
+document.getElementById("cardSection").addEventListener("click", e => {
+  const btn = e.target.closest("[data-action='open-sales']");
+  if (!btn) return;
+  const product = allProducts.find(p => p.code === btn.dataset.code);
+  if (product) openSalesHistory(product);
+});
+document.getElementById("btnCloseSales").addEventListener("click", closeSalesHistory);
 
 // Edit Modal — Add image
 document.getElementById("btnAddImgEdit").addEventListener("click", () => {

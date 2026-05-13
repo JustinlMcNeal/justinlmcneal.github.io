@@ -722,6 +722,25 @@
       </div>
     </div>
 
+    <!-- Sales History Modal (Phase 4 — read-only, no eBay mutations) -->
+    <div id="salesModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center hidden">
+      <div class="bg-white rounded-2xl shadow-xl border-4 border-black w-full max-w-md mx-4 max-h-[80vh] overflow-y-auto">
+        <div class="p-5">
+          <div class="flex items-start justify-between mb-3">
+            <div>
+              <h3 class="text-base font-black" id="salesModalName"></h3>
+              <p class="text-[10px] font-mono text-gray-400" id="salesModalCode"></p>
+            </div>
+            <button id="btnCloseSales" class="text-gray-400 hover:text-black text-2xl leading-none ml-3 flex-shrink-0">&times;</button>
+          </div>
+          <div id="salesModalSummary"></div>
+          <div id="salesModalBody">
+            <p class="text-xs text-gray-400 text-center py-6">Loading sales history…</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </main>
 
   <div id="kkFooterMount"></div>
