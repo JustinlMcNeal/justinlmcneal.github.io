@@ -62,6 +62,7 @@ let bulkMode               = "price";
 let searchTimeout;
 let pushSalesMetrics = null;   // Phase 5: cached per push-modal session
 let editSalesMetrics = null;   // Phase 5: cached per edit-modal session
+let pageAdRatePct    = 0;      // Phase 6: assumed promoted listing ad rate for main-page estimates
 
 // ── Edge Function Helper ──────────────────────────────────────
 async function callEdge(fnName, body) {
@@ -202,6 +203,41 @@ function wsChips(p, health = null) {
   return `<div class="ws-chips">${chips.join("")}</div>`;
 }
 
+// ── Est Profit Helpers (Phase 6) ──────────────────────────────
+function epCls(marginPct) {
+  if (marginPct == null) return "ep-na";
+  if (marginPct < 0)    return "ep-neg";
+  if (marginPct < 10)   return "ep-warn";
+  if (marginPct < 20)   return "ep-low";
+  return "ep-ok";
+}
+
+function rowEstProfitHtml(p) {
+  if (!p.ebay_price_cents) return '<span class="ep-badge ep-na">—</span>';
+  const est = buildEstimate({
+    priceCents:   p.ebay_price_cents,
+    kkPriceCents: p.price     ? Math.round(Number(p.price) * 100) : null,
+    unitCostUsd:  p.unit_cost != null ? Number(p.unit_cost) : null,
+    weightG:      p.weight_g  ?? null,
+    labelWeightG: p.weight_g  ?? null,   // product weight used as proxy for packaged weight
+    adRatePct:    pageAdRatePct,
+  });
+  if (est.netProfitCents !== null) {
+    const sign    = est.netProfitCents >= 0 ? "+" : "";
+    const cls     = epCls(est.marginPct);
+    const value   = `${sign}$${(Math.abs(est.netProfitCents) / 100).toFixed(2)}`;
+    const pctTxt  = est.marginPct !== null ? `${est.marginPct}%` : "";
+    const partial = est.complete ? "" : "*";
+    const tipBase = `Est. net profit${pageAdRatePct > 0 ? ` (incl. ${pageAdRatePct}% promo ad rate)` : ""}`;
+    const tip     = est.complete ? tipBase : `${tipBase} — *partial (label unknown)`;
+    return `<span class="ep-badge ep-${cls}" title="${esc(tip)}">~${value}${partial}${pctTxt ? `<br><span class="ep-pct">${pctTxt}</span>` : ""}</span>`;
+  }
+  if (!p.unit_cost) {
+    return '<span class="ep-badge ep-na" title="Set unit cost on product to enable estimate">no cost</span>';
+  }
+  return '<span class="ep-badge ep-na">—</span>';
+}
+
 // ── Load Products ─────────────────────────────────────────────
 async function loadProducts() {
   const { data, error } = await supabase
@@ -309,17 +345,18 @@ function renderTable() {
       <td class="py-2 pr-3">
         <div class="flex items-start gap-2">
           ${p.catalog_image_url ? `<img src="${p.catalog_image_url}" class="w-8 h-8 object-cover rounded flex-shrink-0" />` : '<div class="w-8 h-8 bg-gray-100 rounded flex-shrink-0"></div>'}
-          <div>
+          <div class="min-w-0">
             <a href="/pages/admin/products.html?q=${encodeURIComponent(p.name)}" target="_blank" class="font-medium text-sm line-clamp-1 text-blue-600 hover:underline">${esc(p.name)}</a>
+            <div class="text-[10px] font-mono text-gray-400 leading-none mt-0.5">${p.ebay_listing_id
+              ? `<a href="https://www.ebay.com/itm/${esc(p.ebay_listing_id)}" target="_blank" class="text-blue-500 hover:underline">${esc(p.code)}</a>`
+              : esc(p.code)}</div>
             ${wsChips(p, health)}
           </div>
         </div>
       </td>
-      <td class="py-2 pr-3 text-xs font-mono">${p.ebay_listing_id
-        ? `<a href="https://www.ebay.com/itm/${esc(p.ebay_listing_id)}" target="_blank" class="text-blue-600 hover:underline">${esc(p.code)}</a>`
-        : esc(p.code)}</td>
       <td class="py-2 pr-3 text-xs">${kkPrice}</td>
       <td class="py-2 pr-3 text-xs">${ebayPrice}</td>
+      <td class="py-2 pr-3 text-xs">${rowEstProfitHtml(p)}</td>
       <td class="py-2 pr-3">
         <div class="flex flex-col items-start gap-0.5">
           <span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase ebay-${status}">${statusLabel}</span>
@@ -409,7 +446,11 @@ function renderCards() {
             ${scoreBadge}
           </div>
         </div>
-        ${wsChips(p, health)}
+        <div class="flex items-center justify-between mt-1.5">
+          <span class="text-[9px] text-gray-400 font-semibold uppercase tracking-wide">Est Profit</span>
+          ${rowEstProfitHtml(p)}
+        </div>
+        ${wsChips(p, health)
         <div class="flex gap-1 mt-3">${actions}</div>
         ${status !== "not_listed"
           ? `<button class="w-full mt-1 border border-gray-100 text-gray-400 py-1 rounded text-[9px] font-semibold hover:bg-gray-50 hover:text-black transition-all" data-action="open-sales" data-code="${esc(p.code)}">📊 Sales History</button>`
@@ -721,6 +762,7 @@ window.openPush = async function openPush(code) {
     }
   }
 
+  document.getElementById("modalAdRate").value = String(pageAdRatePct);
   refreshPushPreview();
   pushSalesMetrics = null;
   loadAndRenderPriceRef("modalPriceRef", currentProduct, "push");
@@ -954,6 +996,7 @@ window.openEdit = async function openEdit(code) {
 
     document.getElementById("editLoading").classList.add("hidden");
     document.getElementById("editForm").classList.remove("hidden");
+    document.getElementById("editAdRate").value = String(pageAdRatePct);
     refreshEditPreview();
     editSalesMetrics = null;
     loadAndRenderPriceRef("editPriceRef", editProduct, "edit");
@@ -1119,27 +1162,31 @@ function renderMigrateResults(items) {
 
 function refreshPushPreview() {
   if (!currentProduct) return;
-  const priceVal = parseFloat(document.getElementById("modalPrice")?.value);
-  const ozVal    = parseFloat(document.getElementById("modalWeightOz")?.value);
+  const priceVal  = parseFloat(document.getElementById("modalPrice")?.value);
+  const ozVal     = parseFloat(document.getElementById("modalWeightOz")?.value);
+  const pushAdRate = parseInt(document.getElementById("modalAdRate")?.value ?? "0", 10) || 0;
   renderPreview("modalProfitPreview", buildEstimate({
     priceCents:   isNaN(priceVal) ? null : Math.round(priceVal * 100),
     kkPriceCents: currentProduct.price      ? Math.round(Number(currentProduct.price) * 100) : null,
     unitCostUsd:  currentProduct.unit_cost != null ? Number(currentProduct.unit_cost) : null,
     weightG:      currentProduct.weight_g  ?? null,
     labelWeightG: isNaN(ozVal) ? null : Math.round(ozVal * 28.3495),
+    adRatePct:    pushAdRate,
   }));
 }
 
 function refreshEditPreview() {
   if (!editProduct) return;
-  const priceVal = parseFloat(document.getElementById("editPrice")?.value);
-  const ozVal    = parseFloat(document.getElementById("editWeightOz")?.value);
+  const priceVal   = parseFloat(document.getElementById("editPrice")?.value);
+  const ozVal      = parseFloat(document.getElementById("editWeightOz")?.value);
+  const editAdRate = parseInt(document.getElementById("editAdRate")?.value ?? "0", 10) || 0;
   renderPreview("editProfitPreview", buildEstimate({
     priceCents:   isNaN(priceVal) ? null : Math.round(priceVal * 100),
     kkPriceCents: editProduct.price      ? Math.round(Number(editProduct.price) * 100) : null,
     unitCostUsd:  editProduct.unit_cost != null ? Number(editProduct.unit_cost) : null,
     weightG:      editProduct.weight_g  ?? null,
     labelWeightG: isNaN(ozVal) ? null : Math.round(ozVal * 28.3495),
+    adRatePct:    editAdRate,
   }));
 }
 
@@ -1224,6 +1271,10 @@ document.getElementById("searchClear").addEventListener("click", () => {
 });
 document.getElementById("statusFilter").addEventListener("change", applyFilters);
 document.getElementById("quickFilter").addEventListener("change", applyFilters);
+document.getElementById("adRateFilter").addEventListener("change", e => {
+  pageAdRatePct = parseInt(e.target.value, 10) || 0;
+  renderAll();
+});
 
 // View toggle
 document.querySelectorAll(".view-toggle-btn").forEach(btn => {
@@ -1723,6 +1774,8 @@ document.getElementById("btnCloseEdit").addEventListener("click", () => {
 document.getElementById("editPrice").addEventListener("input", refreshEditPreview);
 document.getElementById("editPrice").addEventListener("input", refreshEditRef);
 document.getElementById("editWeightOz").addEventListener("input", refreshEditPreview);
+document.getElementById("modalAdRate").addEventListener("change", () => { refreshPushPreview(); refreshPushRef(); });
+document.getElementById("editAdRate").addEventListener("change",  () => { refreshEditPreview(); refreshEditRef(); });
 
 // Sales History Modal — delegated from stable section parents (table and cards containers)
 // Uses data-action="open-sales" on buttons generated inside renderTable/renderCards.

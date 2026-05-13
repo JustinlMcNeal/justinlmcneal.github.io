@@ -142,11 +142,13 @@ function estimateEbayFee(priceCents) {
  *
  * @returns {object} estimate result with all fields and warnings
  */
-export function buildEstimate({ priceCents, kkPriceCents, unitCostUsd, weightG, labelWeightG }) {
+export function buildEstimate({ priceCents, kkPriceCents, unitCostUsd, weightG, labelWeightG, adRatePct = 0 }) {
   const est = {
     priceCents:       priceCents  ?? null,
     kkPriceCents:     kkPriceCents ?? null,
     feeCents:         null,
+    adFeeCents:       null,   // Phase 6: assumed promotional ad fee (not actual campaign data)
+    adRatePct:        adRatePct,
     cpiCents:         null,
     labelCents:       null,
     netAfterFeeCents: null,
@@ -210,20 +212,27 @@ export function buildEstimate({ priceCents, kkPriceCents, unitCostUsd, weightG, 
     est.assumptions.push("Label: not estimated (no weight available)");
   }
 
+  // ── Assumed ad/promotional fee (Phase 6 extension) ─────────
+  if (adRatePct > 0 && priceCents > 0) {
+    est.adFeeCents = Math.round(priceCents * adRatePct / 100);
+    est.assumptions.push(`Assumed promo/ad rate: ${adRatePct}% of price (not actual campaign data)`);
+  }
+  const adFeeDeduct = est.adFeeCents ?? 0;
+
   // ── Net profit ────────────────────────────────────────────
   if (est.feeCents != null && est.cpiCents != null && est.labelCents != null) {
-    // Full estimate: fee + cpi + label all available
-    est.netProfitCents = priceCents - est.feeCents - est.cpiCents - est.labelCents;
+    // Full estimate: fee + cpi + label (+optional ad fee) all available
+    est.netProfitCents = priceCents - est.feeCents - est.cpiCents - est.labelCents - adFeeDeduct;
     est.marginPct      = Math.round((est.netProfitCents / priceCents) * 100);
     est.complete       = true;
   } else if (est.feeCents != null && est.cpiCents != null) {
     // Partial: cpi available but label unknown
-    est.netProfitCents = priceCents - est.feeCents - est.cpiCents;
+    est.netProfitCents = priceCents - est.feeCents - est.cpiCents - adFeeDeduct;
     est.marginPct      = Math.round((est.netProfitCents / priceCents) * 100);
     // partial — flag below threshold using pre-label numbers (more optimistic, so flag lower)
   } else if (est.feeCents != null && est.labelCents != null) {
     // Fee + label but no CPI
-    est.netAfterFeeCents = priceCents - est.feeCents;
+    est.netAfterFeeCents = priceCents - est.feeCents - adFeeDeduct;
     // Don't set netProfitCents — too incomplete without cost
   }
   // If only fee: netAfterFeeCents is already set above, nothing else to compute.
@@ -284,6 +293,7 @@ export function renderPreview(containerId, estimate) {
 
   const {
     priceCents, kkPriceCents, feeCents, cpiCents, labelCents,
+    adFeeCents, adRatePct: estAdRatePct,
     netAfterFeeCents, netProfitCents, marginPct,
     warnings, assumptions, complete,
   } = estimate;
@@ -358,6 +368,11 @@ export function renderPreview(containerId, estimate) {
         <span>Est. label</span>
         <span class="pp-val pp-cost">${fmt(labelCents != null ? -labelCents : null)}</span>
       </div>
+      ${adFeeCents != null && adFeeCents > 0 ? `
+      <div class="pp-row pp-deduct-row">
+        <span>Assumed ad fee (${estAdRatePct}%)</span>
+        <span class="pp-val pp-cost">${fmt(-adFeeCents)}</span>
+      </div>` : ""}
       <div class="pp-divider"></div>
       ${profitRow}
       ${netOnlyNote}
