@@ -836,6 +836,11 @@ window.openEdit = async function openEdit(code) {
   document.getElementById("editLoading").classList.remove("hidden");
   document.getElementById("editForm").classList.add("hidden");
   document.getElementById("editStatus").textContent = "";
+  document.getElementById("editPriceQtyGrid").classList.toggle("grid-cols-1", isGroupListing);
+  document.getElementById("editPriceQtyGrid").classList.toggle("grid-cols-2", !isGroupListing);
+  document.getElementById("editQuantityField").classList.toggle("hidden", isGroupListing);
+  document.getElementById("editQuantity").disabled = isGroupListing;
+  document.getElementById("editVariantQtyNote").classList.toggle("hidden", !isGroupListing);
   editVariantImageOverrides = {};
   editVariantQtyOverrides   = {};
   document.getElementById("editVariantImagesSection").classList.add("hidden");
