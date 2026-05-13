@@ -79,6 +79,16 @@ function isEbayProductNotFoundPublishError(data: unknown): boolean {
   return Boolean(payload?.errors?.some((e) => e?.errorId === 25604 || e?.errorId === 25709));
 }
 
+function getEbayErrors(data: unknown): Array<{ errorId?: number; message?: string }> {
+  const payload = data as { errors?: Array<{ errorId?: number; message?: string }> } | null;
+  return Array.isArray(payload?.errors) ? payload.errors : [];
+}
+
+function isTransientGetItemError(status: number, data: unknown): boolean {
+  const errors = getEbayErrors(data);
+  return status >= 500 || errors.some((e) => e?.errorId === 25001 || /system error/i.test(e?.message || ""));
+}
+
 async function delay(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -140,7 +150,20 @@ serve(async (req) => {
       if (!sku) throw new Error("sku is required");
       const result = await ebayFetch(accessToken, "GET", `${INV_API}/inventory_item/${encodeURIComponent(sku)}`);
       if (!result.ok) {
-        throw new Error(`Get item failed (${result.status}): ${JSON.stringify(result.data)}`);
+        const transient = isTransientGetItemError(result.status, result.data);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            action: "get_item",
+            sku,
+            status: result.status,
+            upstreamStatus: result.status,
+            transient,
+            error: `Get item failed (${result.status}): ${JSON.stringify(result.data)}`,
+            upstream: result.data,
+          }),
+          { headers: corsHeaders }
+        );
       }
       return new Response(JSON.stringify({ success: true, item: result.data }), { headers: corsHeaders });
     }

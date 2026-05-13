@@ -79,6 +79,53 @@ async function callEdge(fnName, body) {
   return resp.json().catch(() => ({ success: false, error: `Non-JSON response from ${fnName} (HTTP ${resp.status})` }));
 }
 
+function shortDelay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function ebayErrorIds(payload) {
+  const errors = payload?.errors || payload?.upstream?.errors || payload?.upstreamData?.errors || [];
+  return Array.isArray(errors) ? errors.map(e => Number(e?.errorId)).filter(Number.isFinite) : [];
+}
+
+function isTransientGetItemFailure(result) {
+  const status = Number(result?.upstreamStatus || result?.status || 0);
+  const ids    = ebayErrorIds(result);
+  const detail = `${result?.error || ""} ${JSON.stringify(result?.upstream || result?.upstreamData || {})}`;
+  return status >= 500 || ids.includes(25001) || /system error|api_inventory|25001/i.test(detail);
+}
+
+async function getItemForEdit(sku) {
+  try {
+    const first = await callEdge("ebay-manage-listing", { action: "get_item", sku });
+    if (first.success) return { ...first, retried: false };
+    if (!isTransientGetItemFailure(first)) {
+      console.warn(`[edit] get_item failed for ${sku}; using fallback:`, first.error || first);
+      return { ...first, success: false, retried: false, fallback: true };
+    }
+
+    console.warn(`[edit] get_item failed for ${sku}; retrying once:`, first.error || first);
+    await shortDelay(600);
+    const second = await callEdge("ebay-manage-listing", { action: "get_item", sku });
+    if (second.success) return { ...second, retried: true };
+
+    console.warn(`[edit] get_item failed for ${sku} after retry; using fallback:`, second.error || second);
+    return { ...second, success: false, retried: true, fallback: true };
+  } catch (e) {
+    console.warn(`[edit] get_item error for ${sku}; retrying once:`, e.message);
+    await shortDelay(600);
+    try {
+      const retry = await callEdge("ebay-manage-listing", { action: "get_item", sku });
+      if (retry.success) return { ...retry, retried: true };
+      console.warn(`[edit] get_item failed for ${sku} after retry; using fallback:`, retry.error || retry);
+      return { ...retry, success: false, retried: true, fallback: true };
+    } catch (retryErr) {
+      console.warn(`[edit] get_item error for ${sku} after retry; using fallback:`, retryErr.message);
+      return { success: false, error: retryErr.message, retried: true, fallback: true };
+    }
+  }
+}
+
 // ── Status Bar ────────────────────────────────────────────────
 function showStatus(msg, isError = false) {
   const bar = document.getElementById("statusBar");
@@ -787,6 +834,8 @@ window.openEdit = async function openEdit(code) {
   document.getElementById("editProductName").textContent = editProduct.name;
   document.getElementById("editProductCode").textContent = editProduct.code + (isGroupListing ? " (Multi-Variant)" : "");
 
+  let variantFetchSummary = null;
+
   const ebayLink = document.getElementById("editEbayLink");
   if (editProduct.ebay_listing_id) {
     ebayLink.href = `https://www.ebay.com/itm/${editProduct.ebay_listing_id}`;
@@ -821,7 +870,7 @@ window.openEdit = async function openEdit(code) {
       if (firstVariantSku) {
         const [offersResult, variantItemResult] = await Promise.all([
           callEdge("ebay-manage-listing", { action: "get_offers", sku: firstVariantSku }),
-          callEdge("ebay-manage-listing", { action: "get_item",   sku: firstVariantSku }),
+          getItemForEdit(firstVariantSku),
         ]);
         offer = (offersResult.offers || [])[0] || {};
         if (variantItemResult.success) item = variantItemResult.item;
@@ -887,7 +936,7 @@ window.openEdit = async function openEdit(code) {
     renderImageStrip("editImageStrip", editImageUrls, editImageUrls);
 
     if (isGroupListing) {
-      await renderEditVariantImageControls(editProduct, editProduct._groupData);
+      variantFetchSummary = await renderEditVariantImageControls(editProduct, editProduct._groupData);
     }
 
     const offerPrice = offer.pricingSummary?.price?.value;
@@ -996,6 +1045,9 @@ window.openEdit = async function openEdit(code) {
 
     document.getElementById("editLoading").classList.add("hidden");
     document.getElementById("editForm").classList.remove("hidden");
+    if (variantFetchSummary?.failures?.length) {
+      document.getElementById("editStatus").textContent = `⚠️ ${variantFetchSummary.failures.length} variant eBay detail lookup(s) failed. Fallback image/qty controls are shown where available; you can still edit and save.`;
+    }
     document.getElementById("editAdRate").value = String(pageAdRatePct);
     refreshEditPreview();
     editSalesMetrics = null;
@@ -1043,19 +1095,23 @@ async function renderEditVariantImageControls(product, group) {
     const local       = bySku.get(sku);
     let currentLead   = local?.preview_image_url || "";
     let currentQty = 0;
-    try {
-      const r = await callEdge("ebay-manage-listing", { action: "get_item", sku });
-      if (r.success) {
-        currentLead = r.item?.product?.imageUrls?.[0] || currentLead;
-        currentQty  = r.item?.availability?.shipToLocationAvailability?.quantity ?? 0;
-      } else console.warn(`get_item failed for ${sku}:`, r.error);
-    } catch (e) {
-      console.warn(`get_item error for ${sku}:`, e.message);
+    const r = await getItemForEdit(sku);
+    if (r.success) {
+      currentLead = r.item?.product?.imageUrls?.[0] || currentLead;
+      currentQty  = r.item?.availability?.shipToLocationAvailability?.quantity ?? 0;
     }
     editVariantImageOverrides[sku] = currentLead;
     editVariantQtyOverrides[sku]   = currentQty;
-    return { sku, label: local?.option_value || sku, lead: currentLead, qty: currentQty };
+    return { sku, label: local?.option_value || sku, lead: currentLead, qty: currentQty, failed: !r.success, retried: !!r.retried, error: r.error || "eBay item lookup failed" };
   }));
+
+  const failures = rows.filter(r => r.failed);
+  if (failures.length) {
+    const warning = document.createElement("div");
+    warning.className = "text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded p-2 mb-2";
+    warning.textContent = `${failures.length} variant detail lookup(s) failed; fallback controls are shown for: ${failures.map(f => f.sku).join(", ")}`;
+    list.appendChild(warning);
+  }
 
   rows.forEach(r => {
     const row = document.createElement("div");
@@ -1073,6 +1129,7 @@ async function renderEditVariantImageControls(product, group) {
     row.innerHTML = `
       <div class="flex items-center gap-3 mb-1">
         <span class="text-[10px] font-bold text-gray-700">${esc(r.label)}</span>
+        ${r.failed ? `<span class="text-[9px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1" title="${esc(r.error)}">fallback${r.retried ? " after retry" : ""}</span>` : ""}
         <label class="flex items-center gap-1 ml-auto">
           <span class="text-[9px] text-gray-500 uppercase font-bold">Qty</span>
           <input type="number" min="0" value="${r.qty}"
@@ -1105,6 +1162,7 @@ async function renderEditVariantImageControls(product, group) {
   });
 
   section.classList.remove("hidden");
+  return { rows, failures };
 }
 
 // ── Withdraw / Publish (from table) ──────────────────────────
