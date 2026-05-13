@@ -567,6 +567,46 @@ function imageOptionLabel(url, idx) {
   return file.length > 34 ? `${file.slice(0, 31)}...` : file;
 }
 
+function renderVariantAssignedImages(container, urls) {
+  container.innerHTML = urls.length
+    ? urls.map((url, i) => `
+      <div class="relative w-14 h-14 rounded border-2 ${i === 0 ? "border-kkpink" : "border-gray-200"} overflow-hidden flex-shrink-0" data-assigned-url="${esc(url)}">
+        <img src="${esc(url)}" alt="" class="w-full h-full object-cover" />
+        ${i === 0 ? `<span class="absolute left-0 bottom-0 bg-kkpink text-black text-[8px] font-black px-1">Main</span>` : `<button type="button" class="absolute left-0 bottom-0 bg-white/90 text-[8px] font-bold px-1" data-set-main-url="${esc(url)}">Main</button>`}
+        <button type="button" class="absolute -top-1 -right-1 bg-black text-white rounded-full w-4 h-4 text-[10px] leading-4" data-remove-assigned-url="${esc(url)}">×</button>
+      </div>`).join("")
+    : `<div class="text-[10px] text-gray-400 border border-dashed border-gray-300 rounded px-2 py-3">No variant images assigned</div>`;
+}
+
+function getAssignedVariantImages(row) {
+  if (!row) return [];
+  return [...row.querySelectorAll("[data-assigned-url]")].map(el => el.dataset.assignedUrl).filter(Boolean);
+}
+
+function setAssignedVariantImages(row, urls) {
+  const container = row.querySelector("[data-variant-assigned-images]");
+  if (container) renderVariantAssignedImages(container, [...new Set(urls.filter(Boolean))].slice(0, 24));
+}
+
+function wireVariantImageSetControls(row, onChange) {
+  row.addEventListener("click", (e) => {
+    const removeUrl = e.target?.dataset?.removeAssignedUrl;
+    const mainUrl = e.target?.dataset?.setMainUrl;
+    if (!removeUrl && !mainUrl) return;
+    const urls = getAssignedVariantImages(row);
+    if (removeUrl) setAssignedVariantImages(row, urls.filter(u => u !== removeUrl));
+    if (mainUrl) setAssignedVariantImages(row, [mainUrl, ...urls.filter(u => u !== mainUrl)]);
+    onChange?.(getAssignedVariantImages(row));
+  });
+  row.querySelector("[data-add-variant-image]")?.addEventListener("change", (e) => {
+    const url = e.target.value;
+    if (!url) return;
+    setAssignedVariantImages(row, [...getAssignedVariantImages(row), url]);
+    e.target.value = "";
+    onChange?.(getAssignedVariantImages(row));
+  });
+}
+
 function renderVariantPanel(variants, baseCode) {
   const list = document.getElementById("variantList");
   const availableImages = buildImageUrls(currentProduct);
@@ -575,16 +615,13 @@ function renderVariantPanel(variants, baseCode) {
     const sku     = `${baseCode}-${suffix}`;
     const qty     = v.stock ?? 0;
     const oosNote = qty === 0 ? `<span class="text-[9px] text-orange-500 font-semibold ml-1">OOS</span>` : "";
-    const selectedImage = v.preview_image_url || "";
-    const imageOptions = [...new Set([selectedImage, ...availableImages].filter(Boolean))]
-      .map((url, imgIdx) => `<option value="${esc(url)}" ${url === selectedImage ? "selected" : ""}>${url === selectedImage ? "Current variant image" : `Image ${imgIdx + 1}`} — ${esc(imageOptionLabel(url, imgIdx))}</option>`)
+    const assignedImages = v.preview_image_url ? [v.preview_image_url] : [];
+    const imageOptions = [...new Set([...availableImages, ...assignedImages].filter(Boolean))]
+      .map((url, imgIdx) => `<option value="${esc(url)}">Image ${imgIdx + 1} — ${esc(imageOptionLabel(url, imgIdx))}</option>`)
       .join("");
     return `<div class="p-2 rounded-lg border border-gray-200 bg-gray-50">
       <div class="flex items-center gap-2">
         <input type="checkbox" class="variant-check accent-pink-500" data-idx="${i}" checked />
-        <div data-variant-img-preview="${i}" class="w-8 h-8 rounded border bg-white flex-shrink-0 overflow-hidden flex items-center justify-center text-[9px] text-gray-400">
-          ${selectedImage ? `<img src="${esc(selectedImage)}" class="w-full h-full object-cover" />` : "None"}
-        </div>
       <div class="flex-1 min-w-0">
         <div class="text-xs font-bold truncate">${esc(v.option_value)}${oosNote}</div>
         <div class="text-[10px] text-gray-400 font-mono">${esc(sku)}</div>
@@ -592,24 +629,23 @@ function renderVariantPanel(variants, baseCode) {
       <input type="number" class="variant-qty w-14 border border-gray-300 rounded px-1 py-0.5 text-xs text-center" value="${qty}" min="0" data-idx="${i}" />
       <span class="text-[10px] text-gray-400">qty</span>
       </div>
-      <label class="block text-[9px] text-gray-500 uppercase font-bold mt-2 mb-0.5">Variant-specific image</label>
-      <select class="variant-image w-full border border-gray-300 rounded px-2 py-1 text-[10px] bg-white" data-idx="${i}">
-        <option value="">No specific image assigned</option>
+      <div class="mt-2">
+        <div class="text-[9px] text-gray-500 uppercase font-bold mb-1">Images assigned to ${esc(v.option_value)}</div>
+        <div class="flex flex-wrap gap-1 mb-2" data-variant-assigned-images data-idx="${i}"></div>
+        <select class="w-full border border-gray-300 rounded px-2 py-1 text-[10px] bg-white" data-add-variant-image data-idx="${i}">
+        <option value="">+ Add image from shared/gallery candidates</option>
         ${imageOptions}
-      </select>
+        </select>
+      </div>
     </div>`;
   }).join("");
 
-  list.querySelectorAll(".variant-image").forEach(select => {
-    select.addEventListener("change", () => {
-      const preview = list.querySelector(`[data-variant-img-preview="${select.dataset.idx}"]`);
-      const url = select.value;
-      if (preview) {
-        preview.innerHTML = url
-          ? `<img src="${esc(url)}" class="w-full h-full object-cover" />`
-          : "None";
-      }
-    });
+  list.querySelectorAll("[data-variant-assigned-images]").forEach(container => {
+    const variant = variants[Number(container.dataset.idx)];
+    renderVariantAssignedImages(container, variant?.preview_image_url ? [variant.preview_image_url] : []);
+  });
+  [...list.children].forEach(row => {
+    wireVariantImageSetControls(row);
   });
 
   document.getElementById("variantCount").textContent      = variants.length;
@@ -619,14 +655,14 @@ function renderVariantPanel(variants, baseCode) {
 function getCheckedVariants() {
   const checks = document.querySelectorAll(".variant-check");
   const qtys   = document.querySelectorAll(".variant-qty");
-  const imgs   = document.querySelectorAll(".variant-image");
+  const rows   = document.querySelectorAll("#variantList > div");
   const result = [];
   checks.forEach((cb, i) => {
     if (cb.checked && pushVariants[i]) {
       const v      = pushVariants[i];
       const suffix = v.option_value.toUpperCase().replace(/[^A-Z0-9]/g, "").substring(0, 6);
       const qty    = parseInt(qtys[i]?.value) || 1;
-      result.push({ ...v, sku: `${currentProduct.code}-${suffix}`, quantity: qty, variant_image_url: imgs[i]?.value || "" });
+      result.push({ ...v, sku: `${currentProduct.code}-${suffix}`, quantity: qty, variant_image_urls: getAssignedVariantImages(rows[i]) });
     }
   });
   return result;
@@ -1139,16 +1175,16 @@ async function renderEditVariantImageControls(product, group) {
 
   const rows = await Promise.all(variantSKUs.map(async (sku) => {
     const local       = bySku.get(sku);
-    let currentLead   = local?.preview_image_url || "";
+    let currentImages = local?.preview_image_url ? [local.preview_image_url] : [];
     let currentQty = 0;
     const r = await getItemForEdit(sku);
     if (r.success) {
-      currentLead = r.item?.product?.imageUrls?.[0] || currentLead;
+      currentImages = r.item?.product?.imageUrls?.length ? [...r.item.product.imageUrls] : currentImages;
       currentQty  = r.item?.availability?.shipToLocationAvailability?.quantity ?? 0;
     }
-    editVariantImageOverrides[sku] = currentLead;
+    editVariantImageOverrides[sku] = currentImages;
     editVariantQtyOverrides[sku]   = currentQty;
-    return { sku, label: local?.option_value || sku, lead: currentLead, qty: currentQty, failed: !r.success, retried: !!r.retried, error: r.error || "eBay item lookup failed" };
+    return { sku, label: local?.option_value || sku, images: currentImages, qty: currentQty, failed: !r.success, retried: !!r.retried, error: r.error || "eBay item lookup failed" };
   }));
 
   const failures = rows.filter(r => r.failed);
@@ -1162,20 +1198,14 @@ async function renderEditVariantImageControls(product, group) {
   rows.forEach(r => {
     const row = document.createElement("div");
     row.className   = "mb-3";
-    const candidateImages = [...new Set([r.lead, ...editImageUrls].filter(Boolean))];
-    const selectedUrl     = r.lead || "";
-
-    const thumbsHtml = candidateImages.map((u) => {
-      const isSelected = Boolean(selectedUrl) && u === selectedUrl;
-      return `<img src="${esc(u)}" alt="" loading="lazy"
-        data-variant-thumb-sku="${esc(r.sku)}" data-thumb-url="${esc(u)}"
-        class="w-12 h-12 rounded object-cover border-2 cursor-pointer transition-all flex-shrink-0 ${isSelected ? "border-kkpink ring-1 ring-kkpink" : "border-gray-200 hover:border-gray-400"}" />`;
-    }).join("");
+    const assignedImages = [...new Set((r.images || []).filter(Boolean))];
+    const candidateImages = [...new Set([...editImageUrls, ...assignedImages].filter(Boolean))];
+    const optionsHtml = candidateImages.map((u, i) => `<option value="${esc(u)}">Image ${i + 1} — ${esc(imageOptionLabel(u, i))}</option>`).join("");
 
     row.innerHTML = `
       <div class="flex items-center gap-3 mb-1">
         <span class="text-[10px] font-bold text-gray-700">${esc(r.label)}</span>
-        ${selectedUrl ? `<span class="text-[9px] text-green-700 bg-green-50 border border-green-200 rounded px-1">variant image assigned</span>` : `<span class="text-[9px] text-gray-500 bg-gray-100 border border-gray-200 rounded px-1">no variant image assigned</span>`}
+        ${assignedImages.length ? `<span class="text-[9px] text-green-700 bg-green-50 border border-green-200 rounded px-1">${assignedImages.length} variant image${assignedImages.length === 1 ? "" : "s"}</span>` : `<span class="text-[9px] text-gray-500 bg-gray-100 border border-gray-200 rounded px-1">no variant images assigned</span>`}
         ${r.failed ? `<span class="text-[9px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1" title="${esc(r.error)}">fallback${r.retried ? " after retry" : ""}</span>` : ""}
         <label class="flex items-center gap-1 ml-auto">
           <span class="text-[9px] text-gray-500 uppercase font-bold">Qty</span>
@@ -1184,23 +1214,15 @@ async function renderEditVariantImageControls(product, group) {
             class="w-14 border-2 border-gray-300 rounded px-1 py-0.5 text-xs text-center focus:border-kkpink outline-none" />
         </label>
       </div>
-          <div class="text-[9px] text-gray-500 mb-1">Choose one image for this variant. Shared listing images are only candidates here.</div>
-      <div class="flex flex-wrap gap-1">${thumbsHtml}</div>`;
+      <div class="text-[9px] text-gray-500 mb-1">Images assigned to this variant. First image is the eBay main image for this variant.</div>
+      <div class="flex flex-wrap gap-1 mb-2" data-variant-assigned-images></div>
+      <select class="w-full border border-gray-300 rounded px-2 py-1 text-[10px] bg-white" data-add-variant-image>
+        <option value="">+ Add image from shared/gallery candidates</option>
+        ${optionsHtml}
+      </select>`;
 
-    row.querySelectorAll("[data-variant-thumb-sku]").forEach(thumb => {
-      thumb.addEventListener("click", () => {
-        const tSku = thumb.dataset.variantThumbSku;
-        const url  = thumb.dataset.thumbUrl;
-        editVariantImageOverrides[tSku] = url;
-        row.querySelectorAll("[data-variant-thumb-sku]").forEach(t => {
-          const sel = t.dataset.thumbUrl === url;
-          t.classList.toggle("border-kkpink", sel);
-          t.classList.toggle("ring-1", sel);
-          t.classList.toggle("ring-kkpink", sel);
-          t.classList.toggle("border-gray-200", !sel);
-        });
-      });
-    });
+    setAssignedVariantImages(row, assignedImages);
+    wireVariantImageSetControls(row, (urls) => { editVariantImageOverrides[r.sku] = urls; });
     row.querySelectorAll("[data-var-qty-sku]").forEach(input => {
       input.addEventListener("change", () => {
         editVariantQtyOverrides[input.dataset.varQtySku] = parseInt(input.value) || 0;
@@ -1603,8 +1625,7 @@ document.getElementById("btnCreateItem").addEventListener("click", async () => {
       for (const v of validVariants) {
         progressEl.textContent = `Creating ${v.option_value} (${v.sku})... (${created + 1}/${validVariants.length})`;
         const variantAspects = { ...aspects, Color: [v.option_value] };
-        const variantLead = v.variant_image_url || "";
-        const variantImages  = variantLead ? [variantLead] : [];
+        const variantImages = [...new Set((v.variant_image_urls || []).filter(Boolean))];
 
         const variantProduct = { title, description, condition, quantity: v.quantity, imageUrls: variantImages.slice(0, 24), aspects: variantAspects };
         if (lotSize > 1) variantProduct.lotSize = lotSize;
@@ -2066,12 +2087,7 @@ document.getElementById("btnSaveEdit").addEventListener("click", async () => {
         const mergedAspects = { ...sharedAspects };
         if (varAspects.Color) mergedAspects.Color = varAspects.Color;
 
-        const preferredLead         = editVariantImageOverrides[vSku];
-        const existingVariantImages = varItem.product?.imageUrls || [];
-        let variantImageUrls = [...existingVariantImages];
-        if (preferredLead) {
-          variantImageUrls = [preferredLead, ...existingVariantImages.filter(u => u !== preferredLead)].slice(0, 24);
-        }
+        const variantImageUrls = [...new Set((editVariantImageOverrides[vSku] || varItem.product?.imageUrls || []).filter(Boolean))].slice(0, 24);
 
         const resolvedQty          = editVariantQtyOverrides[vSku] ?? varItem.availability?.shipToLocationAvailability?.quantity ?? quantity;
         const variantUpdateProduct = { title, description, condition, imageUrls: variantImageUrls, aspects: mergedAspects,
