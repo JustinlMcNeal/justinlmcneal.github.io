@@ -450,7 +450,7 @@ function renderCards() {
           <span class="text-[9px] text-gray-400 font-semibold uppercase tracking-wide">Est Profit</span>
           ${rowEstProfitHtml(p)}
         </div>
-        ${wsChips(p, health)
+        ${wsChips(p, health)}
         <div class="flex gap-1 mt-3">${actions}</div>
         ${status !== "not_listed"
           ? `<button class="w-full mt-1 border border-gray-100 text-gray-400 py-1 rounded text-[9px] font-semibold hover:bg-gray-50 hover:text-black transition-all" data-action="open-sales" data-code="${esc(p.code)}">📊 Sales History</button>`
