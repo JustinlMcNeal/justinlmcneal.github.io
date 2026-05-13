@@ -233,7 +233,8 @@
 
             <!-- Images -->
             <div>
-              <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">Images</label>
+              <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">General Listing Images</label>
+              <p class="text-[10px] text-gray-500 mb-1">Shared gallery for the overall listing. Variant-specific images use separate controls when variants are present.</p>
               <div id="modalImageStrip" class="img-strip"></div>
               <div class="flex items-center gap-2 mt-1">
                 <button type="button" id="btnAddImgPush" class="text-[10px] font-bold text-blue-600 hover:text-kkpink">+ Add from Gallery</button>
@@ -278,8 +279,8 @@
 
             <!-- Variant Panel (shown when product has color variants) -->
             <div id="variantPanel" class="hidden">
-              <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-2 text-black/70">🎨 Color Variants</label>
-              <p class="text-[10px] text-gray-500 mb-2">This product has multiple color variants. Each creates a separate eBay inventory item grouped under one listing.</p>
+              <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-2 text-black/70">🎨 Variant Images + Quantities</label>
+              <p class="text-[10px] text-gray-500 mb-2">Assign a specific image and quantity to each variant. These are separate from the shared listing gallery above.</p>
               <div id="variantList" class="space-y-2 max-h-[200px] overflow-y-auto"></div>
               <div class="mt-2 text-[10px] text-gray-400">
                 <span id="variantCount">0</span> variant(s) · SKU pattern: <code id="variantSkuPattern" class="bg-gray-100 px-1 rounded"></code>
@@ -494,7 +495,8 @@
 
             <!-- Images -->
             <div>
-              <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">Images</label>
+              <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">General Listing Images</label>
+              <p class="text-[10px] text-gray-500 mb-1">Shared gallery for the overall listing. Variant-specific images use separate controls when variants are present.</p>
               <div id="editImageStrip" class="img-strip"></div>
               <div class="flex items-center gap-2 mt-1">
                 <button type="button" id="btnAddImgEdit" class="text-[10px] font-bold text-blue-600 hover:text-kkpink">+ Add from Gallery</button>
@@ -506,7 +508,7 @@
             <div id="editVariantImagesSection" class="hidden border border-gray-200 rounded-lg p-3 bg-gray-50">
               <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-2 text-black/70">Variant Images + Quantities</label>
               <div id="editVariantImagesList" class="space-y-2"></div>
-              <p class="text-[9px] text-gray-500 mt-2">Set a lead image and quantity per color variant. Quantity is managed per variant for this listing.</p>
+              <p class="text-[9px] text-gray-500 mt-2">Assign a specific image and quantity per color variant. Shared listing images remain separate unless you choose one for a variant.</p>
             </div>
 
             <!-- Item Specifics -->

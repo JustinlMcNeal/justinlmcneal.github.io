@@ -561,26 +561,56 @@ function enableBtn(id, enabled) {
 }
 
 // ── Variant Panel ─────────────────────────────────────────────
+function imageOptionLabel(url, idx) {
+  let file = (url || "").split("/").pop()?.split("?")[0] || `Image ${idx + 1}`;
+  try { file = decodeURIComponent(file); } catch (_) {}
+  return file.length > 34 ? `${file.slice(0, 31)}...` : file;
+}
+
 function renderVariantPanel(variants, baseCode) {
   const list = document.getElementById("variantList");
+  const availableImages = buildImageUrls(currentProduct);
   list.innerHTML = variants.map((v, i) => {
     const suffix  = v.option_value.toUpperCase().replace(/[^A-Z0-9]/g, "").substring(0, 6);
     const sku     = `${baseCode}-${suffix}`;
     const qty     = v.stock ?? 0;
     const oosNote = qty === 0 ? `<span class="text-[9px] text-orange-500 font-semibold ml-1">OOS</span>` : "";
-    return `<div class="flex items-center gap-2 p-2 rounded-lg border border-gray-200 bg-gray-50">
-      <input type="checkbox" class="variant-check accent-pink-500" data-idx="${i}" checked />
-      ${v.preview_image_url
-        ? `<img src="${v.preview_image_url}" class="w-8 h-8 rounded object-cover border" />`
-        : `<div class="w-8 h-8 rounded bg-gray-200 flex items-center justify-center text-[10px]">?</div>`}
+    const selectedImage = v.preview_image_url || "";
+    const imageOptions = [...new Set([selectedImage, ...availableImages].filter(Boolean))]
+      .map((url, imgIdx) => `<option value="${esc(url)}" ${url === selectedImage ? "selected" : ""}>${url === selectedImage ? "Current variant image" : `Image ${imgIdx + 1}`} — ${esc(imageOptionLabel(url, imgIdx))}</option>`)
+      .join("");
+    return `<div class="p-2 rounded-lg border border-gray-200 bg-gray-50">
+      <div class="flex items-center gap-2">
+        <input type="checkbox" class="variant-check accent-pink-500" data-idx="${i}" checked />
+        <div data-variant-img-preview="${i}" class="w-8 h-8 rounded border bg-white flex-shrink-0 overflow-hidden flex items-center justify-center text-[9px] text-gray-400">
+          ${selectedImage ? `<img src="${esc(selectedImage)}" class="w-full h-full object-cover" />` : "None"}
+        </div>
       <div class="flex-1 min-w-0">
         <div class="text-xs font-bold truncate">${esc(v.option_value)}${oosNote}</div>
         <div class="text-[10px] text-gray-400 font-mono">${esc(sku)}</div>
       </div>
       <input type="number" class="variant-qty w-14 border border-gray-300 rounded px-1 py-0.5 text-xs text-center" value="${qty}" min="0" data-idx="${i}" />
       <span class="text-[10px] text-gray-400">qty</span>
+      </div>
+      <label class="block text-[9px] text-gray-500 uppercase font-bold mt-2 mb-0.5">Variant-specific image</label>
+      <select class="variant-image w-full border border-gray-300 rounded px-2 py-1 text-[10px] bg-white" data-idx="${i}">
+        <option value="">No specific image assigned</option>
+        ${imageOptions}
+      </select>
     </div>`;
   }).join("");
+
+  list.querySelectorAll(".variant-image").forEach(select => {
+    select.addEventListener("change", () => {
+      const preview = list.querySelector(`[data-variant-img-preview="${select.dataset.idx}"]`);
+      const url = select.value;
+      if (preview) {
+        preview.innerHTML = url
+          ? `<img src="${esc(url)}" class="w-full h-full object-cover" />`
+          : "None";
+      }
+    });
+  });
 
   document.getElementById("variantCount").textContent      = variants.length;
   document.getElementById("variantSkuPattern").textContent = `${baseCode}-{COLOR}`;
@@ -589,13 +619,14 @@ function renderVariantPanel(variants, baseCode) {
 function getCheckedVariants() {
   const checks = document.querySelectorAll(".variant-check");
   const qtys   = document.querySelectorAll(".variant-qty");
+  const imgs   = document.querySelectorAll(".variant-image");
   const result = [];
   checks.forEach((cb, i) => {
     if (cb.checked && pushVariants[i]) {
       const v      = pushVariants[i];
       const suffix = v.option_value.toUpperCase().replace(/[^A-Z0-9]/g, "").substring(0, 6);
       const qty    = parseInt(qtys[i]?.value) || 1;
-      result.push({ ...v, sku: `${currentProduct.code}-${suffix}`, quantity: qty });
+      result.push({ ...v, sku: `${currentProduct.code}-${suffix}`, quantity: qty, variant_image_url: imgs[i]?.value || "" });
     }
   });
   return result;
@@ -1132,10 +1163,10 @@ async function renderEditVariantImageControls(product, group) {
     const row = document.createElement("div");
     row.className   = "mb-3";
     const candidateImages = [...new Set([r.lead, ...editImageUrls].filter(Boolean))];
-    const selectedUrl     = r.lead || candidateImages[0] || "";
+    const selectedUrl     = r.lead || "";
 
     const thumbsHtml = candidateImages.map((u) => {
-      const isSelected = u === selectedUrl;
+      const isSelected = Boolean(selectedUrl) && u === selectedUrl;
       return `<img src="${esc(u)}" alt="" loading="lazy"
         data-variant-thumb-sku="${esc(r.sku)}" data-thumb-url="${esc(u)}"
         class="w-12 h-12 rounded object-cover border-2 cursor-pointer transition-all flex-shrink-0 ${isSelected ? "border-kkpink ring-1 ring-kkpink" : "border-gray-200 hover:border-gray-400"}" />`;
@@ -1144,6 +1175,7 @@ async function renderEditVariantImageControls(product, group) {
     row.innerHTML = `
       <div class="flex items-center gap-3 mb-1">
         <span class="text-[10px] font-bold text-gray-700">${esc(r.label)}</span>
+        ${selectedUrl ? `<span class="text-[9px] text-green-700 bg-green-50 border border-green-200 rounded px-1">variant image assigned</span>` : `<span class="text-[9px] text-gray-500 bg-gray-100 border border-gray-200 rounded px-1">no variant image assigned</span>`}
         ${r.failed ? `<span class="text-[9px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1" title="${esc(r.error)}">fallback${r.retried ? " after retry" : ""}</span>` : ""}
         <label class="flex items-center gap-1 ml-auto">
           <span class="text-[9px] text-gray-500 uppercase font-bold">Qty</span>
@@ -1152,6 +1184,7 @@ async function renderEditVariantImageControls(product, group) {
             class="w-14 border-2 border-gray-300 rounded px-1 py-0.5 text-xs text-center focus:border-kkpink outline-none" />
         </label>
       </div>
+          <div class="text-[9px] text-gray-500 mb-1">Choose one image for this variant. Shared listing images are only candidates here.</div>
       <div class="flex flex-wrap gap-1">${thumbsHtml}</div>`;
 
     row.querySelectorAll("[data-variant-thumb-sku]").forEach(thumb => {
@@ -1570,9 +1603,8 @@ document.getElementById("btnCreateItem").addEventListener("click", async () => {
       for (const v of validVariants) {
         progressEl.textContent = `Creating ${v.option_value} (${v.sku})... (${created + 1}/${validVariants.length})`;
         const variantAspects = { ...aspects, Color: [v.option_value] };
-        const variantImages  = [];
-        if (v.preview_image_url) variantImages.push(v.preview_image_url);
-        imageUrls.forEach(url => { if (url !== v.preview_image_url) variantImages.push(url); });
+        const variantLead = v.variant_image_url || "";
+        const variantImages  = variantLead ? [variantLead] : [];
 
         const variantProduct = { title, description, condition, quantity: v.quantity, imageUrls: variantImages.slice(0, 24), aspects: variantAspects };
         if (lotSize > 1) variantProduct.lotSize = lotSize;
@@ -2036,10 +2068,9 @@ document.getElementById("btnSaveEdit").addEventListener("click", async () => {
 
         const preferredLead         = editVariantImageOverrides[vSku];
         const existingVariantImages = varItem.product?.imageUrls || [];
-        let variantImageUrls = existingVariantImages.length ? [...existingVariantImages] : [...imageUrls];
-        if (imageUrls.length) {
-          const lead = preferredLead || existingVariantImages[0] || imageUrls[0];
-          variantImageUrls = [lead, ...imageUrls.filter(u => u !== lead)].slice(0, 24);
+        let variantImageUrls = [...existingVariantImages];
+        if (preferredLead) {
+          variantImageUrls = [preferredLead, ...existingVariantImages.filter(u => u !== preferredLead)].slice(0, 24);
         }
 
         const resolvedQty          = editVariantQtyOverrides[vSku] ?? varItem.availability?.shipToLocationAvailability?.quantity ?? quantity;
