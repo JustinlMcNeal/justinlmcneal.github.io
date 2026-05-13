@@ -89,6 +89,56 @@ function isTransientGetItemError(status: number, data: unknown): boolean {
   return status >= 500 || errors.some((e) => e?.errorId === 25001 || /system error/i.test(e?.message || ""));
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function configuredLocationKey(): string {
+  return Deno.env.get("EBAY_LOCATION_KEY") || "default";
+}
+
+function isLocationInfoNotFoundError(data: unknown): boolean {
+  const errors = getEbayErrors(data);
+  return errors.some((e) => e?.errorId === 25002 && /location information not found/i.test(e?.message || ""))
+    || /location information not found/i.test(JSON.stringify(data || {}));
+}
+
+function getOfferListingId(offer: Record<string, unknown>): string | null {
+  const listing = offer.listing;
+  if (!isRecord(listing)) return null;
+  const value = listing.listingId || listing.legacyItemId || listing.ebayItemId;
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function structuredOfferFailure(
+  code: string,
+  message: string,
+  details: Record<string, unknown>,
+): Response {
+  return new Response(
+    JSON.stringify({ success: false, code, message, error: message, details }),
+    { headers: corsHeaders },
+  );
+}
+
+async function verifyMerchantLocation(accessToken: string, locationKey: string): Promise<Record<string, unknown>> {
+  const result = await ebayFetch(
+    accessToken,
+    "GET",
+    `${INV_API}/location/${encodeURIComponent(locationKey)}`,
+  );
+  const data = isRecord(result.data) ? result.data : {};
+  const merchantLocationStatus = typeof data.merchantLocationStatus === "string" ? data.merchantLocationStatus : "";
+  const ok = result.ok && !/disabled|deleted/i.test(merchantLocationStatus);
+  return {
+    ok,
+    locationKey,
+    status: result.status,
+    merchantLocationStatus,
+    upstream: result.ok ? undefined : result.data,
+  };
+}
+
 async function delay(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -410,16 +460,42 @@ serve(async (req) => {
 
     // ── UPDATE OFFER (price, quantity) ──────────────────────
     if (action === "update_offer") {
-      const { offerId, sku, priceCents, quantity, categoryId, policies, bestOfferTerms, storeCategoryNames } = body;
+      const { offerId, sku, expectedSku, listingId, priceCents, quantity, categoryId, policies, bestOfferTerms, storeCategoryNames } = body;
       if (!offerId) throw new Error("offerId is required");
 
       // First GET current offer to preserve fields we're not changing
       const current = await ebayFetch(accessToken, "GET", `${INV_API}/offer/${offerId}`);
       if (!current.ok) {
+        const stale = current.status === 404 || /not found|does not exist/i.test(JSON.stringify(current.data || {}));
+        if (stale) {
+          return structuredOfferFailure(
+            "STALE_OFFER_RELINK_REQUIRED",
+            "This saved eBay offer could not be found. It was likely replaced by manual relist activity; refresh/relink this listing before editing.",
+            { offerId, sku, expectedSku, listingId, upstreamStatus: current.status, upstream: current.data },
+          );
+        }
         throw new Error(`Get offer failed (${current.status}): ${JSON.stringify(current.data)}`);
       }
 
       const existing = current.data as Record<string, unknown>;
+      const liveSku = typeof existing.sku === "string" ? existing.sku : "";
+      const expectedLiveSku = typeof expectedSku === "string" && expectedSku ? expectedSku : (typeof sku === "string" ? sku : "");
+      const liveListingId = getOfferListingId(existing);
+      if (expectedLiveSku && liveSku && liveSku !== expectedLiveSku) {
+        return structuredOfferFailure(
+          "STALE_OFFER_RELINK_REQUIRED",
+          "This eBay offer no longer matches the local SKU linkage. It was likely changed by manual relist activity; refresh/relink this listing before editing.",
+          { offerId, sku, expectedSku: expectedLiveSku, liveSku, listingId, liveListingId },
+        );
+      }
+      if (listingId && liveListingId && liveListingId !== listingId) {
+        return structuredOfferFailure(
+          "STALE_OFFER_RELINK_REQUIRED",
+          "This eBay offer points at a different live listing than the local record. Refresh/relink this listing before editing.",
+          { offerId, sku, expectedSku: expectedLiveSku, listingId, liveListingId },
+        );
+      }
+
       const updatedOffer: Record<string, unknown> = {
         ...existing,
         availableQuantity: quantity ?? existing.availableQuantity,
@@ -465,6 +541,33 @@ serve(async (req) => {
         updatedOffer.storeCategoryNames = [];
       }
 
+      const existingLocationKey = typeof existing.merchantLocationKey === "string" ? existing.merchantLocationKey.trim() : "";
+      const defaultLocationKey = configuredLocationKey();
+      let repairedLocation = false;
+      let locationCheck: Record<string, unknown> | null = null;
+
+      if (existingLocationKey) {
+        locationCheck = await verifyMerchantLocation(accessToken, existingLocationKey);
+        if (!locationCheck.ok) {
+          return structuredOfferFailure(
+            "OFFER_LOCATION_RELINK_REQUIRED",
+            "The eBay offer references an inventory location that is missing or disabled. Rebuild/relink the offer from the current eBay state before editing.",
+            { offerId, sku, expectedSku: expectedLiveSku, listingId, liveListingId, merchantLocationKey: existingLocationKey, locationCheck },
+          );
+        }
+      } else {
+        locationCheck = await verifyMerchantLocation(accessToken, defaultLocationKey);
+        if (!locationCheck.ok) {
+          return structuredOfferFailure(
+            "OFFER_LOCATION_RELINK_REQUIRED",
+            "This eBay offer is missing location data, and the configured default inventory location could not be confirmed. Run location setup or relink the listing before editing.",
+            { offerId, sku, expectedSku: expectedLiveSku, listingId, liveListingId, configuredLocationKey: defaultLocationKey, locationCheck },
+          );
+        }
+        updatedOffer.merchantLocationKey = defaultLocationKey;
+        repairedLocation = true;
+      }
+
       const result = await ebayFetch(
         accessToken,
         "PUT",
@@ -473,6 +576,13 @@ serve(async (req) => {
       );
 
       if (!result.ok && result.status !== 204) {
+        if (isLocationInfoNotFoundError(result.data)) {
+          return structuredOfferFailure(
+            "STALE_OFFER_RELINK_REQUIRED",
+            "eBay rejected this offer update because its location-backed offer state is missing or stale. Refresh/relink this listing before editing; the same offer update should not be retried blindly.",
+            { offerId, sku, expectedSku: expectedLiveSku, listingId, liveListingId, merchantLocationKey: updatedOffer.merchantLocationKey || null, repairedLocation, locationCheck, upstreamStatus: result.status, upstream: result.data },
+          );
+        }
         throw new Error(`Update offer failed (${result.status}): ${JSON.stringify(result.data)}`);
       }
 
@@ -487,7 +597,7 @@ serve(async (req) => {
       }
 
       return new Response(
-        JSON.stringify({ success: true, offerId }),
+        JSON.stringify({ success: true, offerId, repairedLocation }),
         { headers: corsHeaders }
       );
     }

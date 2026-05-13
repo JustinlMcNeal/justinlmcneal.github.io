@@ -126,6 +126,16 @@ async function getItemForEdit(sku) {
   }
 }
 
+function offerUpdateErrorMessage(result, fallback) {
+  if (result?.code === "STALE_OFFER_RELINK_REQUIRED") {
+    return result.message || "This eBay offer appears to be stale after manual relist activity. Refresh/relink this listing before editing.";
+  }
+  if (result?.code === "OFFER_LOCATION_RELINK_REQUIRED") {
+    return result.message || "Location data for this eBay offer is missing or invalid. Rebuild/relink the offer from the current eBay state before editing.";
+  }
+  return result?.message || result?.error || fallback;
+}
+
 // ── Status Bar ────────────────────────────────────────────────
 function showStatus(msg, isError = false) {
   const bar = document.getElementById("statusBar");
@@ -2052,6 +2062,8 @@ document.getElementById("btnSaveEdit").addEventListener("click", async () => {
           action:           "update_offer",
           offerId:          offerRow.offerId,
           sku:              editProduct.code,
+          expectedSku:      vSku,
+          listingId:        editProduct.ebay_listing_id,
           priceCents,
           quantity:         editVariantQtyOverrides[vSku] ?? offerRow.availableQuantity ?? quantity,
           categoryId:       editCategoryId || undefined,
@@ -2059,7 +2071,7 @@ document.getElementById("btnSaveEdit").addEventListener("click", async () => {
           // Best Offer not permitted on group (variant) listings (eBay error 25737)
           storeCategoryNames: editStoreCat ? [editStoreCat] : [],
         });
-        if (!offerResult.success) throw new Error(offerResult.error || `Offer update failed for ${vSku}`);
+        if (!offerResult.success) throw new Error(offerUpdateErrorMessage(offerResult, `Offer update failed for ${vSku}`));
       }
     } else {
       status.textContent = "Updating item...";
@@ -2082,13 +2094,13 @@ document.getElementById("btnSaveEdit").addEventListener("click", async () => {
         const offerResult  = await callEdge("ebay-manage-listing", {
           action:           "update_offer",
           offerId:          editProduct.ebay_offer_id,
-          sku, priceCents, quantity,
+          sku, expectedSku: sku, listingId: editProduct.ebay_listing_id, priceCents, quantity,
           categoryId:       editCategoryId || undefined,
           policies:         getSelectedPolicies("edit"),
           bestOfferTerms:   getBestOfferTerms("edit"),
           storeCategoryNames: editStoreCat ? [editStoreCat] : [],
         });
-        if (!offerResult.success) throw new Error(offerResult.error || "Offer update failed");
+        if (!offerResult.success) throw new Error(offerUpdateErrorMessage(offerResult, "Offer update failed"));
       }
     }
 
