@@ -70,3 +70,26 @@
 .ai-badge-inferred  { background: #fef3c7; color: #92400e; }
 .ai-badge-default   { background: #dcfce7; color: #166534; }
 .ai-badge-from_data { background: #dbeafe; color: #1e40af; }
+
+/* ── Workspace Chips (Phase 1 read-only metrics) ─────────────── */
+.ws-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 3px;
+}
+.ws-chip {
+  display: inline-block;
+  padding: 0 5px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  line-height: 16px;
+  white-space: nowrap;
+}
+.ws-chip-sales { background: #dcfce7; color: #166534; }
+.ws-chip-date  { background: #f3f4f6; color: #374151; }
+.ws-chip-promo { background: #ede9fe; color: #6d28d9; }
+.ws-chip-issue { background: #fee2e2; color: #991b1b; cursor: help; }

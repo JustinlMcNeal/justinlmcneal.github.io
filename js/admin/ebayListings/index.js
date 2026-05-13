@@ -120,6 +120,67 @@ function populatePolicyDropdowns() {
   fill("editPaymentPolicy",      "payment_policy",     defaultPayment);
 }
 
+// ── Workspace Metrics (Phase 1: read-only, non-blocking) ────────────────────
+// Fetches v_ebay_listing_workspace and merges workspace metrics onto product rows.
+// If the view is unavailable, products load normally and metric badges show "—".
+async function mergeWorkspaceMetrics(products) {
+  try {
+    const { data: wsData, error: wsErr } = await supabase
+      .from("v_ebay_listing_workspace")
+      .select("product_code, sold_qty_30d, sold_qty_90d, last_sold_at, avg_sold_price_cents_90d, gallery_image_count, active_variant_count, active_variant_stock_total, issue_flags, issue_count");
+    if (wsErr || !wsData) {
+      console.warn("[workspace] metrics unavailable:", wsErr?.message);
+      return products;
+    }
+    const map = Object.fromEntries(wsData.map(row => [row.product_code, row]));
+    return products.map(p => ({ ...p, _ws: map[p.code] || null }));
+  } catch (e) {
+    console.warn("[workspace] metrics skipped:", e.message);
+    return products;
+  }
+}
+
+// Relative date formatter for "last sold" badges.
+function formatRelativeDate(dtStr) {
+  if (!dtStr) return null;
+  const dt    = new Date(dtStr);
+  const diffMs = Date.now() - dt.getTime();
+  const days  = Math.floor(diffMs / 86400000);
+  if (days === 0) return "today";
+  if (days === 1) return "1d ago";
+  if (days < 30)  return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months}mo ago`;
+  return `${Math.floor(months / 12)}y ago`;
+}
+
+// Build compact workspace chip HTML for a product row/card.
+// Returns empty string when _ws is null (view unavailable) — no crash, no badge.
+function wsChips(p) {
+  const ws = p._ws;
+  if (!ws) return "";
+  const chips = [];
+
+  const sold30 = ws.sold_qty_30d ?? 0;
+  if (sold30 > 0) {
+    chips.push(`<span class="ws-chip ws-chip-sales" title="Units sold in last 30 days">${sold30} sold</span>`);
+  }
+  if (ws.last_sold_at) {
+    const ago = formatRelativeDate(ws.last_sold_at);
+    if (ago) chips.push(`<span class="ws-chip ws-chip-date" title="Last eBay sale">${ago}</span>`);
+  }
+  if (p.ebay_volume_promo_id) {
+    chips.push(`<span class="ws-chip ws-chip-promo" title="Has volume promotion">PROMO</span>`);
+  }
+  const issues = ws.issue_count ?? 0;
+  if (issues > 0) {
+    const flagNames = ws.issue_flags ? Object.keys(ws.issue_flags).join(", ") : "";
+    chips.push(`<span class="ws-chip ws-chip-issue" title="${esc(flagNames)}">⚠ ${issues}</span>`);
+  }
+  if (!chips.length) return "";
+  return `<div class="ws-chips">${chips.join("")}</div>`;
+}
+
 // ── Load Products ─────────────────────────────────────────────
 async function loadProducts() {
   const { data, error } = await supabase
@@ -132,7 +193,7 @@ async function loadProducts() {
     return;
   }
 
-  allProducts = data || [];
+  allProducts = await mergeWorkspaceMetrics(data || []);
   applyFilters();
   updateStats();
 }
@@ -141,6 +202,7 @@ async function loadProducts() {
 function applyFilters() {
   const query     = (document.getElementById("searchInput")?.value || "").toLowerCase().trim();
   const statusVal = document.getElementById("statusFilter")?.value || "";
+  const quickVal  = document.getElementById("quickFilter")?.value || "";
 
   filteredProducts = allProducts.filter(p => {
     if (query) {
@@ -150,6 +212,15 @@ function applyFilters() {
     if (statusVal) {
       const pStatus = p.ebay_status || "not_listed";
       if (pStatus !== statusVal) return false;
+    }
+    if (quickVal === "needs_work") {
+      if (!p._ws || (p._ws.issue_count ?? 0) === 0) return false;
+    } else if (quickVal === "no_sales_30d") {
+      const st = p.ebay_status || "not_listed";
+      if (st !== "active") return false;
+      if (p._ws && (p._ws.sold_qty_30d ?? 0) > 0) return false;
+    } else if (quickVal === "has_promo") {
+      if (!p.ebay_volume_promo_id) return false;
     }
     return true;
   });
@@ -200,9 +271,12 @@ function renderTable() {
         ${isListed ? `<input type="checkbox" class="bulk-check accent-kkpink" data-code="${esc(p.code)}" data-offer="${esc(p.ebay_offer_id || '')}" data-sku="${esc(p.ebay_sku || p.code)}" />` : ""}
       </td>
       <td class="py-2 pr-3">
-        <div class="flex items-center gap-2">
-          ${p.catalog_image_url ? `<img src="${p.catalog_image_url}" class="w-8 h-8 object-cover rounded" />` : '<div class="w-8 h-8 bg-gray-100 rounded"></div>'}
-          <a href="/pages/admin/products.html?q=${encodeURIComponent(p.name)}" target="_blank" class="font-medium text-sm line-clamp-1 text-blue-600 hover:underline">${esc(p.name)}</a>
+        <div class="flex items-start gap-2">
+          ${p.catalog_image_url ? `<img src="${p.catalog_image_url}" class="w-8 h-8 object-cover rounded flex-shrink-0" />` : '<div class="w-8 h-8 bg-gray-100 rounded flex-shrink-0"></div>'}
+          <div>
+            <a href="/pages/admin/products.html?q=${encodeURIComponent(p.name)}" target="_blank" class="font-medium text-sm line-clamp-1 text-blue-600 hover:underline">${esc(p.name)}</a>
+            ${wsChips(p)}
+          </div>
         </div>
       </td>
       <td class="py-2 pr-3 text-xs font-mono">${p.ebay_listing_id
@@ -285,6 +359,7 @@ function renderCards() {
           </div>
           <span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase ebay-${status}">${statusLabel}</span>
         </div>
+        ${wsChips(p)}
         <div class="flex gap-1 mt-3">${actions}</div>
       </div>
     </div>`;
@@ -994,6 +1069,7 @@ document.getElementById("searchClear").addEventListener("click", () => {
   applyFilters();
 });
 document.getElementById("statusFilter").addEventListener("change", applyFilters);
+document.getElementById("quickFilter").addEventListener("change", applyFilters);
 
 // View toggle
 document.querySelectorAll(".view-toggle-btn").forEach(btn => {
