@@ -534,6 +534,13 @@ serve(async (req) => {
       );
       if (offersForGroup.ok) {
         const groupOffers = isRecord(offersForGroup.data) && Array.isArray(offersForGroup.data.offers) ? offersForGroup.data.offers.filter(isRecord) : [];
+        if (groupOffers.length < 2) {
+          return structuredOfferFailure(
+            "PUBLISH_GROUP_REQUIRES_VARIATIONS",
+            "This saved eBay group has fewer than two variant offers. Publish it as a normal offer or rebuild it in a category that supports multi-variation listings.",
+            { inventoryItemGroupKey, sku, offerCount: groupOffers.length },
+          );
+        }
         for (const offer of groupOffers) {
           const offerId = offerIdValue(offer);
           const offerSku = typeof offer.sku === "string" ? offer.sku : undefined;

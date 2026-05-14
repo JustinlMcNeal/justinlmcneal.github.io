@@ -862,6 +862,14 @@ function publishQuantityForProduct(product) {
   return variantStock > 0 ? variantStock : 1;
 }
 
+function activeVariantCount(product) {
+  return (product?.product_variants || []).filter(v => v.is_active).length;
+}
+
+function isEffectiveGroupListing(product) {
+  return Boolean(product?.ebay_item_group_key) && activeVariantCount(product) > 1;
+}
+
 // ── AI Badge ──────────────────────────────────────────────────
 function addAiBadge(inputId, source) {
   const input = document.getElementById(inputId);
@@ -1091,7 +1099,7 @@ window.openEdit = async function openEdit(code) {
   editProduct = allProducts.find(p => p.code === code);
   if (!editProduct) return;
 
-  const isGroupListing = !!editProduct.ebay_item_group_key;
+  const isGroupListing = isEffectiveGroupListing(editProduct);
 
   document.getElementById("editModal").classList.remove("hidden");
   document.getElementById("editLoading").classList.remove("hidden");
@@ -1459,7 +1467,8 @@ window.doWithdraw = async function doWithdraw(code, offerId, itemGroupKey) {
   if (!confirm(`End eBay listing for ${code}?`)) return;
   showStatus("Withdrawing…");
   try {
-    const hasGroup = itemGroupKey && String(itemGroupKey).trim();
+    const product = allProducts.find(p => p.code === code);
+    const hasGroup = isEffectiveGroupListing(product) && itemGroupKey && String(itemGroupKey).trim();
     const hasOffer = offerId && String(offerId).trim();
     if (!hasGroup && !hasOffer) {
       showStatus("❌ Cannot end listing: missing offer ID/group key", true);
@@ -1476,8 +1485,13 @@ window.doWithdraw = async function doWithdraw(code, offerId, itemGroupKey) {
 window.doPublish = async function doPublish(code, offerId, itemGroupKey) {
   showStatus("Publishing…");
   try {
-    const hasGroup = itemGroupKey && String(itemGroupKey).trim();
     const product = allProducts.find(p => p.code === code);
+    const hasGroup = isEffectiveGroupListing(product) && itemGroupKey && String(itemGroupKey).trim();
+    const hasOffer = offerId && String(offerId).trim();
+    if (!hasGroup && !hasOffer) {
+      showStatus("❌ Cannot publish: missing offer ID. Use Resume Push to rebuild the offer.", true);
+      return;
+    }
     const variantQuantities = Object.fromEntries((product?.product_variants || [])
       .filter(v => v.is_active && (parseInt(v.stock, 10) || 0) > 0)
       .map(v => {
@@ -1487,7 +1501,7 @@ window.doPublish = async function doPublish(code, offerId, itemGroupKey) {
     variantQuantities[code] = publishQuantityForProduct(product);
     const result   = hasGroup
       ? await callEdge("ebay-manage-listing", { action: "publish_group", inventoryItemGroupKey: String(itemGroupKey).trim(), sku: code, variantQuantities })
-      : await callEdge("ebay-manage-listing", { action: "publish", offerId, sku: code, quantity: publishQuantityForProduct(product) });
+      : await callEdge("ebay-manage-listing", { action: "publish", offerId: String(offerId).trim(), sku: code, quantity: publishQuantityForProduct(product) });
     if (result.success) {
       showStatus(`✅ Published! Listing ID: ${result.listingId}`);
       loadProducts();
