@@ -168,16 +168,37 @@ function stripOfferReadonlyFields(offer: Record<string, unknown>): Record<string
   return writable;
 }
 
-function normalizeProductAspects(aspects: unknown): Record<string, unknown> {
+function hasAspectValue(aspects: Record<string, unknown>, aspectName: string): boolean {
+  return Object.keys(aspects).some((key) => key.toLowerCase() === aspectName.toLowerCase()
+    && (Array.isArray(aspects[key])
+      ? (aspects[key] as unknown[]).some((value) => typeof value === "string" && value.trim())
+      : typeof aspects[key] === "string" && (aspects[key] as string).trim()));
+}
+
+function defaultTypeAspect(title: unknown): string {
+  const text = typeof title === "string" ? title.toLowerCase() : "";
+  if (/key\s*chain|keychain/.test(text)) return "Keychain";
+  if (/charm/.test(text)) return "Charm";
+  if (/beanie/.test(text)) return "Beanie";
+  if (/hat|cap/.test(text)) return "Hat";
+  if (/earring/.test(text)) return "Earrings";
+  if (/necklace/.test(text)) return "Necklace";
+  if (/bracelet/.test(text)) return "Bracelet";
+  if (/ring/.test(text)) return "Ring";
+  if (/bag|tote|purse/.test(text)) return "Bag";
+  if (/hoodie/.test(text)) return "Hoodie";
+  if (/plush/.test(text)) return "Plush";
+  return "Accessory";
+}
+
+function normalizeProductAspects(aspects: unknown, title?: unknown): Record<string, unknown> {
   const normalized = isRecord(aspects) ? { ...aspects } : {};
-  const hasBrand = Object.keys(normalized).some((key) => key.toLowerCase() === "brand"
-    && Array.isArray(normalized[key])
-    && (normalized[key] as unknown[]).some((value) => typeof value === "string" && value.trim()));
-  if (!hasBrand) normalized.Brand = ["Unbranded"];
+  if (!hasAspectValue(normalized, "Brand")) normalized.Brand = ["Unbranded"];
+  if (!hasAspectValue(normalized, "Type")) normalized.Type = [defaultTypeAspect(title)];
   return normalized;
 }
 
-async function ensureInventoryItemBrand(accessToken: string, sku: string | undefined): Promise<{ ok: boolean; repaired?: boolean; error?: string; details?: Record<string, unknown> }> {
+async function ensureInventoryItemRequiredAspects(accessToken: string, sku: string | undefined): Promise<{ ok: boolean; repaired?: boolean; error?: string; details?: Record<string, unknown> }> {
   if (!sku) return { ok: true };
   const currentItem = await ebayFetch(accessToken, "GET", `${INV_API}/inventory_item/${encodeURIComponent(sku)}`);
   if (!currentItem.ok) {
@@ -187,11 +208,9 @@ async function ensureInventoryItemBrand(accessToken: string, sku: string | undef
   const item = currentItem.data;
   const product = isRecord(item.product) ? { ...item.product } : {};
   const before = isRecord(product.aspects) ? product.aspects : {};
-  const after = normalizeProductAspects(before);
-  const hadBrand = Object.keys(before).some((key) => key.toLowerCase() === "brand"
-    && Array.isArray(before[key])
-    && (before[key] as unknown[]).some((value) => typeof value === "string" && value.trim()));
-  if (hadBrand) return { ok: true, repaired: false };
+  const after = normalizeProductAspects(before, product.title);
+  const missingAspects = ["Brand", "Type"].filter((name) => !hasAspectValue(before, name));
+  if (!missingAspects.length) return { ok: true, repaired: false };
 
   product.aspects = after;
   const updateBody: Record<string, unknown> = {
@@ -203,9 +222,9 @@ async function ensureInventoryItemBrand(accessToken: string, sku: string | undef
   if (item.lotSize) updateBody.lotSize = item.lotSize;
   const update = await ebayFetch(accessToken, "PUT", `${INV_API}/inventory_item/${encodeURIComponent(sku)}`, updateBody);
   if (!update.ok && update.status !== 204) {
-    return { ok: false, error: `Repair Brand item specific failed (${update.status})`, details: { sku, upstreamStatus: update.status, upstream: update.data } };
+    return { ok: false, error: `Repair required item specifics failed (${update.status})`, details: { sku, missingAspects, upstreamStatus: update.status, upstream: update.data } };
   }
-  return { ok: true, repaired: true };
+  return { ok: true, repaired: true, details: { sku, repairedAspects: missingAspects } };
 }
 
 async function ensurePublishQuantity(accessToken: string, offerId: string, fallbackSku: string | undefined, desiredQuantity: number | null): Promise<{ ok: boolean; sku?: string; quantity?: number; error?: string; details?: Record<string, unknown> }> {
@@ -390,7 +409,7 @@ serve(async (req) => {
           title: product.title,
           description: product.description || "",
           imageUrls: product.imageUrls || [],
-          aspects: normalizeProductAspects(product.aspects),
+          aspects: normalizeProductAspects(product.aspects, product.title),
         },
       };
 
@@ -524,12 +543,12 @@ serve(async (req) => {
           { offerId, sku, publishQty, ...quantityCheck.details },
         );
       }
-      const brandCheck = await ensureInventoryItemBrand(accessToken, quantityCheck.sku || sku);
-      if (!brandCheck.ok) {
+      const aspectCheck = await ensureInventoryItemRequiredAspects(accessToken, quantityCheck.sku || sku);
+      if (!aspectCheck.ok) {
         return structuredOfferFailure(
-          "PUBLISH_BRAND_REQUIRED",
-          `${brandCheck.error || "The item specific Brand is missing."} Add Brand to this listing and try publishing again.`,
-          { offerId, sku, ...brandCheck.details },
+          "PUBLISH_ASPECTS_REQUIRED",
+          `${aspectCheck.error || "A required item specific is missing."} Add the missing item specific to this listing and try publishing again.`,
+          { offerId, sku, ...aspectCheck.details },
         );
       }
 
@@ -612,12 +631,12 @@ serve(async (req) => {
               { inventoryItemGroupKey, offerId, sku: offerSku, variantQuantities, ...quantityCheck.details },
             );
           }
-          const brandCheck = await ensureInventoryItemBrand(accessToken, quantityCheck.sku || offerSku);
-          if (!brandCheck.ok) {
+          const aspectCheck = await ensureInventoryItemRequiredAspects(accessToken, quantityCheck.sku || offerSku);
+          if (!aspectCheck.ok) {
             return structuredOfferFailure(
-              "PUBLISH_BRAND_REQUIRED",
-              `${brandCheck.error || "The item specific Brand is missing."} Add Brand to this variant and try publishing again.`,
-              { inventoryItemGroupKey, offerId, sku: offerSku, ...brandCheck.details },
+              "PUBLISH_ASPECTS_REQUIRED",
+              `${aspectCheck.error || "A required item specific is missing."} Add the missing item specific to this variant and try publishing again.`,
+              { inventoryItemGroupKey, offerId, sku: offerSku, ...aspectCheck.details },
             );
           }
         }

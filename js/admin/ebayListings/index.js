@@ -990,7 +990,7 @@ async function fetchAspects(categoryId) {
     }
 
     currentAspects = result.aspects;
-    const defaults  = { Brand: "Unbranded", Condition: "New" };
+    const defaults  = { Brand: "Unbranded", Condition: "New", Type: "Accessory" };
     const required  = result.aspects.filter(a => a.required);
     const optional  = result.aspects.filter(a => !a.required).slice(0, 15);
 
@@ -1425,6 +1425,8 @@ window.openEdit = async function openEdit(code) {
         for (const [key, val] of Object.entries(existingAspects)) {
           defaults[key] = Array.isArray(val) ? val[0] : val;
         }
+        if (!defaults.Brand) defaults.Brand = "Unbranded";
+        if (!defaults.Type) defaults.Type = "Accessory";
         if (isGroupListing && !defaults.Color) {
           const colorSpec = editProduct._groupData?.variesBy?.specifications?.find(s => s?.name === "Color");
           if (colorSpec?.values?.length) defaults.Color = colorSpec.values.join(", ");
