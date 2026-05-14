@@ -848,11 +848,18 @@ function getCheckedVariants() {
     if (cb.checked && pushVariants[i]) {
       const v      = pushVariants[i];
       const suffix = v.option_value.toUpperCase().replace(/[^A-Z0-9]/g, "").substring(0, 6);
-      const qty    = parseInt(qtys[i]?.value) || 1;
+      const rawQty = parseInt(qtys[i]?.value, 10);
+      const qty    = Number.isFinite(rawQty) && rawQty >= 0 ? rawQty : 0;
       result.push({ ...v, sku: `${currentProduct.code}-${suffix}`, quantity: qty, variant_image_urls: getAssignedVariantImages(rows[i]) });
     }
   });
   return result;
+}
+
+function publishQuantityForProduct(product) {
+  const variants = (product?.product_variants || []).filter(v => v.is_active);
+  const variantStock = variants.reduce((sum, v) => sum + (parseInt(v.stock, 10) || 0), 0);
+  return variantStock > 0 ? variantStock : 1;
 }
 
 // ── AI Badge ──────────────────────────────────────────────────
@@ -1470,9 +1477,17 @@ window.doPublish = async function doPublish(code, offerId, itemGroupKey) {
   showStatus("Publishing…");
   try {
     const hasGroup = itemGroupKey && String(itemGroupKey).trim();
+    const product = allProducts.find(p => p.code === code);
+    const variantQuantities = Object.fromEntries((product?.product_variants || [])
+      .filter(v => v.is_active && (parseInt(v.stock, 10) || 0) > 0)
+      .map(v => {
+        const suffix = v.option_value.toUpperCase().replace(/[^A-Z0-9]/g, "").substring(0, 6);
+        return [`${code}-${suffix}`, parseInt(v.stock, 10) || 0];
+      }));
+    variantQuantities[code] = publishQuantityForProduct(product);
     const result   = hasGroup
-      ? await callEdge("ebay-manage-listing", { action: "publish_group", inventoryItemGroupKey: String(itemGroupKey).trim(), sku: code })
-      : await callEdge("ebay-manage-listing", { action: "publish", offerId, sku: code });
+      ? await callEdge("ebay-manage-listing", { action: "publish_group", inventoryItemGroupKey: String(itemGroupKey).trim(), sku: code, variantQuantities })
+      : await callEdge("ebay-manage-listing", { action: "publish", offerId, sku: code, quantity: publishQuantityForProduct(product) });
     if (result.success) {
       showStatus(`✅ Published! Listing ID: ${result.listingId}`);
       loadProducts();
@@ -1916,7 +1931,8 @@ document.getElementById("btnCreateOffer").addEventListener("click", async () => 
     const checked       = getCheckedVariants();
     // Always use all active checked SKUs — some may already exist on eBay from a prior run,
     // and create_group_offer handles 25002 (already exists) gracefully.
-    const allActiveSkus = checked.map(v => v.sku);
+    const publishableVariants = checked.filter(v => v.quantity > 0);
+    const allActiveSkus = publishableVariants.map(v => v.sku);
     const effectiveSkus = allActiveSkus;
 
     if (isVariantListing && allActiveSkus.length < 2) {
@@ -1925,9 +1941,9 @@ document.getElementById("btnCreateOffer").addEventListener("click", async () => 
         btn.disabled = false; btn.textContent = "2. Create Offer";
         return;
       }
-      const variantItem = checked.find(v => v.sku === allActiveSkus[0]) || checked[0];
+      const variantItem = publishableVariants.find(v => v.sku === allActiveSkus[0]) || publishableVariants[0];
       const vSku        = variantItem.sku;
-      const vQty        = variantItem.quantity || 1;
+      const vQty        = variantItem.quantity;
       const storeCat    = document.getElementById("modalStoreCategory").value;
       const result      = await callEdge("ebay-manage-listing", {
         action:           "create_offer",
@@ -1967,7 +1983,7 @@ document.getElementById("btnCreateOffer").addEventListener("click", async () => 
         btn.disabled = false; btn.textContent = "2. Create Group + Offer";
         return;
       }
-      const colorValues = checked.filter(v => variantSKUs.includes(v.sku)).map(v => v.option_value);
+      const colorValues = publishableVariants.filter(v => variantSKUs.includes(v.sku)).map(v => v.option_value);
       const variesBy        = { aspectsImageVariesBy: ["Color"], specifications: [{ name: "Color", values: colorValues }] };
 
       progressEl.textContent = "Creating inventory item group...";
@@ -1988,10 +2004,12 @@ document.getElementById("btnCreateOffer").addEventListener("click", async () => 
 
       progressEl.textContent = "Group created ✓ — Creating offer...";
       const storeCat    = document.getElementById("modalStoreCategory").value;
+      const variantQuantities = Object.fromEntries(publishableVariants.map(v => [v.sku, v.quantity]));
       const offerResult = await callEdge("ebay-manage-listing", {
         action:               "create_group_offer",
         inventoryItemGroupKey: groupKey,
         variantSKUs, categoryId,
+        variantQuantities,
         priceCents:           Math.round(price * 100),
         policies:             getSelectedPolicies("modal"),
         bestOfferTerms:       getBestOfferTerms("modal"),
@@ -2046,6 +2064,9 @@ document.getElementById("btnPublish").addEventListener("click", async () => {
   const sku      = document.getElementById("modalSku").value.trim();
   const offerId  = currentProduct._offerId || currentProduct.ebay_offer_id;
   const groupKey = currentProduct._groupKey || currentProduct.ebay_item_group_key || `${currentProduct.code}-GROUP`;
+  const checked = getCheckedVariants().filter(v => v.quantity > 0);
+  const variantQuantities = Object.fromEntries(checked.map(v => [v.sku, v.quantity]));
+  variantQuantities[currentProduct.code] = checked.reduce((sum, v) => sum + v.quantity, 0) || (parseInt(document.getElementById("modalQuantity").value, 10) || 1);
 
   if (!isVariantListing && !offerId) {
     status.textContent = "❌ No offer ID";
@@ -2059,8 +2080,8 @@ document.getElementById("btnPublish").addEventListener("click", async () => {
   const priceCents  = Math.round(price * 100);
 
   const result = isVariantListing
-      ? await callEdge("ebay-manage-listing", { action: "publish_group", inventoryItemGroupKey: groupKey, sku: currentProduct.code, categoryId, priceCents })
-      : await callEdge("ebay-manage-listing", { action: "publish", offerId, sku, categoryId, priceCents });
+      ? await callEdge("ebay-manage-listing", { action: "publish_group", inventoryItemGroupKey: groupKey, sku: currentProduct.code, categoryId, priceCents, variantQuantities })
+      : await callEdge("ebay-manage-listing", { action: "publish", offerId, sku, categoryId, priceCents, quantity: parseInt(document.getElementById("modalQuantity").value, 10) || 1 });
 
     if (result.success) {
       status.textContent = `✅ Published! Listing ID: ${result.listingId}`;

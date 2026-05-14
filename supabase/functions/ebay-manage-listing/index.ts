@@ -139,6 +139,82 @@ function offerIdValue(offer: Record<string, unknown>): string | null {
   return typeof offer.offerId === "string" && offer.offerId.trim() ? offer.offerId.trim() : null;
 }
 
+function positiveQuantity(value: unknown): number | null {
+  const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  if (!Number.isFinite(parsed)) return null;
+  const qty = Math.floor(parsed);
+  return qty > 0 ? qty : null;
+}
+
+function inventoryItemQuantity(item: Record<string, unknown>): number | null {
+  const availability = isRecord(item.availability) ? item.availability : {};
+  const ship = isRecord(availability.shipToLocationAvailability) ? availability.shipToLocationAvailability : {};
+  return typeof ship.quantity === "number" ? ship.quantity : positiveQuantity(ship.quantity);
+}
+
+function stripOfferReadonlyFields(offer: Record<string, unknown>): Record<string, unknown> {
+  const writable = { ...offer };
+  ["offerId", "listing", "statusEnum", "auditInfo", "format", "marketplaceId"].forEach((k) => delete writable[k]);
+  return writable;
+}
+
+async function ensurePublishQuantity(accessToken: string, offerId: string, fallbackSku: string | undefined, desiredQuantity: number | null): Promise<{ ok: boolean; sku?: string; quantity?: number; error?: string; details?: Record<string, unknown> }> {
+  const currentOffer = await ebayFetch(accessToken, "GET", `${INV_API}/offer/${offerId}`);
+  if (!currentOffer.ok) {
+    return { ok: false, error: `Get offer failed (${currentOffer.status})`, details: { offerId, upstreamStatus: currentOffer.status, upstream: currentOffer.data } };
+  }
+
+  const offer = isRecord(currentOffer.data) ? currentOffer.data : {};
+  const offerSku = typeof offer.sku === "string" && offer.sku.trim() ? offer.sku.trim() : fallbackSku;
+  const offerQty = positiveQuantity(offer.availableQuantity);
+  let repairedQuantity = offerQty;
+
+  if (!offerQty) {
+    if (!desiredQuantity) {
+      return { ok: false, sku: offerSku, error: "Publish requires quantity greater than 0 before eBay will accept the listing.", details: { offerId, sku: offerSku, availableQuantity: offer.availableQuantity } };
+    }
+    const updatedOffer = stripOfferReadonlyFields(offer);
+    updatedOffer.availableQuantity = desiredQuantity;
+    const offerUpdate = await ebayFetch(accessToken, "PUT", `${INV_API}/offer/${offerId}`, updatedOffer);
+    if (!offerUpdate.ok && offerUpdate.status !== 204) {
+      return { ok: false, sku: offerSku, error: `Repair offer quantity failed (${offerUpdate.status})`, details: { offerId, sku: offerSku, upstreamStatus: offerUpdate.status, upstream: offerUpdate.data } };
+    }
+    repairedQuantity = desiredQuantity;
+  }
+
+  if (offerSku) {
+    const currentItem = await ebayFetch(accessToken, "GET", `${INV_API}/inventory_item/${encodeURIComponent(offerSku)}`);
+    if (currentItem.ok && isRecord(currentItem.data)) {
+      const itemQty = positiveQuantity(inventoryItemQuantity(currentItem.data));
+      if (!itemQty) {
+        if (!desiredQuantity) {
+          return { ok: false, sku: offerSku, error: "Publish requires inventory item quantity greater than 0 before eBay will accept the listing.", details: { offerId, sku: offerSku, inventoryQuantity: inventoryItemQuantity(currentItem.data) } };
+        }
+        const existingItem = currentItem.data;
+        const availability = isRecord(existingItem.availability) ? { ...existingItem.availability } : {};
+        availability.shipToLocationAvailability = {
+          ...(isRecord(availability.shipToLocationAvailability) ? availability.shipToLocationAvailability : {}),
+          quantity: desiredQuantity,
+        };
+        const itemUpdateBody: Record<string, unknown> = {
+          condition: existingItem.condition || "NEW",
+          availability,
+          product: isRecord(existingItem.product) ? existingItem.product : {},
+        };
+        if (existingItem.packageWeightAndSize) itemUpdateBody.packageWeightAndSize = existingItem.packageWeightAndSize;
+        if (existingItem.lotSize) itemUpdateBody.lotSize = existingItem.lotSize;
+        const itemUpdate = await ebayFetch(accessToken, "PUT", `${INV_API}/inventory_item/${encodeURIComponent(offerSku)}`, itemUpdateBody);
+        if (!itemUpdate.ok && itemUpdate.status !== 204) {
+          return { ok: false, sku: offerSku, error: `Repair inventory quantity failed (${itemUpdate.status})`, details: { offerId, sku: offerSku, upstreamStatus: itemUpdate.status, upstream: itemUpdate.data } };
+        }
+        repairedQuantity = desiredQuantity;
+      }
+    }
+  }
+
+  return { ok: true, sku: offerSku, quantity: repairedQuantity || desiredQuantity || undefined };
+}
+
 function structuredOfferFailure(
   code: string,
   message: string,
@@ -387,8 +463,17 @@ serve(async (req) => {
 
     // ── PUBLISH OFFER ───────────────────────────────────────
     if (action === "publish") {
-      const { offerId, sku, categoryId: pubCategoryId, priceCents: pubPriceCents } = body;
+      const { offerId, sku, categoryId: pubCategoryId, priceCents: pubPriceCents, quantity: publishQty } = body;
       if (!offerId) throw new Error("offerId is required");
+
+      const quantityCheck = await ensurePublishQuantity(accessToken, offerId, sku, positiveQuantity(publishQty));
+      if (!quantityCheck.ok) {
+        return structuredOfferFailure(
+          "PUBLISH_QUANTITY_REQUIRED",
+          `${quantityCheck.error || "Publish requires quantity greater than 0."} Set a quantity greater than 0, then publish again.`,
+          { offerId, sku, publishQty, ...quantityCheck.details },
+        );
+      }
 
       let result = await ebayFetch(
         accessToken,
@@ -439,8 +524,31 @@ serve(async (req) => {
 
     // ── PUBLISH OFFER BY INVENTORY ITEM GROUP ───────────────
     if (action === "publish_group") {
-      const { inventoryItemGroupKey, sku, categoryId: grpCategoryId, priceCents: grpPriceCents } = body;
+      const { inventoryItemGroupKey, sku, categoryId: grpCategoryId, priceCents: grpPriceCents, variantQuantities } = body;
       if (!inventoryItemGroupKey) throw new Error("inventoryItemGroupKey is required");
+
+      const offersForGroup = await ebayFetch(
+        accessToken,
+        "GET",
+        `${INV_API}/offer?inventory_item_group_key=${encodeURIComponent(inventoryItemGroupKey)}`,
+      );
+      if (offersForGroup.ok) {
+        const groupOffers = isRecord(offersForGroup.data) && Array.isArray(offersForGroup.data.offers) ? offersForGroup.data.offers.filter(isRecord) : [];
+        for (const offer of groupOffers) {
+          const offerId = offerIdValue(offer);
+          const offerSku = typeof offer.sku === "string" ? offer.sku : undefined;
+          if (!offerId) continue;
+          const desiredQty = isRecord(variantQuantities) && offerSku ? positiveQuantity(variantQuantities[offerSku]) : null;
+          const quantityCheck = await ensurePublishQuantity(accessToken, offerId, offerSku, desiredQty);
+          if (!quantityCheck.ok) {
+            return structuredOfferFailure(
+              "PUBLISH_QUANTITY_REQUIRED",
+              `${quantityCheck.error || "Publish requires every variant quantity to be greater than 0."} Set variant quantity greater than 0, then publish again.`,
+              { inventoryItemGroupKey, offerId, sku: offerSku, variantQuantities, ...quantityCheck.details },
+            );
+          }
+        }
+      }
 
       let result = await ebayFetch(
         accessToken,
@@ -1384,7 +1492,7 @@ serve(async (req) => {
 
     // ── CREATE OFFER FOR ITEM GROUP ─────────────────────
     if (action === "create_group_offer") {
-      const { categoryId, priceCents, policies, bestOfferTerms, storeCategoryNames, baseProductCode, variantSKUs } = body;
+      const { categoryId, priceCents, policies, bestOfferTerms, storeCategoryNames, baseProductCode, variantSKUs, variantQuantities } = body;
       if (!categoryId) throw new Error("categoryId is required");
       if (!variantSKUs?.length) throw new Error("variantSKUs is required");
 
@@ -1396,6 +1504,7 @@ serve(async (req) => {
           sku,
           marketplaceId: "EBAY_US",
           format: "FIXED_PRICE",
+          availableQuantity: isRecord(variantQuantities) ? positiveQuantity(variantQuantities[sku]) || 1 : 1,
           categoryId,
           pricingSummary: {
             price: { value: priceValue, currency: "USD" },
