@@ -168,6 +168,46 @@ function stripOfferReadonlyFields(offer: Record<string, unknown>): Record<string
   return writable;
 }
 
+function normalizeProductAspects(aspects: unknown): Record<string, unknown> {
+  const normalized = isRecord(aspects) ? { ...aspects } : {};
+  const hasBrand = Object.keys(normalized).some((key) => key.toLowerCase() === "brand"
+    && Array.isArray(normalized[key])
+    && (normalized[key] as unknown[]).some((value) => typeof value === "string" && value.trim()));
+  if (!hasBrand) normalized.Brand = ["Unbranded"];
+  return normalized;
+}
+
+async function ensureInventoryItemBrand(accessToken: string, sku: string | undefined): Promise<{ ok: boolean; repaired?: boolean; error?: string; details?: Record<string, unknown> }> {
+  if (!sku) return { ok: true };
+  const currentItem = await ebayFetch(accessToken, "GET", `${INV_API}/inventory_item/${encodeURIComponent(sku)}`);
+  if (!currentItem.ok) {
+    return { ok: false, error: `Get inventory item failed (${currentItem.status})`, details: { sku, upstreamStatus: currentItem.status, upstream: currentItem.data } };
+  }
+  if (!isRecord(currentItem.data)) return { ok: false, error: "Inventory item response was invalid", details: { sku } };
+  const item = currentItem.data;
+  const product = isRecord(item.product) ? { ...item.product } : {};
+  const before = isRecord(product.aspects) ? product.aspects : {};
+  const after = normalizeProductAspects(before);
+  const hadBrand = Object.keys(before).some((key) => key.toLowerCase() === "brand"
+    && Array.isArray(before[key])
+    && (before[key] as unknown[]).some((value) => typeof value === "string" && value.trim()));
+  if (hadBrand) return { ok: true, repaired: false };
+
+  product.aspects = after;
+  const updateBody: Record<string, unknown> = {
+    condition: item.condition || "NEW",
+    availability: isRecord(item.availability) ? item.availability : { shipToLocationAvailability: { quantity: 1 } },
+    product,
+  };
+  if (item.packageWeightAndSize) updateBody.packageWeightAndSize = item.packageWeightAndSize;
+  if (item.lotSize) updateBody.lotSize = item.lotSize;
+  const update = await ebayFetch(accessToken, "PUT", `${INV_API}/inventory_item/${encodeURIComponent(sku)}`, updateBody);
+  if (!update.ok && update.status !== 204) {
+    return { ok: false, error: `Repair Brand item specific failed (${update.status})`, details: { sku, upstreamStatus: update.status, upstream: update.data } };
+  }
+  return { ok: true, repaired: true };
+}
+
 async function ensurePublishQuantity(accessToken: string, offerId: string, fallbackSku: string | undefined, desiredQuantity: number | null): Promise<{ ok: boolean; sku?: string; quantity?: number; error?: string; details?: Record<string, unknown> }> {
   const currentOffer = await ebayFetch(accessToken, "GET", `${INV_API}/offer/${offerId}`);
   if (!currentOffer.ok) {
@@ -350,7 +390,7 @@ serve(async (req) => {
           title: product.title,
           description: product.description || "",
           imageUrls: product.imageUrls || [],
-          aspects: product.aspects || {},
+          aspects: normalizeProductAspects(product.aspects),
         },
       };
 
@@ -484,6 +524,14 @@ serve(async (req) => {
           { offerId, sku, publishQty, ...quantityCheck.details },
         );
       }
+      const brandCheck = await ensureInventoryItemBrand(accessToken, quantityCheck.sku || sku);
+      if (!brandCheck.ok) {
+        return structuredOfferFailure(
+          "PUBLISH_BRAND_REQUIRED",
+          `${brandCheck.error || "The item specific Brand is missing."} Add Brand to this listing and try publishing again.`,
+          { offerId, sku, ...brandCheck.details },
+        );
+      }
 
       let result = await ebayFetch(
         accessToken,
@@ -562,6 +610,14 @@ serve(async (req) => {
               "PUBLISH_QUANTITY_REQUIRED",
               `${quantityCheck.error || "Publish requires every variant quantity to be greater than 0."} Set variant quantity greater than 0, then publish again.`,
               { inventoryItemGroupKey, offerId, sku: offerSku, variantQuantities, ...quantityCheck.details },
+            );
+          }
+          const brandCheck = await ensureInventoryItemBrand(accessToken, quantityCheck.sku || offerSku);
+          if (!brandCheck.ok) {
+            return structuredOfferFailure(
+              "PUBLISH_BRAND_REQUIRED",
+              `${brandCheck.error || "The item specific Brand is missing."} Add Brand to this variant and try publishing again.`,
+              { inventoryItemGroupKey, offerId, sku: offerSku, ...brandCheck.details },
             );
           }
         }
