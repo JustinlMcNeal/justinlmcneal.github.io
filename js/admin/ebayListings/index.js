@@ -184,16 +184,25 @@ function isStaleLinkCheck(check) {
   return Boolean(check?.success && ["stale", "ambiguous", "no_active_match"].includes(check.state));
 }
 
+function isOutOfStockLinkCheck(check) {
+  return Boolean(check?.success && check.state === "out_of_stock");
+}
+
+function isLinkWarningCheck(check) {
+  return isStaleLinkCheck(check) || isOutOfStockLinkCheck(check);
+}
+
 function staleActionState(p) {
   const state = p?._linkCheck?.state;
-  return ["stale", "ambiguous", "no_active_match"].includes(state) ? state : "";
+  return ["stale", "ambiguous", "no_active_match", "out_of_stock"].includes(state) ? state : "";
 }
 
 function staleActionBadge(p) {
   const state = staleActionState(p);
   if (!state) return "";
   const label = state === "no_active_match" ? "No active eBay listing found" : staleLinkLabel(p._linkCheck);
-  return `<span class="inline-block px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold uppercase" title="${esc(staleLinkMessage(p._linkCheck))}">${esc(label)}</span>`;
+  const cls = state === "out_of_stock" ? "bg-orange-100 text-orange-800" : "bg-amber-100 text-amber-800";
+  return `<span class="inline-block px-2 py-0.5 rounded ${cls} text-[10px] font-bold uppercase" title="${esc(staleLinkMessage(p._linkCheck))}">${esc(label)}</span>`;
 }
 
 function staleLinkLabel(check) {
@@ -201,6 +210,7 @@ function staleLinkLabel(check) {
   if (check.state === "stale") return "Local eBay link may be stale";
   if (check.state === "ambiguous") return "Multiple active eBay matches found";
   if (check.state === "no_active_match") return "No active eBay match found";
+  if (check.state === "out_of_stock") return "Sold out on eBay";
   return "eBay link verified";
 }
 
@@ -233,6 +243,13 @@ async function reconcileEbayLink(product, relink = false) {
 
 function ebayCodeLinkHtml(p, compact = false) {
   const check = p._linkCheck;
+  if (isOutOfStockLinkCheck(check)) {
+    const activeId = currentActiveListingId(check) || p.ebay_listing_id;
+    const link = activeId
+      ? ` <a href="https://www.ebay.com/itm/${esc(activeId)}" target="_blank" class="text-orange-700 hover:underline">sold-out listing ↗</a>`
+      : "";
+    return `<span class="text-orange-700 font-bold" title="${esc(staleLinkMessage(check))}">⚠ ${compact ? "Sold out" : esc(p.code)}</span>${link}`;
+  }
   if (isStaleLinkCheck(check)) {
     const activeId = currentActiveListingId(check);
     const relinkBtn = check.safeRelink
@@ -258,7 +275,7 @@ async function auditListingLinks(products = allProducts) {
     if (runId !== linkAuditRunId) return;
     try {
       const check = await reconcileEbayLink(product, false);
-      if (isStaleLinkCheck(check)) staleCount++;
+      if (isLinkWarningCheck(check)) staleCount++;
     } catch (err) {
       console.warn("eBay link audit failed", product.code, err);
       product._linkCheck = { success: false, error: err.message || String(err) };
@@ -266,7 +283,7 @@ async function auditListingLinks(products = allProducts) {
   }
   if (runId !== linkAuditRunId) return;
   renderAll();
-  if (staleCount) showStatus(`⚠️ ${staleCount} eBay link${staleCount === 1 ? "" : "s"} may be stale. Refresh/relink before editing.`, true);
+  if (staleCount) showStatus(`⚠️ ${staleCount} eBay listing${staleCount === 1 ? "" : "s"} need attention. Some may be stale or sold out on eBay.`, true);
 }
 
 window.relinkEbayListing = async function relinkEbayListing(code) {
@@ -319,6 +336,11 @@ function renderProductActions(p, compact = false) {
   const amber = `border border-amber-300 text-amber-700 ${size} rounded font-bold hover:bg-amber-50 transition-all`;
   const green = `bg-green-600 text-white ${size} rounded font-bold hover:bg-green-700 transition-all`;
 
+  if (staleState === "out_of_stock") {
+    return `<button onclick="openEdit('${esc(p.code)}')" class="${green}">Restock</button>
+            <button onclick="clearStaleEbayLink('${esc(p.code)}')" class="${amber}">Mark Ended</button>`;
+  }
+
   if (staleState) {
     const clear = `<button onclick="clearStaleEbayLink('${esc(p.code)}')" class="${amber}">Mark Ended</button>`;
     if (staleState === "stale" && p._linkCheck?.safeRelink) {
@@ -352,16 +374,22 @@ function renderEditLinkWarning(check) {
   const meta = document.getElementById("editLinkWarningMeta");
   const btn = document.getElementById("btnEditRelink");
   if (!box || !text || !meta || !btn) return;
-  if (!isStaleLinkCheck(check)) {
+  if (!isLinkWarningCheck(check)) {
     box.classList.add("hidden");
     btn.classList.add("hidden");
     return;
   }
   const activeId = currentActiveListingId(check);
   text.textContent = staleLinkMessage(check);
-  meta.innerHTML = activeId
+  if (isOutOfStockLinkCheck(check)) {
+    const oq = check.activeMatch?.offerQuantity ?? "?";
+    const iq = check.activeMatch?.inventoryQuantity ?? "?";
+    meta.innerHTML = `Offer qty: ${esc(String(oq))} · Inventory qty: ${esc(String(iq))}. Use Restock/Edit to set quantity above 0.`;
+  } else {
+    meta.innerHTML = activeId
     ? `Current active match found: <a href="https://www.ebay.com/itm/${esc(activeId)}" target="_blank" class="underline font-bold">${esc(activeId)} ↗</a>`
     : staleLinkLabel(check);
+  }
   btn.classList.toggle("hidden", !check.safeRelink);
   box.classList.remove("hidden");
 }
@@ -1192,7 +1220,10 @@ window.openEdit = async function openEdit(code) {
     try {
       const linkCheck = await reconcileEbayLink(editProduct, false);
       renderEditLinkWarning(linkCheck);
-      if (isStaleLinkCheck(linkCheck)) {
+      if (isOutOfStockLinkCheck(linkCheck)) {
+        ebayLink.textContent = "View sold-out listing ↗";
+        document.getElementById("editStatus").textContent = "⚠️ Sold out on eBay — set quantity above 0 and save to restock this listing.";
+      } else if (isStaleLinkCheck(linkCheck)) {
         const activeId = currentActiveListingId(linkCheck);
         if (activeId) {
           ebayLink.href = `https://www.ebay.com/itm/${activeId}`;
@@ -1409,7 +1440,9 @@ window.openEdit = async function openEdit(code) {
     document.getElementById("editLoading").classList.add("hidden");
     document.getElementById("editForm").classList.remove("hidden");
     const offerLookupFailures = [...editOfferLookupCache.values()].filter(r => !r.success);
-    if (isStaleLinkCheck(editProduct._linkCheck)) {
+    if (isOutOfStockLinkCheck(editProduct._linkCheck)) {
+      document.getElementById("editStatus").textContent = "⚠️ Sold out on eBay — set quantity above 0 and save to restock this listing.";
+    } else if (isStaleLinkCheck(editProduct._linkCheck)) {
       document.getElementById("editStatus").textContent = "⚠️ Local eBay link may be stale. Refresh/relink before editing.";
     } else if (offerLookupFailures.length) {
       document.getElementById("editStatus").textContent = "⚠️ eBay offer details could not be loaded for part of this listing. The modal remains usable, but offer updates may need a refresh/relink if this persists.";

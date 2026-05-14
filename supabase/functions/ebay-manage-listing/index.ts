@@ -146,10 +146,20 @@ function positiveQuantity(value: unknown): number | null {
   return qty > 0 ? qty : null;
 }
 
+function quantityValue(value: unknown): number | null {
+  const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  if (!Number.isFinite(parsed)) return null;
+  return Math.max(0, Math.floor(parsed));
+}
+
 function inventoryItemQuantity(item: Record<string, unknown>): number | null {
   const availability = isRecord(item.availability) ? item.availability : {};
   const ship = isRecord(availability.shipToLocationAvailability) ? availability.shipToLocationAvailability : {};
-  return typeof ship.quantity === "number" ? ship.quantity : positiveQuantity(ship.quantity);
+  return quantityValue(ship.quantity);
+}
+
+function offerAvailableQuantity(offer: Record<string, unknown>): number | null {
+  return quantityValue(offer.availableQuantity);
 }
 
 function stripOfferReadonlyFields(offer: Record<string, unknown>): Record<string, unknown> {
@@ -937,6 +947,22 @@ serve(async (req) => {
       const payload = isRecord(result.data) ? result.data : {};
       const offers = Array.isArray(payload.offers) ? payload.offers.filter(isRecord) : [];
       const activeOffers = offers.filter(isActiveOffer);
+      const activeOfferQuantities = await Promise.all(activeOffers.map(async (offer) => {
+        const offerSku = typeof offer.sku === "string" && offer.sku.trim() ? offer.sku.trim() : null;
+        let itemQuantity: number | null = null;
+        if (offerSku) {
+          const itemResult = await ebayFetch(accessToken, "GET", `${INV_API}/inventory_item/${encodeURIComponent(offerSku)}`);
+          if (itemResult.ok && isRecord(itemResult.data)) itemQuantity = inventoryItemQuantity(itemResult.data);
+        }
+        return {
+          offerId: offerIdValue(offer),
+          listingId: getOfferListingId(offer),
+          sku: offerSku,
+          status: getOfferStatus(offer) || null,
+          offerQuantity: offerAvailableQuantity(offer),
+          inventoryQuantity: itemQuantity,
+        };
+      }));
       const activeListingIds = [...new Set(activeOffers.map(getOfferListingId).filter((v): v is string => Boolean(v)))];
       const activeOfferIds = [...new Set(activeOffers.map(offerIdValue).filter((v): v is string => Boolean(v)))];
       const localOffer = typeof localOfferId === "string" && localOfferId.trim() ? localOfferId.trim() : "";
@@ -961,9 +987,17 @@ serve(async (req) => {
         code = localListing && !localListingActive ? "STALE_LISTING_ID" : "STALE_OFFER_ID";
         message = "Local eBay link may be stale. Active eBay listing may be different. Refresh/relink before editing.";
         safeRelink = true;
+      } else {
+        const purchasable = activeOfferQuantities.some((q) => (q.offerQuantity ?? q.inventoryQuantity ?? 0) > 0 && (q.inventoryQuantity ?? q.offerQuantity ?? 0) > 0);
+        if (!purchasable) {
+          state = "out_of_stock";
+          code = "ACTIVE_ZERO_QUANTITY";
+          message = "Sold out on eBay — quantity is 0. Restock to make this listing purchasable again.";
+        }
       }
 
       const preferredOffer = activeOffers.find((offer) => offerIdValue(offer) === localOffer) || activeOffers[0] || null;
+      const preferredQty = preferredOffer ? activeOfferQuantities.find((q) => q.offerId === offerIdValue(preferredOffer)) : null;
       const activeMatch = preferredOffer ? {
         offerId: offerIdValue(preferredOffer),
         listingId: getOfferListingId(preferredOffer),
@@ -971,6 +1005,8 @@ serve(async (req) => {
         status: getOfferStatus(preferredOffer) || null,
         categoryId: offerCategoryId(preferredOffer),
         priceCents: offerPriceCents(preferredOffer),
+        offerQuantity: preferredQty?.offerQuantity ?? null,
+        inventoryQuantity: preferredQty?.inventoryQuantity ?? null,
       } : null;
 
       if (relink) {
@@ -1017,7 +1053,7 @@ serve(async (req) => {
           safeRelink,
           local: { offerId: localOffer || null, listingId: localListing || null, offerActive: localOfferActive, listingActive: localListingActive },
           activeMatch,
-          matches: activeOffers.map((offer) => ({ offerId: offerIdValue(offer), listingId: getOfferListingId(offer), sku: typeof offer.sku === "string" ? offer.sku : null, status: getOfferStatus(offer) || null })),
+          matches: activeOfferQuantities,
         }),
         { headers: corsHeaders }
       );
