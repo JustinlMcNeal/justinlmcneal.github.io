@@ -64,6 +64,7 @@ let pushSalesMetrics = null;   // Phase 5: cached per push-modal session
 let editSalesMetrics = null;   // Phase 5: cached per edit-modal session
 let pageAdRatePct    = 0;      // Phase 6: assumed promoted listing ad rate for main-page estimates
 let editOfferLookupCache = new Map();
+let linkAuditRunId = 0;
 
 // ── Edge Function Helper ──────────────────────────────────────
 async function callEdge(fnName, body) {
@@ -172,6 +173,127 @@ function offerUpdateErrorMessage(result, fallback) {
     return result.message || "Location data for this eBay offer is missing or invalid. Rebuild/relink the offer from the current eBay state before editing.";
   }
   return result?.message || result?.error || fallback;
+}
+
+function isLinkedOnEbay(p) {
+  const status = p?.ebay_status || "not_listed";
+  return status === "active" && (p.ebay_sku || p.ebay_offer_id || p.ebay_listing_id || p.ebay_item_group_key);
+}
+
+function isStaleLinkCheck(check) {
+  return Boolean(check?.success && ["stale", "ambiguous", "no_active_match"].includes(check.state));
+}
+
+function staleLinkLabel(check) {
+  if (!check) return "Checking eBay link…";
+  if (check.state === "stale") return "Local eBay link may be stale";
+  if (check.state === "ambiguous") return "Multiple active eBay matches found";
+  if (check.state === "no_active_match") return "No active eBay match found";
+  return "eBay link verified";
+}
+
+function staleLinkMessage(check) {
+  return check?.message || "Local eBay link may be stale. Active eBay listing may be different. Refresh/relink before editing.";
+}
+
+function currentActiveListingId(check) {
+  return check?.activeMatch?.listingId || null;
+}
+
+async function reconcileEbayLink(product, relink = false) {
+  const sku = product.ebay_sku || product.code;
+  const result = await callEdge("ebay-manage-listing", {
+    action: "reconcile_listing",
+    productCode: product.code,
+    sku,
+    inventoryItemGroupKey: product.ebay_item_group_key || undefined,
+    localOfferId: product.ebay_offer_id || undefined,
+    localListingId: product.ebay_listing_id || undefined,
+    relink,
+  });
+  if (result?.state === "no_active_match" && product.ebay_status !== "active") {
+    result.state = "no_active_match_non_active";
+    result.stale = false;
+  }
+  product._linkCheck = result;
+  return result;
+}
+
+function ebayCodeLinkHtml(p, compact = false) {
+  const check = p._linkCheck;
+  if (isStaleLinkCheck(check)) {
+    const activeId = currentActiveListingId(check);
+    const relinkBtn = check.safeRelink
+      ? ` <button onclick="relinkEbayListing('${esc(p.code)}')" class="text-amber-700 hover:underline font-bold">Relink</button>`
+      : "";
+    const activeLink = activeId
+      ? ` <a href="https://www.ebay.com/itm/${esc(activeId)}" target="_blank" class="text-amber-700 hover:underline">active match ↗</a>`
+      : "";
+    return `<span class="text-amber-700 font-bold" title="${esc(staleLinkMessage(check))}">⚠ ${compact ? "Stale" : esc(p.code)}</span>${activeLink}${relinkBtn}`;
+  }
+  if (p.ebay_listing_id) {
+    return `<a href="https://www.ebay.com/itm/${esc(p.ebay_listing_id)}" target="_blank" class="text-blue-500 hover:underline">${esc(p.code)}</a>`;
+  }
+  return esc(p.code);
+}
+
+async function auditListingLinks(products = allProducts) {
+  const runId = ++linkAuditRunId;
+  const candidates = products.filter(isLinkedOnEbay);
+  if (!candidates.length) return;
+  let staleCount = 0;
+  for (const product of candidates) {
+    if (runId !== linkAuditRunId) return;
+    try {
+      const check = await reconcileEbayLink(product, false);
+      if (isStaleLinkCheck(check)) staleCount++;
+    } catch (err) {
+      console.warn("eBay link audit failed", product.code, err);
+      product._linkCheck = { success: false, error: err.message || String(err) };
+    }
+  }
+  if (runId !== linkAuditRunId) return;
+  renderAll();
+  if (staleCount) showStatus(`⚠️ ${staleCount} eBay link${staleCount === 1 ? "" : "s"} may be stale. Refresh/relink before editing.`, true);
+}
+
+window.relinkEbayListing = async function relinkEbayListing(code) {
+  const product = allProducts.find(p => p.code === code);
+  if (!product) return;
+  if (!confirm(`Relink ${product.code} to the single active eBay match found for this SKU? No new listing will be created.`)) return;
+  showStatus(`Relinking ${product.code} to current active eBay listing…`);
+  try {
+    const result = await reconcileEbayLink(product, true);
+    if (!result.success || !result.relinked) {
+      showStatus(`❌ ${result.message || result.error || "Relink was not safe"}`, true);
+      renderAll();
+      return;
+    }
+    showStatus(`✅ Relinked ${product.code} to active eBay listing ${result.activeMatch?.listingId || ""}`);
+    await loadProducts();
+  } catch (err) {
+    showStatus(`❌ ${err.message || String(err)}`, true);
+  }
+};
+
+function renderEditLinkWarning(check) {
+  const box = document.getElementById("editLinkWarning");
+  const text = document.getElementById("editLinkWarningText");
+  const meta = document.getElementById("editLinkWarningMeta");
+  const btn = document.getElementById("btnEditRelink");
+  if (!box || !text || !meta || !btn) return;
+  if (!isStaleLinkCheck(check)) {
+    box.classList.add("hidden");
+    btn.classList.add("hidden");
+    return;
+  }
+  const activeId = currentActiveListingId(check);
+  text.textContent = staleLinkMessage(check);
+  meta.innerHTML = activeId
+    ? `Current active match found: <a href="https://www.ebay.com/itm/${esc(activeId)}" target="_blank" class="underline font-bold">${esc(activeId)} ↗</a>`
+    : staleLinkLabel(check);
+  btn.classList.toggle("hidden", !check.safeRelink);
+  box.classList.remove("hidden");
 }
 
 // ── Status Bar ────────────────────────────────────────────────
@@ -348,6 +470,7 @@ async function loadProducts() {
   allProducts = await mergeWorkspaceMetrics(data || []);
   applyFilters();
   updateStats();
+  auditListingLinks(allProducts);
 }
 
 // ── Search / Filter / View ────────────────────────────────────
@@ -442,9 +565,7 @@ function renderTable() {
           ${p.catalog_image_url ? `<img src="${p.catalog_image_url}" class="w-8 h-8 object-cover rounded flex-shrink-0" />` : '<div class="w-8 h-8 bg-gray-100 rounded flex-shrink-0"></div>'}
           <div class="min-w-0">
             <a href="/pages/admin/products.html?q=${encodeURIComponent(p.name)}" target="_blank" class="font-medium text-sm line-clamp-1 text-blue-600 hover:underline">${esc(p.name)}</a>
-            <div class="text-[10px] font-mono text-gray-400 leading-none mt-0.5">${p.ebay_listing_id
-              ? `<a href="https://www.ebay.com/itm/${esc(p.ebay_listing_id)}" target="_blank" class="text-blue-500 hover:underline">${esc(p.code)}</a>`
-              : esc(p.code)}</div>
+            <div class="text-[10px] font-mono text-gray-400 leading-none mt-0.5">${ebayCodeLinkHtml(p)}</div>
             ${wsChips(p, health)}
           </div>
         </div>
@@ -527,9 +648,7 @@ function renderCards() {
       </div>
       <div class="p-3">
         <a href="/pages/admin/products.html?q=${encodeURIComponent(p.name)}" target="_blank" class="font-bold text-sm line-clamp-2 leading-tight text-blue-600 hover:underline">${esc(p.name)}</a>
-        <p class="text-[10px] font-mono text-gray-400 mt-1">${p.ebay_listing_id
-          ? `<a href="https://www.ebay.com/itm/${esc(p.ebay_listing_id)}" target="_blank" class="text-blue-500 hover:underline">${esc(p.code)}</a>`
-          : esc(p.code)}</p>
+        <p class="text-[10px] font-mono text-gray-400 mt-1">${ebayCodeLinkHtml(p, true)}</p>
         <div class="flex items-center justify-between mt-2">
           <div class="text-xs">
             <span class="text-gray-500">KK</span> <span class="font-bold">${kkPrice}</span>
@@ -971,6 +1090,7 @@ window.openEdit = async function openEdit(code) {
   document.getElementById("editLoading").classList.remove("hidden");
   document.getElementById("editForm").classList.add("hidden");
   document.getElementById("editStatus").textContent = "";
+  renderEditLinkWarning(null);
   document.getElementById("editPriceQtyGrid").classList.toggle("grid-cols-1", isGroupListing);
   document.getElementById("editPriceQtyGrid").classList.toggle("grid-cols-2", !isGroupListing);
   document.getElementById("editQuantityField").classList.toggle("hidden", isGroupListing);
@@ -990,12 +1110,32 @@ window.openEdit = async function openEdit(code) {
   const ebayLink = document.getElementById("editEbayLink");
   if (editProduct.ebay_listing_id) {
     ebayLink.href = `https://www.ebay.com/itm/${editProduct.ebay_listing_id}`;
+    ebayLink.textContent = "View on eBay ↗";
     ebayLink.classList.remove("hidden");
   } else {
     ebayLink.classList.add("hidden");
   }
 
   try {
+    try {
+      const linkCheck = await reconcileEbayLink(editProduct, false);
+      renderEditLinkWarning(linkCheck);
+      if (isStaleLinkCheck(linkCheck)) {
+        const activeId = currentActiveListingId(linkCheck);
+        if (activeId) {
+          ebayLink.href = `https://www.ebay.com/itm/${activeId}`;
+          ebayLink.textContent = "View active match ↗";
+          ebayLink.classList.remove("hidden");
+        } else {
+          ebayLink.classList.add("hidden");
+        }
+        document.getElementById("editStatus").textContent = "⚠️ Local eBay link may be stale. Refresh/relink before editing.";
+      }
+    } catch (linkErr) {
+      console.warn("Edit link reconciliation failed:", linkErr);
+      document.getElementById("editStatus").textContent = "⚠️ Could not verify eBay link freshness. Save will re-check before writing.";
+    }
+
     let product = {};
     let item    = {};
     let offer   = {};
@@ -1197,10 +1337,11 @@ window.openEdit = async function openEdit(code) {
     document.getElementById("editLoading").classList.add("hidden");
     document.getElementById("editForm").classList.remove("hidden");
     const offerLookupFailures = [...editOfferLookupCache.values()].filter(r => !r.success);
-    if (offerLookupFailures.length) {
+    if (isStaleLinkCheck(editProduct._linkCheck)) {
+      document.getElementById("editStatus").textContent = "⚠️ Local eBay link may be stale. Refresh/relink before editing.";
+    } else if (offerLookupFailures.length) {
       document.getElementById("editStatus").textContent = "⚠️ eBay offer details could not be loaded for part of this listing. The modal remains usable, but offer updates may need a refresh/relink if this persists.";
-    }
-    if (variantFetchSummary?.failures?.length) {
+    } else if (variantFetchSummary?.failures?.length) {
       document.getElementById("editStatus").textContent = `⚠️ ${variantFetchSummary.failures.length} variant eBay detail lookup(s) failed. Fallback image/qty controls are shown where available; you can still edit and save.`;
     }
     document.getElementById("editAdRate").value = String(pageAdRatePct);
@@ -1967,6 +2108,11 @@ document.getElementById("btnCloseEdit").addEventListener("click", () => {
   editProduct = null;
 });
 
+document.getElementById("btnEditRelink").addEventListener("click", async () => {
+  if (!editProduct) return;
+  await window.relinkEbayListing(editProduct.code);
+});
+
 // Edit Modal — profit preview + price reference live update
 document.getElementById("editPrice").addEventListener("input", refreshEditPreview);
 document.getElementById("editPrice").addEventListener("input", refreshEditRef);
@@ -2129,6 +2275,15 @@ document.getElementById("btnSaveEdit").addEventListener("click", async () => {
   const imageUrls = [...editImageUrls];
 
   try {
+    if (editProduct.ebay_status === "active") {
+      status.textContent = "Checking eBay linkage before save...";
+      const linkCheck = await reconcileEbayLink(editProduct, false);
+      renderEditLinkWarning(linkCheck);
+      if (isStaleLinkCheck(linkCheck)) {
+        throw new Error(`${staleLinkMessage(linkCheck)} Use Relink/Import refresh before saving so you do not edit an old ended listing.`);
+      }
+    }
+
     if (editProduct._isGroup) {
       const groupKey   = editProduct.ebay_item_group_key;
       const groupData  = editProduct._groupData || {};

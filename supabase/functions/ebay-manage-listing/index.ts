@@ -110,6 +110,35 @@ function getOfferListingId(offer: Record<string, unknown>): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+function getOfferStatus(offer: Record<string, unknown>): string {
+  const value = offer.statusEnum || offer.status || offer.offerStatus;
+  return typeof value === "string" ? value.toUpperCase() : "";
+}
+
+function isActiveOffer(offer: Record<string, unknown>): boolean {
+  const listingId = getOfferListingId(offer);
+  if (!listingId) return false;
+  const status = getOfferStatus(offer);
+  return !["ENDED", "WITHDRAWN", "UNPUBLISHED", "ARCHIVED", "INACTIVE"].includes(status);
+}
+
+function offerPriceCents(offer: Record<string, unknown>): number | null {
+  const pricing = isRecord(offer.pricingSummary) ? offer.pricingSummary : {};
+  const price = isRecord(pricing.price) ? pricing.price : {};
+  const raw = price.value;
+  if (typeof raw !== "string" && typeof raw !== "number") return null;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? Math.round(parsed * 100) : null;
+}
+
+function offerCategoryId(offer: Record<string, unknown>): string | null {
+  return typeof offer.categoryId === "string" && offer.categoryId.trim() ? offer.categoryId.trim() : null;
+}
+
+function offerIdValue(offer: Record<string, unknown>): string | null {
+  return typeof offer.offerId === "string" && offer.offerId.trim() ? offer.offerId.trim() : null;
+}
+
 function structuredOfferFailure(
   code: string,
   message: string,
@@ -754,6 +783,127 @@ serve(async (req) => {
 
       return new Response(
         JSON.stringify({ success: true, ...(result.data as Record<string, unknown>) }),
+        { headers: corsHeaders }
+      );
+    }
+
+    // ── RECONCILE LOCAL LINKAGE AGAINST CURRENT ACTIVE OFFER ─
+    if (action === "reconcile_listing") {
+      const { productCode, sku, inventoryItemGroupKey, localOfferId, localListingId, relink } = body;
+      const normalizedSku = typeof sku === "string" && sku.trim() ? sku.trim() : "";
+      const normalizedGroupKey = typeof inventoryItemGroupKey === "string" && inventoryItemGroupKey.trim() ? inventoryItemGroupKey.trim() : "";
+      const dbCode = typeof productCode === "string" && productCode.trim() ? productCode.trim() : normalizedSku;
+      if (!normalizedSku && !normalizedGroupKey) throw new Error("sku or inventoryItemGroupKey is required");
+
+      const qp = new URLSearchParams();
+      if (normalizedGroupKey) qp.set("inventory_item_group_key", normalizedGroupKey);
+      else qp.set("sku", normalizedSku);
+
+      const result = await ebayFetch(accessToken, "GET", `${INV_API}/offer?${qp.toString()}`);
+      if (!result.ok) {
+        const errors = getEbayErrors(result.data);
+        const message = errors[0]?.message || `Reconcile offers failed (${result.status})`;
+        return new Response(
+          JSON.stringify({
+            success: false,
+            action: "reconcile_listing",
+            code: "RECONCILE_OFFERS_FAILED",
+            message,
+            error: message,
+            sku: normalizedSku || null,
+            inventoryItemGroupKey: normalizedGroupKey || null,
+            upstreamStatus: result.status,
+            upstream: result.data,
+          }),
+          { headers: corsHeaders }
+        );
+      }
+
+      const payload = isRecord(result.data) ? result.data : {};
+      const offers = Array.isArray(payload.offers) ? payload.offers.filter(isRecord) : [];
+      const activeOffers = offers.filter(isActiveOffer);
+      const activeListingIds = [...new Set(activeOffers.map(getOfferListingId).filter((v): v is string => Boolean(v)))];
+      const activeOfferIds = [...new Set(activeOffers.map(offerIdValue).filter((v): v is string => Boolean(v)))];
+      const localOffer = typeof localOfferId === "string" && localOfferId.trim() ? localOfferId.trim() : "";
+      const localListing = typeof localListingId === "string" && localListingId.trim() ? localListingId.trim() : "";
+      const localOfferActive = Boolean(localOffer && activeOfferIds.includes(localOffer));
+      const localListingActive = Boolean(localListing && activeListingIds.includes(localListing));
+
+      let state = "healthy";
+      let code = "LINK_HEALTHY";
+      let message = "Local eBay linkage matches the current active eBay offer.";
+      let safeRelink = false;
+      if (!activeOffers.length) {
+        state = "no_active_match";
+        code = "NO_ACTIVE_EBAY_MATCH";
+        message = "No active eBay offer/listing was found for this SKU or inventory group.";
+      } else if (activeListingIds.length > 1) {
+        state = "ambiguous";
+        code = "AMBIGUOUS_ACTIVE_EBAY_MATCH";
+        message = "Multiple active eBay listings were found for this SKU or inventory group; manual review is required before relinking.";
+      } else if ((localListing && !localListingActive) || (localOffer && !localOfferActive)) {
+        state = "stale";
+        code = localListing && !localListingActive ? "STALE_LISTING_ID" : "STALE_OFFER_ID";
+        message = "Local eBay link may be stale. Active eBay listing may be different. Refresh/relink before editing.";
+        safeRelink = true;
+      }
+
+      const preferredOffer = activeOffers.find((offer) => offerIdValue(offer) === localOffer) || activeOffers[0] || null;
+      const activeMatch = preferredOffer ? {
+        offerId: offerIdValue(preferredOffer),
+        listingId: getOfferListingId(preferredOffer),
+        sku: typeof preferredOffer.sku === "string" ? preferredOffer.sku : null,
+        status: getOfferStatus(preferredOffer) || null,
+        categoryId: offerCategoryId(preferredOffer),
+        priceCents: offerPriceCents(preferredOffer),
+      } : null;
+
+      if (relink) {
+        if (!safeRelink || state !== "stale" || activeListingIds.length !== 1 || !activeMatch?.listingId || !activeMatch?.offerId) {
+          return new Response(
+            JSON.stringify({
+              success: false,
+              action: "reconcile_listing",
+              code: "RELINK_NOT_SAFE",
+              message: "Relink was not performed because there is not exactly one high-confidence active eBay match.",
+              state,
+              activeMatch,
+              matches: activeOffers.map((offer) => ({ offerId: offerIdValue(offer), listingId: getOfferListingId(offer), sku: typeof offer.sku === "string" ? offer.sku : null, status: getOfferStatus(offer) || null })),
+            }),
+            { headers: corsHeaders }
+          );
+        }
+        if (!dbCode) throw new Error("productCode is required to relink");
+        const updates: Record<string, unknown> = {
+          ebay_offer_id: activeMatch.offerId,
+          ebay_listing_id: activeMatch.listingId,
+          ebay_status: "active",
+          updated_at: new Date().toISOString(),
+        };
+        if (normalizedSku) updates.ebay_sku = normalizedSku;
+        if (activeMatch.categoryId) updates.ebay_category_id = activeMatch.categoryId;
+        if (activeMatch.priceCents !== null) updates.ebay_price_cents = activeMatch.priceCents;
+        const { error: updateErr } = await supabase.from("products").update(updates).eq("code", dbCode);
+        if (updateErr) throw new Error(`Relink update failed: ${updateErr.message}`);
+        return new Response(
+          JSON.stringify({ success: true, action: "reconcile_listing", relinked: true, state: "relinked", code: "RELINKED", message: "Local product was relinked to the single active eBay match.", activeMatch, updates }),
+          { headers: corsHeaders }
+        );
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          action: "reconcile_listing",
+          state,
+          code,
+          message,
+          stale: state === "stale" || state === "no_active_match" || state === "ambiguous",
+          safeRelink,
+          local: { offerId: localOffer || null, listingId: localListing || null, offerActive: localOfferActive, listingActive: localListingActive },
+          activeMatch,
+          matches: activeOffers.map((offer) => ({ offerId: offerIdValue(offer), listingId: getOfferListingId(offer), sku: typeof offer.sku === "string" ? offer.sku : null, status: getOfferStatus(offer) || null })),
+        }),
         { headers: corsHeaders }
       );
     }
