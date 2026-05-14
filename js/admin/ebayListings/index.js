@@ -184,6 +184,18 @@ function isStaleLinkCheck(check) {
   return Boolean(check?.success && ["stale", "ambiguous", "no_active_match"].includes(check.state));
 }
 
+function staleActionState(p) {
+  const state = p?._linkCheck?.state;
+  return ["stale", "ambiguous", "no_active_match"].includes(state) ? state : "";
+}
+
+function staleActionBadge(p) {
+  const state = staleActionState(p);
+  if (!state) return "";
+  const label = state === "no_active_match" ? "No active eBay listing found" : staleLinkLabel(p._linkCheck);
+  return `<span class="inline-block px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold uppercase" title="${esc(staleLinkMessage(p._linkCheck))}">${esc(label)}</span>`;
+}
+
 function staleLinkLabel(check) {
   if (!check) return "Checking eBay link…";
   if (check.state === "stale") return "Local eBay link may be stale";
@@ -275,6 +287,64 @@ window.relinkEbayListing = async function relinkEbayListing(code) {
     showStatus(`❌ ${err.message || String(err)}`, true);
   }
 };
+
+window.clearStaleEbayLink = async function clearStaleEbayLink(code) {
+  const product = allProducts.find(p => p.code === code);
+  if (!product) return;
+  if (!confirm(`Clear stale local eBay link for ${product.code}? This only updates the website record; it will not create, edit, or end anything on eBay.`)) return;
+  showStatus(`Clearing stale local eBay link for ${product.code}…`);
+  try {
+    const result = await callEdge("ebay-manage-listing", {
+      action: "clear_stale_listing_link",
+      productCode: product.code,
+    });
+    if (!result.success) {
+      showStatus(`❌ ${result.message || result.error || "Clear stale link failed"}`, true);
+      return;
+    }
+    showStatus(`✅ Cleared stale eBay link for ${product.code}. Use Re-list to push it again when ready.`);
+    await loadProducts();
+  } catch (err) {
+    showStatus(`❌ ${err.message || String(err)}`, true);
+  }
+};
+
+function renderProductActions(p, compact = false) {
+  const status = p.ebay_status || "not_listed";
+  const staleState = staleActionState(p);
+  const size = compact ? "flex-1 px-2 py-1.5 text-xs" : "px-2 py-1 text-[10px]";
+  const black = `bg-black text-white ${size} rounded font-bold hover:bg-kkpink hover:text-black transition-all`;
+  const blue = `bg-blue-600 text-white ${size} rounded font-bold hover:bg-blue-700 transition-all`;
+  const red = `border border-red-300 text-red-600 ${size} rounded font-bold hover:bg-red-50 transition-all`;
+  const amber = `border border-amber-300 text-amber-700 ${size} rounded font-bold hover:bg-amber-50 transition-all`;
+  const green = `bg-green-600 text-white ${size} rounded font-bold hover:bg-green-700 transition-all`;
+
+  if (staleState) {
+    const clear = `<button onclick="clearStaleEbayLink('${esc(p.code)}')" class="${amber}">Mark Ended</button>`;
+    if (staleState === "stale" && p._linkCheck?.safeRelink) {
+      return `<button onclick="relinkEbayListing('${esc(p.code)}')" class="${green}">Relink</button>${clear}`;
+    }
+    return clear;
+  }
+
+  if (status === "not_listed") {
+    return `<button onclick="openPush('${esc(p.code)}')" class="${black}">Push</button>`;
+  }
+  if (status === "active") {
+    return `<button onclick="openEdit('${esc(p.code)}')" class="${blue}">Edit</button>
+            <button onclick="doWithdraw('${esc(p.code)}', '${esc(p.ebay_offer_id)}', '${esc(p.ebay_item_group_key)}')" class="${red}">End</button>`;
+  }
+  if (status === "draft") {
+    return `<button onclick="openEdit('${esc(p.code)}')" class="${blue}">Edit</button>
+            ${p.ebay_offer_id
+              ? `<button onclick="doPublish('${esc(p.code)}', '${esc(p.ebay_offer_id)}', '${esc(p.ebay_item_group_key)}')" class="${green}">Publish</button>`
+              : `<button onclick="openPush('${esc(p.code)}')" class="${black}">Resume Push</button>`}`;
+  }
+  if (status === "ended") {
+    return `<button onclick="openPush('${esc(p.code)}')" class="${black}">Re-list</button>`;
+  }
+  return "";
+}
 
 function renderEditLinkWarning(check) {
   const box = document.getElementById("editLinkWarning");
@@ -576,27 +646,13 @@ function renderTable() {
       <td class="py-2 pr-3">
         <div class="flex flex-col items-start gap-0.5">
           <span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase ebay-${status}">${statusLabel}</span>
+          ${staleActionBadge(p)}
           ${scoreBadge}
         </div>
       </td>
       <td class="py-2">
         <div class="flex gap-1">
-          ${status === "not_listed"
-            ? `<button onclick="openPush('${esc(p.code)}')" class="bg-black text-white px-2 py-1 rounded text-[10px] font-bold hover:bg-kkpink hover:text-black transition-all">Push</button>`
-            : ""}
-          ${status === "active"
-            ? `<button onclick="openEdit('${esc(p.code)}')" class="bg-blue-600 text-white px-2 py-1 rounded text-[10px] font-bold hover:bg-blue-700 transition-all">Edit</button>
-               <button onclick="doWithdraw('${esc(p.code)}', '${esc(p.ebay_offer_id)}', '${esc(p.ebay_item_group_key)}')" class="border border-red-300 text-red-600 px-2 py-1 rounded text-[10px] font-bold hover:bg-red-50 transition-all">End</button>`
-            : ""}
-          ${status === "draft"
-            ? `<button onclick="openEdit('${esc(p.code)}')" class="bg-blue-600 text-white px-2 py-1 rounded text-[10px] font-bold hover:bg-blue-700 transition-all">Edit</button>
-               ${p.ebay_offer_id
-                 ? `<button onclick="doPublish('${esc(p.code)}', '${esc(p.ebay_offer_id)}', '${esc(p.ebay_item_group_key)}')" class="bg-green-600 text-white px-2 py-1 rounded text-[10px] font-bold hover:bg-green-700 transition-all">Publish</button>`
-                 : `<button onclick="openPush('${esc(p.code)}')" class="bg-black text-white px-2 py-1 rounded text-[10px] font-bold hover:bg-kkpink hover:text-black transition-all">Resume Push</button>`}`
-            : ""}
-          ${status === "ended"
-            ? `<button onclick="openPush('${esc(p.code)}')" class="bg-black text-white px-2 py-1 rounded text-[10px] font-bold hover:bg-kkpink hover:text-black transition-all">Re-list</button>`
-            : ""}
+          ${renderProductActions(p)}
           ${status !== "not_listed"
             ? `<button class="border border-gray-200 text-gray-400 px-1.5 py-1 rounded text-[10px] hover:bg-gray-100 hover:text-black transition-all" data-action="open-sales" data-code="${esc(p.code)}" title="Sales history">📊</button>`
             : ""}
@@ -657,6 +713,7 @@ function renderCards() {
           </div>
           <div class="flex items-center gap-1 flex-wrap">
             <span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase ebay-${status}">${statusLabel}</span>
+            ${staleActionBadge(p)}
             ${scoreBadge}
           </div>
         </div>
@@ -665,7 +722,7 @@ function renderCards() {
           ${rowEstProfitHtml(p)}
         </div>
         ${wsChips(p, health)}
-        <div class="flex gap-1 mt-3">${actions}</div>
+        <div class="flex gap-1 mt-3">${renderProductActions(p, true)}</div>
         ${status !== "not_listed"
           ? `<button class="w-full mt-1 border border-gray-100 text-gray-400 py-1 rounded text-[9px] font-semibold hover:bg-gray-50 hover:text-black transition-all" data-action="open-sales" data-code="${esc(p.code)}">📊 Sales History</button>`
           : ""}

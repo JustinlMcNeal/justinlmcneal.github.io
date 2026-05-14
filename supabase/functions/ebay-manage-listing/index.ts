@@ -1023,6 +1023,38 @@ serve(async (req) => {
       );
     }
 
+    // ── CLEAR LOCAL STALE LINK ONLY ─────────────────────────
+    if (action === "clear_stale_listing_link") {
+      const { productCode } = body;
+      const dbCode = typeof productCode === "string" && productCode.trim() ? productCode.trim() : "";
+      if (!dbCode) throw new Error("productCode is required");
+
+      const updates = {
+        ebay_offer_id: null,
+        ebay_listing_id: null,
+        ebay_item_group_key: null,
+        ebay_status: "ended",
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error: updateErr } = await supabase
+        .from("products")
+        .update(updates)
+        .eq("code", dbCode);
+      if (updateErr) throw new Error(`Clear stale link failed: ${updateErr.message}`);
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          action: "clear_stale_listing_link",
+          productCode: dbCode,
+          message: "Cleared stale local eBay offer/listing IDs and marked the product ended. No eBay listing was created, edited, or ended.",
+          updates,
+        }),
+        { headers: corsHeaders }
+      );
+    }
+
     // ── BULK UPDATE PRICE/QUANTITY ──────────────────────────
     if (action === "bulk_update") {
       const { items } = body;
