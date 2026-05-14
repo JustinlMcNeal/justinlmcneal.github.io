@@ -73,6 +73,14 @@ async function ebayFetch(
   return { ok: resp.ok, status: resp.status, data, headers: resp.headers };
 }
 
+async function deleteEbayResource(accessToken: string, url: string): Promise<{ ok: boolean; skipped?: boolean; status?: number; data?: unknown }> {
+  const result = await ebayFetch(accessToken, "DELETE", url);
+  if (result.ok || result.status === 204 || result.status === 404) {
+    return { ok: true, skipped: result.status === 404, status: result.status };
+  }
+  return { ok: false, status: result.status, data: result.data, skipped: false };
+}
+
 // Detects eBay eventual-consistency errors: 25604 (Product not found at publish) and 25709 (Invalid InventoryItemBundleKey)
 function isEbayProductNotFoundPublishError(data: unknown): boolean {
   const payload = data as { errors?: Array<{ errorId?: number }> } | null;
@@ -191,14 +199,44 @@ function defaultTypeAspect(title: unknown): string {
   return "Accessory";
 }
 
-function normalizeProductAspects(aspects: unknown, title?: unknown): Record<string, unknown> {
+function defaultRequiredAspectValue(aspectName: string, title?: unknown): string {
+  const key = aspectName.toLowerCase();
+  if (key === "brand") return "Unbranded";
+  if (key === "type") return defaultTypeAspect(title);
+  if (key === "department") return "Unisex Adults";
+  if (key === "color") return "Multicolor";
+  if (key === "style") return "Novelty";
+  if (key === "theme") return "Novelty";
+  if (key === "material") return "Mixed Materials";
+  return "Not Specified";
+}
+
+function missingItemSpecificNames(data: unknown): string[] {
+  if (!isRecord(data) || !Array.isArray(data.errors)) return [];
+  const names = new Set<string>();
+  for (const err of data.errors) {
+    if (!isRecord(err)) continue;
+    const message = typeof err.message === "string" ? err.message : "";
+    const fromMessage = message.match(/item specific\s+(.+?)\s+is missing/i)?.[1]?.trim();
+    if (fromMessage) names.add(fromMessage);
+    const params = Array.isArray(err.parameters) ? err.parameters : [];
+    for (const param of params) {
+      if (!isRecord(param)) continue;
+      if (param.name === "2" && typeof param.value === "string" && param.value.trim()) names.add(param.value.trim());
+    }
+  }
+  return [...names];
+}
+
+function normalizeProductAspects(aspects: unknown, title?: unknown, requiredAspectNames: string[] = []): Record<string, unknown> {
   const normalized = isRecord(aspects) ? { ...aspects } : {};
-  if (!hasAspectValue(normalized, "Brand")) normalized.Brand = ["Unbranded"];
-  if (!hasAspectValue(normalized, "Type")) normalized.Type = [defaultTypeAspect(title)];
+  for (const aspectName of ["Brand", "Type", "Department", ...requiredAspectNames]) {
+    if (!hasAspectValue(normalized, aspectName)) normalized[aspectName] = [defaultRequiredAspectValue(aspectName, title)];
+  }
   return normalized;
 }
 
-async function ensureInventoryItemRequiredAspects(accessToken: string, sku: string | undefined): Promise<{ ok: boolean; repaired?: boolean; error?: string; details?: Record<string, unknown> }> {
+async function ensureInventoryItemRequiredAspects(accessToken: string, sku: string | undefined, requiredAspectNames: string[] = []): Promise<{ ok: boolean; repaired?: boolean; error?: string; details?: Record<string, unknown> }> {
   if (!sku) return { ok: true };
   const currentItem = await ebayFetch(accessToken, "GET", `${INV_API}/inventory_item/${encodeURIComponent(sku)}`);
   if (!currentItem.ok) {
@@ -208,8 +246,9 @@ async function ensureInventoryItemRequiredAspects(accessToken: string, sku: stri
   const item = currentItem.data;
   const product = isRecord(item.product) ? { ...item.product } : {};
   const before = isRecord(product.aspects) ? product.aspects : {};
-  const after = normalizeProductAspects(before, product.title);
-  const missingAspects = ["Brand", "Type"].filter((name) => !hasAspectValue(before, name));
+  const required = ["Brand", "Type", "Department", ...requiredAspectNames].filter((name, index, arr) => arr.findIndex((v) => v.toLowerCase() === name.toLowerCase()) === index);
+  const after = normalizeProductAspects(before, product.title, requiredAspectNames);
+  const missingAspects = required.filter((name) => !hasAspectValue(before, name));
   if (!missingAspects.length) return { ok: true, repaired: false };
 
   product.aspects = after;
@@ -348,6 +387,70 @@ serve(async (req) => {
     const accessToken = await getAccessToken(supabase);
     const body = await req.json();
     const { action } = body;
+
+    // ── DISCARD LOCAL/EBAY DRAFT ─────────────────────────
+    if (action === "discard_draft") {
+      const { productCode, sku, offerId, inventoryItemGroupKey } = body;
+      const dbCode = typeof productCode === "string" && productCode.trim() ? productCode.trim() : (typeof sku === "string" ? sku.trim() : "");
+      if (!dbCode) throw new Error("productCode is required");
+
+      const { data: productRow, error: productErr } = await supabase
+        .from("products")
+        .select("code, ebay_status, ebay_sku, ebay_offer_id, ebay_item_group_key")
+        .eq("code", dbCode)
+        .maybeSingle();
+      if (productErr) throw productErr;
+      if (productRow && productRow.ebay_status === "active") {
+        throw new Error("Refusing to discard an active eBay listing. Use End instead.");
+      }
+
+      const baseSku = typeof sku === "string" && sku.trim() ? sku.trim() : (typeof productRow?.ebay_sku === "string" && productRow.ebay_sku.trim() ? productRow.ebay_sku.trim() : dbCode);
+      const offerToDelete = typeof offerId === "string" && offerId.trim() ? offerId.trim() : (typeof productRow?.ebay_offer_id === "string" ? productRow.ebay_offer_id.trim() : "");
+      const groupToDelete = typeof inventoryItemGroupKey === "string" && inventoryItemGroupKey.trim() ? inventoryItemGroupKey.trim() : (typeof productRow?.ebay_item_group_key === "string" ? productRow.ebay_item_group_key.trim() : "");
+      const deleted: Array<Record<string, unknown>> = [];
+      const skusToDelete = new Set<string>([baseSku]);
+
+      if (groupToDelete) {
+        const offersForGroup = await ebayFetch(accessToken, "GET", `${INV_API}/offer?inventory_item_group_key=${encodeURIComponent(groupToDelete)}`);
+        const groupOffers = offersForGroup.ok && isRecord(offersForGroup.data) && Array.isArray(offersForGroup.data.offers) ? offersForGroup.data.offers.filter(isRecord) : [];
+        for (const offer of groupOffers) {
+          const liveOfferId = offerIdValue(offer);
+          const liveSku = typeof offer.sku === "string" && offer.sku.trim() ? offer.sku.trim() : "";
+          if (liveSku) skusToDelete.add(liveSku);
+          if (liveOfferId) {
+            const delOffer = await deleteEbayResource(accessToken, `${INV_API}/offer/${liveOfferId}`);
+            if (!delOffer.ok) throw new Error(`Delete draft offer failed (${delOffer.status}): ${JSON.stringify(delOffer.data)}`);
+            deleted.push({ type: "offer", id: liveOfferId, skipped: delOffer.skipped });
+          }
+        }
+        const delGroup = await deleteEbayResource(accessToken, `${INV_API}/inventory_item_group/${encodeURIComponent(groupToDelete)}`);
+        if (!delGroup.ok) throw new Error(`Delete draft group failed (${delGroup.status}): ${JSON.stringify(delGroup.data)}`);
+        deleted.push({ type: "group", id: groupToDelete, skipped: delGroup.skipped });
+      } else if (offerToDelete) {
+        const delOffer = await deleteEbayResource(accessToken, `${INV_API}/offer/${offerToDelete}`);
+        if (!delOffer.ok) throw new Error(`Delete draft offer failed (${delOffer.status}): ${JSON.stringify(delOffer.data)}`);
+        deleted.push({ type: "offer", id: offerToDelete, skipped: delOffer.skipped });
+      }
+
+      for (const itemSku of skusToDelete) {
+        const delItem = await deleteEbayResource(accessToken, `${INV_API}/inventory_item/${encodeURIComponent(itemSku)}`);
+        if (!delItem.ok) throw new Error(`Delete draft inventory item failed (${delItem.status}): ${JSON.stringify(delItem.data)}`);
+        deleted.push({ type: "inventory_item", id: itemSku, skipped: delItem.skipped });
+      }
+
+      await supabase.from("products").update({
+        ebay_sku: null,
+        ebay_offer_id: null,
+        ebay_listing_id: null,
+        ebay_status: "not_listed",
+        ebay_category_id: null,
+        ebay_price_cents: null,
+        ebay_item_group_key: null,
+        updated_at: new Date().toISOString(),
+      }).eq("code", dbCode);
+
+      return new Response(JSON.stringify({ success: true, discarded: true, deleted }), { headers: corsHeaders });
+    }
 
     // ── DELETE INVENTORY ITEM ─────────────────────────────
     if (action === "delete_item") {
@@ -576,6 +679,26 @@ serve(async (req) => {
       }
 
       if (!result.ok) {
+        const missingSpecifics = missingItemSpecificNames(result.data);
+        if (missingSpecifics.length) {
+          const repairCheck = await ensureInventoryItemRequiredAspects(accessToken, quantityCheck.sku || sku, missingSpecifics);
+          if (!repairCheck.ok) {
+            return structuredOfferFailure(
+              "PUBLISH_ASPECTS_REQUIRED",
+              `${repairCheck.error || `Required item specifics missing: ${missingSpecifics.join(", ")}.`} Add the missing item specific to this listing and try publishing again.`,
+              { offerId, sku, missingSpecifics, ...repairCheck.details },
+            );
+          }
+          result = await ebayFetch(
+            accessToken,
+            "POST",
+            `${INV_API}/offer/${offerId}/publish`,
+            {},
+          );
+        }
+      }
+
+      if (!result.ok) {
         throw new Error(`Publish failed (${result.status}): ${JSON.stringify(result.data)}`);
       }
 
@@ -661,6 +784,30 @@ serve(async (req) => {
           );
           if (result.ok) break;
           if (!isEbayProductNotFoundPublishError(result.data)) break;
+        }
+      }
+
+      if (!result.ok && offersForGroup.ok) {
+        const missingSpecifics = missingItemSpecificNames(result.data);
+        if (missingSpecifics.length) {
+          const groupOffers = isRecord(offersForGroup.data) && Array.isArray(offersForGroup.data.offers) ? offersForGroup.data.offers.filter(isRecord) : [];
+          for (const offer of groupOffers) {
+            const offerSku = typeof offer.sku === "string" ? offer.sku : undefined;
+            const repairCheck = await ensureInventoryItemRequiredAspects(accessToken, offerSku, missingSpecifics);
+            if (!repairCheck.ok) {
+              return structuredOfferFailure(
+                "PUBLISH_ASPECTS_REQUIRED",
+                `${repairCheck.error || `Required item specifics missing: ${missingSpecifics.join(", ")}.`} Add the missing item specific to this variant and try publishing again.`,
+                { inventoryItemGroupKey, sku: offerSku, missingSpecifics, ...repairCheck.details },
+              );
+            }
+          }
+          result = await ebayFetch(
+            accessToken,
+            "POST",
+            `${INV_API}/offer/publish_by_inventory_item_group`,
+            { inventoryItemGroupKey, marketplaceId: "EBAY_US" },
+          );
         }
       }
 
@@ -1561,7 +1708,7 @@ serve(async (req) => {
         title: title || "",
         description: description || "",
         imageUrls: imageUrls || [],
-        aspects: aspects || {},
+        aspects: normalizeProductAspects(aspects, title),
         variantSKUs,
         variesBy: variesBy || {},
       };

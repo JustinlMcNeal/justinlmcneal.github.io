@@ -360,7 +360,8 @@ function renderProductActions(p, compact = false) {
     return `<button onclick="openEdit('${esc(p.code)}')" class="${blue}">Edit</button>
             ${p.ebay_offer_id
               ? `<button onclick="doPublish('${esc(p.code)}', '${esc(p.ebay_offer_id)}', '${esc(p.ebay_item_group_key)}')" class="${green}">Publish</button>`
-              : `<button onclick="openPush('${esc(p.code)}')" class="${black}">Resume Push</button>`}`;
+              : `<button onclick="openPush('${esc(p.code)}')" class="${black}">Resume Push</button>`}
+            <button onclick="discardDraft('${esc(p.code)}', '${esc(p.ebay_offer_id)}', '${esc(p.ebay_item_group_key)}')" class="${amber}">Discard</button>`;
   }
   if (status === "ended") {
     return `<button onclick="openPush('${esc(p.code)}')" class="${black}">Re-list</button>`;
@@ -990,7 +991,7 @@ async function fetchAspects(categoryId) {
     }
 
     currentAspects = result.aspects;
-    const defaults  = { Brand: "Unbranded", Condition: "New", Type: "Accessory" };
+    const defaults  = { Brand: "Unbranded", Condition: "New", Type: "Accessory", Department: "Unisex Adults" };
     const required  = result.aspects.filter(a => a.required);
     const optional  = result.aspects.filter(a => !a.required).slice(0, 15);
 
@@ -1427,6 +1428,7 @@ window.openEdit = async function openEdit(code) {
         }
         if (!defaults.Brand) defaults.Brand = "Unbranded";
         if (!defaults.Type) defaults.Type = "Accessory";
+        if (!defaults.Department) defaults.Department = "Unisex Adults";
         if (isGroupListing && !defaults.Color) {
           const colorSpec = editProduct._groupData?.variesBy?.specifications?.find(s => s?.name === "Color");
           if (colorSpec?.values?.length) defaults.Color = colorSpec.values.join(", ");
@@ -1555,6 +1557,33 @@ async function renderEditVariantImageControls(product, group) {
 }
 
 // ── Withdraw / Publish (from table) ──────────────────────────
+window.discardDraft = async function discardDraft(code, offerId, itemGroupKey) {
+  const product = allProducts.find(p => p.code === code);
+  if (!product || product.ebay_status !== "draft") {
+    showStatus("❌ Only draft listings can be discarded here.", true);
+    return;
+  }
+  if (!confirm(`Discard the eBay draft attempt for ${code}? This deletes the unpublished eBay draft resources and resets the product to Not Listed.`)) return;
+  showStatus("Discarding draft…");
+  try {
+    const result = await callEdge("ebay-manage-listing", {
+      action: "discard_draft",
+      productCode: code,
+      sku: product.ebay_sku || code,
+      offerId: offerId && String(offerId).trim() ? String(offerId).trim() : product.ebay_offer_id,
+      inventoryItemGroupKey: itemGroupKey && String(itemGroupKey).trim() ? String(itemGroupKey).trim() : product.ebay_item_group_key,
+    });
+    if (result.success) {
+      showStatus(`✅ Draft discarded for ${code}. You can Push again when ready.`);
+      await loadProducts();
+    } else {
+      showStatus("❌ " + (result.error || "Discard draft failed"), true);
+    }
+  } catch (e) {
+    showStatus("❌ " + e.message, true);
+  }
+};
+
 window.doWithdraw = async function doWithdraw(code, offerId, itemGroupKey) {
   if (!confirm(`End eBay listing for ${code}?`)) return;
   showStatus("Withdrawing…");
