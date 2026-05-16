@@ -107,3 +107,70 @@ export function variantSkuFromOption(baseCode, optionValue) {
   const suffix = String(optionValue || "").toUpperCase().replace(/[^A-Z0-9]/g, "").substring(0, 6);
   return `${baseCode}-${suffix}`;
 }
+
+// ── Variant / listing product helpers ────────────────────────
+
+/** Total publish quantity: sum of active variant stock, or 1 if no variants. */
+export function publishQuantityForProduct(product) {
+  const variants = (product?.product_variants || []).filter(v => v.is_active);
+  const variantStock = variants.reduce((sum, v) => sum + (parseInt(v.stock, 10) || 0), 0);
+  return variantStock > 0 ? variantStock : 1;
+}
+
+/** Number of active variants on a product. */
+export function activeVariantCount(product) {
+  return (product?.product_variants || []).filter(v => v.is_active).length;
+}
+
+/**
+ * Returns true when the product has an eBay item group key AND more than one
+ * active variant — i.e. it is a group (multi-variation) listing on eBay.
+ */
+export function isEffectiveGroupListing(product) {
+  return Boolean(product?.ebay_item_group_key) && activeVariantCount(product) > 1;
+}
+
+// ── Shared UI helpers ────────────────────────────────────────
+
+/**
+ * Toggle a step button between its active (black) and disabled (gray) states.
+ * Used by Push/Edit modal step buttons (Create Item, Create Offer, Publish).
+ */
+export function enableBtn(id, enabled) {
+  const btn = document.getElementById(id);
+  btn.disabled = !enabled;
+  if (enabled) {
+    btn.classList.remove("border-gray-300", "bg-gray-100", "text-gray-400");
+    btn.classList.add("border-black", "bg-black", "text-white", "hover:bg-kkpink", "hover:border-kkpink", "hover:text-black");
+  } else {
+    btn.classList.add("border-gray-300", "bg-gray-100", "text-gray-400");
+    btn.classList.remove("border-black", "bg-black", "text-white", "hover:bg-kkpink", "hover:border-kkpink", "hover:text-black");
+  }
+}
+
+/**
+ * Derive a short display label from an image URL for the variant image picker.
+ * Falls back to "Image N" when the URL has no filename segment.
+ */
+export function imageOptionLabel(url, idx) {
+  let file = (url || "").split("/").pop()?.split("?")[0] || `Image ${idx + 1}`;
+  try { file = decodeURIComponent(file); } catch (_) {}
+  return file.length > 34 ? `${file.slice(0, 31)}...` : file;
+}
+
+/**
+ * Append (or replace) an AI source badge on the label nearest to the given input.
+ * Used by Push and Edit modal AI Auto-Fill to mark which fields were AI-generated.
+ */
+export function addAiBadge(inputId, source) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  const label = input.closest("div")?.querySelector("label");
+  if (!label) return;
+  const existing = label.querySelector(".ai-badge");
+  if (existing) existing.remove();
+  const badge    = document.createElement("span");
+  badge.className = `ai-badge ai-badge-${source}`;
+  badge.textContent = source === "generated" ? "AI" : source === "from_data" ? "From data" : source;
+  label.appendChild(badge);
+}

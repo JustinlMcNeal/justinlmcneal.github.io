@@ -20,22 +20,54 @@ import {
   getSelectedPolicies,
   getBestOfferTerms,
   variantSkuFromOption,
+  publishQuantityForProduct,
+  activeVariantCount,
+  isEffectiveGroupListing,
+  enableBtn,
+  imageOptionLabel,
+  addAiBadge,
 } from "./utils.js";
 
-import {
-  quillToolbar,
-  descState,
-  resetQuillEditorMount,
-  toggleDescMode,
-  getDescriptionHtml,
-} from "./editor.js";
+import { quillToolbar, descState, resetQuillEditorMount, toggleDescMode, getDescriptionHtml } from "./editor.js";
 
-import { renderImageStrip, showGalleryPicker } from "./images.js";
-import { addVolTier, getVolTiers, setVolTiers } from "./volPricing.js";
+import { addVolTier, getVolTiers } from "./volPricing.js";
 import { buildEstimate, renderPreview } from "./profitPreview.js";
 import { computeHealth } from "./listingHealth.js";
 import { openSalesHistory, closeSalesHistory } from "./salesHistory.js";
 import { buildPriceRef, renderPriceRef, fetchSalesMetrics } from "./priceReference.js";
+import { renderImageStrip, showGalleryPicker } from "./images.js";
+import { createEditModalContext } from "./editModal.js";
+
+import { callEdge, mergeWorkspaceMetrics } from "./api.js";
+import { formatRelativeDate, wsChips, epCls, rowEstProfitHtml } from "./renderHelpers.js";
+import {
+  isLinkedOnEbay, isStaleLinkCheck, isOutOfStockLinkCheck, isLinkWarningCheck,
+  staleActionState, staleActionBadge, staleLinkLabel, staleLinkMessage,
+  currentActiveListingId, ebayCodeLinkHtml,
+} from "./linkCheck.js";
+import { createReconcileActions } from "./reconcileActions.js";
+import { renderProductActions } from "./productActions.js";
+import { createTableActions } from "./tableActions.js";
+import { createProductActionDispatcher } from "./actionDispatcher.js";
+import { renderTable } from "./table.js";
+import { renderCards } from "./cards.js";
+import { initSetupPanel } from "./setupPanel.js";
+import { initImportPanel } from "./importPanel.js";
+import { initBulkActions, updateBulkBar } from "./bulkActions.js";
+import { buildAspectField, buildEditAspectField, collectAspects, validateRequiredAspects } from "./aspectHelpers.js";
+import {
+  renderVariantAssignedImages, getAssignedVariantImages, setAssignedVariantImages,
+  renderVariantCandidatePicker, refreshVariantCandidateButtons, wireVariantImageSetControls,
+  renderVariantPanel, getCheckedVariants, renderEditVariantImageControls,
+} from "./variantPanel.js";
+import {
+  refreshPushPreview, refreshEditPreview, refreshPushRef, refreshEditRef, loadAndRenderPriceRef,
+} from "./modalPreviews.js";
+import {
+  shortDelay, ebayErrorIds, isTransientGetItemFailure, getItemForEdit,
+  getOffersForEdit, offerUpdateErrorMessage,
+} from "./editFetch.js";
+import { loadPoliciesCache } from "./policyCache.js";
 
 // ── Init Supabase ─────────────────────────────────────────────
 const supabase    = getSupabaseClient();
@@ -57,8 +89,6 @@ let pushVariants           = [];
 let isVariantListing       = false;
 let editProduct            = null;
 let editAspects            = [];
-let cachedPolicies         = null;
-let bulkMode               = "price";
 let searchTimeout;
 let pushSalesMetrics = null;   // Phase 5: cached per push-modal session
 let editSalesMetrics = null;   // Phase 5: cached per edit-modal session
@@ -66,334 +96,20 @@ let pageAdRatePct    = 0;      // Phase 6: assumed promoted listing ad rate for 
 let editOfferLookupCache = new Map();
 let linkAuditRunId = 0;
 
-// ── Edge Function Helper ──────────────────────────────────────
-async function callEdge(fnName, body) {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.access_token) throw new Error("Not authenticated — please refresh the page");
-  const resp = await fetch(`${SUPABASE_URL}/functions/v1/${fnName}`, {
-    method:  "POST",
-    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
-    body: JSON.stringify(body),
-  });
-  if (!resp.ok && !resp.headers.get("content-type")?.includes("application/json")) {
-    return { success: false, error: `HTTP ${resp.status} from ${fnName}` };
-  }
-  const data = await resp.json().catch(() => ({ success: false, error: `Non-JSON response from ${fnName} (HTTP ${resp.status})` }));
-  if (!data?.success && fnName === "ebay-manage-listing") {
-    console.warn("[ebay-listing] edge action failed", {
-      action: body?.action,
-      sku: body?.sku,
-      offerId: body?.offerId,
-      inventoryItemGroupKey: body?.inventoryItemGroupKey,
-      code: data?.code,
-      status: data?.status || data?.upstreamStatus || resp.status,
-      message: data?.message || data?.error,
-    });
-  }
-  return data;
-}
-
-function shortDelay(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-function ebayErrorIds(payload) {
-  const errors = payload?.errors || payload?.upstream?.errors || payload?.upstreamData?.errors || [];
-  return Array.isArray(errors) ? errors.map(e => Number(e?.errorId)).filter(Number.isFinite) : [];
-}
-
-function isTransientGetItemFailure(result) {
-  const status = Number(result?.upstreamStatus || result?.status || 0);
-  const ids    = ebayErrorIds(result);
-  const detail = `${result?.error || ""} ${JSON.stringify(result?.upstream || result?.upstreamData || {})}`;
-  return status >= 500 || ids.includes(25001) || /system error|api_inventory|25001/i.test(detail);
-}
-
-async function getItemForEdit(sku) {
-  try {
-    const first = await callEdge("ebay-manage-listing", { action: "get_item", sku });
-    if (first.success) return { ...first, retried: false };
-    if (!isTransientGetItemFailure(first)) {
-      console.warn(`[edit] get_item failed for ${sku}; using fallback:`, first.error || first);
-      return { ...first, success: false, retried: false, fallback: true };
-    }
-
-    console.warn(`[edit] get_item failed for ${sku}; retrying once:`, first.error || first);
-    await shortDelay(600);
-    const second = await callEdge("ebay-manage-listing", { action: "get_item", sku });
-    if (second.success) return { ...second, retried: true };
-
-    console.warn(`[edit] get_item failed for ${sku} after retry; using fallback:`, second.error || second);
-    return { ...second, success: false, retried: true, fallback: true };
-  } catch (e) {
-    console.warn(`[edit] get_item error for ${sku}; retrying once:`, e.message);
-    await shortDelay(600);
-    try {
-      const retry = await callEdge("ebay-manage-listing", { action: "get_item", sku });
-      if (retry.success) return { ...retry, retried: true };
-      console.warn(`[edit] get_item failed for ${sku} after retry; using fallback:`, retry.error || retry);
-      return { ...retry, success: false, retried: true, fallback: true };
-    } catch (retryErr) {
-      console.warn(`[edit] get_item error for ${sku} after retry; using fallback:`, retryErr.message);
-      return { success: false, error: retryErr.message, retried: true, fallback: true };
-    }
-  }
-}
-
-async function getOffersForEdit(sku, context = "edit") {
-  const key = String(sku || "").trim();
-  if (!key) return { success: false, offers: [], error: "sku is required", cached: false };
-  if (editOfferLookupCache.has(key)) {
-    return { ...editOfferLookupCache.get(key), cached: true };
-  }
-
-  const result = await callEdge("ebay-manage-listing", { action: "get_offers", sku: key });
-  const normalized = result?.success
-    ? { ...result, cached: false }
-    : {
-        ...result,
-        success: false,
-        offers: [],
-        cached: false,
-        error: result?.message || result?.error || "Offer lookup failed",
-      };
-
-  editOfferLookupCache.set(key, normalized);
-  if (!normalized.success) {
-    console.warn(`[edit:${context}] get_offers failed for ${key}; cached failure to avoid repeated requests`, normalized);
-  }
-  return normalized;
-}
-
-function offerUpdateErrorMessage(result, fallback) {
-  if (result?.code === "STALE_OFFER_RELINK_REQUIRED") {
-    return result.message || "This eBay offer appears to be stale after manual relist activity. Refresh/relink this listing before editing.";
-  }
-  if (result?.code === "OFFER_LOCATION_RELINK_REQUIRED") {
-    return result.message || "Location data for this eBay offer is missing or invalid. Rebuild/relink the offer from the current eBay state before editing.";
-  }
-  return result?.message || result?.error || fallback;
-}
-
-function isLinkedOnEbay(p) {
-  const status = p?.ebay_status || "not_listed";
-  return status === "active" && (p.ebay_sku || p.ebay_offer_id || p.ebay_listing_id || p.ebay_item_group_key);
-}
-
-function isStaleLinkCheck(check) {
-  return Boolean(check?.success && ["stale", "ambiguous", "no_active_match"].includes(check.state));
-}
-
-function isOutOfStockLinkCheck(check) {
-  return Boolean(check?.success && check.state === "out_of_stock");
-}
-
-function isLinkWarningCheck(check) {
-  return isStaleLinkCheck(check) || isOutOfStockLinkCheck(check);
-}
-
-function staleActionState(p) {
-  const state = p?._linkCheck?.state;
-  return ["stale", "ambiguous", "no_active_match", "out_of_stock"].includes(state) ? state : "";
-}
-
-function staleActionBadge(p) {
-  const state = staleActionState(p);
-  if (!state) return "";
-  const label = state === "no_active_match" ? "No active eBay listing found" : staleLinkLabel(p._linkCheck);
-  const cls = state === "out_of_stock" ? "bg-orange-100 text-orange-800" : "bg-amber-100 text-amber-800";
-  return `<span class="inline-block px-2 py-0.5 rounded ${cls} text-[10px] font-bold uppercase" title="${esc(staleLinkMessage(p._linkCheck))}">${esc(label)}</span>`;
-}
-
-function staleLinkLabel(check) {
-  if (!check) return "Checking eBay link…";
-  if (check.state === "stale") return "Local eBay link may be stale";
-  if (check.state === "ambiguous") return "Multiple active eBay matches found";
-  if (check.state === "no_active_match") return "No active eBay match found";
-  if (check.state === "out_of_stock") return "Sold out on eBay";
-  return "eBay link verified";
-}
-
-function staleLinkMessage(check) {
-  return check?.message || "Local eBay link may be stale. Active eBay listing may be different. Refresh/relink before editing.";
-}
-
-function currentActiveListingId(check) {
-  return check?.activeMatch?.listingId || null;
-}
-
-async function reconcileEbayLink(product, relink = false) {
-  const sku = product.ebay_sku || product.code;
-  const result = await callEdge("ebay-manage-listing", {
-    action: "reconcile_listing",
-    productCode: product.code,
-    sku,
-    inventoryItemGroupKey: product.ebay_item_group_key || undefined,
-    localOfferId: product.ebay_offer_id || undefined,
-    localListingId: product.ebay_listing_id || undefined,
-    relink,
-  });
-  if (result?.state === "no_active_match" && product.ebay_status !== "active") {
-    result.state = "no_active_match_non_active";
-    result.stale = false;
-  }
-  product._linkCheck = result;
-  return result;
-}
-
-function ebayCodeLinkHtml(p, compact = false) {
-  const check = p._linkCheck;
-  if (isOutOfStockLinkCheck(check)) {
-    const activeId = currentActiveListingId(check) || p.ebay_listing_id;
-    const link = activeId
-      ? ` <a href="https://www.ebay.com/itm/${esc(activeId)}" target="_blank" class="text-orange-700 hover:underline">sold-out listing ↗</a>`
-      : "";
-    return `<span class="text-orange-700 font-bold" title="${esc(staleLinkMessage(check))}">⚠ ${compact ? "Sold out" : esc(p.code)}</span>${link}`;
-  }
-  if (isStaleLinkCheck(check)) {
-    const activeId = currentActiveListingId(check);
-    const relinkBtn = check.safeRelink
-      ? ` <button onclick="relinkEbayListing('${esc(p.code)}')" class="text-amber-700 hover:underline font-bold">Relink</button>`
-      : "";
-    const activeLink = activeId
-      ? ` <a href="https://www.ebay.com/itm/${esc(activeId)}" target="_blank" class="text-amber-700 hover:underline">active match ↗</a>`
-      : "";
-    return `<span class="text-amber-700 font-bold" title="${esc(staleLinkMessage(check))}">⚠ ${compact ? "Stale" : esc(p.code)}</span>${activeLink}${relinkBtn}`;
-  }
-  if (p.ebay_listing_id) {
-    return `<a href="https://www.ebay.com/itm/${esc(p.ebay_listing_id)}" target="_blank" class="text-blue-500 hover:underline">${esc(p.code)}</a>`;
-  }
-  return esc(p.code);
-}
-
-async function auditListingLinks(products = allProducts) {
-  const runId = ++linkAuditRunId;
-  const candidates = products.filter(isLinkedOnEbay);
-  if (!candidates.length) return;
-  let staleCount = 0;
-  for (const product of candidates) {
-    if (runId !== linkAuditRunId) return;
-    try {
-      const check = await reconcileEbayLink(product, false);
-      if (isLinkWarningCheck(check)) staleCount++;
-    } catch (err) {
-      console.warn("eBay link audit failed", product.code, err);
-      product._linkCheck = { success: false, error: err.message || String(err) };
-    }
-  }
-  if (runId !== linkAuditRunId) return;
-  renderAll();
-  if (staleCount) showStatus(`⚠️ ${staleCount} eBay listing${staleCount === 1 ? "" : "s"} need attention. Some may be stale or sold out on eBay.`, true);
-}
-
-window.relinkEbayListing = async function relinkEbayListing(code) {
-  const product = allProducts.find(p => p.code === code);
-  if (!product) return;
-  if (!confirm(`Relink ${product.code} to the single active eBay match found for this SKU? No new listing will be created.`)) return;
-  showStatus(`Relinking ${product.code} to current active eBay listing…`);
-  try {
-    const result = await reconcileEbayLink(product, true);
-    if (!result.success || !result.relinked) {
-      showStatus(`❌ ${result.message || result.error || "Relink was not safe"}`, true);
-      renderAll();
-      return;
-    }
-    showStatus(`✅ Relinked ${product.code} to active eBay listing ${result.activeMatch?.listingId || ""}`);
-    await loadProducts();
-  } catch (err) {
-    showStatus(`❌ ${err.message || String(err)}`, true);
-  }
-};
-
-window.clearStaleEbayLink = async function clearStaleEbayLink(code) {
-  const product = allProducts.find(p => p.code === code);
-  if (!product) return;
-  if (!confirm(`Clear stale local eBay link for ${product.code}? This only updates the website record; it will not create, edit, or end anything on eBay.`)) return;
-  showStatus(`Clearing stale local eBay link for ${product.code}…`);
-  try {
-    const result = await callEdge("ebay-manage-listing", {
-      action: "clear_stale_listing_link",
-      productCode: product.code,
-    });
-    if (!result.success) {
-      showStatus(`❌ ${result.message || result.error || "Clear stale link failed"}`, true);
-      return;
-    }
-    showStatus(`✅ Cleared stale eBay link for ${product.code}. Use Re-list to push it again when ready.`);
-    await loadProducts();
-  } catch (err) {
-    showStatus(`❌ ${err.message || String(err)}`, true);
-  }
-};
-
-function renderProductActions(p, compact = false) {
-  const status = p.ebay_status || "not_listed";
-  const staleState = staleActionState(p);
-  const size = compact ? "flex-1 px-2 py-1.5 text-xs" : "px-2 py-1 text-[10px]";
-  const black = `bg-black text-white ${size} rounded font-bold hover:bg-kkpink hover:text-black transition-all`;
-  const blue = `bg-blue-600 text-white ${size} rounded font-bold hover:bg-blue-700 transition-all`;
-  const red = `border border-red-300 text-red-600 ${size} rounded font-bold hover:bg-red-50 transition-all`;
-  const amber = `border border-amber-300 text-amber-700 ${size} rounded font-bold hover:bg-amber-50 transition-all`;
-  const green = `bg-green-600 text-white ${size} rounded font-bold hover:bg-green-700 transition-all`;
-
-  if (staleState === "out_of_stock") {
-    return `<button onclick="openEdit('${esc(p.code)}')" class="${green}">Restock</button>
-            <button onclick="clearStaleEbayLink('${esc(p.code)}')" class="${amber}">Mark Ended</button>`;
-  }
-
-  if (staleState) {
-    const clear = `<button onclick="clearStaleEbayLink('${esc(p.code)}')" class="${amber}">Mark Ended</button>`;
-    if (staleState === "stale" && p._linkCheck?.safeRelink) {
-      return `<button onclick="relinkEbayListing('${esc(p.code)}')" class="${green}">Relink</button>${clear}`;
-    }
-    return clear;
-  }
-
-  if (status === "not_listed") {
-    return `<button onclick="openPush('${esc(p.code)}')" class="${black}">Push</button>`;
-  }
-  if (status === "active") {
-    return `<button onclick="openEdit('${esc(p.code)}')" class="${blue}">Edit</button>
-            <button onclick="doWithdraw('${esc(p.code)}', '${esc(p.ebay_offer_id)}', '${esc(p.ebay_item_group_key)}')" class="${red}">End</button>`;
-  }
-  if (status === "draft") {
-    return `<button onclick="openEdit('${esc(p.code)}')" class="${blue}">Edit</button>
-            ${p.ebay_offer_id
-              ? `<button onclick="doPublish('${esc(p.code)}', '${esc(p.ebay_offer_id)}', '${esc(p.ebay_item_group_key)}')" class="${green}">Publish</button>`
-              : `<button onclick="openPush('${esc(p.code)}')" class="${black}">Resume Push</button>`}
-            <button onclick="discardDraft('${esc(p.code)}', '${esc(p.ebay_offer_id)}', '${esc(p.ebay_item_group_key)}')" class="${amber}">Discard</button>`;
-  }
-  if (status === "ended") {
-    return `<button onclick="openPush('${esc(p.code)}')" class="${black}">Re-list</button>`;
-  }
-  return "";
-}
-
-function renderEditLinkWarning(check) {
-  const box = document.getElementById("editLinkWarning");
-  const text = document.getElementById("editLinkWarningText");
-  const meta = document.getElementById("editLinkWarningMeta");
-  const btn = document.getElementById("btnEditRelink");
-  if (!box || !text || !meta || !btn) return;
-  if (!isLinkWarningCheck(check)) {
-    box.classList.add("hidden");
-    btn.classList.add("hidden");
-    return;
-  }
-  const activeId = currentActiveListingId(check);
-  text.textContent = staleLinkMessage(check);
-  if (isOutOfStockLinkCheck(check)) {
-    const oq = check.activeMatch?.offerQuantity ?? "?";
-    const iq = check.activeMatch?.inventoryQuantity ?? "?";
-    meta.innerHTML = `Offer qty: ${esc(String(oq))} · Inventory qty: ${esc(String(iq))}. Use Restock/Edit to set quantity above 0.`;
-  } else {
-    meta.innerHTML = activeId
-    ? `Current active match found: <a href="https://www.ebay.com/itm/${esc(activeId)}" target="_blank" class="underline font-bold">${esc(activeId)} ↗</a>`
-    : staleLinkLabel(check);
-  }
-  btn.classList.toggle("hidden", !check.safeRelink);
-  box.classList.remove("hidden");
-}
+// ── Factory contexts (wired to page-level state and callbacks) ────────────
+const reconcileCtx = createReconcileActions({ getProducts: () => allProducts, renderAll, loadProducts, showStatus });
+const tableCtx     = createTableActions({ getProducts: () => allProducts, loadProducts, showStatus });
+const dispatchProductAction = createProductActionDispatcher({
+  openPush:           (...args) => window.openPush?.(...args),
+  openEdit:           (...args) => window.openEdit?.(...args),
+  openSalesHistory,
+  relinkEbayListing:  reconcileCtx.relinkEbayListing,
+  clearStaleEbayLink: reconcileCtx.clearStaleEbayLink,
+  doWithdraw:         tableCtx.doWithdraw,
+  doPublish:          tableCtx.doPublish,
+  discardDraft:       tableCtx.discardDraft,
+  getProducts:        () => allProducts,
+});
 
 // ── Status Bar ────────────────────────────────────────────────
 function showStatus(msg, isError = false) {
@@ -403,155 +119,12 @@ function showStatus(msg, isError = false) {
   bar.classList.remove("hidden");
 }
 
-// ── Policies Cache ────────────────────────────────────────────
-async function loadPoliciesCache() {
-  if (cachedPolicies) return cachedPolicies;
-  try {
-    const result = await callEdge("ebay-manage-listing", { action: "get_policies" });
-    if (result.success) {
-      cachedPolicies = result.policies;
-      populatePolicyDropdowns();
-    }
-  } catch (e) { console.warn("Policy load failed:", e); }
-  return cachedPolicies;
-}
-
-function populatePolicyDropdowns() {
-  if (!cachedPolicies) return;
-  const defaultFulfill = "266551432012";
-  const defaultReturn  = "266551433012";
-  const defaultPayment = "266551437012";
-
-  function fill(selectId, policyType, defaultId) {
-    const sel = document.getElementById(selectId);
-    if (!sel) return;
-    const raw  = cachedPolicies[policyType];
-    const list = raw?.policies || raw?.fulfillmentPolicies || raw?.returnPolicies || raw?.paymentPolicies || [];
-    sel.innerHTML = list.map(p => {
-      const id       = p.fulfillmentPolicyId || p.returnPolicyId || p.paymentPolicyId || "";
-      const name     = p.name || p.policyName || "Unnamed";
-      const selected = id === defaultId ? " selected" : "";
-      return `<option value="${id}"${selected}>${name}</option>`;
-    }).join("") || '<option value="">No policies found</option>';
-  }
-
-  fill("modalFulfillmentPolicy", "fulfillment_policy", defaultFulfill);
-  fill("modalReturnPolicy",      "return_policy",      defaultReturn);
-  fill("modalPaymentPolicy",     "payment_policy",     defaultPayment);
-  fill("editFulfillmentPolicy",  "fulfillment_policy", defaultFulfill);
-  fill("editReturnPolicy",       "return_policy",      defaultReturn);
-  fill("editPaymentPolicy",      "payment_policy",     defaultPayment);
-}
-
-// ── Workspace Metrics (Phase 1: read-only, non-blocking) ────────────────────
-// Fetches v_ebay_listing_workspace and merges workspace metrics onto product rows.
-// If the view is unavailable, products load normally and metric badges show "—".
-async function mergeWorkspaceMetrics(products) {
-  try {
-    const { data: wsData, error: wsErr } = await supabase
-      .from("v_ebay_listing_workspace")
-      .select("product_code, sold_qty_30d, sold_qty_90d, last_sold_at, avg_sold_price_cents_90d, gallery_image_count, active_variant_count, active_variant_stock_total, issue_flags, issue_count");
-    if (wsErr || !wsData) {
-      console.warn("[workspace] metrics unavailable:", wsErr?.message);
-      return products;
-    }
-    const map = Object.fromEntries(wsData.map(row => [row.product_code, row]));
-    return products.map(p => ({ ...p, _ws: map[p.code] || null }));
-  } catch (e) {
-    console.warn("[workspace] metrics skipped:", e.message);
-    return products;
-  }
-}
-
-// Relative date formatter for "last sold" badges.
-function formatRelativeDate(dtStr) {
-  if (!dtStr) return null;
-  const dt    = new Date(dtStr);
-  const diffMs = Date.now() - dt.getTime();
-  const days  = Math.floor(diffMs / 86400000);
-  if (days === 0) return "today";
-  if (days === 1) return "1d ago";
-  if (days < 30)  return `${days}d ago`;
-  const months = Math.floor(days / 30);
-  if (months < 12) return `${months}mo ago`;
-  return `${Math.floor(months / 12)}y ago`;
-}
-
-// Build compact workspace chip HTML for a product row/card.
-// Returns empty string when _ws is null (view unavailable) — no crash, no badge.
-// health parameter (optional) — if provided, improves the issue chip tooltip/label.
-function wsChips(p, health = null) {
-  const ws = p._ws;
-  if (!ws) return "";
-  const chips = [];
-
-  const sold30 = ws.sold_qty_30d ?? 0;
-  if (sold30 > 0) {
-    chips.push(`<span class="ws-chip ws-chip-sales" title="Units sold in last 30 days">${sold30} sold</span>`);
-  }
-  if (ws.last_sold_at) {
-    const ago = formatRelativeDate(ws.last_sold_at);
-    if (ago) chips.push(`<span class="ws-chip ws-chip-date" title="Last eBay sale">${ago}</span>`);
-  }
-  if (p.ebay_volume_promo_id) {
-    chips.push(`<span class="ws-chip ws-chip-promo" title="Has volume promotion">PROMO</span>`);
-  }
-  // Phase 5: underpriced vs internal avg sold (only for active/draft, ≥2 obs)
-  const priceStatus = p.ebay_status || "not_listed";
-  if (["active", "draft"].includes(priceStatus)) {
-    const avgSold90d = ws.avg_sold_price_cents_90d;
-    const soldQty90d = ws.sold_qty_90d ?? 0;
-    if (p.ebay_price_cents && avgSold90d != null && soldQty90d >= 2 && p.ebay_price_cents < avgSold90d) {
-      const kkFmt  = `$${(p.ebay_price_cents / 100).toFixed(2)}`;
-      const avgFmt = `$${(avgSold90d / 100).toFixed(2)}`;
-      chips.push(`<span class="ws-chip ws-chip-underpriced" title="eBay price (${kkFmt}) is below recent avg sold (${avgFmt})">&#8595; avg</span>`);
-    }
-  }
-  const issues = health ? health.flags.length : (ws.issue_count ?? 0);
-  if (issues > 0) {
-    // Use human-readable flag labels from health object if available; fall back to raw flag keys.
-    const tooltip = health?.flagLabels?.length
-      ? health.flagLabels.join(" | ")
-      : ws.issue_flags ? Object.keys(ws.issue_flags).join(", ") : "";
-    chips.push(`<span class="ws-chip ws-chip-issue" title="${esc(tooltip)}">⚠ ${issues}</span>`);
-  }
-  if (!chips.length) return "";
-  return `<div class="ws-chips">${chips.join("")}</div>`;
-}
-
-// ── Est Profit Helpers (Phase 6) ──────────────────────────────
-function epCls(marginPct) {
-  if (marginPct == null) return "ep-na";
-  if (marginPct < 0)    return "ep-neg";
-  if (marginPct < 10)   return "ep-warn";
-  if (marginPct < 20)   return "ep-low";
-  return "ep-ok";
-}
-
-function rowEstProfitHtml(p) {
-  if (!p.ebay_price_cents) return '<span class="ep-badge ep-na">—</span>';
-  const est = buildEstimate({
-    priceCents:   p.ebay_price_cents,
-    kkPriceCents: p.price     ? Math.round(Number(p.price) * 100) : null,
-    unitCostUsd:  p.unit_cost != null ? Number(p.unit_cost) : null,
-    weightG:      p.weight_g  ?? null,
-    labelWeightG: p.weight_g  ?? null,   // product weight used as proxy for packaged weight
-    adRatePct:    pageAdRatePct,
-  });
-  if (est.netProfitCents !== null) {
-    const sign    = est.netProfitCents >= 0 ? "+" : "";
-    const cls     = epCls(est.marginPct);
-    const value   = `${sign}$${(Math.abs(est.netProfitCents) / 100).toFixed(2)}`;
-    const pctTxt  = est.marginPct !== null ? `${est.marginPct}%` : "";
-    const partial = est.complete ? "" : "*";
-    const tipBase = `Est. net profit${pageAdRatePct > 0 ? ` (incl. ${pageAdRatePct}% promo ad rate)` : ""}`;
-    const tip     = est.complete ? tipBase : `${tipBase} — *partial (label unknown)`;
-    return `<span class="ep-badge ep-${cls}" title="${esc(tip)}">~${value}${partial}${pctTxt ? `<br><span class="ep-pct">${pctTxt}</span>` : ""}</span>`;
-  }
-  if (!p.unit_cost) {
-    return '<span class="ep-badge ep-na" title="Set unit cost on product to enable estimate">no cost</span>';
-  }
-  return '<span class="ep-badge ep-na">—</span>';
+// ── Stats ──────────────────────────────────────────────────────
+function updateStats() {
+  document.getElementById("statTotal").textContent     = allProducts.length;
+  document.getElementById("statActive").textContent    = allProducts.filter(p => p.ebay_status === "active").length;
+  document.getElementById("statDraft").textContent     = allProducts.filter(p => p.ebay_status === "draft").length;
+  document.getElementById("statNotListed").textContent = allProducts.filter(p => !p.ebay_status || p.ebay_status === "not_listed").length;
 }
 
 // ── Load Products ─────────────────────────────────────────────
@@ -569,7 +142,7 @@ async function loadProducts() {
   allProducts = await mergeWorkspaceMetrics(data || []);
   applyFilters();
   updateStats();
-  auditListingLinks(allProducts);
+  reconcileCtx.auditListingLinks(allProducts);
 }
 
 // ── Search / Filter / View ────────────────────────────────────
@@ -618,11 +191,11 @@ function renderAll() {
   if (currentView === "cards") {
     document.getElementById("tableSection").classList.add("hidden");
     document.getElementById("cardSection").classList.remove("hidden");
-    renderCards();
+    renderCards(filteredProducts, pageAdRatePct);
   } else {
     document.getElementById("tableSection").classList.remove("hidden");
     document.getElementById("cardSection").classList.add("hidden");
-    renderTable();
+    renderTable(filteredProducts, pageAdRatePct);
   }
 }
 
@@ -635,340 +208,11 @@ function setView(view) {
   renderAll();
 }
 
-// ── Render Table ──────────────────────────────────────────────
-function renderTable() {
-  const tbody = document.getElementById("productsBody");
-  if (!filteredProducts.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="py-8 text-center text-gray-400">No products found</td></tr>';
-    return;
-  }
+// ── Category / Aspects (Push Modal) ──────────────────────────
 
-  tbody.innerHTML = filteredProducts.map(p => {
-    const kkPrice   = p.price             ? `$${Number(p.price).toFixed(2)}`            : "—";
-    const ebayPrice = p.ebay_price_cents  ? `$${(p.ebay_price_cents / 100).toFixed(2)}` : "—";
-    const status      = p.ebay_status || "not_listed";
-    const statusLabel = { active: "Active", draft: "Draft", ended: "Ended", not_listed: "Not Listed" }[status] || status;
-    const isListed    = status === "active" || status === "draft";
 
-    const health      = computeHealth(p);
-    const scoreBadge  = health.score !== null
-      ? `<span class="health-badge health-${health.severity}" title="${esc(health.primaryLabel ? `${health.primaryLabel} — ${health.actionLabel}` : 'No issues found')}">${health.score}</span>`
-      : "";
 
-    return `<tr class="product-row border-b border-gray-100">
-      <td class="py-2 pr-2">
-        ${isListed ? `<input type="checkbox" class="bulk-check accent-kkpink" data-code="${esc(p.code)}" data-offer="${esc(p.ebay_offer_id || '')}" data-sku="${esc(p.ebay_sku || p.code)}" />` : ""}
-      </td>
-      <td class="py-2 pr-3">
-        <div class="flex items-start gap-2">
-          ${p.catalog_image_url ? `<img src="${p.catalog_image_url}" class="w-8 h-8 object-cover rounded flex-shrink-0" />` : '<div class="w-8 h-8 bg-gray-100 rounded flex-shrink-0"></div>'}
-          <div class="min-w-0">
-            <a href="/pages/admin/products.html?q=${encodeURIComponent(p.name)}" target="_blank" class="font-medium text-sm line-clamp-1 text-blue-600 hover:underline">${esc(p.name)}</a>
-            <div class="text-[10px] font-mono text-gray-400 leading-none mt-0.5">${ebayCodeLinkHtml(p)}</div>
-            ${wsChips(p, health)}
-          </div>
-        </div>
-      </td>
-      <td class="py-2 pr-3 text-xs">${kkPrice}</td>
-      <td class="py-2 pr-3 text-xs">${ebayPrice}</td>
-      <td class="py-2 pr-3 text-xs">${rowEstProfitHtml(p)}</td>
-      <td class="py-2 pr-3">
-        <div class="flex flex-col items-start gap-0.5">
-          <span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase ebay-${status}">${statusLabel}</span>
-          ${staleActionBadge(p)}
-          ${scoreBadge}
-        </div>
-      </td>
-      <td class="py-2">
-        <div class="flex gap-1">
-          ${renderProductActions(p)}
-          ${status !== "not_listed"
-            ? `<button class="border border-gray-200 text-gray-400 px-1.5 py-1 rounded text-[10px] hover:bg-gray-100 hover:text-black transition-all" data-action="open-sales" data-code="${esc(p.code)}" title="Sales history">📊</button>`
-            : ""}
-        </div>
-      </td>
-    </tr>`;
-  }).join("");
 
-  updateBulkBar();
-}
-
-// ── Render Cards ──────────────────────────────────────────────
-function renderCards() {
-  const grid = document.getElementById("cardsGrid");
-  if (!filteredProducts.length) {
-    grid.innerHTML = '<p class="col-span-full text-center text-gray-400 py-8">No products found</p>';
-    return;
-  }
-
-  grid.innerHTML = filteredProducts.map(p => {
-    const kkPrice   = p.price            ? `$${Number(p.price).toFixed(2)}`            : "—";
-    const ebayPrice = p.ebay_price_cents ? `$${(p.ebay_price_cents / 100).toFixed(2)}` : "—";
-    const status      = p.ebay_status || "not_listed";
-    const statusLabel = { active: "Active", draft: "Draft", ended: "Ended", not_listed: "Not Listed" }[status] || status;
-
-    const health     = computeHealth(p);
-    const scoreBadge = health.score !== null
-      ? `<span class="health-badge health-${health.severity}" title="${esc(health.primaryLabel ? `${health.primaryLabel} — ${health.actionLabel}` : 'No issues found')}">${health.score}</span>`
-      : "";
-
-    let actions = "";
-    if (status === "not_listed") {
-      actions = `<button onclick="openPush('${esc(p.code)}')" class="flex-1 bg-black text-white px-2 py-1.5 rounded text-xs font-bold hover:bg-kkpink hover:text-black transition-all">Push</button>`;
-    } else if (status === "active") {
-      actions = `<button onclick="openEdit('${esc(p.code)}')" class="flex-1 bg-blue-600 text-white px-2 py-1.5 rounded text-xs font-bold">Edit</button>
-                 <button onclick="doWithdraw('${esc(p.code)}', '${esc(p.ebay_offer_id)}', '${esc(p.ebay_item_group_key)}')" class="flex-1 border border-red-300 text-red-600 px-2 py-1.5 rounded text-xs font-bold">End</button>`;
-    } else if (status === "draft") {
-      actions = `<button onclick="openEdit('${esc(p.code)}')" class="flex-1 bg-blue-600 text-white px-2 py-1.5 rounded text-xs font-bold">Edit</button>
-                 ${p.ebay_offer_id
-                   ? `<button onclick="doPublish('${esc(p.code)}', '${esc(p.ebay_offer_id)}', '${esc(p.ebay_item_group_key)}')" class="flex-1 bg-green-600 text-white px-2 py-1.5 rounded text-xs font-bold">Publish</button>`
-                   : `<button onclick="openPush('${esc(p.code)}')" class="flex-1 bg-black text-white px-2 py-1.5 rounded text-xs font-bold hover:bg-kkpink hover:text-black transition-all">Resume Push</button>`}`;
-    } else if (status === "ended") {
-      actions = `<button onclick="openPush('${esc(p.code)}')" class="flex-1 bg-black text-white px-2 py-1.5 rounded text-xs font-bold hover:bg-kkpink hover:text-black transition-all">Re-list</button>`;
-    }
-
-    return `<div class="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
-      <div class="aspect-square bg-gray-50">
-        ${p.catalog_image_url ? `<img src="${p.catalog_image_url}" class="w-full h-full object-cover" />` : '<div class="w-full h-full flex items-center justify-center text-gray-300 text-3xl">📦</div>'}
-      </div>
-      <div class="p-3">
-        <a href="/pages/admin/products.html?q=${encodeURIComponent(p.name)}" target="_blank" class="font-bold text-sm line-clamp-2 leading-tight text-blue-600 hover:underline">${esc(p.name)}</a>
-        <p class="text-[10px] font-mono text-gray-400 mt-1">${ebayCodeLinkHtml(p, true)}</p>
-        <div class="flex items-center justify-between mt-2">
-          <div class="text-xs">
-            <span class="text-gray-500">KK</span> <span class="font-bold">${kkPrice}</span>
-            <span class="text-gray-300 mx-1">|</span>
-            <span class="text-gray-500">eBay</span> <span class="font-bold">${ebayPrice}</span>
-          </div>
-          <div class="flex items-center gap-1 flex-wrap">
-            <span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase ebay-${status}">${statusLabel}</span>
-            ${staleActionBadge(p)}
-            ${scoreBadge}
-          </div>
-        </div>
-        <div class="flex items-center justify-between mt-1.5">
-          <span class="text-[9px] text-gray-400 font-semibold uppercase tracking-wide">Est Profit</span>
-          ${rowEstProfitHtml(p)}
-        </div>
-        ${wsChips(p, health)}
-        <div class="flex gap-1 mt-3">${renderProductActions(p, true)}</div>
-        ${status !== "not_listed"
-          ? `<button class="w-full mt-1 border border-gray-100 text-gray-400 py-1 rounded text-[9px] font-semibold hover:bg-gray-50 hover:text-black transition-all" data-action="open-sales" data-code="${esc(p.code)}">📊 Sales History</button>`
-          : ""}
-      </div>
-    </div>`;
-  }).join("");
-}
-
-// ── Stats ─────────────────────────────────────────────────────
-function updateStats() {
-  document.getElementById("statTotal").textContent    = allProducts.length;
-  document.getElementById("statActive").textContent   = allProducts.filter(p => p.ebay_status === "active").length;
-  document.getElementById("statDraft").textContent    = allProducts.filter(p => p.ebay_status === "draft").length;
-  document.getElementById("statNotListed").textContent = allProducts.filter(p => !p.ebay_status || p.ebay_status === "not_listed").length;
-}
-
-// ── Bulk Selection ────────────────────────────────────────────
-function getSelectedItems() {
-  return [...document.querySelectorAll(".bulk-check:checked")].map(cb => ({
-    code:    cb.dataset.code,
-    offerId: cb.dataset.offer,
-    sku:     cb.dataset.sku,
-  }));
-}
-
-function updateBulkBar() {
-  const selected = getSelectedItems();
-  const bar      = document.getElementById("bulkBar");
-  if (selected.length > 0) {
-    bar.classList.remove("hidden");
-    bar.classList.add("flex");
-    document.getElementById("bulkCount").textContent = `${selected.length} selected`;
-  } else {
-    bar.classList.add("hidden");
-    bar.classList.remove("flex");
-  }
-}
-
-// ── Enable/disable step buttons ───────────────────────────────
-function enableBtn(id, enabled) {
-  const btn = document.getElementById(id);
-  btn.disabled = !enabled;
-  if (enabled) {
-    btn.classList.remove("border-gray-300", "bg-gray-100", "text-gray-400");
-    btn.classList.add("border-black", "bg-black", "text-white", "hover:bg-kkpink", "hover:border-kkpink", "hover:text-black");
-  } else {
-    btn.classList.add("border-gray-300", "bg-gray-100", "text-gray-400");
-    btn.classList.remove("border-black", "bg-black", "text-white", "hover:bg-kkpink", "hover:border-kkpink", "hover:text-black");
-  }
-}
-
-// ── Variant Panel ─────────────────────────────────────────────
-function imageOptionLabel(url, idx) {
-  let file = (url || "").split("/").pop()?.split("?")[0] || `Image ${idx + 1}`;
-  try { file = decodeURIComponent(file); } catch (_) {}
-  return file.length > 34 ? `${file.slice(0, 31)}...` : file;
-}
-
-function renderVariantAssignedImages(container, urls) {
-  container.innerHTML = urls.length
-    ? urls.map((url, i) => `
-      <div class="relative w-14 h-14 rounded border-2 ${i === 0 ? "border-kkpink" : "border-gray-200"} overflow-hidden flex-shrink-0" data-assigned-url="${esc(url)}">
-        <img src="${esc(url)}" alt="" class="w-full h-full object-cover" />
-        ${i === 0 ? `<span class="absolute left-0 bottom-0 bg-kkpink text-black text-[8px] font-black px-1">Main</span>` : `<button type="button" class="absolute left-0 bottom-0 bg-white/90 text-[8px] font-bold px-1" data-set-main-url="${esc(url)}">Main</button>`}
-        <button type="button" class="absolute -top-1 -right-1 bg-black text-white rounded-full w-4 h-4 text-[10px] leading-4" data-remove-assigned-url="${esc(url)}">×</button>
-      </div>`).join("")
-    : `<div class="text-[10px] text-gray-400 border border-dashed border-gray-300 rounded px-2 py-3">No variant images assigned</div>`;
-}
-
-function getAssignedVariantImages(row) {
-  if (!row) return [];
-  return [...row.querySelectorAll("[data-assigned-url]")].map(el => el.dataset.assignedUrl).filter(Boolean);
-}
-
-function setAssignedVariantImages(row, urls) {
-  const container = row.querySelector("[data-variant-assigned-images]");
-  if (container) renderVariantAssignedImages(container, [...new Set(urls.filter(Boolean))].slice(0, 24));
-}
-
-function renderVariantCandidatePicker(urls) {
-  const unique = [...new Set(urls.filter(Boolean))];
-  if (!unique.length) return `<div class="text-[10px] text-gray-400 border border-dashed border-gray-200 rounded px-2 py-3">No candidate images available</div>`;
-  return `
-    <div class="grid grid-cols-2 gap-1" data-variant-candidate-list>
-      ${unique.map((url, i) => `
-        <button type="button" data-add-candidate-url="${esc(url)}" class="variant-candidate flex items-center gap-2 text-left border border-gray-200 rounded p-1 bg-white hover:border-kkpink hover:bg-pink-50 transition-colors">
-          <img src="${esc(url)}" alt="" loading="lazy" class="w-9 h-9 rounded object-cover border border-gray-100 flex-shrink-0" />
-          <span class="text-[9px] leading-tight text-gray-600 truncate">${esc(imageOptionLabel(url, i))}</span>
-        </button>`).join("")}
-    </div>
-    <div data-no-variant-candidates class="hidden text-[10px] text-gray-400 border border-dashed border-gray-200 rounded px-2 py-3">All candidate images are already assigned.</div>`;
-}
-
-function refreshVariantCandidateButtons(row) {
-  const assigned = new Set(getAssignedVariantImages(row));
-  const buttons = [...row.querySelectorAll("[data-add-candidate-url]")];
-  let visible = 0;
-  buttons.forEach(btn => {
-    const isAssigned = assigned.has(btn.dataset.addCandidateUrl);
-    btn.classList.toggle("hidden", isAssigned);
-    if (!isAssigned) visible++;
-  });
-  row.querySelector("[data-no-variant-candidates]")?.classList.toggle("hidden", visible !== 0);
-}
-
-function wireVariantImageSetControls(row, onChange) {
-  row.addEventListener("click", (e) => {
-    const toggle = e.target?.closest?.("[data-toggle-variant-picker]");
-    if (toggle) {
-      row.querySelector("[data-variant-picker]")?.classList.toggle("hidden");
-      return;
-    }
-    const candidate = e.target?.closest?.("[data-add-candidate-url]");
-    if (candidate) {
-      setAssignedVariantImages(row, [...getAssignedVariantImages(row), candidate.dataset.addCandidateUrl]);
-      row.querySelector("[data-variant-picker]")?.classList.add("hidden");
-      refreshVariantCandidateButtons(row);
-      onChange?.(getAssignedVariantImages(row));
-      return;
-    }
-    const removeUrl = e.target?.dataset?.removeAssignedUrl;
-    const mainUrl = e.target?.dataset?.setMainUrl;
-    if (!removeUrl && !mainUrl) return;
-    const urls = getAssignedVariantImages(row);
-    if (removeUrl) setAssignedVariantImages(row, urls.filter(u => u !== removeUrl));
-    if (mainUrl) setAssignedVariantImages(row, [mainUrl, ...urls.filter(u => u !== mainUrl)]);
-    refreshVariantCandidateButtons(row);
-    onChange?.(getAssignedVariantImages(row));
-  });
-  refreshVariantCandidateButtons(row);
-}
-
-function renderVariantPanel(variants, baseCode) {
-  const list = document.getElementById("variantList");
-  const availableImages = buildImageUrls(currentProduct);
-  list.innerHTML = variants.map((v, i) => {
-    const suffix  = v.option_value.toUpperCase().replace(/[^A-Z0-9]/g, "").substring(0, 6);
-    const sku     = `${baseCode}-${suffix}`;
-    const qty     = v.stock ?? 0;
-    const oosNote = qty === 0 ? `<span class="text-[9px] text-orange-500 font-semibold ml-1">OOS</span>` : "";
-    const assignedImages = v.preview_image_url ? [v.preview_image_url] : [];
-    const candidatePicker = renderVariantCandidatePicker([...availableImages, ...assignedImages]);
-    return `<div class="p-2 rounded-lg border border-gray-200 bg-gray-50">
-      <div class="flex items-center gap-2">
-        <input type="checkbox" class="variant-check accent-pink-500" data-idx="${i}" checked />
-      <div class="flex-1 min-w-0">
-        <div class="text-xs font-bold truncate">${esc(v.option_value)}${oosNote}</div>
-        <div class="text-[10px] text-gray-400 font-mono">${esc(sku)}</div>
-      </div>
-      <input type="number" class="variant-qty w-14 border border-gray-300 rounded px-1 py-0.5 text-xs text-center" value="${qty}" min="0" data-idx="${i}" />
-      <span class="text-[10px] text-gray-400">qty</span>
-      </div>
-      <div class="mt-2">
-        <div class="text-[9px] text-gray-500 uppercase font-bold mb-1">Images assigned to ${esc(v.option_value)}</div>
-        <div class="flex flex-wrap gap-1 mb-2" data-variant-assigned-images data-idx="${i}"></div>
-        <button type="button" class="text-[10px] font-bold text-blue-600 hover:text-kkpink" data-toggle-variant-picker>+ Add image</button>
-        <div class="hidden mt-2 rounded border border-gray-200 bg-white p-2" data-variant-picker>${candidatePicker}</div>
-      </div>
-    </div>`;
-  }).join("");
-
-  list.querySelectorAll("[data-variant-assigned-images]").forEach(container => {
-    const variant = variants[Number(container.dataset.idx)];
-    renderVariantAssignedImages(container, variant?.preview_image_url ? [variant.preview_image_url] : []);
-  });
-  [...list.children].forEach(row => {
-    wireVariantImageSetControls(row);
-  });
-
-  document.getElementById("variantCount").textContent      = variants.length;
-  document.getElementById("variantSkuPattern").textContent = `${baseCode}-{COLOR}`;
-}
-
-function getCheckedVariants() {
-  const checks = document.querySelectorAll(".variant-check");
-  const qtys   = document.querySelectorAll(".variant-qty");
-  const rows   = document.querySelectorAll("#variantList > div");
-  const result = [];
-  checks.forEach((cb, i) => {
-    if (cb.checked && pushVariants[i]) {
-      const v      = pushVariants[i];
-      const suffix = v.option_value.toUpperCase().replace(/[^A-Z0-9]/g, "").substring(0, 6);
-      const rawQty = parseInt(qtys[i]?.value, 10);
-      const qty    = Number.isFinite(rawQty) && rawQty >= 0 ? rawQty : 0;
-      result.push({ ...v, sku: `${currentProduct.code}-${suffix}`, quantity: qty, variant_image_urls: getAssignedVariantImages(rows[i]) });
-    }
-  });
-  return result;
-}
-
-function publishQuantityForProduct(product) {
-  const variants = (product?.product_variants || []).filter(v => v.is_active);
-  const variantStock = variants.reduce((sum, v) => sum + (parseInt(v.stock, 10) || 0), 0);
-  return variantStock > 0 ? variantStock : 1;
-}
-
-function activeVariantCount(product) {
-  return (product?.product_variants || []).filter(v => v.is_active).length;
-}
-
-function isEffectiveGroupListing(product) {
-  return Boolean(product?.ebay_item_group_key) && activeVariantCount(product) > 1;
-}
-
-// ── AI Badge ──────────────────────────────────────────────────
-function addAiBadge(inputId, source) {
-  const input = document.getElementById(inputId);
-  if (!input) return;
-  const label = input.closest("div")?.querySelector("label");
-  if (!label) return;
-  const existing = label.querySelector(".ai-badge");
-  if (existing) existing.remove();
-  const badge    = document.createElement("span");
-  badge.className = `ai-badge ai-badge-${source}`;
-  badge.textContent = source === "generated" ? "AI" : source === "from_data" ? "From data" : source;
-  label.appendChild(badge);
-}
 
 // ── Category / Aspects (Push Modal) ──────────────────────────
 async function fetchAspects(categoryId) {
@@ -1003,40 +247,6 @@ async function fetchAspects(categoryId) {
   }
 }
 
-function buildAspectField(aspect, defaults, isRequired) {
-  const div    = document.createElement("div");
-  const listId = `dl_${aspect.name.replace(/\W/g, "_")}`;
-  const defaultVal = defaults[aspect.name] || "";
-  const label  = isRequired ? `${aspect.name} <span class="text-red-500">*</span>` : aspect.name;
-
-  div.innerHTML = `
-    <label class="block text-[10px] font-bold uppercase tracking-wider ${isRequired ? "text-black" : "text-gray-500"} mb-0.5">${label}</label>
-    <input type="text" data-aspect="${esc(aspect.name)}" data-required="${isRequired}"
-      value="${esc(defaultVal)}" list="${listId}"
-      class="w-full border-2 ${isRequired ? "border-black" : "border-gray-300"} px-2 py-1.5 text-xs outline-none focus:border-kkpink transition-colors" />
-    ${aspect.values?.length
-      ? `<datalist id="${listId}">${aspect.values.slice(0, 30).map(v => `<option value="${esc(v)}">`).join("")}</datalist>`
-      : ""}
-  `;
-  return div;
-}
-
-function collectAspects() {
-  const aspects = {};
-  document.querySelectorAll("[data-aspect]").forEach(input => {
-    const val = input.value.trim();
-    if (val) aspects[input.dataset.aspect] = [val];
-  });
-  return aspects;
-}
-
-function validateRequiredAspects() {
-  const missing = [];
-  document.querySelectorAll("[data-aspect][data-required='true']").forEach(input => {
-    if (!input.value.trim()) missing.push(input.dataset.aspect);
-  });
-  return missing;
-}
 
 // ── Push Modal ────────────────────────────────────────────────
 window.openPush = async function openPush(code) {
@@ -1097,7 +307,7 @@ window.openPush = async function openPush(code) {
 
   if (isVariantListing) {
     document.getElementById("variantPanel").classList.remove("hidden");
-    renderVariantPanel(activeVariants, currentProduct.code);
+    renderVariantPanel(activeVariants, currentProduct.code, currentProduct);
     document.getElementById("btnCreateItem").textContent  = "1. Create Items";
     document.getElementById("btnCreateOffer").textContent = "2. Create Group + Offer";
     // eBay does not allow Best Offer on group (variant) listings
@@ -1175,576 +385,37 @@ window.openPush = async function openPush(code) {
   }
 
   document.getElementById("modalAdRate").value = String(pageAdRatePct);
-  refreshPushPreview();
+  refreshPushPreview(currentProduct);
   pushSalesMetrics = null;
-  loadAndRenderPriceRef("modalPriceRef", currentProduct, "push");
-};
-
-// ── Edit Modal ────────────────────────────────────────────────
-window.openEdit = async function openEdit(code) {
-  editProduct = allProducts.find(p => p.code === code);
-  if (!editProduct) return;
-
-  const isGroupListing = isEffectiveGroupListing(editProduct);
-
-  document.getElementById("editModal").classList.remove("hidden");
-  document.getElementById("editLoading").classList.remove("hidden");
-  document.getElementById("editForm").classList.add("hidden");
-  document.getElementById("editStatus").textContent = "";
-  renderEditLinkWarning(null);
-  document.getElementById("editPriceQtyGrid").classList.toggle("grid-cols-1", isGroupListing);
-  document.getElementById("editPriceQtyGrid").classList.toggle("grid-cols-2", !isGroupListing);
-  document.getElementById("editQuantityField").classList.toggle("hidden", isGroupListing);
-  document.getElementById("editQuantity").disabled = isGroupListing;
-  document.getElementById("editVariantQtyNote").classList.toggle("hidden", !isGroupListing);
-  editOfferLookupCache = new Map();
-  editVariantImageOverrides = {};
-  editVariantQtyOverrides   = {};
-  document.getElementById("editVariantImagesSection").classList.add("hidden");
-  document.getElementById("editVariantImagesList").innerHTML = "";
-
-  document.getElementById("editProductName").textContent = editProduct.name;
-  document.getElementById("editProductCode").textContent = editProduct.code + (isGroupListing ? " (Multi-Variant)" : "");
-
-  let variantFetchSummary = null;
-
-  const ebayLink = document.getElementById("editEbayLink");
-  if (editProduct.ebay_listing_id) {
-    ebayLink.href = `https://www.ebay.com/itm/${editProduct.ebay_listing_id}`;
-    ebayLink.textContent = "View on eBay ↗";
-    ebayLink.classList.remove("hidden");
-  } else {
-    ebayLink.classList.add("hidden");
-  }
-
-  try {
-    try {
-      const linkCheck = await reconcileEbayLink(editProduct, false);
-      renderEditLinkWarning(linkCheck);
-      if (isOutOfStockLinkCheck(linkCheck)) {
-        ebayLink.textContent = "View sold-out listing ↗";
-        document.getElementById("editStatus").textContent = "⚠️ Sold out on eBay — set quantity above 0 and save to restock this listing.";
-      } else if (isStaleLinkCheck(linkCheck)) {
-        const activeId = currentActiveListingId(linkCheck);
-        if (activeId) {
-          ebayLink.href = `https://www.ebay.com/itm/${activeId}`;
-          ebayLink.textContent = "View active match ↗";
-          ebayLink.classList.remove("hidden");
-        } else {
-          ebayLink.classList.add("hidden");
-        }
-        document.getElementById("editStatus").textContent = "⚠️ Local eBay link may be stale. Refresh/relink before editing.";
-      }
-    } catch (linkErr) {
-      console.warn("Edit link reconciliation failed:", linkErr);
-      document.getElementById("editStatus").textContent = "⚠️ Could not verify eBay link freshness. Save will re-check before writing.";
-    }
-
-    let product = {};
-    let item    = {};
-    let offer   = {};
-
-    if (isGroupListing) {
-      const groupResult = await callEdge("ebay-manage-listing", {
-        action: "get_item_group",
-        inventoryItemGroupKey: editProduct.ebay_item_group_key,
-      });
-      if (!groupResult.success) throw new Error(groupResult.error || "Failed to fetch item group");
-
-      const group = groupResult.itemGroup;
-      product = {
-        title:       group.title || "",
-        description: group.description || "",
-        imageUrls:   group.imageUrls || [],
-        aspects:     group.aspects || {},
-      };
-      editProduct._groupData = group;
-      editProduct._isGroup   = true;
-
-      const firstVariantSku = group.variantSKUs?.[0];
-      if (firstVariantSku) {
-        const [offersResult, variantItemResult] = await Promise.all([
-          getOffersForEdit(firstVariantSku, "open"),
-          getItemForEdit(firstVariantSku),
-        ]);
-        offer = (offersResult.offers || [])[0] || {};
-        if (variantItemResult.success) item = variantItemResult.item;
-      }
-      if (!offer.pricingSummary?.price?.value && editProduct.ebay_price_cents) {
-        offer.pricingSummary = { price: { value: (editProduct.ebay_price_cents / 100).toFixed(2) } };
-      }
-    } else {
-      const sku = editProduct.ebay_sku || editProduct.code;
-      const [itemResult, offerResult] = await Promise.all([
-        callEdge("ebay-manage-listing", { action: "get_item", sku }),
-        editProduct.ebay_offer_id
-          ? getOffersForEdit(sku, "open")
-          : Promise.resolve({ success: true, offers: [] }),
-      ]);
-
-      if (!itemResult.success) throw new Error(itemResult.error || "Failed to fetch item");
-      item    = itemResult.item;
-      product = item.product || {};
-      editProduct._isGroup = false;
-      offer = (offerResult.offers || []).find(o => o.offerId === editProduct.ebay_offer_id) || {};
-    }
-
-    // Pre-fill fields
-    document.getElementById("editTitle").value    = product.title || editProduct.name;
-    document.getElementById("editCondition").value = item.condition || "NEW";
-    document.getElementById("editQuantity").value  = item.availability?.shipToLocationAvailability?.quantity ?? 1;
-
-    const existingLotSize = item.lotSize || 0;
-    document.getElementById("editLotEnabled").checked = existingLotSize > 1;
-    document.getElementById("editLotFields").classList.toggle("hidden", existingLotSize <= 1);
-    document.getElementById("editLotSize").value = existingLotSize > 1 ? existingLotSize : 2;
-
-    // Init Quill for edit (destroy previous)
-    resetQuillEditorMount("editDescriptionEditor");
-    const editEditorEl = document.getElementById("editDescriptionEditor");
-    editQuill = new Quill(editEditorEl, { theme: "snow", modules: { toolbar: quillToolbar } });
-
-    const existingDesc = product.description || "";
-    document.getElementById("editDescriptionPreview").classList.add("hidden");
-    document.getElementById("btnEditPreview").classList.remove("active");
-    if (existingDesc && isComplexHtml(existingDesc)) {
-      descState.editMode = "html";
-      document.getElementById("editDescriptionHtml").value = existingDesc;
-      document.getElementById("editDescriptionHtml").classList.remove("hidden");
-      editEditorEl.style.display = "none";
-      const tb = editEditorEl.previousElementSibling;
-      if (tb?.classList?.contains("ql-toolbar")) tb.style.display = "none";
-      document.getElementById("btnEditVisual").classList.remove("active");
-      document.getElementById("btnEditHtml").classList.add("active");
-    } else {
-      if (existingDesc) editQuill.root.innerHTML = existingDesc;
-      descState.editMode = "visual";
-      document.getElementById("editDescriptionHtml").value = "";
-      document.getElementById("editDescriptionHtml").classList.add("hidden");
-      document.getElementById("btnEditVisual").classList.add("active");
-      document.getElementById("btnEditHtml").classList.remove("active");
-    }
-
-    // Build edit image strip
-    const ebayImages = product.imageUrls || [];
-    editImageUrls = ebayImages.length ? [...ebayImages] : buildImageUrls(editProduct);
-    renderImageStrip("editImageStrip", editImageUrls, editImageUrls);
-
-    if (isGroupListing) {
-      variantFetchSummary = await renderEditVariantImageControls(editProduct, editProduct._groupData);
-    }
-
-    const offerPrice = offer.pricingSummary?.price?.value;
-    document.getElementById("editPrice").value = offerPrice
-      ? parseFloat(offerPrice).toFixed(2)
-      : editProduct.ebay_price_cents
-        ? (editProduct.ebay_price_cents / 100).toFixed(2)
-        : Number(editProduct.price).toFixed(2);
-
-    const pkg = item.packageWeightAndSize || {};
-    if (pkg.weight) {
-      document.getElementById("editWeightOz").value = pkg.weight.value || "";
-    } else if (editProduct.weight_g) {
-      document.getElementById("editWeightOz").value = (editProduct.weight_g / 28.3495).toFixed(1);
-    }
-    if (pkg.dimensions) {
-      document.getElementById("editDimL").value = pkg.dimensions.length || "";
-      document.getElementById("editDimW").value = pkg.dimensions.width  || "";
-      document.getElementById("editDimH").value = pkg.dimensions.height || "";
-    }
-
-    // Policy dropdowns
-    await loadPoliciesCache();
-    const lp = offer.listingPolicies || {};
-    if (lp.fulfillmentPolicyId) document.getElementById("editFulfillmentPolicy").value = lp.fulfillmentPolicyId;
-    if (lp.returnPolicyId)      document.getElementById("editReturnPolicy").value      = lp.returnPolicyId;
-    if (lp.paymentPolicyId)     document.getElementById("editPaymentPolicy").value     = lp.paymentPolicyId;
-
-    // Best Offer — not permitted on group (variant) listings
-    const bot = lp.bestOfferTerms || {};
-    if (isGroupListing) {
-      document.getElementById("editBestOffer").checked = false;
-      document.getElementById("editBestOfferFields").classList.add("hidden");
-      document.getElementById("editBestOffer").closest("div").classList.add("hidden");
-    } else {
-      document.getElementById("editBestOffer").closest("div").classList.remove("hidden");
-      document.getElementById("editBestOffer").checked = !!bot.bestOfferEnabled;
-      document.getElementById("editBestOfferFields").classList.toggle("hidden", !bot.bestOfferEnabled);
-      document.getElementById("editAutoAccept").value  = bot.autoAcceptPrice?.value  || "";
-      document.getElementById("editAutoDecline").value = bot.autoDeclinePrice?.value || "";
-    }
-
-    // Store Category — local DB first, eBay GET as fallback
-    const storeCats = offer.storeCategoryNames || [];
-    document.getElementById("editStoreCategory").value = editProduct.ebay_store_category || storeCats[0] || "";
-
-    // Volume Pricing
-    const volPromoId = editProduct.ebay_volume_promo_id;
-    if (volPromoId) {
-      try {
-        const promoResult = await callEdge("ebay-manage-listing", { action: "get_volume_discount", promotionId: volPromoId });
-        if (promoResult.success && promoResult.promotion?.discountRules?.length) {
-          document.getElementById("editVolEnabled").checked = true;
-          document.getElementById("editVolFields").classList.remove("hidden");
-          setVolTiers("edit", promoResult.promotion.discountRules);
-          editProduct._volPromoId = volPromoId;
-        } else {
-          document.getElementById("editVolEnabled").checked = false;
-          document.getElementById("editVolFields").classList.add("hidden");
-          document.getElementById("editVolTiers").innerHTML = "";
-        }
-      } catch (ve) {
-        console.warn("Volume pricing fetch failed:", ve);
-        document.getElementById("editVolEnabled").checked = false;
-        document.getElementById("editVolFields").classList.add("hidden");
-        document.getElementById("editVolTiers").innerHTML = "";
-      }
-    } else {
-      document.getElementById("editVolEnabled").checked = false;
-      document.getElementById("editVolFields").classList.add("hidden");
-      document.getElementById("editVolTiers").innerHTML = "";
-    }
-
-    // Aspects
-    const categoryId       = editProduct.ebay_category_id || offer.categoryId || item.categoryId || "";
-    document.getElementById("editCategoryId").value = categoryId || "";
-    const existingAspects  = product.aspects || {};
-    const reqContainer     = document.getElementById("editAspectsRequired");
-    const optContainer     = document.getElementById("editAspectsOptional");
-    reqContainer.innerHTML = "";
-    optContainer.innerHTML = "";
-    editAspects = [];
-
-    if (categoryId) {
-      const aspectResult = await callEdge("ebay-taxonomy", { action: "get_aspects", categoryId });
-      if (aspectResult.success && aspectResult.aspects?.length) {
-        editAspects     = aspectResult.aspects;
-        const required  = aspectResult.aspects.filter(a => a.required);
-        const optional  = aspectResult.aspects.filter(a => !a.required).slice(0, 15);
-
-        const defaults = {};
-        for (const [key, val] of Object.entries(existingAspects)) {
-          defaults[key] = Array.isArray(val) ? val[0] : val;
-        }
-        if (!defaults.Brand) defaults.Brand = "Unbranded";
-        if (!defaults.Type) defaults.Type = "Accessory";
-        if (!defaults.Department) defaults.Department = "Unisex Adults";
-        if (isGroupListing && !defaults.Color) {
-          const colorSpec = editProduct._groupData?.variesBy?.specifications?.find(s => s?.name === "Color");
-          if (colorSpec?.values?.length) defaults.Color = colorSpec.values.join(", ");
-        }
-
-        required.forEach(a => reqContainer.appendChild(buildEditAspectField(a, defaults, true)));
-        optional.forEach(a => optContainer.appendChild(buildEditAspectField(a, defaults, false)));
-      }
-    } else if (!editProduct.ebay_offer_id) {
-      document.getElementById("editStatus").textContent = "⚠️ This draft has no category/offer yet. Use Resume Push from the list to choose a category and create the offer.";
-    }
-
-    document.getElementById("editLoading").classList.add("hidden");
-    document.getElementById("editForm").classList.remove("hidden");
-    const offerLookupFailures = [...editOfferLookupCache.values()].filter(r => !r.success);
-    if (isOutOfStockLinkCheck(editProduct._linkCheck)) {
-      document.getElementById("editStatus").textContent = "⚠️ Sold out on eBay — set quantity above 0 and save to restock this listing.";
-    } else if (isStaleLinkCheck(editProduct._linkCheck)) {
-      document.getElementById("editStatus").textContent = "⚠️ Local eBay link may be stale. Refresh/relink before editing.";
-    } else if (offerLookupFailures.length) {
-      document.getElementById("editStatus").textContent = "⚠️ eBay offer details could not be loaded for part of this listing. The modal remains usable, but offer updates may need a refresh/relink if this persists.";
-    } else if (variantFetchSummary?.failures?.length) {
-      document.getElementById("editStatus").textContent = `⚠️ ${variantFetchSummary.failures.length} variant eBay detail lookup(s) failed. Fallback image/qty controls are shown where available; you can still edit and save.`;
-    }
-    document.getElementById("editAdRate").value = String(pageAdRatePct);
-    refreshEditPreview();
-    editSalesMetrics = null;
-    loadAndRenderPriceRef("editPriceRef", editProduct, "edit");
-  } catch (e) {
-    document.getElementById("editLoading").textContent = "❌ " + e.message;
-  }
-};
-
-function buildEditAspectField(aspect, defaults, isRequired) {
-  const div    = document.createElement("div");
-  const listId = `edl_${aspect.name.replace(/\W/g, "_")}`;
-  const defaultVal = defaults[aspect.name] || "";
-  const label  = isRequired ? `${aspect.name} <span class="text-red-500">*</span>` : aspect.name;
-
-  div.innerHTML = `
-    <label class="block text-[10px] font-bold uppercase tracking-wider ${isRequired ? "text-black" : "text-gray-500"} mb-0.5">${label}</label>
-    <input type="text" data-edit-aspect="${esc(aspect.name)}" data-required="${isRequired}"
-      value="${esc(defaultVal)}" list="${listId}"
-      class="w-full border-2 ${isRequired ? "border-black" : "border-gray-300"} px-2 py-1.5 text-xs outline-none focus:border-kkpink transition-colors" />
-    ${aspect.values?.length
-      ? `<datalist id="${listId}">${aspect.values.slice(0, 30).map(v => `<option value="${esc(v)}">`).join("")}</datalist>`
-      : ""}
-  `;
-  return div;
+  loadAndRenderPriceRef("modalPriceRef", currentProduct, "modalPrice", (m) => { pushSalesMetrics = m; }, (p) => currentProduct?.code === p.code);
 }
 
-// ── Variant Image Controls (Edit Modal) ───────────────────────
-async function renderEditVariantImageControls(product, group) {
-  const section   = document.getElementById("editVariantImagesSection");
-  const list      = document.getElementById("editVariantImagesList");
-  list.innerHTML  = "";
 
-  const variantSKUs = group?.variantSKUs || [];
-  if (!variantSKUs.length) { section.classList.add("hidden"); return; }
 
-  const variants = (product.product_variants || []).filter(v => v.is_active);
-  const bySku    = new Map();
-  variants.forEach(v => {
-    const sku = variantSkuFromOption(product.code, v.option_value);
-    bySku.set(sku, v);
-  });
 
-  const rows = await Promise.all(variantSKUs.map(async (sku) => {
-    const local       = bySku.get(sku);
-    let currentImages = local?.preview_image_url ? [local.preview_image_url] : [];
-    let currentQty = 0;
-    const r = await getItemForEdit(sku);
-    if (r.success) {
-      currentImages = r.item?.product?.imageUrls?.length ? [...r.item.product.imageUrls] : currentImages;
-      currentQty  = r.item?.availability?.shipToLocationAvailability?.quantity ?? 0;
-    }
-    editVariantImageOverrides[sku] = currentImages;
-    editVariantQtyOverrides[sku]   = currentQty;
-    return { sku, label: local?.option_value || sku, images: currentImages, qty: currentQty, failed: !r.success, retried: !!r.retried, error: r.error || "eBay item lookup failed" };
-  }));
 
-  const failures = rows.filter(r => r.failed);
-  if (failures.length) {
-    const warning = document.createElement("div");
-    warning.className = "text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded p-2 mb-2";
-    warning.textContent = `${failures.length} variant detail lookup(s) failed; fallback controls are shown for: ${failures.map(f => f.sku).join(", ")}`;
-    list.appendChild(warning);
-  }
 
-  rows.forEach(r => {
-    const row = document.createElement("div");
-    row.className   = "mb-3";
-    const assignedImages = [...new Set((r.images || []).filter(Boolean))];
-    const candidateImages = [...new Set([...editImageUrls, ...assignedImages].filter(Boolean))];
-    const candidatePicker = renderVariantCandidatePicker(candidateImages);
-
-    row.innerHTML = `
-      <div class="flex items-center gap-3 mb-1">
-        <span class="text-[10px] font-bold text-gray-700">${esc(r.label)}</span>
-        ${assignedImages.length ? `<span class="text-[9px] text-green-700 bg-green-50 border border-green-200 rounded px-1">${assignedImages.length} variant image${assignedImages.length === 1 ? "" : "s"}</span>` : `<span class="text-[9px] text-gray-500 bg-gray-100 border border-gray-200 rounded px-1">no variant images assigned</span>`}
-        ${r.failed ? `<span class="text-[9px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1" title="${esc(r.error)}">fallback${r.retried ? " after retry" : ""}</span>` : ""}
-        <label class="flex items-center gap-1 ml-auto">
-          <span class="text-[9px] text-gray-500 uppercase font-bold">Qty</span>
-          <input type="number" min="0" value="${r.qty}"
-            data-var-qty-sku="${esc(r.sku)}"
-            class="w-14 border-2 border-gray-300 rounded px-1 py-0.5 text-xs text-center focus:border-kkpink outline-none" />
-        </label>
-      </div>
-      <div class="text-[9px] text-gray-500 mb-1">Images assigned to this variant. First image is the eBay main image for this variant.</div>
-      <div class="flex flex-wrap gap-1 mb-2" data-variant-assigned-images></div>
-      <button type="button" class="text-[10px] font-bold text-blue-600 hover:text-kkpink" data-toggle-variant-picker>+ Add image</button>
-      <div class="hidden mt-2 rounded border border-gray-200 bg-white p-2" data-variant-picker>${candidatePicker}</div>`;
-
-    setAssignedVariantImages(row, assignedImages);
-    wireVariantImageSetControls(row, (urls) => { editVariantImageOverrides[r.sku] = urls; });
-    row.querySelectorAll("[data-var-qty-sku]").forEach(input => {
-      input.addEventListener("change", () => {
-        editVariantQtyOverrides[input.dataset.varQtySku] = parseInt(input.value) || 0;
-      });
-    });
-    list.appendChild(row);
-  });
-
-  section.classList.remove("hidden");
-  return { rows, failures };
-}
-
-// ── Withdraw / Publish (from table) ──────────────────────────
-window.discardDraft = async function discardDraft(code, offerId, itemGroupKey) {
-  const product = allProducts.find(p => p.code === code);
-  if (!product || product.ebay_status !== "draft") {
-    showStatus("❌ Only draft listings can be discarded here.", true);
-    return;
-  }
-  if (!confirm(`Discard the eBay draft attempt for ${code}? This deletes the unpublished eBay draft resources and resets the product to Not Listed.`)) return;
-  showStatus("Discarding draft…");
-  try {
-    const result = await callEdge("ebay-manage-listing", {
-      action: "discard_draft",
-      productCode: code,
-      sku: product.ebay_sku || code,
-      offerId: offerId && String(offerId).trim() ? String(offerId).trim() : product.ebay_offer_id,
-      inventoryItemGroupKey: itemGroupKey && String(itemGroupKey).trim() ? String(itemGroupKey).trim() : product.ebay_item_group_key,
-    });
-    if (result.success) {
-      showStatus(`✅ Draft discarded for ${code}. You can Push again when ready.`);
-      await loadProducts();
-    } else {
-      showStatus("❌ " + (result.error || "Discard draft failed"), true);
-    }
-  } catch (e) {
-    showStatus("❌ " + e.message, true);
-  }
-};
-
-window.doWithdraw = async function doWithdraw(code, offerId, itemGroupKey) {
-  if (!confirm(`End eBay listing for ${code}?`)) return;
-  showStatus("Withdrawing…");
-  try {
-    const product = allProducts.find(p => p.code === code);
-    const hasGroup = isEffectiveGroupListing(product) && itemGroupKey && String(itemGroupKey).trim();
-    const hasOffer = offerId && String(offerId).trim();
-    if (!hasGroup && !hasOffer) {
-      showStatus("❌ Cannot end listing: missing offer ID/group key", true);
-      return;
-    }
-    const result = hasGroup
-      ? await callEdge("ebay-manage-listing", { action: "withdraw_group", inventoryItemGroupKey: String(itemGroupKey).trim(), sku: code })
-      : await callEdge("ebay-manage-listing", { action: "withdraw", offerId: String(offerId).trim(), sku: code });
-    if (result.success) { showStatus("✅ Listing ended"); loadProducts(); }
-    else showStatus("❌ " + (result.error || "Withdraw failed"), true);
-  } catch (e) { showStatus("❌ " + e.message, true); }
-};
-
-window.doPublish = async function doPublish(code, offerId, itemGroupKey) {
-  showStatus("Publishing…");
-  try {
-    const product = allProducts.find(p => p.code === code);
-    const hasGroup = isEffectiveGroupListing(product) && itemGroupKey && String(itemGroupKey).trim();
-    const hasOffer = offerId && String(offerId).trim();
-    if (!hasGroup && !hasOffer) {
-      showStatus("❌ Cannot publish: missing offer ID. Use Resume Push to rebuild the offer.", true);
-      return;
-    }
-    const variantQuantities = Object.fromEntries((product?.product_variants || [])
-      .filter(v => v.is_active && (parseInt(v.stock, 10) || 0) > 0)
-      .map(v => {
-        const suffix = v.option_value.toUpperCase().replace(/[^A-Z0-9]/g, "").substring(0, 6);
-        return [`${code}-${suffix}`, parseInt(v.stock, 10) || 0];
-      }));
-    variantQuantities[code] = publishQuantityForProduct(product);
-    const result   = hasGroup
-      ? await callEdge("ebay-manage-listing", { action: "publish_group", inventoryItemGroupKey: String(itemGroupKey).trim(), sku: code, variantQuantities })
-      : await callEdge("ebay-manage-listing", { action: "publish", offerId: String(offerId).trim(), sku: code, quantity: publishQuantityForProduct(product) });
-    if (result.success) {
-      showStatus(`✅ Published! Listing ID: ${result.listingId}`);
-      loadProducts();
-    } else {
-      showStatus("❌ " + (result.error || "Publish failed"), true);
-    }
-  } catch (e) { showStatus("❌ " + e.message, true); }
-};
-
-// ── Migrate / Import ──────────────────────────────────────────
-function renderMigrateResults(items) {
-  const panel = document.getElementById("migrateResults");
-  const tbody = document.getElementById("migrateBody");
-  if (!items.length) { panel.classList.add("hidden"); return; }
-  tbody.innerHTML = items.map(item => `
-    <tr class="border-b border-gray-100">
-      <td class="py-1 pr-2 font-mono">${esc(item.sku)}</td>
-      <td class="py-1 pr-2">${esc(item.title)}</td>
-      <td class="py-1 pr-2">${item.quantity ?? "—"}</td>
-      <td class="py-1 ${item.matchedCode || item.code ? "text-green-600 font-bold" : "text-red-400"}">${esc(item.matchedCode || item.code || "—")}</td>
-    </tr>
-  `).join("");
-  panel.classList.remove("hidden");
-}
-
-// ── Profit Preview Helpers (Phase 2) ───────────────────────────────────────
-
-function refreshPushPreview() {
-  if (!currentProduct) return;
-  const priceVal  = parseFloat(document.getElementById("modalPrice")?.value);
-  const ozVal     = parseFloat(document.getElementById("modalWeightOz")?.value);
-  const pushAdRate = parseInt(document.getElementById("modalAdRate")?.value ?? "0", 10) || 0;
-  renderPreview("modalProfitPreview", buildEstimate({
-    priceCents:   isNaN(priceVal) ? null : Math.round(priceVal * 100),
-    kkPriceCents: currentProduct.price      ? Math.round(Number(currentProduct.price) * 100) : null,
-    unitCostUsd:  currentProduct.unit_cost != null ? Number(currentProduct.unit_cost) : null,
-    weightG:      currentProduct.weight_g  ?? null,
-    labelWeightG: isNaN(ozVal) ? null : Math.round(ozVal * 28.3495),
-    adRatePct:    pushAdRate,
-  }));
-}
-
-function refreshEditPreview() {
-  if (!editProduct) return;
-  const priceVal   = parseFloat(document.getElementById("editPrice")?.value);
-  const ozVal      = parseFloat(document.getElementById("editWeightOz")?.value);
-  const editAdRate = parseInt(document.getElementById("editAdRate")?.value ?? "0", 10) || 0;
-  renderPreview("editProfitPreview", buildEstimate({
-    priceCents:   isNaN(priceVal) ? null : Math.round(priceVal * 100),
-    kkPriceCents: editProduct.price      ? Math.round(Number(editProduct.price) * 100) : null,
-    unitCostUsd:  editProduct.unit_cost != null ? Number(editProduct.unit_cost) : null,
-    weightG:      editProduct.weight_g  ?? null,
-    labelWeightG: isNaN(ozVal) ? null : Math.round(ozVal * 28.3495),
-    adRatePct:    editAdRate,
-  }));
-}
-
-// ── Price Reference Helpers (Phase 5) ─────────────────────────────────────────
-
-/** Re-render push modal price reference using the current price input value. */
-function refreshPushRef() {
-  if (!currentProduct) return;
-  const priceVal = parseFloat(document.getElementById("modalPrice")?.value);
-  const ref = buildPriceRef(
-    currentProduct,
-    pushSalesMetrics,
-    isNaN(priceVal) ? null : Math.round(priceVal * 100),
-  );
-  // loading=true only while metrics are still being fetched (pushSalesMetrics===null)
-  renderPriceRef("modalPriceRef", ref, pushSalesMetrics === null);
-}
-
-/** Re-render edit modal price reference using the current price input value. */
-function refreshEditRef() {
-  if (!editProduct) return;
-  const priceVal = parseFloat(document.getElementById("editPrice")?.value);
-  const ref = buildPriceRef(
-    editProduct,
-    editSalesMetrics,
-    isNaN(priceVal) ? null : Math.round(priceVal * 100),
-  );
-  renderPriceRef("editPriceRef", ref, editSalesMetrics === null);
-}
-
-/**
- * Load sales metrics async, then re-render the price reference panel.
- * Renders immediately with loading=true, then again with full data once fetched.
- *
- * @param {string} containerId — 'modalPriceRef' or 'editPriceRef'
- * @param {object} product     — the product being opened
- * @param {string} type        — 'push' or 'edit'
- */
-async function loadAndRenderPriceRef(containerId, product, type) {
-  // Initial render — instant data only, loading=true for async range
-  const priceInput = document.getElementById(type === "push" ? "modalPrice" : "editPrice");
-  const priceVal0  = parseFloat(priceInput?.value);
-  const initRef    = buildPriceRef(
-    product,
-    null,
-    isNaN(priceVal0) ? null : Math.round(priceVal0 * 100),
-  );
-  renderPriceRef(containerId, initRef, true);
-
-  // Async fetch min/max from v_ebay_product_recent_sales
-  const metrics = await fetchSalesMetrics(product.code);
-  if (type === "push") pushSalesMetrics = metrics;
-  else                  editSalesMetrics = metrics;
-
-  // Guard: only update if the same product is still open
-  const stillActive = type === "push"
-    ? currentProduct?.code === product.code
-    : editProduct?.code    === product.code;
-  if (!stillActive) return;
-
-  const priceVal = parseFloat(priceInput?.value);
-  const fullRef  = buildPriceRef(
-    product,
-    metrics,
-    isNaN(priceVal) ? null : Math.round(priceVal * 100),
-  );
-  renderPriceRef(containerId, fullRef, false);
-}
+// ── Edit Modal Context ────────────────────────────────────────
+const editCtx = createEditModalContext({
+  getProducts:           () => allProducts,
+  loadProducts,
+  showStatus,
+  getAdRatePct:          () => pageAdRatePct,
+  supabase,
+  reconcileEbayLink:     reconcileCtx.reconcileEbayLink,
+  renderEditLinkWarning: reconcileCtx.renderEditLinkWarning,
+  relinkEbayListing:     reconcileCtx.relinkEbayListing,
+  syncBack(state) {
+    editProduct               = state.currentProduct;
+    editQuill                 = state.editQuill;
+    editImageUrls             = state.editImageUrls;
+    editVariantImageOverrides = state.editVariantImageOverrides;
+    editVariantQtyOverrides   = state.editVariantQtyOverrides;
+    editAspects               = state.currentAspects;
+    editSalesMetrics          = state.editSalesMetrics;
+  },
+});
+window.openEdit = editCtx.openEdit;
 
 // ── Event Listeners ────────────────────────────────────────────
 
@@ -1779,9 +450,9 @@ document.getElementById("btnCloseModal").addEventListener("click", () => {
 });
 
 // Push Modal — profit preview + price reference live update
-document.getElementById("modalPrice").addEventListener("input", refreshPushPreview);
-document.getElementById("modalPrice").addEventListener("input", refreshPushRef);
-document.getElementById("modalWeightOz").addEventListener("input", refreshPushPreview);
+document.getElementById("modalPrice").addEventListener("input", () => refreshPushPreview(currentProduct));
+document.getElementById("modalPrice").addEventListener("input", () => refreshPushRef(currentProduct, pushSalesMetrics));
+document.getElementById("modalWeightOz").addEventListener("input", () => refreshPushPreview(currentProduct));
 
 // Push Modal — Add image
 document.getElementById("btnAddImgPush").addEventListener("click", () => {
@@ -1948,7 +619,7 @@ document.getElementById("btnCreateItem").addEventListener("click", async () => {
 
   try {
     if (isVariantListing) {
-      const checked = getCheckedVariants();
+      const checked = getCheckedVariants(pushVariants, currentProduct.code);
       if (!checked.length) {
         status.textContent = "❌ Select at least one variant";
         btn.disabled = false; btn.textContent = "1. Create Items";
@@ -2063,7 +734,7 @@ document.getElementById("btnCreateOffer").addEventListener("click", async () => 
   }
 
   try {
-    const checked       = getCheckedVariants();
+    const checked       = getCheckedVariants(pushVariants, currentProduct.code);
     // Always use all active checked SKUs — some may already exist on eBay from a prior run,
     // and create_group_offer handles 25002 (already exists) gracefully.
     const publishableVariants = checked.filter(v => v.quantity > 0);
@@ -2199,7 +870,7 @@ document.getElementById("btnPublish").addEventListener("click", async () => {
   const sku      = document.getElementById("modalSku").value.trim();
   const offerId  = currentProduct._offerId || currentProduct.ebay_offer_id;
   const groupKey = currentProduct._groupKey || currentProduct.ebay_item_group_key || `${currentProduct.code}-GROUP`;
-  const checked = getCheckedVariants().filter(v => v.quantity > 0);
+  const checked = getCheckedVariants(pushVariants, currentProduct.code).filter(v => v.quantity > 0);
   const variantQuantities = Object.fromEntries(checked.map(v => [v.sku, v.quantity]));
   variantQuantities[currentProduct.code] = checked.reduce((sum, v) => sum + v.quantity, 0) || (parseInt(document.getElementById("modalQuantity").value, 10) || 1);
 
@@ -2257,60 +928,14 @@ document.getElementById("btnPublish").addEventListener("click", async () => {
   }
 });
 
-// Edit Modal — close
-document.getElementById("btnCloseEdit").addEventListener("click", () => {
-  document.getElementById("editModal").classList.add("hidden");
-  document.getElementById("editImagePicker").classList.add("hidden");
-  editProduct = null;
-});
+// Edit Modal — base listeners (close, relink, previews, add image, desc tabs) — delegated to editCtx:
+editCtx.bindEditBaseListeners();
 
-document.getElementById("btnEditRelink").addEventListener("click", async () => {
-  if (!editProduct) return;
-  await window.relinkEbayListing(editProduct.code);
-});
-
-// Edit Modal — profit preview + price reference live update
-document.getElementById("editPrice").addEventListener("input", refreshEditPreview);
-document.getElementById("editPrice").addEventListener("input", refreshEditRef);
-document.getElementById("editWeightOz").addEventListener("input", refreshEditPreview);
-document.getElementById("modalAdRate").addEventListener("change", () => { refreshPushPreview(); refreshPushRef(); });
-document.getElementById("editAdRate").addEventListener("change",  () => { refreshEditPreview(); refreshEditRef(); });
-
-// Sales History Modal — delegated from stable section parents (table and cards containers)
-// Uses data-action="open-sales" on buttons generated inside renderTable/renderCards.
-// Delegated to stable parents so listeners survive re-renders without re-binding.
-document.getElementById("tableSection").addEventListener("click", e => {
-  const btn = e.target.closest("[data-action='open-sales']");
-  if (!btn) return;
-  const product = allProducts.find(p => p.code === btn.dataset.code);
-  if (product) openSalesHistory(product);
-});
-document.getElementById("cardSection").addEventListener("click", e => {
-  const btn = e.target.closest("[data-action='open-sales']");
-  if (!btn) return;
-  const product = allProducts.find(p => p.code === btn.dataset.code);
-  if (product) openSalesHistory(product);
-});
+// Product action dispatcher — handles all data-action buttons in table and cards.
+document.getElementById("tableSection").addEventListener("click", dispatchProductAction);
+document.getElementById("cardSection").addEventListener("click", dispatchProductAction);
 document.getElementById("btnCloseSales").addEventListener("click", closeSalesHistory);
 
-// Edit Modal — Add image
-document.getElementById("btnAddImgEdit").addEventListener("click", () => {
-  if (!editProduct) return;
-  showGalleryPicker("editImagePicker", "editImageStrip", editImageUrls, editProduct);
-});
-
-// Edit Modal — Description mode
-document.getElementById("btnEditVisual").addEventListener("click", () => {
-  descState.editMode = "visual";
-  toggleDescMode("visual", "edit", editQuill);
-});
-document.getElementById("btnEditHtml").addEventListener("click", () => {
-  descState.editMode = "html";
-  toggleDescMode("html", "edit", editQuill);
-});
-document.getElementById("btnEditPreview").addEventListener("click", () => {
-  toggleDescMode("preview", "edit", editQuill);
-});
 
 // Edit Modal — AI Auto-Fill
 document.getElementById("btnEditAiFill").addEventListener("click", async () => {
@@ -2433,8 +1058,8 @@ document.getElementById("btnSaveEdit").addEventListener("click", async () => {
   try {
     if (editProduct.ebay_status === "active") {
       status.textContent = "Checking eBay linkage before save...";
-      const linkCheck = await reconcileEbayLink(editProduct, false);
-      renderEditLinkWarning(linkCheck);
+      const linkCheck = await reconcileCtx.reconcileEbayLink(editProduct, false);
+      reconcileCtx.renderEditLinkWarning(linkCheck);
       if (isStaleLinkCheck(linkCheck)) {
         throw new Error(`${staleLinkMessage(linkCheck)} Use Relink/Import refresh before saving so you do not edit an old ended listing.`);
       }
@@ -2491,7 +1116,7 @@ document.getElementById("btnSaveEdit").addEventListener("click", async () => {
       const offerLookupFailures = [];
       const variantOfferRows = [];
       for (const vSku of variantSKUs) {
-        const offersResp = await getOffersForEdit(vSku, "save");
+        const offersResp = await getOffersForEdit(editOfferLookupCache, vSku, "save");
         if (!offersResp.success) {
           offerLookupFailures.push(vSku);
           continue;
@@ -2588,85 +1213,6 @@ document.getElementById("btnSaveEdit").addEventListener("click", async () => {
   }
 });
 
-// Bulk — checkbox listeners
-document.addEventListener("change", (e) => {
-  if (e.target.classList.contains("bulk-check")) updateBulkBar();
-});
-document.getElementById("checkAll").addEventListener("change", (e) => {
-  document.querySelectorAll(".bulk-check").forEach(cb => { cb.checked = e.target.checked; });
-  updateBulkBar();
-});
-document.getElementById("btnBulkCancel").addEventListener("click", () => {
-  document.querySelectorAll(".bulk-check").forEach(cb => { cb.checked = false; });
-  document.getElementById("checkAll").checked = false;
-  updateBulkBar();
-});
-
-// Bulk — open modal
-document.getElementById("btnBulkPrice").addEventListener("click", () => openBulkModal("price"));
-document.getElementById("btnBulkQty").addEventListener("click",   () => openBulkModal("qty"));
-
-function openBulkModal(mode) {
-  bulkMode = mode;
-  const selected = getSelectedItems();
-  if (!selected.length) return;
-  document.getElementById("bulkModalTitle").textContent = mode === "price" ? "Bulk Update Price" : "Bulk Update Quantity";
-  document.getElementById("bulkModalLabel").textContent = mode === "price" ? "New Price ($)" : "New Quantity";
-  document.getElementById("bulkModalValue").value       = "";
-  document.getElementById("bulkModalValue").step        = mode === "price" ? "0.01" : "1";
-  document.getElementById("bulkModalItems").textContent = selected.map(s => s.sku).join(", ");
-  document.getElementById("bulkModalStatus").textContent = "";
-  document.getElementById("bulkModal").classList.remove("hidden");
-}
-
-document.getElementById("btnCloseBulk").addEventListener("click", () => {
-  document.getElementById("bulkModal").classList.add("hidden");
-});
-
-document.getElementById("btnBulkApply").addEventListener("click", async () => {
-  const btn    = document.getElementById("btnBulkApply");
-  const status = document.getElementById("bulkModalStatus");
-  const value  = parseFloat(document.getElementById("bulkModalValue").value);
-  if (isNaN(value) || value < 0) { status.textContent = "❌ Enter a valid number"; return; }
-
-  const selected = getSelectedItems().filter(s => s.offerId);
-  if (!selected.length) { status.textContent = "❌ No items with offers selected"; return; }
-
-  btn.disabled = true; btn.textContent = "Updating...";
-
-  try {
-    const items = selected.map(s => ({
-      sku:     s.sku,
-      offerId: s.offerId,
-      ...(bulkMode === "price" ? { priceCents: Math.round(value * 100) } : {}),
-      ...(bulkMode === "qty"   ? { quantity:   Math.round(value) }       : {}),
-    }));
-
-    const result = await callEdge("ebay-manage-listing", { action: "bulk_update", items });
-    if (result.success) {
-      status.textContent = `✅ Updated ${selected.length} listings`;
-      if (bulkMode === "price") {
-        const priceCents = Math.round(value * 100);
-        for (const s of selected) {
-          await supabase.from("products").update({ ebay_price_cents: priceCents, updated_at: new Date().toISOString() }).eq("code", s.code);
-        }
-      }
-      setTimeout(() => {
-        document.getElementById("bulkModal").classList.add("hidden");
-        document.querySelectorAll(".bulk-check").forEach(cb => { cb.checked = false; });
-        document.getElementById("checkAll").checked = false;
-        updateBulkBar();
-        loadProducts();
-      }, 1200);
-    } else {
-      status.textContent = "❌ " + (result.error || "Bulk update failed");
-    }
-  } catch (e) {
-    status.textContent = "❌ " + e.message;
-  } finally {
-    btn.disabled = false; btn.textContent = "Apply to All Selected";
-  }
-});
 
 // Checkbox toggles — Best Offer
 document.getElementById("modalBestOffer").addEventListener("change", (e) => {
@@ -2696,87 +1242,7 @@ document.getElementById("editVolEnabled").addEventListener("change", (e) => {
 document.getElementById("modalAddTier").addEventListener("click", () => addVolTier("modal"));
 document.getElementById("editAddTier").addEventListener("click",  () => addVolTier("edit"));
 
-// Setup Panel
-document.getElementById("btnSetup").addEventListener("click", async () => {
-  const panel = document.getElementById("policiesPanel");
-  panel.classList.toggle("hidden");
-  if (panel.classList.contains("hidden")) return;
 
-  const content = document.getElementById("policiesContent");
-  content.textContent = "Loading policies...";
-  try {
-    const result = await callEdge("ebay-manage-listing", { action: "get_policies" });
-    if (result.success) {
-      const html = [];
-      for (const [type, data] of Object.entries(result.policies)) {
-        const policies = (data?.policies || data?.fulfillmentPolicies || data?.returnPolicies || data?.paymentPolicies || []);
-        const label    = type.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
-        html.push(`<div class="mb-3"><strong>${label}:</strong>`);
-        if (policies.length) {
-          for (const p of policies) {
-            html.push(`<div class="ml-3 text-gray-600">• ${esc(p.name || p.policyName || "Unnamed")} <span class="text-gray-400">(${p.fulfillmentPolicyId || p.returnPolicyId || p.paymentPolicyId || ""})</span></div>`);
-          }
-        } else {
-          html.push('<div class="ml-3 text-red-500">No policies found — create them in eBay Seller Hub first</div>');
-        }
-        html.push("</div>");
-      }
-      content.innerHTML = html.join("");
-    } else {
-      content.textContent = "❌ " + (result.error || "Failed to load policies");
-    }
-  } catch (e) { content.textContent = "❌ " + e.message; }
-});
-
-document.getElementById("btnSetupLocation").addEventListener("click", async () => {
-  const btn    = document.getElementById("btnSetupLocation");
-  const status = document.getElementById("locationStatus");
-  btn.disabled = true; status.textContent = "Creating location...";
-  try {
-    const result = await callEdge("ebay-manage-listing", { action: "setup_location", locationKey: "default" });
-    status.textContent = result.success ? "✅ Location ready" : "❌ " + (result.error || "Failed");
-  } catch (e) { status.textContent = "❌ " + e.message; }
-  finally { btn.disabled = false; }
-});
-
-// Migrate Panel
-document.getElementById("btnMigrate").addEventListener("click", () => {
-  document.getElementById("migratePanel").classList.toggle("hidden");
-});
-
-document.getElementById("btnScanEbay").addEventListener("click", async () => {
-  const btn    = document.getElementById("btnScanEbay");
-  const status = document.getElementById("migrateStatus");
-  btn.disabled = true; btn.textContent = "Scanning..."; status.textContent = "";
-  try {
-    const result = await callEdge("ebay-migrate-listings", { action: "scan" });
-    if (result.success) {
-      status.textContent = `Found ${result.total} items — ${result.matched} matched, ${result.unmatched} unmatched`;
-      renderMigrateResults(result.items || []);
-    } else {
-      status.textContent = "❌ " + (result.error || "Scan failed");
-    }
-  } catch (e) { status.textContent = "❌ " + e.message; }
-  finally { btn.disabled = false; btn.textContent = "🔍 Scan eBay Inventory"; }
-});
-
-document.getElementById("btnAutoLink").addEventListener("click", async () => {
-  if (!confirm("Auto-link all matchable eBay items to KK products?")) return;
-  const btn    = document.getElementById("btnAutoLink");
-  const status = document.getElementById("migrateStatus");
-  btn.disabled = true; btn.textContent = "Linking..."; status.textContent = "";
-  try {
-    const result = await callEdge("ebay-migrate-listings", { action: "auto_link" });
-    if (result.success) {
-      status.textContent = `✅ Linked ${result.linked} of ${result.total} items (${result.skippedNoMatch} unmatched)`;
-      renderMigrateResults(result.results || []);
-      loadProducts();
-    } else {
-      status.textContent = "❌ " + (result.error || "Auto-link failed");
-    }
-  } catch (e) { status.textContent = "❌ " + e.message; }
-  finally { btn.disabled = false; btn.textContent = "⚡ Auto-Link All"; }
-});
 
 // Refresh
 document.getElementById("btnRefresh").addEventListener("click", () => loadProducts());
@@ -2789,6 +1255,9 @@ async function init() {
   setView(currentView); // sync view toggle buttons on load
   await loadProducts();
   loadPoliciesCache();
+  initBulkActions({ callEdge, supabase, loadProducts });
+  initSetupPanel({ callEdge });
+  initImportPanel({ callEdge, loadProducts });
 }
 
 init();

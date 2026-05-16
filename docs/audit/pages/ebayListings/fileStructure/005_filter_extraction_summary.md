@@ -1,0 +1,149 @@
+# 005 — Phase 3: Filter Extraction Summary
+
+Date: 2026-05-15
+
+## What was done
+
+Created `js/admin/ebayListings/filters.js` and moved all product filter predicate logic out of `applyFilters()` in `index.js`.
+
+---
+
+## What moved to `filters.js`
+
+**New file: `js/admin/ebayListings/filters.js`** (64 lines)
+
+Exports one function:
+
+```js
+export function filterProducts(products, query, statusVal, quickVal)
+```
+
+Logic moved from `applyFilters()`:
+
+- Search predicate: `name`, `code`, `ebay_sku` haystack match
+- Status predicate: `ebay_status || "not_listed"` vs `statusVal`
+- Quick filter `"needs_work"`: `_ws.issue_count > 0`
+- Quick filter `"no_sales_30d"`: active + `_ws.sold_qty_30d === 0`
+- Quick filter `"has_promo"`: `ebay_volume_promo_id` truthy
+- Quick filter `"low_score"`: `computeHealth(p).score < 60` (non-null)
+- Quick filter `"draft_stalled"`: status=draft and no `ebay_offer_id`
+- Quick filter `"missing_basics"`: any of `missing_category`, `missing_ebay_price`, `missing_listing_id` set in `_ws.issue_flags`
+
+Dependencies inside `filters.js`:
+
+- `import { computeHealth } from "./listingHealth.js"` — direct, unidirectional, no circular risk.
+
+---
+
+## What stayed in `index.js`
+
+`applyFilters()` is now 10 lines (was 40+):
+
+```js
+function applyFilters() {
+  const query     = (document.getElementById("searchInput")?.value || "").toLowerCase().trim();
+  const statusVal = document.getElementById("statusFilter")?.value || "";
+  const quickVal  = document.getElementById("quickFilter")?.value || "";
+
+  filteredProducts = filterProducts(allProducts, query, statusVal, quickVal);
+
+  document.getElementById("countLabel").textContent =
+    `${filteredProducts.length} item${filteredProducts.length !== 1 ? "s" : ""}`;
+  renderAll();
+}
+```
+
+Stayed in `index.js`:
+- DOM control reads (`searchInput`, `statusFilter`, `quickFilter`)
+- `filteredProducts` state assignment
+- `countLabel` DOM update
+- `renderAll()` call
+- All event listeners (`input`, `change`)
+- `adRateFilter` handler (calls `renderAll()` directly, not `applyFilters`)
+- `computeHealth` import (still needed by `renderTable` and `renderCards`)
+
+---
+
+## Line count
+
+| File | Before | After |
+|---|---|---|
+| `index.js` | 2 744 | 2 446 |
+| `filters.js` | — | 64 |
+| Net lines removed from `index.js` | −298 (includes Phase 1+3 combined) | |
+
+Phase 3 alone removed ~30 lines of predicate logic from `applyFilters()`.
+
+---
+
+## Import graph (no cycles)
+
+```
+index.js
+  └── filters.js
+        └── listingHealth.js   (also imported directly by index.js — fine)
+  └── api.js
+  └── utils.js
+  └── editor.js
+  └── images.js
+  └── volPricing.js
+  └── profitPreview.js
+  └── listingHealth.js
+  └── salesHistory.js
+  └── priceReference.js
+```
+
+No circular imports.
+
+---
+
+## Why this was safe
+
+- `filterProducts()` is a pure predicate — no DOM writes, no page-state mutation, no side effects.
+- The single import (`computeHealth`) goes to an existing pure module already imported by `index.js`.
+- `applyFilters()` shape is identical from the caller's perspective — same inputs (implicit via DOM reads), same outputs (same `filteredProducts` array shape, same count label text, same render call).
+- No eBay mutation payloads touched.
+- No rendering logic moved.
+
+---
+
+## Verification performed
+
+| Check | Result |
+|---|---|
+| `node --check filters.js` | ✅ Pass |
+| `node --check index.js` | ✅ Pass |
+| Circular import check | ✅ None |
+| Products load (60 total) | ✅ Confirmed |
+| Search "charm" → 7 items | ✅ Confirmed |
+| Status: active → 23 items | ✅ Confirmed |
+| Status: draft → 2 items | ✅ Confirmed |
+| Status: not_listed → 34 items | ✅ Confirmed |
+| Quick: needs_work → 22 items | ✅ Confirmed |
+| Quick: no_sales_30d → 19 items | ✅ Confirmed |
+| Quick: has_promo → 7 items | ✅ Confirmed |
+| Quick: low_score → 1 item | ✅ Confirmed |
+| Quick: draft_stalled → 1 item | ✅ Confirmed |
+| Quick: missing_basics → 1 item | ✅ Confirmed |
+| Count label updates on filter change | ✅ Confirmed |
+| Table view renders filtered results | ✅ Confirmed (23 rows with active filter) |
+| Card view renders filtered results | ✅ Confirmed (23 cards with active filter) |
+| Reset quick filter → 60 items | ✅ Confirmed |
+| eBay action payloads unchanged | ✅ Confirmed (no mutation code touched) |
+
+Live browser test run against http://localhost:8080/pages/admin/ebay-listings.html (no active Supabase auth session — countLabel and filter behavior verified from loaded data).
+
+---
+
+## Next recommended refactor phase
+
+**Phase 4 — Rendering helpers**
+
+Extract `renderTable()` and `renderCards()` (and their helpers: `wsChips`, `rowEstProfitHtml`, `epCls`) into `table.js` and/or `cards.js`.
+
+Risk: **Medium** — templates embed `window.*` onclick strings and depend on `computeHealth`, profit preview, health scoring, and stale-link badge logic. Requires careful inline-onclick inventory before moving.
+
+Suggested prompt:
+> "Implement Phase 4 only for `js/admin/ebayListings`: inventory all `window.*` globals and inline onclick strings currently generated by `renderTable()` and `renderCards()`, then extract only the stable template helpers (`wsChips`, `rowEstProfitHtml`, `epCls`) that have no onclick dependencies. Keep `renderTable()` and `renderCards()` in `index.js` for now. Do not change onclick strings. Do not change action handlers. Verify table/card render, all chips, profit column, health score column, stale badges, and bulk checkboxes."
+
+Alternative safer next step — **Phase 2: utils.js cleanup** (lower risk, classify pure vs DOM-reader helpers).
