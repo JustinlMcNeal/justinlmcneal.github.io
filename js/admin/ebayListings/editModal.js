@@ -2,6 +2,7 @@ import {
   isEffectiveGroupListing,
   buildImageUrls,
   isComplexHtml,
+  variantSkuFromOption,
 } from "./utils.js";
 import {
   quillToolbar,
@@ -15,7 +16,7 @@ import { buildEditAspectField } from "./aspectHelpers.js";
 import { renderEditVariantImageControls } from "./variantPanel.js";
 import { refreshEditPreview, refreshEditRef, loadAndRenderPriceRef } from "./modalPreviews.js";
 import { fetchAspectsForCategory } from "./taxonomyApi.js";
-import { getItemForEdit, getOffersForEdit, getOffersByGroupForEdit } from "./editFetch.js";
+import { getItemForEdit, getOffersForEdit, getOffersByGroupForEdit, offerMappingDiagnosticMessage } from "./editFetch.js";
 import { loadPoliciesCache } from "./policyCache.js";
 import {
   isStaleLinkCheck,
@@ -232,13 +233,16 @@ export function createEditModalContext({
         p._groupData = group;
         p._isGroup   = true;
 
+        const localExpectedSkus = (p.product_variants || [])
+          .filter(v => v.is_active)
+          .map(v => variantSkuFromOption(p.code, v.option_value));
         const firstVariantSku = group.variantSKUs?.[0];
         const groupOffersResult = p.ebay_item_group_key
-          ? await getOffersByGroupForEdit(state.editOfferLookupCache, p.ebay_item_group_key, group.variantSKUs || [], "open")
+          ? await getOffersByGroupForEdit(state.editOfferLookupCache, p.ebay_item_group_key, group.variantSKUs || [], "open", localExpectedSkus)
           : { success: false, offers: [], error: "Missing local inventory item group key" };
         if (!groupOffersResult.success) {
           p._offerMappingsUnresolved = true;
-          p._offerMappingFailureMessage = "This variant listing could not be matched to active eBay offers. Refresh/relink this listing before saving eBay edits.";
+          p._offerMappingFailureMessage = offerMappingDiagnosticMessage(groupOffersResult, "This variant listing could not be matched to active eBay offers. Refresh/relink this listing before saving eBay edits.");
         } else {
           const offerSkus = new Set((groupOffersResult.offers || []).map(o => o?.sku).filter(Boolean));
           const missingOfferSkus = (group.variantSKUs || []).filter(sku => !offerSkus.has(sku));
@@ -431,10 +435,10 @@ export function createEditModalContext({
       const offerLookupFailures = [...state.editOfferLookupCache.values()].filter(r => !r.success);
       if (isOutOfStockLinkCheck(p._linkCheck)) {
         document.getElementById("editStatus").textContent = "\u26a0\ufe0f Sold out on eBay \u2014 set quantity above 0 and save to restock this listing.";
-      } else if (isStaleLinkCheck(p._linkCheck)) {
-        document.getElementById("editStatus").textContent = `\u26a0\ufe0f ${p._linkCheck?.message || "Local eBay link may be stale. Refresh/relink before editing."}`;
       } else if (p._offerMappingsUnresolved) {
         document.getElementById("editStatus").textContent = `\u26a0\ufe0f ${p._offerMappingFailureMessage || "This variant listing could not be matched to active eBay offers. Refresh/relink this listing before saving eBay edits."}`;
+      } else if (isStaleLinkCheck(p._linkCheck)) {
+        document.getElementById("editStatus").textContent = `\u26a0\ufe0f ${p._linkCheck?.message || "Local eBay link may be stale. Refresh/relink before editing."}`;
       } else if (offerLookupFailures.length) {
         document.getElementById("editStatus").textContent = "\u26a0\ufe0f eBay offer details could not be loaded for part of this listing. Refresh/relink this listing before saving eBay edits.";
       } else if (variantFetchSummary?.failures?.length) {

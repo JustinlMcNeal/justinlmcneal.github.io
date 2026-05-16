@@ -27,7 +27,26 @@ import {
   staleLinkMessage,
   currentActiveListingId,
 } from "./linkCheck.js";
-import { esc } from "./utils.js";
+import { esc, variantSkuFromOption } from "./utils.js";
+
+function expectedVariantSkus(product) {
+  return (product?.product_variants || [])
+    .filter(v => v?.is_active)
+    .map(v => variantSkuFromOption(product.code, v.option_value));
+}
+
+function diagnosticSummary(diagnostic) {
+  const d = diagnostic || {};
+  const mismatched = Array.isArray(d.mismatchedLocalSkus) ? d.mismatchedLocalSkus.filter(Boolean) : [];
+  if (mismatched.length) return `Local variants do not match the eBay group variants: ${mismatched.join(", ")}.`;
+  const unavailable = Array.isArray(d.unavailableOfferSkus) ? d.unavailableOfferSkus.filter(Boolean) : [];
+  if (unavailable.length) return `eBay says these child offers are not available: ${unavailable.join(", ")}.`;
+  const missing = Array.isArray(d.missingOfferSkus) ? d.missingOfferSkus.filter(Boolean) : [];
+  if (missing.length) return `eBay could not find active child offers for: ${missing.join(", ")}.`;
+  const activeListingIds = Array.isArray(d.activeListingIds) ? d.activeListingIds.filter(Boolean) : [];
+  if (d.inventoryItemGroupKey && !activeListingIds.length) return "No active eBay listing was found for this variant group.";
+  return "Offer mapping could not be verified.";
+}
 
 /**
  * Wire up the reconcile action cluster.
@@ -44,6 +63,7 @@ export function createReconcileActions({ getProducts, renderAll, loadProducts, s
       productCode: product.code,
       sku,
       inventoryItemGroupKey: product.ebay_item_group_key || undefined,
+      expectedSkus: product.ebay_item_group_key ? expectedVariantSkus(product) : undefined,
       localOfferId: product.ebay_offer_id || undefined,
       localListingId: product.ebay_listing_id || undefined,
       relink,
@@ -141,7 +161,7 @@ export function createReconcileActions({ getProducts, renderAll, loadProducts, s
       const iq = check.activeMatch?.inventoryQuantity ?? "?";
       meta.innerHTML = `Offer qty: ${esc(String(oq))} · Inventory qty: ${esc(String(iq))}. Use Restock/Edit to set quantity above 0.`;
     } else if (check.state === "offer_mapping_unresolved" || check.state === "ebay_api_failure") {
-      meta.textContent = "Offer mapping could not be verified. Save is blocked until the listing is refreshed/relinked or marked ended.";
+      meta.textContent = `${diagnosticSummary(check.diagnostic)} Save is blocked until the listing is refreshed/relinked or marked ended.`;
     } else {
       meta.innerHTML = activeId
       ? `Current active match found: <a href="https://www.ebay.com/itm/${esc(activeId)}" target="_blank" class="underline font-bold">${esc(activeId)} ↗</a>`

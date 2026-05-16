@@ -7,7 +7,8 @@
  *   isTransientGetItemFailure(result)        — detect 5xx / known transient eBay errors
  *   getItemForEdit(sku)                      — get_item with one retry on transient failure
  *   getOffersForEdit(cache, sku, context)    — get_offers with per-session Map cache
- *   getOffersByGroupForEdit(cache, groupKey, variantSKUs, context) — group get_offers, cached + fanned out by SKU
+ *   getOffersByGroupForEdit(cache, groupKey, variantSKUs, context, localExpectedSkus) — group get_offers, cached + fanned out by SKU
+ *   offerMappingDiagnosticMessage(result, fallback) — summarize group mapping diagnostics
  *   offerUpdateErrorMessage(result, fallback) — normalize offer update error message
  *
  * Does NOT own:
@@ -133,9 +134,10 @@ export async function getOffersForEdit(cache, sku, context = "edit") {
  * @param {string} inventoryItemGroupKey
  * @param {string[]} [variantSKUs]
  * @param {string} [context="edit"]
+ * @param {string[]} [localExpectedSkus]
  * @returns {Promise<object>}
  */
-export async function getOffersByGroupForEdit(cache, inventoryItemGroupKey, variantSKUs = [], context = "edit") {
+export async function getOffersByGroupForEdit(cache, inventoryItemGroupKey, variantSKUs = [], context = "edit", localExpectedSkus = []) {
   const key = String(inventoryItemGroupKey || "").trim();
   if (!key) return { success: false, offers: [], error: "inventoryItemGroupKey is required", cached: false };
   const cacheKey = `group:${key}`;
@@ -143,7 +145,7 @@ export async function getOffersByGroupForEdit(cache, inventoryItemGroupKey, vari
     return { ...cache.get(cacheKey), cached: true };
   }
 
-  const result = await callEdge("ebay-manage-listing", { action: "get_offers", inventoryItemGroupKey: key, variantSKUs });
+  const result = await callEdge("ebay-manage-listing", { action: "get_offers", inventoryItemGroupKey: key, variantSKUs, localExpectedSkus });
   const normalized = normalizeOfferLookupResult(result, cacheKey);
   cache.set(cacheKey, normalized);
 
@@ -160,6 +162,19 @@ export async function getOffersByGroupForEdit(cache, inventoryItemGroupKey, vari
 }
 
 // ── Offer update error message normalization ──────────────────
+
+export function offerMappingDiagnosticMessage(result, fallback) {
+  const d = result?.diagnostic || {};
+  const mismatched = Array.isArray(d.mismatchedLocalSkus) ? d.mismatchedLocalSkus.filter(Boolean) : [];
+  if (mismatched.length) return `Local variants do not match the eBay group variants: ${mismatched.join(", ")}. Refresh/relink this listing before saving.`;
+  const unavailable = Array.isArray(d.unavailableOfferSkus) ? d.unavailableOfferSkus.filter(Boolean) : [];
+  if (unavailable.length) return `eBay says these child offers are not available: ${unavailable.join(", ")}. Refresh/relink this listing before saving.`;
+  const missing = Array.isArray(d.missingOfferSkus) ? d.missingOfferSkus.filter(Boolean) : [];
+  if (missing.length) return `eBay could not find active child offers for: ${missing.join(", ")}. Refresh/relink this listing before saving.`;
+  const activeListingIds = Array.isArray(d.activeListingIds) ? d.activeListingIds.filter(Boolean) : [];
+  if (d.inventoryItemGroupKey && !activeListingIds.length) return "No active eBay listing was found for this variant group. Refresh/relink this listing before saving.";
+  return result?.message || result?.error || fallback;
+}
 
 /**
  * Returns a human-readable error message for a failed offer update result.
