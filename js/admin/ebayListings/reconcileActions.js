@@ -48,6 +48,12 @@ export function createReconcileActions({ getProducts, renderAll, loadProducts, s
       localListingId: product.ebay_listing_id || undefined,
       relink,
     });
+    if (!result?.success && result?.code === "RECONCILE_OFFERS_FAILED") {
+      result.state = result.state || "offer_mapping_unresolved";
+      result.stale = true;
+      result.safeRelink = false;
+      result.message = result.message || "This listing's active eBay offer mapping could not be verified. Refresh/relink before editing.";
+    }
     if (result?.state === "no_active_match" && product.ebay_status !== "active") {
       result.state = "no_active_match_non_active";
       result.stale = false;
@@ -134,6 +140,8 @@ export function createReconcileActions({ getProducts, renderAll, loadProducts, s
       const oq = check.activeMatch?.offerQuantity ?? "?";
       const iq = check.activeMatch?.inventoryQuantity ?? "?";
       meta.innerHTML = `Offer qty: ${esc(String(oq))} · Inventory qty: ${esc(String(iq))}. Use Restock/Edit to set quantity above 0.`;
+    } else if (check.state === "offer_mapping_unresolved" || check.state === "ebay_api_failure") {
+      meta.textContent = "Offer mapping could not be verified. Save is blocked until the listing is refreshed/relinked or marked ended.";
     } else {
       meta.innerHTML = activeId
       ? `Current active match found: <a href="https://www.ebay.com/itm/${esc(activeId)}" target="_blank" class="underline font-bold">${esc(activeId)} ↗</a>`

@@ -7,6 +7,7 @@
  *   isTransientGetItemFailure(result)        — detect 5xx / known transient eBay errors
  *   getItemForEdit(sku)                      — get_item with one retry on transient failure
  *   getOffersForEdit(cache, sku, context)    — get_offers with per-session Map cache
+ *   getOffersByGroupForEdit(cache, groupKey, context) — group get_offers, cached + fanned out by SKU
  *   offerUpdateErrorMessage(result, fallback) — normalize offer update error message
  *
  * Does NOT own:
@@ -93,6 +94,19 @@ export async function getItemForEdit(sku) {
  * @param {string} [context="edit"] — label for console warning
  * @returns {Promise<object>}
  */
+function normalizeOfferLookupResult(result, cacheKey) {
+  return result?.success
+    ? { ...result, cached: false }
+    : {
+        ...result,
+        success: false,
+        offers: [],
+        cached: false,
+        cacheKey,
+        error: result?.message || result?.error || "Offer lookup failed",
+      };
+}
+
 export async function getOffersForEdit(cache, sku, context = "edit") {
   const key = String(sku || "").trim();
   if (!key) return { success: false, offers: [], error: "sku is required", cached: false };
@@ -101,20 +115,46 @@ export async function getOffersForEdit(cache, sku, context = "edit") {
   }
 
   const result = await callEdge("ebay-manage-listing", { action: "get_offers", sku: key });
-  const normalized = result?.success
-    ? { ...result, cached: false }
-    : {
-        ...result,
-        success: false,
-        offers: [],
-        cached: false,
-        error: result?.message || result?.error || "Offer lookup failed",
-      };
+  const normalized = normalizeOfferLookupResult(result, key);
 
   cache.set(key, normalized);
   if (!normalized.success) {
     console.warn(`[edit:${context}] get_offers failed for ${key}; cached failure to avoid repeated requests`, normalized);
   }
+  return normalized;
+}
+
+/**
+ * Fetches offers for a variant inventory item group, caches the group result,
+ * and fans out each returned offer under its SKU for later save-time reuse.
+ * Save code must not re-query failed SKU lookups from the same modal session.
+ *
+ * @param {Map} cache
+ * @param {string} inventoryItemGroupKey
+ * @param {string} [context="edit"]
+ * @returns {Promise<object>}
+ */
+export async function getOffersByGroupForEdit(cache, inventoryItemGroupKey, context = "edit") {
+  const key = String(inventoryItemGroupKey || "").trim();
+  if (!key) return { success: false, offers: [], error: "inventoryItemGroupKey is required", cached: false };
+  const cacheKey = `group:${key}`;
+  if (cache.has(cacheKey)) {
+    return { ...cache.get(cacheKey), cached: true };
+  }
+
+  const result = await callEdge("ebay-manage-listing", { action: "get_offers", inventoryItemGroupKey: key });
+  const normalized = normalizeOfferLookupResult(result, cacheKey);
+  cache.set(cacheKey, normalized);
+
+  if (normalized.success) {
+    for (const offer of normalized.offers || []) {
+      const offerSku = typeof offer?.sku === "string" ? offer.sku.trim() : "";
+      if (offerSku) cache.set(offerSku, { ...normalized, offers: [offer], cached: false, cacheKey: offerSku });
+    }
+  } else {
+    console.warn(`[edit:${context}] group get_offers failed for ${key}; cached failure to avoid repeated requests`, normalized);
+  }
+
   return normalized;
 }
 
@@ -129,6 +169,9 @@ export async function getOffersForEdit(cache, sku, context = "edit") {
  * @returns {string}
  */
 export function offerUpdateErrorMessage(result, fallback) {
+  if (["OFFER_NOT_AVAILABLE", "GROUP_OFFER_NOT_AVAILABLE", "STALE_OFFER_MAPPING", "RELINK_REQUIRED"].includes(result?.code)) {
+    return result.message || "This eBay offer mapping could not be verified. Refresh/relink this listing before editing.";
+  }
   if (result?.code === "STALE_OFFER_RELINK_REQUIRED") {
     return result.message || "This eBay offer appears to be stale after manual relist activity. Refresh/relink this listing before editing.";
   }

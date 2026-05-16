@@ -92,6 +92,40 @@ function getEbayErrors(data: unknown): Array<{ errorId?: number; message?: strin
   return Array.isArray(payload?.errors) ? payload.errors : [];
 }
 
+function classifyOfferLookupFailure(status: number, data: unknown, hasGroupKey: boolean): { code: string; state: string; message: string } {
+  const errors = getEbayErrors(data);
+  const rawMessage = errors[0]?.message || `Offer lookup failed (${status})`;
+  const detail = `${rawMessage} ${JSON.stringify(data || {})}`;
+  if (/offer is not available|this offer is not available/i.test(detail)) {
+    return {
+      code: hasGroupKey ? "GROUP_OFFER_NOT_AVAILABLE" : "OFFER_NOT_AVAILABLE",
+      state: "offer_mapping_unresolved",
+      message: hasGroupKey
+        ? "This variant listing's eBay group offer is not available. Refresh/relink this listing before editing."
+        : "This eBay offer is not available. Refresh/relink this listing before editing.",
+    };
+  }
+  if (status === 404 || /not found|does not exist/i.test(detail)) {
+    return {
+      code: hasGroupKey ? "STALE_OFFER_MAPPING" : "OFFER_NOT_AVAILABLE",
+      state: "offer_mapping_unresolved",
+      message: "The saved local eBay offer mapping appears stale or missing. Refresh/relink this listing before editing.",
+    };
+  }
+  if (status >= 500) {
+    return {
+      code: "EBAY_OFFER_LOOKUP_FAILED",
+      state: "ebay_api_failure",
+      message: "eBay offer verification failed due to an upstream API error. Try again later before saving edits.",
+    };
+  }
+  return {
+    code: "RELINK_REQUIRED",
+    state: "offer_mapping_unresolved",
+    message: rawMessage,
+  };
+}
+
 function isTransientGetItemError(status: number, data: unknown): boolean {
   const errors = getEbayErrors(data);
   return status >= 500 || errors.some((e) => e?.errorId === 25001 || /system error/i.test(e?.message || ""));
@@ -1103,21 +1137,22 @@ serve(async (req) => {
       );
 
       if (!result.ok) {
-        const errors = getEbayErrors(result.data);
-        const message = errors[0]?.message || `Get offers failed (${result.status})`;
+        const classified = classifyOfferLookupFailure(result.status, result.data, Boolean(inventoryItemGroupKey));
         console.warn("[ebay-listing] get_offers failed", {
           sku,
           inventoryItemGroupKey,
           status: result.status,
+          code: classified.code,
           upstream: result.data,
         });
         return new Response(
           JSON.stringify({
             success: false,
             action: "get_offers",
-            code: "GET_OFFERS_FAILED",
-            message,
-            error: message,
+            code: classified.code,
+            state: classified.state,
+            message: classified.message,
+            error: classified.message,
             sku,
             inventoryItemGroupKey,
             status: 200,
@@ -1148,15 +1183,18 @@ serve(async (req) => {
 
       const result = await ebayFetch(accessToken, "GET", `${INV_API}/offer?${qp.toString()}`);
       if (!result.ok) {
-        const errors = getEbayErrors(result.data);
-        const message = errors[0]?.message || `Reconcile offers failed (${result.status})`;
+        const classified = classifyOfferLookupFailure(result.status, result.data, Boolean(normalizedGroupKey));
         return new Response(
           JSON.stringify({
             success: false,
             action: "reconcile_listing",
             code: "RECONCILE_OFFERS_FAILED",
-            message,
-            error: message,
+            reasonCode: classified.code,
+            state: classified.state,
+            stale: true,
+            safeRelink: false,
+            message: classified.message,
+            error: classified.message,
             sku: normalizedSku || null,
             inventoryItemGroupKey: normalizedGroupKey || null,
             upstreamStatus: result.status,

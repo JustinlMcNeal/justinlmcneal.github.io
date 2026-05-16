@@ -6,7 +6,7 @@ export function isLinkedOnEbay(p) {
 }
 
 export function isStaleLinkCheck(check) {
-  return Boolean(check?.success && ["stale", "ambiguous", "no_active_match"].includes(check.state));
+  return Boolean(check && ["stale", "ambiguous", "no_active_match", "offer_mapping_unresolved", "ebay_api_failure"].includes(check.state));
 }
 
 export function isOutOfStockLinkCheck(check) {
@@ -19,7 +19,7 @@ export function isLinkWarningCheck(check) {
 
 export function staleActionState(p) {
   const state = p?._linkCheck?.state;
-  return ["stale", "ambiguous", "no_active_match", "out_of_stock"].includes(state) ? state : "";
+  return ["stale", "ambiguous", "no_active_match", "offer_mapping_unresolved", "ebay_api_failure", "out_of_stock"].includes(state) ? state : "";
 }
 
 export function staleActionBadge(p) {
@@ -35,6 +35,8 @@ export function staleLinkLabel(check) {
   if (check.state === "stale") return "Local eBay link may be stale";
   if (check.state === "ambiguous") return "Multiple active eBay matches found";
   if (check.state === "no_active_match") return "No active eBay match found";
+  if (check.state === "offer_mapping_unresolved") return "eBay offer mapping unresolved";
+  if (check.state === "ebay_api_failure") return "eBay verification failed";
   if (check.state === "out_of_stock") return "Sold out on eBay";
   return "eBay link verified";
 }

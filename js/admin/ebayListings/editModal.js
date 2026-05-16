@@ -15,7 +15,7 @@ import { buildEditAspectField } from "./aspectHelpers.js";
 import { renderEditVariantImageControls } from "./variantPanel.js";
 import { refreshEditPreview, refreshEditRef, loadAndRenderPriceRef } from "./modalPreviews.js";
 import { fetchAspectsForCategory } from "./taxonomyApi.js";
-import { getItemForEdit, getOffersForEdit } from "./editFetch.js";
+import { getItemForEdit, getOffersForEdit, getOffersByGroupForEdit } from "./editFetch.js";
 import { loadPoliciesCache } from "./policyCache.js";
 import {
   isStaleLinkCheck,
@@ -169,6 +169,8 @@ export function createEditModalContext({
     state.editOfferLookupCache      = new Map();
     state.editVariantImageOverrides = {};
     state.editVariantQtyOverrides   = {};
+    p._offerMappingsUnresolved      = false;
+    p._offerMappingFailureMessage    = "";
     document.getElementById("editVariantImagesSection").classList.add("hidden");
     document.getElementById("editVariantImagesList").innerHTML = "";
 
@@ -231,12 +233,23 @@ export function createEditModalContext({
         p._isGroup   = true;
 
         const firstVariantSku = group.variantSKUs?.[0];
+        const groupOffersResult = p.ebay_item_group_key
+          ? await getOffersByGroupForEdit(state.editOfferLookupCache, p.ebay_item_group_key, "open")
+          : { success: false, offers: [], error: "Missing local inventory item group key" };
+        if (!groupOffersResult.success) {
+          p._offerMappingsUnresolved = true;
+          p._offerMappingFailureMessage = "This variant listing could not be matched to active eBay offers. Refresh/relink this listing before saving eBay edits.";
+        } else {
+          const offerSkus = new Set((groupOffersResult.offers || []).map(o => o?.sku).filter(Boolean));
+          const missingOfferSkus = (group.variantSKUs || []).filter(sku => !offerSkus.has(sku));
+          if (missingOfferSkus.length) {
+            p._offerMappingsUnresolved = true;
+            p._offerMappingFailureMessage = `This variant listing is missing active eBay offers for ${missingOfferSkus.join(", ")}. Refresh/relink this listing before saving eBay edits.`;
+          }
+        }
         if (firstVariantSku) {
-          const [offersResult, variantItemResult] = await Promise.all([
-            getOffersForEdit(state.editOfferLookupCache, firstVariantSku, "open"),
-            getItemForEdit(firstVariantSku),
-          ]);
-          offer = (offersResult.offers || [])[0] || {};
+          const variantItemResult = await getItemForEdit(firstVariantSku);
+          offer = (state.editOfferLookupCache.get(firstVariantSku)?.offers || [])[0] || (groupOffersResult.offers || [])[0] || {};
           if (variantItemResult.success) item = variantItemResult.item;
         }
         if (!offer.pricingSummary?.price?.value && p.ebay_price_cents) {
@@ -419,9 +432,11 @@ export function createEditModalContext({
       if (isOutOfStockLinkCheck(p._linkCheck)) {
         document.getElementById("editStatus").textContent = "\u26a0\ufe0f Sold out on eBay \u2014 set quantity above 0 and save to restock this listing.";
       } else if (isStaleLinkCheck(p._linkCheck)) {
-        document.getElementById("editStatus").textContent = "\u26a0\ufe0f Local eBay link may be stale. Refresh/relink before editing.";
+        document.getElementById("editStatus").textContent = `\u26a0\ufe0f ${p._linkCheck?.message || "Local eBay link may be stale. Refresh/relink before editing."}`;
+      } else if (p._offerMappingsUnresolved) {
+        document.getElementById("editStatus").textContent = `\u26a0\ufe0f ${p._offerMappingFailureMessage || "This variant listing could not be matched to active eBay offers. Refresh/relink this listing before saving eBay edits."}`;
       } else if (offerLookupFailures.length) {
-        document.getElementById("editStatus").textContent = "\u26a0\ufe0f eBay offer details could not be loaded for part of this listing. The modal remains usable, but offer updates may need a refresh/relink if this persists.";
+        document.getElementById("editStatus").textContent = "\u26a0\ufe0f eBay offer details could not be loaded for part of this listing. Refresh/relink this listing before saving eBay edits.";
       } else if (variantFetchSummary?.failures?.length) {
         document.getElementById("editStatus").textContent = `\u26a0\ufe0f ${variantFetchSummary.failures.length} variant eBay detail lookup(s) failed. Fallback image/qty controls are shown where available; you can still edit and save.`;
       }

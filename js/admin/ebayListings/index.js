@@ -65,7 +65,7 @@ import {
 } from "./modalPreviews.js";
 import {
   shortDelay, ebayErrorIds, isTransientGetItemFailure, getItemForEdit,
-  getOffersForEdit, offerUpdateErrorMessage,
+  offerUpdateErrorMessage,
 } from "./editFetch.js";
 import { loadPoliciesCache } from "./policyCache.js";
 
@@ -1069,6 +1069,15 @@ document.getElementById("btnSaveEdit").addEventListener("click", async () => {
       const groupKey   = editProduct.ebay_item_group_key;
       const groupData  = editProduct._groupData || {};
       const variantSKUs = groupData.variantSKUs || [];
+      const unresolvedVariantOffers = variantSKUs.filter(vSku => {
+        const cached = editOfferLookupCache.get(vSku);
+        return !cached?.success || !(cached.offers || [])[0]?.offerId;
+      });
+      if (editProduct._offerMappingsUnresolved || unresolvedVariantOffers.length) {
+        const detail = editProduct._offerMappingFailureMessage
+          || `This variant listing could not be matched to active eBay offers${unresolvedVariantOffers.length ? ` for ${unresolvedVariantOffers.join(", ")}` : ""}. Refresh/relink this listing before saving eBay edits.`;
+        throw new Error(detail);
+      }
       const sharedAspects = { ...aspects };
       delete sharedAspects.Color;
 
@@ -1116,7 +1125,7 @@ document.getElementById("btnSaveEdit").addEventListener("click", async () => {
       const offerLookupFailures = [];
       const variantOfferRows = [];
       for (const vSku of variantSKUs) {
-        const offersResp = await getOffersForEdit(editOfferLookupCache, vSku, "save");
+        const offersResp = editOfferLookupCache.get(vSku) || { success: false, offers: [], cached: true };
         if (!offersResp.success) {
           offerLookupFailures.push(vSku);
           continue;
