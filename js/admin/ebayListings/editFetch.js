@@ -7,7 +7,7 @@
  *   isTransientGetItemFailure(result)        — detect 5xx / known transient eBay errors
  *   getItemForEdit(sku)                      — get_item with one retry on transient failure
  *   getOffersForEdit(cache, sku, context)    — get_offers with per-session Map cache
- *   getOffersByGroupForEdit(cache, groupKey, context) — group get_offers, cached + fanned out by SKU
+ *   getOffersByGroupForEdit(cache, groupKey, variantSKUs, context) — group get_offers, cached + fanned out by SKU
  *   offerUpdateErrorMessage(result, fallback) — normalize offer update error message
  *
  * Does NOT own:
@@ -131,10 +131,11 @@ export async function getOffersForEdit(cache, sku, context = "edit") {
  *
  * @param {Map} cache
  * @param {string} inventoryItemGroupKey
+ * @param {string[]} [variantSKUs]
  * @param {string} [context="edit"]
  * @returns {Promise<object>}
  */
-export async function getOffersByGroupForEdit(cache, inventoryItemGroupKey, context = "edit") {
+export async function getOffersByGroupForEdit(cache, inventoryItemGroupKey, variantSKUs = [], context = "edit") {
   const key = String(inventoryItemGroupKey || "").trim();
   if (!key) return { success: false, offers: [], error: "inventoryItemGroupKey is required", cached: false };
   const cacheKey = `group:${key}`;
@@ -142,7 +143,7 @@ export async function getOffersByGroupForEdit(cache, inventoryItemGroupKey, cont
     return { ...cache.get(cacheKey), cached: true };
   }
 
-  const result = await callEdge("ebay-manage-listing", { action: "get_offers", inventoryItemGroupKey: key });
+  const result = await callEdge("ebay-manage-listing", { action: "get_offers", inventoryItemGroupKey: key, variantSKUs });
   const normalized = normalizeOfferLookupResult(result, cacheKey);
   cache.set(cacheKey, normalized);
 
