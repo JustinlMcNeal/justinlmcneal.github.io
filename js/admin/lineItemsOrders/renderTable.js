@@ -1,5 +1,5 @@
 // /js/admin/lineItemsOrders/renderTable.js
-import { esc, moneyFromCents, gramsToOz, formatOz, formatDateShort } from "./dom.js";
+import { esc, moneyFromCents, gramsToOz, formatOz, formatDateShort, getOrderSource } from "./dom.js";
 
 /** Truncate long IDs for display; full value stays in title + data attr */
 function truncateId(id, max = 16) {
@@ -139,11 +139,25 @@ function mobileCardStatusAccent(labelStatus, refund) {
 }
 
 /* -------------------------
+   ROW EXTRAS SEAM
+   Normalises per-row injection objects supplied by render callers.
+   All keys default to empty strings so the HTML is unchanged when no
+   extras are provided.
+-------------------------- */
+function normalizeRowExtras(extras = {}) {
+  return {
+    desktopActionContent: extras.desktopActionContent || "",
+    mobileActionBlock: extras.mobileActionBlock || "",
+  };
+}
+
+/* -------------------------
    MOBILE RENDER (CARDS)
 -------------------------- */
-function renderMobileCards(rows = []) {
+function renderMobileCards(rows = [], getRowExtras = () => ({})) {
   return rows
     .map((r, idx) => {
+      const extras = normalizeRowExtras(getRowExtras(r, idx));
       const ship = r.shipment;
 
       const orderId = r.kk_order_id || "—";
@@ -155,7 +169,7 @@ function renderMobileCards(rows = []) {
       const items = r.total_items ?? r.li_total_items ?? "—";
 
       const paid = moneyFromCents(r.total_paid_cents);
-      const isEbay = r.stripe_checkout_session_id?.startsWith("ebay_api_");
+      const isEbay = getOrderSource(r) === "ebay";
       const { cents: profitCents } = isEbay ? resolveEbayProfit(r) : { cents: r.profit_cents };
       const profit = profitCents != null ? moneyFromCents(profitCents) : "—";
       const profitColor = profitCents == null ? 'text-amber-600' : (Number(profitCents) > 0 ? 'text-emerald-600' : 'text-red-600');
@@ -230,6 +244,7 @@ function renderMobileCards(rows = []) {
                   <div class="mt-1">${reviewBadgeHtml(r.review_count)}</div>
                 </div>
               </div>
+              ${extras.mobileActionBlock}
             </div>
           </td>
         </tr>
@@ -241,9 +256,10 @@ function renderMobileCards(rows = []) {
 /* -------------------------
    DESKTOP RENDER (TABLE)
 -------------------------- */
-function renderDesktopRows(rows = []) {
+function renderDesktopRows(rows = [], getRowExtras = () => ({})) {
   return rows
     .map((r, idx) => {
+      const extras = normalizeRowExtras(getRowExtras(r, idx));
       const ship = r.shipment;
 
       const customer =
@@ -252,7 +268,7 @@ function renderDesktopRows(rows = []) {
       const items = r.total_items ?? r.li_total_items ?? "—";
 
       const paid = moneyFromCents(r.total_paid_cents);
-      const isEbay = r.stripe_checkout_session_id?.startsWith("ebay_api_");
+      const isEbay = getOrderSource(r) === "ebay";
       const { cents: profitCents } = isEbay ? resolveEbayProfit(r) : { cents: r.profit_cents };
       const profit = profitCents != null ? moneyFromCents(profitCents) : "—";
       const profitColor = profitCents == null ? 'text-amber-600' : (Number(profitCents) > 0 ? 'text-emerald-600' : 'text-red-600');
@@ -318,6 +334,7 @@ function renderDesktopRows(rows = []) {
               <span aria-hidden="true" class="text-[12px] leading-none">✎</span>
               <span>Edit</span>
             </button>
+            ${extras.desktopActionContent}
           </td>
         </tr>
       `;
@@ -328,7 +345,8 @@ function renderDesktopRows(rows = []) {
 /* -------------------------
    MAIN
 -------------------------- */
-export function renderOrdersRows({ tbodyEl, rows = [], onEdit, onView, countLabelEl } = {}) {
+export function renderOrdersRows({ tbodyEl, rows = [], onEdit, onView, countLabelEl, getRowExtras } = {}) {
+  const _getRowExtras = typeof getRowExtras === "function" ? getRowExtras : () => ({});
   if (!tbodyEl) return;
 
   if (countLabelEl) {
@@ -346,7 +364,7 @@ export function renderOrdersRows({ tbodyEl, rows = [], onEdit, onView, countLabe
     return;
   }
 
-  tbodyEl.innerHTML = isMobile() ? renderMobileCards(rows) : renderDesktopRows(rows);
+  tbodyEl.innerHTML = isMobile() ? renderMobileCards(rows, _getRowExtras) : renderDesktopRows(rows, _getRowExtras);
 
   // bind edit
   tbodyEl.querySelectorAll("[data-edit]").forEach((btn) => {
@@ -359,8 +377,11 @@ export function renderOrdersRows({ tbodyEl, rows = [], onEdit, onView, countLabe
   });
 
   // bind view
+  // Guard: ignore clicks that originate inside [data-print-cta] buttons — those are handled
+  // by wireCta delegation and must not also open the workspace (mobile stopPropagation fix).
   tbodyEl.querySelectorAll("[data-view]").forEach((btn) => {
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", (e) => {
+      if (e.target.closest("[data-print-cta]")) return;
       const idx = Number(btn.getAttribute("data-view"));
       const row = rows[idx];
       if (row) onView?.(row);

@@ -1,4 +1,12 @@
 // /js/admin/lineItemsOrders/modalEditor.js
+//
+// ⚠️  DEPRECATED — no longer imported by index.js or any runtime file.
+//
+// workspace.js (Phase 3) replaced the separate view + edit modals and owns
+// all fulfillment editing. This file is retained for reference only and will
+// be removed in a future cleanup pass.
+//
+// DO NOT add new features here. Use workspace.js instead.
 import {
   isoToLocalDatetimeValue,
   localDatetimeValueToIso,
