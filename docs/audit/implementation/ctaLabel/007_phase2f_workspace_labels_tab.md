@@ -29,7 +29,9 @@ The helper reads existing rows from:
 - `cta_label_links`
 - `cta_label_scans`
 
-Each table is queried by `session_id`. The helper returns normalized arrays plus JS-built lookup objects for scan counts, latest scans, and links grouped by print ID. No database views, writes, redirects, or RLS changes were added.
+Each table is queried by `session_id`. The helper returns normalized arrays plus JS-built lookup objects for scan counts, latest scans, and links grouped by print ID. No database views, writes, or redirects were added.
+
+Follow-up RLS fix: live verification found `cta_label_prints` had rows but no authenticated SELECT policy, so authenticated admins could see links/scans but not print rows. Migration `20260517_d_cta_label_prints_select_policy.sql` adds authenticated SELECT, keeps service-role ALL, and removes the old authenticated INSERT policy because prints are inserted by the `track-cta-label-print` Edge Function.
 
 If label history fails to load, the workspace still opens and the Labels tab shows an inline error state.
 
@@ -64,12 +66,10 @@ Completed validation:
 - `node --check` passed for `js/admin/lineItemsOrders/*.js`.
 - Cursor diagnostics showed no linter errors for the changed JS files.
 - Headless Edge could load the local admin shell, but the unauthenticated smoke test redirected to the admin dashboard before exercising order workspace data.
+- Live authenticated follow-up confirmed the Labels tab rendered for KK, eBay, and no-history orders.
+- Live authenticated follow-up found `cta_label_prints` rows were hidden by missing authenticated SELECT RLS.
+- After the RLS fix, live authenticated follow-up confirmed print rows load and Print History renders for orders with CTA print history.
 
 Manual authenticated browser follow-up still recommended:
 
-- Open a KK order with CTA label history and confirm Labels data appears.
-- Open an eBay order with CTA label history and confirm Labels data appears.
-- Open an order with no CTA label history and confirm the empty state appears.
-- Confirm existing tabs still render: Overview, Financials, Fulfillment, IDs.
-- Confirm row Print CTA behavior is unchanged.
-- Confirm shipping/Shippo behavior is unchanged.
+- Manual copy-button verification in a non-headless browser, if desired.
