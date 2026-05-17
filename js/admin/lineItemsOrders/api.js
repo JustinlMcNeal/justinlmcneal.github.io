@@ -9,6 +9,14 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const SUMMARY = "v_order_summary_plus";
 const SHIP = "fulfillment_shipments";
 
+function indexById(rows = []) {
+  const m = new Map();
+  for (const row of rows || []) {
+    if (row?.id) m.set(row.id, row);
+  }
+  return m;
+}
+
 /**
  * Fetch full order details including line items with product images and costs
  */
@@ -185,6 +193,105 @@ export async function fetchOrderDetails(stripe_checkout_session_id) {
     order: orderWithCost,
     lineItems: enrichedLineItems,
     shipment: shipment || null,
+  };
+}
+
+/**
+ * Fetch CTA label print/link/scan history for a single order workspace.
+ * Read-only helper: queries existing tracking tables by session_id and normalizes
+ * scan aggregates in JS so Phase 2F does not require DB views or policy changes.
+ */
+export async function fetchCtaLabelHistory(sessionId) {
+  if (!sessionId) {
+    return {
+      prints: [],
+      links: [],
+      scans: [],
+      scanCountsByPrintId: {},
+      latestScanByPrintId: {},
+      scanCountsByLinkId: {},
+      latestScanByLinkId: {},
+      linksByPrintId: {},
+    };
+  }
+
+  const [
+    { data: prints, error: printsErr },
+    { data: links, error: linksErr },
+    { data: scans, error: scansErr },
+  ] = await Promise.all([
+    supabase
+      .from("cta_label_prints")
+      .select("*")
+      .eq("session_id", sessionId)
+      .order("printed_at", { ascending: false }),
+    supabase
+      .from("cta_label_links")
+      .select("*")
+      .eq("session_id", sessionId)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("cta_label_scans")
+      .select("*")
+      .eq("session_id", sessionId)
+      .order("scanned_at", { ascending: false }),
+  ]);
+
+  if (printsErr) throw printsErr;
+  if (linksErr) throw linksErr;
+  if (scansErr) throw scansErr;
+
+  const printRows = prints || [];
+  const linkRows = links || [];
+  const scanRows = scans || [];
+  const printById = indexById(printRows);
+  const linkById = indexById(linkRows);
+  const scanCountsByPrintId = {};
+  const scanCountsByLinkId = {};
+  const latestScanByPrintId = {};
+  const latestScanByLinkId = {};
+  const linksByPrintId = {};
+
+  for (const link of linkRows) {
+    if (!link?.print_id) continue;
+    if (!linksByPrintId[link.print_id]) linksByPrintId[link.print_id] = [];
+    linksByPrintId[link.print_id].push(link);
+  }
+
+  for (const scan of scanRows) {
+    const link = scan?.link_id ? linkById.get(scan.link_id) : null;
+    const printId = scan?.print_id || link?.print_id || null;
+    const linkId = scan?.link_id || null;
+
+    if (printId && printById.has(printId)) {
+      scanCountsByPrintId[printId] = (scanCountsByPrintId[printId] || 0) + 1;
+      if (
+        !latestScanByPrintId[printId] ||
+        new Date(scan?.scanned_at || 0) > new Date(latestScanByPrintId[printId]?.scanned_at || 0)
+      ) {
+        latestScanByPrintId[printId] = scan;
+      }
+    }
+    if (linkId) {
+      scanCountsByLinkId[linkId] = (scanCountsByLinkId[linkId] || 0) + 1;
+      if (
+        !latestScanByLinkId[linkId] ||
+        new Date(scan?.scanned_at || 0) > new Date(latestScanByLinkId[linkId]?.scanned_at || 0)
+      ) {
+        latestScanByLinkId[linkId] = scan;
+      }
+    }
+  }
+
+  return {
+    prints: printRows,
+    links: linkRows,
+    scans: scanRows,
+    scanCountsByPrintId,
+    latestScanByPrintId,
+    scanCountsByLinkId,
+    latestScanByLinkId,
+    linksByPrintId,
   };
 }
 

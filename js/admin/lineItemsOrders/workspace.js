@@ -3,6 +3,7 @@
 // Exports: initWorkspace, openWorkspace, closeWorkspace
 import {
   fetchOrderDetails,
+  fetchCtaLabelHistory,
   upsertFulfillmentShipment,
   issueRefund,
   updateRefundReason,
@@ -23,6 +24,7 @@ import {
 import { renderOverview } from "./workspaceOverview.js";
 import { renderFinancials } from "./workspaceFinancials.js";
 import { renderFulfillment } from "./workspaceFulfillment.js";
+import { renderLabels } from "./workspaceLabels.js";
 import { renderIds } from "./workspaceIds.js";
 function cleanStr(v) {
   const s = String(v ?? "").trim();
@@ -106,6 +108,22 @@ export async function openWorkspace(row, { tab = "overview" } = {}) {
 
   try {
     _detail = await fetchOrderDetails(row.stripe_checkout_session_id);
+    try {
+      _detail.ctaLabelHistory = await fetchCtaLabelHistory(row.stripe_checkout_session_id);
+    } catch (historyErr) {
+      console.warn("[workspace] CTA label history fetch failed:", historyErr);
+      _detail.ctaLabelHistory = {
+        prints: [],
+        links: [],
+        scans: [],
+        scanCountsByPrintId: {},
+        latestScanByPrintId: {},
+        scanCountsByLinkId: {},
+        latestScanByLinkId: {},
+        linksByPrintId: {},
+        error: historyErr?.message || String(historyErr),
+      };
+    }
     _renderTabBody(tab);
     requestAnimationFrame(() => document.getElementById("btnWsClose")?.focus());
   } catch (err) {
@@ -166,6 +184,7 @@ function _renderTabBar(activeTab) {
     { id: "overview", label: "Overview" },
     { id: "financials", label: "Financials" },
     { id: "fulfillment", label: "Fulfillment" },
+    { id: "labels", label: "Labels" },
     { id: "ids", label: "IDs" },
   ];
 
@@ -224,11 +243,12 @@ function _setDirtyDot(on) {
 function _renderTabBody(tab) {
   const wsBody = document.getElementById("wsBody");
   if (!wsBody || !_detail) return;
-  const { order, lineItems, shipment } = _detail;
+  const { order, lineItems, shipment, ctaLabelHistory } = _detail;
 
   if (tab === "overview") wsBody.innerHTML = renderOverview(order, lineItems);
   else if (tab === "financials") wsBody.innerHTML = renderFinancials(order, shipment);
   else if (tab === "fulfillment") wsBody.innerHTML = renderFulfillment(order, shipment);
+  else if (tab === "labels") wsBody.innerHTML = renderLabels(order, ctaLabelHistory);
   else if (tab === "ids") wsBody.innerHTML = renderIds(order);
 
   if (tab === "fulfillment") {
@@ -236,6 +256,8 @@ function _renderTabBody(tab) {
     _wireRefundButtons(wsBody, order);
     _wireLabelButtons(wsBody, order, shipment);
     _trackDirty(wsBody);
+  } else if (tab === "labels") {
+    _wireCopyButtons(wsBody);
   } else if (tab === "ids") {
     _wireCopyButtons(wsBody);
   }
