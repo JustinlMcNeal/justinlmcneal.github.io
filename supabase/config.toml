@@ -394,3 +394,8 @@ entrypoint = "./functions/autopilot-fill/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/shippo-webhook/index.ts"
+
+[functions.cta-label-redirect]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/cta-label-redirect/index.ts"
