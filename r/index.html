@@ -8,18 +8,25 @@
     body { display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; font-family: sans-serif; color: #666; }
   </style>
   <script>
-    // SMS links use: karrykraze.com/r/?c={short_code}
-    // This page extracts the code, hits the edge function (logs click), then follows its 302 redirect.
+    // Redirect relay — two systems share this page:
+    //   ?c={short_code}  → sms-redirect  (SMS click tracking)
+    //   ?t={token}       → cta-label-redirect  (CTA label QR scan tracking)
+    // SMS ?c= takes priority if both params are somehow present.
     (function () {
       var params = new URLSearchParams(window.location.search);
-      var code = params.get('c') || '';
-      if (!code) {
-        window.location.href = '/';
-        return;
+      var code  = params.get('c');
+      var token = params.get('t');
+      if (code) {
+        window.location.replace(
+          'https://yxdzvzscufkvewecvagq.supabase.co/functions/v1/sms-redirect?code=' + encodeURIComponent(code)
+        );
+      } else if (token) {
+        window.location.replace(
+          'https://yxdzvzscufkvewecvagq.supabase.co/functions/v1/cta-label-redirect?t=' + encodeURIComponent(token)
+        );
+      } else {
+        window.location.replace('/');
       }
-      window.location.replace(
-        'https://yxdzvzscufkvewecvagq.supabase.co/functions/v1/sms-redirect?code=' + encodeURIComponent(code)
-      );
     })();
   </script>
 </head>

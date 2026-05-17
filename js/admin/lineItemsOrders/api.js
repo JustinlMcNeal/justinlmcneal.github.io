@@ -51,16 +51,12 @@ export async function fetchOrderDetails(stripe_checkout_session_id) {
       .in("code", productCodes);
     
     if (pErr) console.error("[fetchOrderDetails] Products error:", pErr);
-    console.log("[fetchOrderDetails] Product codes:", productCodes);
-    console.log("[fetchOrderDetails] Products data:", products);
-    
+
     for (const p of products || []) {
       // Calculate supplier ship per unit using the weight formula (default 30 qty)
       const weightG = Number(p.weight_g ?? 0);
       const shipDetails = getSupplierShippingDetails(weightG, 30);
       const supplierShipPerUnit = shipDetails.perUnitUSD || 0;
-      
-      console.log(`[fetchOrderDetails] Product ${p.code} unit_cost:`, p.unit_cost, "weight_g:", weightG, "supplierShip:", supplierShipPerUnit);
       productsMap.set(p.code, { ...p, _supplierShipPerUnit: supplierShipPerUnit });
       // Build variant image map
       for (const v of p.product_variants || []) {
@@ -687,4 +683,105 @@ export async function issueRefund(stripe_checkout_session_id, amount_cents = nul
     throw new Error(result.error || `Refund failed (${res.status})`);
   }
   return result;
+}
+
+/**
+ * Record a CTA label print event in cta_label_prints.
+ * Phase 2C: lightweight insert-only analytics — never throws; returns ok/error.
+ *
+ * Caller (index.js wireCta) is responsible for treating failures as non-blocking
+ * and showing only a secondary status message.
+ *
+ * @param {object} params
+ * @param {string} params.sessionId    - stripe_checkout_session_id
+ * @param {string|null} params.kkOrderId - kk_order_id (null for eBay orders)
+ * @param {string} params.orderSource  - 'kk' | 'ebay'
+ * @param {string} params.labelType    - 'review_cta' | 'channel_cta'
+ * @param {object} [params.metadata]  - optional extra data (e.g. qr_target)
+ * @returns {Promise<{ ok: true, id: string|null } | { ok: false, error: string }>}
+ */
+export async function trackCtaLabelPrint({ sessionId, kkOrderId, orderSource, labelType, metadata = {} }) {
+  if (!sessionId || !orderSource || !labelType) {
+    return { ok: false, error: "trackCtaLabelPrint: missing required fields" };
+  }
+
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/track-cta-label-print`, {
+      method: "POST",
+      headers: {
+        "Content-Type":  "application/json",
+        "Authorization": `Bearer ${token || SUPABASE_ANON_KEY}`,
+        "apikey":        SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({
+        session_id:   sessionId,
+        kk_order_id:  kkOrderId || null,
+        order_source: orderSource,
+        label_type:   labelType,
+        metadata,
+      }),
+    });
+
+    const result = await res.json();
+    if (!res.ok || !result.ok) {
+      return { ok: false, error: result.error || `Edge Function failed (${res.status})` };
+    }
+    return { ok: true, id: result.id };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/**
+ * Call the create-cta-label-link Edge Function to generate a tracking token
+ * and insert a row into cta_label_links (service-role, token generated server-side).
+ *
+ * @param {object} params
+ * @param {string|null} params.printId      - id from cta_label_prints (may be null)
+ * @param {string}      params.sessionId    - stripe_checkout_session_id
+ * @param {string|null} params.kkOrderId    - kk_order_id (null for eBay)
+ * @param {string}      params.orderSource  - 'kk' | 'ebay'
+ * @param {string}      params.labelType    - 'review_cta' | 'channel_cta'
+ * @param {string}      params.destinationUrl - full final destination URL
+ * @param {object}      [params.metadata]   - optional extra metadata
+ * @returns {Promise<{ ok: true, token: string, trackingUrl: string } | { ok: false, error: string }>}
+ */
+export async function createCtaLabelLink({ printId, sessionId, kkOrderId, orderSource, labelType, destinationUrl, metadata = {} }) {
+  if (!sessionId || !orderSource || !labelType || !destinationUrl) {
+    return { ok: false, error: "createCtaLabelLink: missing required fields" };
+  }
+
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/create-cta-label-link`, {
+      method: "POST",
+      headers: {
+        "Content-Type":  "application/json",
+        "Authorization": `Bearer ${token || SUPABASE_ANON_KEY}`,
+        "apikey":        SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({
+        print_id:        printId || null,
+        session_id:      sessionId,
+        kk_order_id:     kkOrderId || null,
+        order_source:    orderSource,
+        label_type:      labelType,
+        destination_url: destinationUrl,
+        metadata,
+      }),
+    });
+
+    const result = await res.json();
+    if (!res.ok || !result.ok) {
+      return { ok: false, error: result.error || `Edge Function failed (${res.status})` };
+    }
+    return { ok: true, token: result.token, trackingUrl: result.tracking_url };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
 }
