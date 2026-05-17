@@ -38,13 +38,16 @@ function expectedVariantSkus(product) {
 function diagnosticSummary(diagnostic) {
   const d = diagnostic || {};
   const mismatched = Array.isArray(d.mismatchedLocalSkus) ? d.mismatchedLocalSkus.filter(Boolean) : [];
-  if (mismatched.length) return `Local variants do not match the eBay group variants: ${mismatched.join(", ")}.`;
+  if (mismatched.length) return "Local variant SKUs do not match eBay’s variant SKUs.";
   const unavailable = Array.isArray(d.unavailableOfferSkus) ? d.unavailableOfferSkus.filter(Boolean) : [];
-  if (unavailable.length) return `eBay says these child offers are not available: ${unavailable.join(", ")}.`;
+  if (unavailable.length) return `eBay could not find active child offers for: ${unavailable.join(", ")}. These variants may be ended, sold out, removed, or renamed.`;
   const missing = Array.isArray(d.missingOfferSkus) ? d.missingOfferSkus.filter(Boolean) : [];
-  if (missing.length) return `eBay could not find active child offers for: ${missing.join(", ")}.`;
+  if (missing.length) return `eBay could not find active child offers for: ${missing.join(", ")}. These variants may be ended, sold out, removed, or renamed.`;
+  if (d.reasonCode === "ACTIVE_ZERO_QUANTITY") return "Sold out on eBay — quantity is 0.";
+  if (d.reasonCode === "STALE_LOCAL_GROUP_KEY") return "Saved local eBay group key is stale or missing on eBay.";
+  if (d.reasonCode === "EBAY_API_FAILURE") return "eBay verification failed due to an upstream API error.";
   const activeListingIds = Array.isArray(d.activeListingIds) ? d.activeListingIds.filter(Boolean) : [];
-  if (d.inventoryItemGroupKey && !activeListingIds.length) return "No active eBay listing was found for this variant group.";
+  if (d.inventoryItemGroupKey && !activeListingIds.length) return "No active eBay group listing found. Clear stale link or relist later.";
   return "Offer mapping could not be verified.";
 }
 
@@ -136,7 +139,7 @@ export function createReconcileActions({ getProducts, renderAll, loadProducts, s
         showStatus(`❌ ${result.message || result.error || "Clear stale link failed"}`, true);
         return;
       }
-      showStatus(`✅ Cleared stale eBay link for ${product.code}. Use Re-list to push it again when ready.`);
+      showStatus(`✅ Cleared stale eBay link for ${product.code}. No eBay listing was created or changed.`);
       await loadProducts();
     } catch (err) {
       showStatus(`❌ ${err.message || String(err)}`, true);

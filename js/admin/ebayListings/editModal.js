@@ -238,7 +238,7 @@ export function createEditModalContext({
           .map(v => variantSkuFromOption(p.code, v.option_value));
         const firstVariantSku = group.variantSKUs?.[0];
         const groupOffersResult = p.ebay_item_group_key
-          ? await getOffersByGroupForEdit(state.editOfferLookupCache, p.ebay_item_group_key, group.variantSKUs || [], "open", localExpectedSkus)
+          ? await getOffersByGroupForEdit(state.editOfferLookupCache, p.ebay_item_group_key, group.variantSKUs || [], "open", localExpectedSkus, p.code)
           : { success: false, offers: [], error: "Missing local inventory item group key" };
         if (!groupOffersResult.success) {
           p._offerMappingsUnresolved = true;

@@ -141,21 +141,25 @@ function normalizeSkuList(value: unknown): string[] {
 }
 
 function diagnosticMessage(diagnostic: Record<string, unknown>, fallback: string): string {
+  const reasonCode = typeof diagnostic.reasonCode === "string" ? diagnostic.reasonCode : "";
   const mismatched = normalizeSkuList(diagnostic.mismatchedLocalSkus);
   if (mismatched.length) {
-    return `Local variants do not match the eBay group variants: ${mismatched.join(", ")}. Refresh/relink this listing before saving.`;
+    return "Local variant SKUs do not match eBay’s variant SKUs. Review/relink before saving.";
   }
   const unavailable = normalizeSkuList(diagnostic.unavailableOfferSkus);
   if (unavailable.length) {
-    return `eBay says these child offers are not available: ${unavailable.join(", ")}. Refresh/relink this listing before saving.`;
+    return `eBay could not find active child offers for: ${unavailable.join(", ")}. These variants may be ended, sold out, removed, or renamed.`;
   }
   const missing = normalizeSkuList(diagnostic.missingOfferSkus);
   if (missing.length) {
-    return `eBay could not find active child offers for: ${missing.join(", ")}. Refresh/relink this listing before saving.`;
+    return `eBay could not find active child offers for: ${missing.join(", ")}. These variants may be ended, sold out, removed, or renamed.`;
   }
+  if (reasonCode === "ACTIVE_ZERO_QUANTITY") return "Sold out on eBay — quantity is 0. Restock to make this listing purchasable again.";
+  if (reasonCode === "STALE_LOCAL_GROUP_KEY") return "Saved local eBay group key is stale or missing on eBay. Clear stale link or relink before saving.";
+  if (reasonCode === "EBAY_API_FAILURE") return "eBay verification failed due to an upstream API error. Try again later before saving edits.";
   const activeListingIds = normalizeSkuList(diagnostic.activeListingIds);
   if (!activeListingIds.length) {
-    return "No active eBay listing was found for this variant group. Refresh/relink this listing before saving.";
+    return "No active eBay group listing found. Clear stale link or relist later.";
   }
   return fallback;
 }
@@ -185,22 +189,29 @@ async function getOffersBySkus(accessToken: string, skus: string[]): Promise<{ o
   return { ok: failures.length === 0, offers, failures };
 }
 
-async function diagnoseGroupOfferMapping(accessToken: string, inventoryItemGroupKey: string, localExpectedSkusInput?: unknown): Promise<{ ok: boolean; diagnostic: Record<string, unknown>; offers: Record<string, unknown>[]; failures: Array<{ sku: string; status: number; data: unknown }>; message: string }> {
+async function diagnoseGroupOfferMapping(accessToken: string, inventoryItemGroupKey: string, localExpectedSkusInput?: unknown, productCodeInput?: unknown): Promise<{ ok: boolean; diagnostic: Record<string, unknown>; offers: Record<string, unknown>[]; failures: Array<{ sku: string; status: number; data: unknown }>; message: string }> {
   const localExpectedSkus = normalizeSkuList(localExpectedSkusInput);
+  const productCode = typeof productCodeInput === "string" && productCodeInput.trim() ? productCodeInput.trim() : "";
   const groupLookup = await getVariantSkusForGroup(accessToken, inventoryItemGroupKey);
+  const ebayGroupVariantSkus = groupLookup.skus;
+  const mismatchedLocalSkus = [
+    ...localExpectedSkus.filter((sku) => !ebayGroupVariantSkus.includes(sku)),
+    ...ebayGroupVariantSkus.filter((sku) => localExpectedSkus.length && !localExpectedSkus.includes(sku)),
+  ];
   const diagnostic: Record<string, unknown> = {
+    ...(productCode ? { productCode } : {}),
     inventoryItemGroupKey,
     localExpectedSkus,
-    ebayGroupVariantSkus: groupLookup.skus,
+    ebayGroupVariantSkus,
     foundOfferSkus: [],
     missingOfferSkus: [],
     unavailableOfferSkus: [],
-    mismatchedLocalSkus: localExpectedSkus.filter((sku) => !groupLookup.skus.includes(sku)),
+    mismatchedLocalSkus: [...new Set(mismatchedLocalSkus)],
     activeListingIds: [],
   };
 
   if (!groupLookup.ok) {
-    diagnostic.reasonCode = "GROUP_SKU_LOOKUP_FAILED";
+    diagnostic.reasonCode = (groupLookup.status || 0) >= 500 ? "EBAY_API_FAILURE" : "STALE_LOCAL_GROUP_KEY";
     diagnostic.upstreamStatus = groupLookup.status;
     diagnostic.upstream = groupLookup.data;
     return { ok: false, diagnostic, offers: [], failures: [], message: diagnosticMessage(diagnostic, "Could not load eBay group variant SKUs. Refresh/relink this listing before saving.") };
@@ -216,29 +227,54 @@ async function diagnoseGroupOfferMapping(accessToken: string, inventoryItemGroup
   const activeOffers = grouped.offers.filter(isActiveOffer);
   const foundOfferSkus = [...new Set(activeOffers.map((offer) => typeof offer.sku === "string" ? offer.sku.trim() : "").filter(Boolean))];
   const activeListingIds = [...new Set(activeOffers.map(getOfferListingId).filter((value): value is string => Boolean(value)))];
+  const activeOfferQuantities = await Promise.all(activeOffers.map(async (offer) => {
+    const offerSku = typeof offer.sku === "string" && offer.sku.trim() ? offer.sku.trim() : null;
+    let itemQuantity: number | null = null;
+    if (offerSku) {
+      const itemResult = await ebayFetch(accessToken, "GET", `${INV_API}/inventory_item/${encodeURIComponent(offerSku)}`);
+      if (itemResult.ok && isRecord(itemResult.data)) itemQuantity = inventoryItemQuantity(itemResult.data);
+    }
+    return {
+      sku: offerSku,
+      offerQuantity: offerAvailableQuantity(offer),
+      inventoryQuantity: itemQuantity,
+    };
+  }));
   const unavailableOfferSkus = grouped.failures
     .filter((failure) => classifyOfferLookupFailure(failure.status, failure.data, false).code === "OFFER_NOT_AVAILABLE")
     .map((failure) => failure.sku);
   const missingOfferSkus = lookupSkus.filter((sku) => !foundOfferSkus.includes(sku));
   const firstFailure = grouped.failures[0];
   const firstFailureCode = firstFailure ? classifyOfferLookupFailure(firstFailure.status, firstFailure.data, false).code : "";
+  const hasEbayApiFailure = grouped.failures.some((failure) => failure.status >= 500 || classifyOfferLookupFailure(failure.status, failure.data, false).state === "ebay_api_failure");
+  const allActiveOffersZeroQuantity = activeOffers.length > 0 && activeOfferQuantities.every((q) => (q.offerQuantity ?? q.inventoryQuantity ?? 0) <= 0 || (q.inventoryQuantity ?? q.offerQuantity ?? 0) <= 0);
 
   diagnostic.foundOfferSkus = foundOfferSkus;
   diagnostic.missingOfferSkus = missingOfferSkus;
   diagnostic.unavailableOfferSkus = unavailableOfferSkus;
   diagnostic.activeListingIds = activeListingIds;
+  diagnostic.offerQuantities = activeOfferQuantities;
   diagnostic.reasonCode = normalizeSkuList(diagnostic.mismatchedLocalSkus).length
     ? "LOCAL_VARIANT_SKU_MISMATCH"
-    : unavailableOfferSkus.length
-      ? "OFFER_NOT_AVAILABLE"
-      : firstFailureCode || (missingOfferSkus.length ? "GROUP_CHILD_OFFERS_MISSING" : activeListingIds.length ? "LINK_HEALTHY" : "NO_ACTIVE_EBAY_MATCH");
+    : hasEbayApiFailure
+      ? "EBAY_API_FAILURE"
+      : unavailableOfferSkus.length
+        ? "OFFER_NOT_AVAILABLE"
+        : missingOfferSkus.length
+          ? "GROUP_CHILD_OFFERS_MISSING"
+          : !activeListingIds.length
+            ? "NO_ACTIVE_EBAY_MATCH"
+            : allActiveOffersZeroQuantity
+              ? "ACTIVE_ZERO_QUANTITY"
+              : firstFailureCode || "LINK_HEALTHY";
   if (grouped.failures.length) diagnostic.failures = grouped.failures;
 
   const ok = grouped.ok
     && !normalizeSkuList(diagnostic.mismatchedLocalSkus).length
     && !missingOfferSkus.length
     && !unavailableOfferSkus.length
-    && activeListingIds.length > 0;
+    && activeListingIds.length > 0
+    && !allActiveOffersZeroQuantity;
   return {
     ok,
     diagnostic,
@@ -1245,9 +1281,9 @@ serve(async (req) => {
 
     // ── READ-ONLY GROUP OFFER MAPPING DIAGNOSTIC ────────────
     if (action === "diagnose_group_offer_mapping") {
-      const { inventoryItemGroupKey, expectedSkus } = body;
+      const { productCode, inventoryItemGroupKey, expectedSkus, localExpectedSkus } = body;
       if (!inventoryItemGroupKey) throw new Error("inventoryItemGroupKey is required");
-      const diagnosed = await diagnoseGroupOfferMapping(accessToken, String(inventoryItemGroupKey), expectedSkus);
+      const diagnosed = await diagnoseGroupOfferMapping(accessToken, String(inventoryItemGroupKey), localExpectedSkus || expectedSkus, productCode);
       return new Response(
         JSON.stringify({
           success: diagnosed.ok,
@@ -1264,11 +1300,11 @@ serve(async (req) => {
 
     // ── GET OFFERS FOR SKU / VARIANT GROUP ──────────────────
     if (action === "get_offers") {
-      const { sku, inventoryItemGroupKey, variantSKUs, localExpectedSkus, limit, offset } = body;
+      const { productCode, sku, inventoryItemGroupKey, variantSKUs, localExpectedSkus, limit, offset } = body;
 
       if (inventoryItemGroupKey) {
         const localSkus = normalizeSkuList(localExpectedSkus).length ? localExpectedSkus : variantSKUs;
-        const diagnosed = await diagnoseGroupOfferMapping(accessToken, String(inventoryItemGroupKey), localSkus);
+        const diagnosed = await diagnoseGroupOfferMapping(accessToken, String(inventoryItemGroupKey), localSkus, productCode || sku);
         if (!diagnosed.ok) {
           return new Response(
             JSON.stringify({
@@ -1348,7 +1384,7 @@ serve(async (req) => {
 
       let offerPayload: Record<string, unknown> = {};
       if (normalizedGroupKey) {
-        const diagnosed = await diagnoseGroupOfferMapping(accessToken, normalizedGroupKey, expectedSkus);
+        const diagnosed = await diagnoseGroupOfferMapping(accessToken, normalizedGroupKey, expectedSkus, dbCode);
         if (!diagnosed.ok) {
           return new Response(
             JSON.stringify({

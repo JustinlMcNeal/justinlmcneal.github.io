@@ -137,7 +137,7 @@ export async function getOffersForEdit(cache, sku, context = "edit") {
  * @param {string[]} [localExpectedSkus]
  * @returns {Promise<object>}
  */
-export async function getOffersByGroupForEdit(cache, inventoryItemGroupKey, variantSKUs = [], context = "edit", localExpectedSkus = []) {
+export async function getOffersByGroupForEdit(cache, inventoryItemGroupKey, variantSKUs = [], context = "edit", localExpectedSkus = [], productCode = "") {
   const key = String(inventoryItemGroupKey || "").trim();
   if (!key) return { success: false, offers: [], error: "inventoryItemGroupKey is required", cached: false };
   const cacheKey = `group:${key}`;
@@ -145,7 +145,7 @@ export async function getOffersByGroupForEdit(cache, inventoryItemGroupKey, vari
     return { ...cache.get(cacheKey), cached: true };
   }
 
-  const result = await callEdge("ebay-manage-listing", { action: "get_offers", inventoryItemGroupKey: key, variantSKUs, localExpectedSkus });
+  const result = await callEdge("ebay-manage-listing", { action: "get_offers", productCode, inventoryItemGroupKey: key, variantSKUs, localExpectedSkus });
   const normalized = normalizeOfferLookupResult(result, cacheKey);
   cache.set(cacheKey, normalized);
 
@@ -166,13 +166,16 @@ export async function getOffersByGroupForEdit(cache, inventoryItemGroupKey, vari
 export function offerMappingDiagnosticMessage(result, fallback) {
   const d = result?.diagnostic || {};
   const mismatched = Array.isArray(d.mismatchedLocalSkus) ? d.mismatchedLocalSkus.filter(Boolean) : [];
-  if (mismatched.length) return `Local variants do not match the eBay group variants: ${mismatched.join(", ")}. Refresh/relink this listing before saving.`;
+  if (mismatched.length) return "Local variant SKUs do not match eBay’s variant SKUs. Review/relink before saving.";
   const unavailable = Array.isArray(d.unavailableOfferSkus) ? d.unavailableOfferSkus.filter(Boolean) : [];
-  if (unavailable.length) return `eBay says these child offers are not available: ${unavailable.join(", ")}. Refresh/relink this listing before saving.`;
+  if (unavailable.length) return `eBay could not find active child offers for: ${unavailable.join(", ")}. These variants may be ended, sold out, removed, or renamed.`;
   const missing = Array.isArray(d.missingOfferSkus) ? d.missingOfferSkus.filter(Boolean) : [];
-  if (missing.length) return `eBay could not find active child offers for: ${missing.join(", ")}. Refresh/relink this listing before saving.`;
+  if (missing.length) return `eBay could not find active child offers for: ${missing.join(", ")}. These variants may be ended, sold out, removed, or renamed.`;
+  if (d.reasonCode === "ACTIVE_ZERO_QUANTITY") return "Sold out on eBay — quantity is 0. Restock to make this listing purchasable again.";
+  if (d.reasonCode === "STALE_LOCAL_GROUP_KEY") return "Saved local eBay group key is stale or missing on eBay. Clear stale link or relink before saving.";
+  if (d.reasonCode === "EBAY_API_FAILURE") return "eBay verification failed due to an upstream API error. Try again later before saving edits.";
   const activeListingIds = Array.isArray(d.activeListingIds) ? d.activeListingIds.filter(Boolean) : [];
-  if (d.inventoryItemGroupKey && !activeListingIds.length) return "No active eBay listing was found for this variant group. Refresh/relink this listing before saving.";
+  if (d.inventoryItemGroupKey && !activeListingIds.length) return "No active eBay group listing found. Clear stale link or relist later.";
   return result?.message || result?.error || fallback;
 }
 
