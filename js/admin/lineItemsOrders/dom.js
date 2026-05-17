@@ -124,6 +124,7 @@ export function esc(s) {
 }
 
 export function moneyFromCents(cents) {
+  if (cents == null) return "—";
   const n = Number(cents);
   if (!Number.isFinite(n)) return "—";
   return `$${(n / 100).toFixed(2)}`;
@@ -174,4 +175,20 @@ export function centsToDollars(cents) {
   const n = Number(cents);
   if (!Number.isFinite(n)) return "";
   return (n / 100).toFixed(2);
+}
+
+/**
+ * Returns the canonical channel for an order row.
+ * Single source of truth — use this instead of checking `source` or
+ * `stripe_checkout_session_id` prefixes inline.
+ *
+ * @param {object} row — order row (from v_order_summary_plus or fetchOrderDetails)
+ * @returns {"kk" | "ebay" | "amazon" | "unknown"}
+ */
+export function getOrderSource(row) {
+  if (row?.source === "amazon") return "amazon";
+  const sid = row?.stripe_checkout_session_id || "";
+  if (sid.startsWith("ebay_api_")) return "ebay";
+  if (sid.startsWith("cs_live_") || sid.startsWith("cs_test_")) return "kk";
+  return "unknown";
 }
