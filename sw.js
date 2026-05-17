@@ -3,7 +3,7 @@
 // Caching strategy: Network-first for pages, Cache-first for assets
 // ─────────────────────────────────────────────────────────
 
-const CACHE_VERSION = 'kk-v6';
+const CACHE_VERSION = 'kk-v7';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const DYNAMIC_CACHE = `${CACHE_VERSION}-dynamic`;
 const IMAGE_CACHE = `${CACHE_VERSION}-images`;
