@@ -155,7 +155,8 @@ export async function getOffersByGroupForEdit(cache, inventoryItemGroupKey, vari
       if (offerSku) cache.set(offerSku, { ...normalized, offers: [offer], cached: false, cacheKey: offerSku });
     }
   } else {
-    console.warn(`[edit:${context}] group get_offers failed for ${key}; cached failure to avoid repeated requests`, normalized);
+    const log = normalized.state === "offer_mapping_unresolved" ? console.info : console.warn;
+    log(`[edit:${context}] group get_offers diagnostic for ${key}; cached result to avoid repeated requests`, normalized);
   }
 
   return normalized;
@@ -175,7 +176,7 @@ export function offerMappingDiagnosticMessage(result, fallback) {
   if (d.reasonCode === "STALE_LOCAL_GROUP_KEY") return "Saved local eBay group key is stale or missing on eBay. Clear stale link or relink before saving.";
   if (d.reasonCode === "EBAY_API_FAILURE") return "eBay verification failed due to an upstream API error. Try again later before saving edits.";
   const activeListingIds = Array.isArray(d.activeListingIds) ? d.activeListingIds.filter(Boolean) : [];
-  if (d.inventoryItemGroupKey && !activeListingIds.length) return "No active eBay group listing found. Clear stale link or relist later.";
+  if (d.inventoryItemGroupKey && !activeListingIds.length) return "No active eBay group listing found. Clear stale link or relist later after your account restriction is resolved.";
   return result?.message || result?.error || fallback;
 }
 

@@ -26,6 +26,7 @@ import {
   staleLinkLabel,
   staleLinkMessage,
   currentActiveListingId,
+  offerMappingDiagnosticHtml,
 } from "./linkCheck.js";
 import { esc, variantSkuFromOption } from "./utils.js";
 
@@ -33,22 +34,6 @@ function expectedVariantSkus(product) {
   return (product?.product_variants || [])
     .filter(v => v?.is_active)
     .map(v => variantSkuFromOption(product.code, v.option_value));
-}
-
-function diagnosticSummary(diagnostic) {
-  const d = diagnostic || {};
-  const mismatched = Array.isArray(d.mismatchedLocalSkus) ? d.mismatchedLocalSkus.filter(Boolean) : [];
-  if (mismatched.length) return "Local variant SKUs do not match eBay’s variant SKUs.";
-  const unavailable = Array.isArray(d.unavailableOfferSkus) ? d.unavailableOfferSkus.filter(Boolean) : [];
-  if (unavailable.length) return `eBay could not find active child offers for: ${unavailable.join(", ")}. These variants may be ended, sold out, removed, or renamed.`;
-  const missing = Array.isArray(d.missingOfferSkus) ? d.missingOfferSkus.filter(Boolean) : [];
-  if (missing.length) return `eBay could not find active child offers for: ${missing.join(", ")}. These variants may be ended, sold out, removed, or renamed.`;
-  if (d.reasonCode === "ACTIVE_ZERO_QUANTITY") return "Sold out on eBay — quantity is 0.";
-  if (d.reasonCode === "STALE_LOCAL_GROUP_KEY") return "Saved local eBay group key is stale or missing on eBay.";
-  if (d.reasonCode === "EBAY_API_FAILURE") return "eBay verification failed due to an upstream API error.";
-  const activeListingIds = Array.isArray(d.activeListingIds) ? d.activeListingIds.filter(Boolean) : [];
-  if (d.inventoryItemGroupKey && !activeListingIds.length) return "No active eBay group listing found. Clear stale link or relist later.";
-  return "Offer mapping could not be verified.";
 }
 
 /**
@@ -146,6 +131,36 @@ export function createReconcileActions({ getProducts, renderAll, loadProducts, s
     }
   }
 
+  async function diagnoseEbayMapping(code) {
+    const product = getProducts().find(p => p.code === code);
+    if (!product) return;
+    if (!product.ebay_item_group_key) {
+      showStatus(`❌ ${product.code} has no saved eBay group key to diagnose.`, true);
+      return;
+    }
+    showStatus(`Diagnosing ${product.code} eBay variant mapping…`);
+    try {
+      const result = await callEdge("ebay-manage-listing", {
+        action: "diagnose_group_offer_mapping",
+        productCode: product.code,
+        inventoryItemGroupKey: product.ebay_item_group_key,
+        localExpectedSkus: expectedVariantSkus(product),
+      });
+      product._linkCheck = {
+        ...result,
+        stale: !result.success,
+        safeRelink: false,
+        state: result.state || (result.success ? "healthy" : "offer_mapping_unresolved"),
+      };
+      renderAll();
+      showStatus(result.success
+        ? `✅ ${product.code} eBay variant mapping verified. No eBay listing was changed.`
+        : `⚠️ ${product.code}: ${result.message || result.error || "Variant mapping needs review."} No eBay listing was changed.`, !result.success);
+    } catch (err) {
+      showStatus(`❌ ${err.message || String(err)}`, true);
+    }
+  }
+
   function renderEditLinkWarning(check) {
     const box = document.getElementById("editLinkWarning");
     const text = document.getElementById("editLinkWarningText");
@@ -164,7 +179,7 @@ export function createReconcileActions({ getProducts, renderAll, loadProducts, s
       const iq = check.activeMatch?.inventoryQuantity ?? "?";
       meta.innerHTML = `Offer qty: ${esc(String(oq))} · Inventory qty: ${esc(String(iq))}. Use Restock/Edit to set quantity above 0.`;
     } else if (check.state === "offer_mapping_unresolved" || check.state === "ebay_api_failure") {
-      meta.textContent = `${diagnosticSummary(check.diagnostic)} Save is blocked until the listing is refreshed/relinked or marked ended.`;
+      meta.innerHTML = `${offerMappingDiagnosticHtml({ code: check.diagnostic?.productCode || "", ebay_item_group_key: check.inventoryItemGroupKey || check.diagnostic?.inventoryItemGroupKey, _linkCheck: check })}<div class="mt-1 font-bold">Save is blocked until the listing is refreshed/relinked or marked ended.</div>`;
     } else {
       meta.innerHTML = activeId
       ? `Current active match found: <a href="https://www.ebay.com/itm/${esc(activeId)}" target="_blank" class="underline font-bold">${esc(activeId)} ↗</a>`
@@ -174,5 +189,5 @@ export function createReconcileActions({ getProducts, renderAll, loadProducts, s
     box.classList.remove("hidden");
   }
 
-  return { reconcileEbayLink, auditListingLinks, relinkEbayListing, clearStaleEbayLink, renderEditLinkWarning };
+  return { reconcileEbayLink, auditListingLinks, relinkEbayListing, clearStaleEbayLink, diagnoseEbayMapping, renderEditLinkWarning };
 }

@@ -1,7 +1,7 @@
 import { esc } from "./utils.js";
 import { computeHealth } from "./listingHealth.js";
 import { wsChips, rowEstProfitHtml } from "./renderHelpers.js";
-import { ebayCodeLinkHtml, staleActionBadge } from "./linkCheck.js";
+import { ebayCodeLinkHtml, staleActionBadge, offerMappingDiagnosticHtml } from "./linkCheck.js";
 import { renderProductActions } from "./productActions.js";
 import { updateBulkBar } from "./bulkActions.js";
 
@@ -34,6 +34,7 @@ export function renderTable(products, pageAdRatePct) {
           <div class="min-w-0">
             <a href="/pages/admin/products.html?q=${encodeURIComponent(p.name)}" target="_blank" class="font-medium text-sm line-clamp-1 text-blue-600 hover:underline">${esc(p.name)}</a>
             <div class="text-[10px] font-mono text-gray-400 leading-none mt-0.5">${ebayCodeLinkHtml(p)}</div>
+            ${offerMappingDiagnosticHtml(p)}
             ${wsChips(p, health)}
           </div>
         </div>

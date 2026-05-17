@@ -1,7 +1,7 @@
 import { esc } from "./utils.js";
 import { computeHealth } from "./listingHealth.js";
 import { wsChips, rowEstProfitHtml } from "./renderHelpers.js";
-import { ebayCodeLinkHtml, staleActionBadge } from "./linkCheck.js";
+import { ebayCodeLinkHtml, staleActionBadge, offerMappingDiagnosticHtml } from "./linkCheck.js";
 import { renderProductActions } from "./productActions.js";
 
 export function renderCards(products, pageAdRatePct) {
@@ -29,6 +29,7 @@ export function renderCards(products, pageAdRatePct) {
       <div class="p-3">
         <a href="/pages/admin/products.html?q=${encodeURIComponent(p.name)}" target="_blank" class="font-bold text-sm line-clamp-2 leading-tight text-blue-600 hover:underline">${esc(p.name)}</a>
         <p class="text-[10px] font-mono text-gray-400 mt-1">${ebayCodeLinkHtml(p, true)}</p>
+        ${offerMappingDiagnosticHtml(p, true)}
         <div class="flex items-center justify-between mt-2">
           <div class="text-xs">
             <span class="text-gray-500">KK</span> <span class="font-bold">${kkPrice}</span>

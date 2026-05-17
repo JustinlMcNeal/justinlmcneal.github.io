@@ -159,7 +159,7 @@ function diagnosticMessage(diagnostic: Record<string, unknown>, fallback: string
   if (reasonCode === "EBAY_API_FAILURE") return "eBay verification failed due to an upstream API error. Try again later before saving edits.";
   const activeListingIds = normalizeSkuList(diagnostic.activeListingIds);
   if (!activeListingIds.length) {
-    return "No active eBay group listing found. Clear stale link or relist later.";
+    return "No active eBay group listing found. Clear stale link or relist later after your account restriction is resolved.";
   }
   return fallback;
 }

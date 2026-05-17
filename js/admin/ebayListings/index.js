@@ -105,6 +105,7 @@ const dispatchProductAction = createProductActionDispatcher({
   openSalesHistory,
   relinkEbayListing:  reconcileCtx.relinkEbayListing,
   clearStaleEbayLink: reconcileCtx.clearStaleEbayLink,
+  diagnoseEbayMapping: reconcileCtx.diagnoseEbayMapping,
   doWithdraw:         tableCtx.doWithdraw,
   doPublish:          tableCtx.doPublish,
   discardDraft:       tableCtx.discardDraft,

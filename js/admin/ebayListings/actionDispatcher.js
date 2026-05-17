@@ -13,6 +13,7 @@
  * @param {function} deps.openSalesHistory  - (product) => void
  * @param {function} deps.relinkEbayListing - (code) => void
  * @param {function} deps.clearStaleEbayLink- (code) => void
+ * @param {function} deps.diagnoseEbayMapping- (code) => void
  * @param {function} deps.doWithdraw        - (code, offerId, groupKey) => void
  * @param {function} deps.doPublish         - (code, offerId, groupKey) => void
  * @param {function} deps.discardDraft      - (code, offerId, groupKey) => void
@@ -25,6 +26,7 @@ export function createProductActionDispatcher({
   openSalesHistory,
   relinkEbayListing,
   clearStaleEbayLink,
+  diagnoseEbayMapping,
   doWithdraw,
   doPublish,
   discardDraft,
@@ -49,6 +51,8 @@ export function createProductActionDispatcher({
       relinkEbayListing(code);
     } else if (action === "clear-stale") {
       clearStaleEbayLink(code);
+    } else if (action === "diagnose-mapping") {
+      diagnoseEbayMapping?.(code);
     } else if (action === "withdraw") {
       doWithdraw(code, offerId, groupKey);
     } else if (action === "publish") {

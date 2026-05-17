@@ -24,7 +24,10 @@ export async function callEdge(fnName, body) {
   }
   const data = await resp.json().catch(() => ({ success: false, error: `Non-JSON response from ${fnName} (HTTP ${resp.status})` }));
   if (!data?.success && fnName === "ebay-manage-listing") {
-    console.warn("[ebay-listing] edge action failed", {
+    const expectedMappingDiagnostic = ["GROUP_OFFER_MAPPING_UNRESOLVED", "GROUP_CHILD_OFFER_LOOKUP_FAILED", "RECONCILE_GROUP_CHILD_OFFERS_FAILED"].includes(data?.code)
+      || data?.state === "offer_mapping_unresolved";
+    const log = expectedMappingDiagnostic ? console.info : console.warn;
+    log("[ebay-listing] edge action diagnostic", {
       action: body?.action,
       sku: body?.sku,
       offerId: body?.offerId,
