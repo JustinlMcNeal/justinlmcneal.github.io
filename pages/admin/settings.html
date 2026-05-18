@@ -648,11 +648,23 @@
 
     // ─── Push Notifications Admin Panel ─────────────────────
     const SUPABASE_URL = "https://yxdzvzscufkvewecvagq.supabase.co";
-    const SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl4ZHp2enNjdWZrdmV3ZWN2YWdxIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NTczNDk0MCwiZXhwIjoyMDgxMzEwOTQwfQ.a3efcbSIIY9u0iIiKteahNQC_d5K6fbKYyk7Oh8LbSw";
+    const PRIVILEGED_ADMIN_ACTIONS_DISABLED = true;
+    const PRIVILEGED_ADMIN_DISABLED_MESSAGE = "Privileged admin actions are disabled until moved behind a secure Edge Function.";
+
+    function showPrivilegedAdminDisabled(statusEl) {
+      if (statusEl) statusEl.textContent = PRIVILEGED_ADMIN_DISABLED_MESSAGE;
+    }
 
     async function loadPushStats() {
       try {
-        const headers = { "Authorization": `Bearer ${SERVICE_KEY}`, "apikey": SERVICE_KEY };
+        if (PRIVILEGED_ADMIN_ACTIONS_DISABLED) {
+          document.getElementById("pushSubCount").textContent = "Subscribers: unavailable";
+          document.getElementById("pushAdminCount").textContent = "Admin devices: unavailable";
+          document.getElementById("pushSentTotal").textContent = "Notifications sent: unavailable";
+          return;
+        }
+
+        const headers = { "Authorization": `Bearer ${""}`, "apikey": "" };
         const [subsResp, logResp] = await Promise.all([
           fetch(`${SUPABASE_URL}/rest/v1/push_subscriptions?select=id,is_admin,is_active`, { headers }),
           fetch(`${SUPABASE_URL}/rest/v1/push_notifications_log?select=sent_count&order=created_at.desc&limit=100`, { headers }),
@@ -673,6 +685,11 @@
       const status = document.getElementById("adminPushStatus");
       status.textContent = "Requesting permission...";
       try {
+        if (PRIVILEGED_ADMIN_ACTIONS_DISABLED) {
+          showPrivilegedAdminDisabled(status);
+          return;
+        }
+
         const permission = await Notification.requestPermission();
         if (permission !== "granted") { status.textContent = "❌ Permission denied"; return; }
 
@@ -685,7 +702,7 @@
         const subJSON = sub.toJSON();
         await fetch(`${SUPABASE_URL}/rest/v1/push_subscriptions?endpoint=eq.${encodeURIComponent(subJSON.endpoint)}`, {
           method: "PATCH",
-          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SERVICE_KEY}`, "apikey": SERVICE_KEY, "Prefer": "return=minimal" },
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${""}`, "apikey": "", "Prefer": "return=minimal" },
           body: JSON.stringify({ is_admin: true }),
         });
         status.textContent = "✅ Registered as admin device!";
@@ -702,13 +719,14 @@
       const url = document.getElementById("pushUrl").value.trim() || "/";
       const target = document.getElementById("pushTarget").value;
 
+      if (PRIVILEGED_ADMIN_ACTIONS_DISABLED) { showPrivilegedAdminDisabled(status); return; }
       if (!title || !body) { status.textContent = "❌ Title and message required"; return; }
 
       btn.disabled = true; btn.textContent = "Sending..."; status.textContent = "";
       try {
         const resp = await fetch(`${SUPABASE_URL}/functions/v1/send-push-notification`, {
           method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SERVICE_KEY}` },
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${""}` },
           body: JSON.stringify({ title, body, url, target }),
         });
         const result = await resp.json();
@@ -747,8 +765,15 @@
     const ebayConnectedPanel = document.getElementById("ebayConnectedPanel");
 
     async function checkEbayConnection() {
+      if (PRIVILEGED_ADMIN_ACTIONS_DISABLED) {
+        ebayStatusDot.className = "w-3 h-3 rounded-full bg-gray-300";
+        ebayStatusText.textContent = "Admin status unavailable";
+        ebayConnectedPanel.classList.add("hidden");
+        return false;
+      }
+
       try {
-        const headers = { "Authorization": `Bearer ${SERVICE_KEY}`, "apikey": SERVICE_KEY };
+        const headers = { "Authorization": `Bearer ${""}`, "apikey": "" };
         const resp = await fetch(
           `${SUPABASE_URL}/rest/v1/marketplace_tokens?platform=eq.ebay&select=token_expires_at,extra,updated_at`,
           { headers }
@@ -818,6 +843,8 @@
     document.getElementById("btnSyncEbayOrders")?.addEventListener("click", async () => {
       const btn = document.getElementById("btnSyncEbayOrders");
       const status = document.getElementById("ebaySyncStatus");
+      if (PRIVILEGED_ADMIN_ACTIONS_DISABLED) { showPrivilegedAdminDisabled(status); return; }
+
       btn.disabled = true;
       btn.textContent = "Syncing...";
       status.textContent = "Pulling orders from eBay...";
@@ -825,7 +852,7 @@
       try {
         const resp = await fetch(`${SUPABASE_URL}/functions/v1/ebay-sync-orders`, {
           method: "POST",
-          headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+          headers: { "Authorization": `Bearer ${""}`, "Content-Type": "application/json" },
           body: JSON.stringify({ days_back: 30 }),
         });
         const data = await resp.json();
@@ -843,6 +870,8 @@
     document.getElementById("btnSyncEbayFinances")?.addEventListener("click", async () => {
       const btn = document.getElementById("btnSyncEbayFinances");
       const status = document.getElementById("ebaySyncStatus");
+      if (PRIVILEGED_ADMIN_ACTIONS_DISABLED) { showPrivilegedAdminDisabled(status); return; }
+
       btn.disabled = true;
       btn.textContent = "Syncing...";
       status.textContent = "Pulling financial transactions from eBay...";
@@ -850,7 +879,7 @@
       try {
         const resp = await fetch(`${SUPABASE_URL}/functions/v1/ebay-sync-finances`, {
           method: "POST",
-          headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+          headers: { "Authorization": `Bearer ${""}`, "Content-Type": "application/json" },
           body: JSON.stringify({ days_back: 90 }),
         });
         const data = await resp.json();
@@ -871,13 +900,15 @@
     document.getElementById("btnRefreshEbayToken")?.addEventListener("click", async () => {
       const btn = document.getElementById("btnRefreshEbayToken");
       const status = document.getElementById("ebaySyncStatus");
+      if (PRIVILEGED_ADMIN_ACTIONS_DISABLED) { showPrivilegedAdminDisabled(status); return; }
+
       btn.disabled = true;
       status.textContent = "Refreshing token...";
 
       try {
         const resp = await fetch(`${SUPABASE_URL}/functions/v1/ebay-refresh-token`, {
           method: "POST",
-          headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+          headers: { "Authorization": `Bearer ${""}`, "Content-Type": "application/json" },
         });
         const data = await resp.json();
         if (data.success) {
@@ -894,8 +925,10 @@
     document.getElementById("btnDisconnectEbay")?.addEventListener("click", async () => {
       if (!confirm("Disconnect eBay? You'll need to re-authorize to sync orders again.")) return;
       const status = document.getElementById("ebaySyncStatus");
+      if (PRIVILEGED_ADMIN_ACTIONS_DISABLED) { showPrivilegedAdminDisabled(status); return; }
+
       try {
-        const headers = { "Authorization": `Bearer ${SERVICE_KEY}`, "apikey": SERVICE_KEY, "Content-Type": "application/json", "Prefer": "return=minimal" };
+        const headers = { "Authorization": `Bearer ${""}`, "apikey": "", "Content-Type": "application/json", "Prefer": "return=minimal" };
         await fetch(`${SUPABASE_URL}/rest/v1/marketplace_tokens?platform=eq.ebay`, { method: "DELETE", headers });
         status.textContent = "✅ eBay disconnected";
         checkEbayConnection();
