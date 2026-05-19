@@ -35,6 +35,9 @@ import { initAnalytics, setupAnalytics, loadAnalytics, initPostAnalyticsModal, i
 import { initPostsContext } from "./features/posts/postsContext.js";
 import { setupQueueFilter } from "./features/posts/queueFilters.js";
 import { loadQueuePosts } from "./features/posts/queueList.js";
+import { initSocialBootContext } from "./boot/socialBootContext.js";
+import { setupTabRouter, switchTab } from "./boot/tabRouter.js";
+import { startSocialAdminPage } from "./boot/pageBoot.js";
 
 // ============================================
 // State
@@ -501,6 +504,21 @@ async function init() {
     const { data: { session } } = await client.auth.getSession();
     if (!session) { window.location.href = "/pages/admin/login.html"; return; }
 
+    initSocialBootContext({
+      state,
+      $,
+      tabHandlers: {
+        loadCalendarPosts,
+        loadQueuePosts,
+        loadAssets,
+        loadTemplates,
+        renderBoardList,
+        loadAutoQueueStats,
+        loadAnalytics,
+        loadRecentCarousels,
+      },
+    });
+
     // Wire modules with dependencies (before data loading so callbacks are ready)
     const baseDeps = { state, els, showToast, getClient };
 
@@ -530,7 +548,7 @@ async function init() {
     ]);
 
     // Setup UI
-    setupTabs();
+    setupTabRouter();
     setupUploadModal();
     setupSettingsModal();
     setupPostDetailModal();
@@ -938,53 +956,7 @@ async function populateBoardSelect() {
 }
 
 // ============================================
-// Tabs
-// ============================================
-
-function setupTabs() {
-  document.querySelectorAll(".tab-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const tab = btn.dataset.tab;
-      switchTab(tab);
-    });
-  });
-}
-
-function switchTab(tab) {
-  state.currentTab = tab;
-
-  // Update tab buttons
-  document.querySelectorAll(".tab-btn").forEach(btn => {
-    btn.classList.toggle("active", btn.dataset.tab === tab);
-  });
-
-  // Show/hide panels
-  document.querySelectorAll(".tab-panel").forEach(panel => {
-    panel.classList.add("hidden");
-  });
-
-  const activePanel = $(`tab-${tab}`);
-  if (activePanel) activePanel.classList.remove("hidden");
-
-  // Load data for tab
-  switch (tab) {
-    case "calendar": loadCalendarPosts(); break;
-    case "queue": loadQueuePosts(); break;
-    case "assets": loadAssets(); break;
-    case "templates": loadTemplates(); break;
-    case "boards": renderBoardList(); break;
-    case "autoqueue": loadAutoQueueStats(); break;
-    case "analytics": loadAnalytics(); break;
-    case "carousel": loadRecentCarousels(); break;
-  }
-}
-
-// ============================================
 // Start
 // ============================================
 
-document.addEventListener("DOMContentLoaded", () => {
-  init();
-  initPostAnalyticsModal();
-  initLearningInsights();
-});
+startSocialAdminPage({ init, initPostAnalyticsModal, initLearningInsights });
