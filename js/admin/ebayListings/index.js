@@ -26,6 +26,8 @@ import {
   enableBtn,
   imageOptionLabel,
   addAiBadge,
+  readMoneyInputCents,
+  logOfferPriceCents,
 } from "./utils.js";
 
 import { quillToolbar, descState, resetQuillEditorMount, toggleDescMode, getDescriptionHtml } from "./editor.js";
@@ -725,7 +727,7 @@ document.getElementById("btnCreateOffer").addEventListener("click", async () => 
 
   const sku        = document.getElementById("modalSku").value.trim();
   const categoryId = document.getElementById("modalCatSelect")?.value;
-  const price      = parseFloat(document.getElementById("modalPrice").value) || 0;
+  const priceRead  = readMoneyInputCents("modalPrice");
   const quantity   = parseInt(document.getElementById("modalQuantity").value) || 1;
 
   if (!categoryId || categoryId === "No categories found") {
@@ -733,6 +735,12 @@ document.getElementById("btnCreateOffer").addEventListener("click", async () => 
     btn.disabled = false; btn.textContent = isVariantListing ? "2. Create Group + Offer" : "2. Create Offer";
     return;
   }
+  if (!priceRead.ok) {
+    status.textContent = `❌ ${priceRead.error}`;
+    btn.disabled = false; btn.textContent = isVariantListing ? "2. Create Group + Offer" : "2. Create Offer";
+    return;
+  }
+  const priceCents = priceRead.cents;
 
   try {
     const checked       = getCheckedVariants(pushVariants, currentProduct.code);
@@ -752,11 +760,12 @@ document.getElementById("btnCreateOffer").addEventListener("click", async () => 
       const vSku        = variantItem.sku;
       const vQty        = variantItem.quantity;
       const storeCat    = document.getElementById("modalStoreCategory").value;
+      logOfferPriceCents({ flow: "push", step: "create_offer", sku: vSku, variant: true }, priceCents);
       const result      = await callEdge("ebay-manage-listing", {
         action:           "create_offer",
         sku:              vSku,
         categoryId,
-        priceCents:       Math.round(price * 100),
+        priceCents,
         quantity:         vQty,
         policies:         getSelectedPolicies("modal"),
         bestOfferTerms:   getBestOfferTerms("modal"),
@@ -812,12 +821,13 @@ document.getElementById("btnCreateOffer").addEventListener("click", async () => 
       progressEl.textContent = "Group created ✓ — Creating offer...";
       const storeCat    = document.getElementById("modalStoreCategory").value;
       const variantQuantities = Object.fromEntries(publishableVariants.map(v => [v.sku, v.quantity]));
+      logOfferPriceCents({ flow: "push", step: "create_group_offer", sku: currentProduct.code, groupKey }, priceCents);
       const offerResult = await callEdge("ebay-manage-listing", {
         action:               "create_group_offer",
         inventoryItemGroupKey: groupKey,
         variantSKUs, categoryId,
         variantQuantities,
-        priceCents:           Math.round(price * 100),
+        priceCents,
         policies:             getSelectedPolicies("modal"),
         bestOfferTerms:       getBestOfferTerms("modal"),
         storeCategoryNames:   storeCat ? [storeCat] : [],
@@ -836,10 +846,11 @@ document.getElementById("btnCreateOffer").addEventListener("click", async () => 
       }
     } else {
       const storeCat = document.getElementById("modalStoreCategory").value;
+      logOfferPriceCents({ flow: "push", step: "create_offer", sku }, priceCents);
       const result   = await callEdge("ebay-manage-listing", {
         action:           "create_offer",
         sku, categoryId,
-        priceCents:       Math.round(price * 100),
+        priceCents,
         quantity,
         policies:         getSelectedPolicies("modal"),
         bestOfferTerms:   getBestOfferTerms("modal"),
@@ -881,10 +892,17 @@ document.getElementById("btnPublish").addEventListener("click", async () => {
     return;
   }
 
+  const priceRead = readMoneyInputCents("modalPrice");
+  if (!priceRead.ok) {
+    status.textContent = `❌ ${priceRead.error}`;
+    btn.disabled = false; btn.textContent = "3. Publish";
+    return;
+  }
+  const priceCents = priceRead.cents;
+
   try {
     const categoryId = document.getElementById("modalCatSelect")?.value || "";
-  const price       = parseFloat(document.getElementById("modalPrice").value) || 0;
-  const priceCents  = Math.round(price * 100);
+    logOfferPriceCents({ flow: "push", step: "publish", sku: currentProduct.code, isVariantListing }, priceCents);
 
   const result = isVariantListing
       ? await callEdge("ebay-manage-listing", { action: "publish_group", inventoryItemGroupKey: groupKey, sku: currentProduct.code, categoryId, priceCents, variantQuantities })
@@ -1031,10 +1049,16 @@ document.getElementById("btnSaveEdit").addEventListener("click", async () => {
   const description = descState.editMode === "html" ? sanitizeForEbay(rawHtml) : wrapDescription(title, rawHtml);
   const condition   = document.getElementById("editCondition").value;
   const quantity    = parseInt(document.getElementById("editQuantity").value) || 1;
-  const price       = parseFloat(document.getElementById("editPrice").value) || 0;
+  const priceRead   = readMoneyInputCents("editPrice");
   const editLotSize = document.getElementById("editLotEnabled").checked ? (parseInt(document.getElementById("editLotSize").value) || 0) : 0;
 
   if (!title) { status.textContent = "❌ Title required"; btn.disabled = false; btn.textContent = "Save Changes"; return; }
+  if (!priceRead.ok) {
+    status.textContent = `❌ ${priceRead.error}`;
+    btn.disabled = false; btn.textContent = "Save Changes";
+    return;
+  }
+  const priceCents = priceRead.cents;
 
   // Validate required aspects
   const missing = [];
@@ -1120,7 +1144,7 @@ document.getElementById("btnSaveEdit").addEventListener("click", async () => {
       }
 
       status.textContent = "Updating variant offers...";
-      const priceCents   = Math.round(price * 100);
+      logOfferPriceCents({ flow: "edit", step: "update_offer", sku: editProduct.code, group: true }, priceCents);
       const editStoreCat = document.getElementById("editStoreCategory").value;
       const editCategoryId = document.getElementById("editCategoryId").value.trim();
       const offerLookupFailures = [];
@@ -1169,7 +1193,7 @@ document.getElementById("btnSaveEdit").addEventListener("click", async () => {
 
       if (editProduct.ebay_offer_id) {
         status.textContent = "Updating offer...";
-        const priceCents   = Math.round(price * 100);
+        logOfferPriceCents({ flow: "edit", step: "update_offer", sku }, priceCents);
         const editStoreCat = document.getElementById("editStoreCategory").value;
         const editCategoryId = document.getElementById("editCategoryId").value.trim();
         const offerResult  = await callEdge("ebay-manage-listing", {

@@ -62,6 +62,27 @@ export function buildImageUrls(product) {
   return urls.slice(0, 24);
 }
 
+/**
+ * Read a money input (#id) as integer cents.
+ * Blocks empty, non-numeric, and non-positive values (no fallback to catalog price).
+ */
+export function readMoneyInputCents(inputId) {
+  const raw = (document.getElementById(inputId)?.value ?? "").trim();
+  if (!raw) {
+    return { ok: false, cents: null, error: "Enter an eBay listing price greater than $0.00" };
+  }
+  const dollars = Number(raw);
+  if (!Number.isFinite(dollars) || dollars <= 0) {
+    return { ok: false, cents: null, error: "eBay price must be a number greater than $0.00" };
+  }
+  return { ok: true, cents: Math.round(dollars * 100), error: null };
+}
+
+/** Dev-safe log of offer price being sent (no tokens). */
+export function logOfferPriceCents(context, priceCents) {
+  console.info("[ebay-listing] offer price", { ...context, priceCents });
+}
+
 /** Read package weight/dimensions from form inputs and return eBay payload. */
 export function buildPackageWeightAndSize(prefix) {
   const w  = parseFloat(document.getElementById(`${prefix}WeightOz`).value);

@@ -137,6 +137,17 @@ export async function getOffersForEdit(cache, sku, context = "edit") {
  * @param {string[]} [localExpectedSkus]
  * @returns {Promise<object>}
  */
+const GROUP_OFFER_RETRY_REASONS = new Set([
+  "GROUP_CHILD_OFFERS_MISSING",
+  "NO_ACTIVE_EBAY_MATCH",
+  "GROUP_CHILD_OFFER_LOOKUP_FAILED",
+]);
+
+function groupOfferLookupRetryable(result) {
+  const reason = result?.reasonCode || result?.diagnostic?.reasonCode || "";
+  return !result?.success && GROUP_OFFER_RETRY_REASONS.has(reason);
+}
+
 export async function getOffersByGroupForEdit(cache, inventoryItemGroupKey, variantSKUs = [], context = "edit", localExpectedSkus = [], productCode = "") {
   const key = String(inventoryItemGroupKey || "").trim();
   if (!key) return { success: false, offers: [], error: "inventoryItemGroupKey is required", cached: false };
@@ -145,7 +156,13 @@ export async function getOffersByGroupForEdit(cache, inventoryItemGroupKey, vari
     return { ...cache.get(cacheKey), cached: true };
   }
 
-  const result = await callEdge("ebay-manage-listing", { action: "get_offers", productCode, inventoryItemGroupKey: key, variantSKUs, localExpectedSkus });
+  let result = await callEdge("ebay-manage-listing", { action: "get_offers", productCode, inventoryItemGroupKey: key, variantSKUs, localExpectedSkus });
+  if (groupOfferLookupRetryable(result)) {
+    console.info(`[edit:${context}] group offer mapping not ready for ${key}; retrying once after short delay`);
+    await shortDelay(1500);
+    const retry = await callEdge("ebay-manage-listing", { action: "get_offers", productCode, inventoryItemGroupKey: key, variantSKUs, localExpectedSkus });
+    if (retry?.success) result = retry;
+  }
   const normalized = normalizeOfferLookupResult(result, cacheKey);
   cache.set(cacheKey, normalized);
 
@@ -173,6 +190,9 @@ export function offerMappingDiagnosticMessage(result, fallback) {
   const missing = Array.isArray(d.missingOfferSkus) ? d.missingOfferSkus.filter(Boolean) : [];
   if (missing.length) return `eBay could not find active child offers for: ${missing.join(", ")}. These variants may be ended, sold out, removed, or renamed.`;
   if (d.reasonCode === "ACTIVE_ZERO_QUANTITY") return "Sold out on eBay — quantity is 0. Restock to make this listing purchasable again.";
+  if (d.reasonCode === "GROUP_CHILD_OFFERS_MISSING" && !missing.length && !unavailable.length) {
+    return "eBay child offers are still syncing after publish. Close and reopen Edit in a moment, or use Refresh/relink if this persists.";
+  }
   if (d.reasonCode === "STALE_LOCAL_GROUP_KEY") return "Saved local eBay group key is stale or missing on eBay. Clear stale link or relink before saving.";
   if (d.reasonCode === "EBAY_API_FAILURE") return "eBay verification failed due to an upstream API error. Try again later before saving edits.";
   const activeListingIds = Array.isArray(d.activeListingIds) ? d.activeListingIds.filter(Boolean) : [];

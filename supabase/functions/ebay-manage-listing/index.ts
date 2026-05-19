@@ -189,9 +189,18 @@ async function getOffersBySkus(accessToken: string, skus: string[]): Promise<{ o
   return { ok: failures.length === 0, offers, failures };
 }
 
-async function diagnoseGroupOfferMapping(accessToken: string, inventoryItemGroupKey: string, localExpectedSkusInput?: unknown, productCodeInput?: unknown): Promise<{ ok: boolean; diagnostic: Record<string, unknown>; offers: Record<string, unknown>[]; failures: Array<{ sku: string; status: number; data: unknown }>; message: string }> {
+async function diagnoseGroupOfferMapping(
+  accessToken: string,
+  inventoryItemGroupKey: string,
+  localExpectedSkusInput?: unknown,
+  productCodeInput?: unknown,
+  parentListingIdInput?: unknown,
+): Promise<{ ok: boolean; diagnostic: Record<string, unknown>; offers: Record<string, unknown>[]; failures: Array<{ sku: string; status: number; data: unknown }>; message: string }> {
   const localExpectedSkus = normalizeSkuList(localExpectedSkusInput);
   const productCode = typeof productCodeInput === "string" && productCodeInput.trim() ? productCodeInput.trim() : "";
+  const parentListingId = typeof parentListingIdInput === "string" && parentListingIdInput.trim()
+    ? parentListingIdInput.trim()
+    : "";
   const groupLookup = await getVariantSkusForGroup(accessToken, inventoryItemGroupKey);
   const ebayGroupVariantSkus = groupLookup.skus;
   const mismatchedLocalSkus = [
@@ -224,10 +233,18 @@ async function diagnoseGroupOfferMapping(accessToken: string, inventoryItemGroup
 
   const lookupSkus = groupLookup.skus;
   const grouped = await getOffersBySkus(accessToken, lookupSkus);
-  const activeOffers = grouped.offers.filter(isActiveOffer);
-  const foundOfferSkus = [...new Set(activeOffers.map((offer) => typeof offer.sku === "string" ? offer.sku.trim() : "").filter(Boolean))];
-  const activeListingIds = [...new Set(activeOffers.map(getOfferListingId).filter((value): value is string => Boolean(value)))];
-  const activeOfferQuantities = await Promise.all(activeOffers.map(async (offer) => {
+  const groupKeyed = await getOffersByInventoryItemGroupKey(accessToken, inventoryItemGroupKey);
+  const mergedOffers = mergeOffersByIdentity([
+    ...grouped.offers,
+    ...(groupKeyed.ok ? groupKeyed.offers : []),
+  ]);
+  const mappableOffers = mergedOffers.filter(isMappableGroupChildOffer);
+  const foundOfferSkus = [...new Set(mappableOffers.map((offer) => typeof offer.sku === "string" ? offer.sku.trim() : "").filter(Boolean))];
+  const activeListingIds = [...new Set([
+    ...mappableOffers.map(getOfferListingId).filter((value): value is string => Boolean(value)),
+    ...(parentListingId ? [parentListingId] : []),
+  ])];
+  const activeOfferQuantities = await Promise.all(mappableOffers.map(async (offer) => {
     const offerSku = typeof offer.sku === "string" && offer.sku.trim() ? offer.sku.trim() : null;
     let itemQuantity: number | null = null;
     if (offerSku) {
@@ -242,18 +259,24 @@ async function diagnoseGroupOfferMapping(accessToken: string, inventoryItemGroup
   }));
   const unavailableOfferSkus = grouped.failures
     .filter((failure) => classifyOfferLookupFailure(failure.status, failure.data, false).code === "OFFER_NOT_AVAILABLE")
-    .map((failure) => failure.sku);
+    .map((failure) => failure.sku)
+    .filter((sku) => !foundOfferSkus.includes(sku));
   const missingOfferSkus = lookupSkus.filter((sku) => !foundOfferSkus.includes(sku));
   const firstFailure = grouped.failures[0];
   const firstFailureCode = firstFailure ? classifyOfferLookupFailure(firstFailure.status, firstFailure.data, false).code : "";
-  const hasEbayApiFailure = grouped.failures.some((failure) => failure.status >= 500 || classifyOfferLookupFailure(failure.status, failure.data, false).state === "ebay_api_failure");
-  const allActiveOffersZeroQuantity = activeOffers.length > 0 && activeOfferQuantities.every((q) => (q.offerQuantity ?? q.inventoryQuantity ?? 0) <= 0 || (q.inventoryQuantity ?? q.offerQuantity ?? 0) <= 0);
+  const hasEbayApiFailure = grouped.failures.some((failure) => failure.status >= 500 || classifyOfferLookupFailure(failure.status, failure.data, false).state === "ebay_api_failure")
+    || (!groupKeyed.ok && (groupKeyed.status || 0) >= 500);
+  const allActiveOffersZeroQuantity = mappableOffers.length > 0 && activeOfferQuantities.every((q) => (q.offerQuantity ?? q.inventoryQuantity ?? 0) <= 0 || (q.inventoryQuantity ?? q.offerQuantity ?? 0) <= 0);
+  const hasListingEvidence = activeListingIds.length > 0;
+  const hasEnoughMappableOffers = mappableOffers.length >= Math.min(2, lookupSkus.length);
 
   diagnostic.foundOfferSkus = foundOfferSkus;
   diagnostic.missingOfferSkus = missingOfferSkus;
   diagnostic.unavailableOfferSkus = unavailableOfferSkus;
   diagnostic.activeListingIds = activeListingIds;
   diagnostic.offerQuantities = activeOfferQuantities;
+  if (parentListingId) diagnostic.parentListingId = parentListingId;
+  if (groupKeyed.ok) diagnostic.groupOfferCount = groupKeyed.offers.length;
   diagnostic.reasonCode = normalizeSkuList(diagnostic.mismatchedLocalSkus).length
     ? "LOCAL_VARIANT_SKU_MISMATCH"
     : hasEbayApiFailure
@@ -262,23 +285,28 @@ async function diagnoseGroupOfferMapping(accessToken: string, inventoryItemGroup
         ? "OFFER_NOT_AVAILABLE"
         : missingOfferSkus.length
           ? "GROUP_CHILD_OFFERS_MISSING"
-          : !activeListingIds.length
+          : !hasListingEvidence
             ? "NO_ACTIVE_EBAY_MATCH"
+            : !hasEnoughMappableOffers
+              ? "GROUP_CHILD_OFFERS_MISSING"
             : allActiveOffersZeroQuantity
               ? "ACTIVE_ZERO_QUANTITY"
               : firstFailureCode || "LINK_HEALTHY";
   if (grouped.failures.length) diagnostic.failures = grouped.failures;
+  if (!groupKeyed.ok && groupKeyed.status) diagnostic.groupOfferLookupStatus = groupKeyed.status;
 
-  const ok = grouped.ok
+  const offerDiscoveryOk = grouped.ok || (groupKeyed.ok && groupKeyed.offers.length > 0);
+  const ok = offerDiscoveryOk
     && !normalizeSkuList(diagnostic.mismatchedLocalSkus).length
     && !missingOfferSkus.length
     && !unavailableOfferSkus.length
-    && activeListingIds.length > 0
+    && hasListingEvidence
+    && hasEnoughMappableOffers
     && !allActiveOffersZeroQuantity;
   return {
     ok,
     diagnostic,
-    offers: grouped.offers,
+    offers: mappableOffers,
     failures: grouped.failures,
     message: diagnosticMessage(diagnostic, ok ? "eBay group child offer mapping is healthy." : "This variant listing could not be matched to active eBay offers. Refresh/relink this listing before saving."),
   };
@@ -320,6 +348,45 @@ function isActiveOffer(offer: Record<string, unknown>): boolean {
   if (!listingId) return false;
   const status = getOfferStatus(offer);
   return !["ENDED", "WITHDRAWN", "UNPUBLISHED", "ARCHIVED", "INACTIVE"].includes(status);
+}
+
+/** Group child offers: PUBLISHED variants often omit per-offer listingId (parent group listing holds it). */
+function isMappableGroupChildOffer(offer: Record<string, unknown>): boolean {
+  const offerId = offerIdValue(offer);
+  if (!offerId) return false;
+  const status = getOfferStatus(offer);
+  if (["ENDED", "WITHDRAWN", "ARCHIVED", "INACTIVE"].includes(status)) return false;
+  if (getOfferListingId(offer)) return true;
+  if (status === "PUBLISHED") return true;
+  if (!status || status === "UNPUBLISHED") return true;
+  return false;
+}
+
+function mergeOffersByIdentity(offers: Record<string, unknown>[]): Record<string, unknown>[] {
+  const byKey = new Map<string, Record<string, unknown>>();
+  for (const offer of offers) {
+    const offerId = offerIdValue(offer);
+    const sku = typeof offer.sku === "string" && offer.sku.trim() ? offer.sku.trim() : "";
+    const key = offerId || (sku ? `sku:${sku}` : "");
+    if (!key) continue;
+    byKey.set(key, offer);
+  }
+  return [...byKey.values()];
+}
+
+async function getOffersByInventoryItemGroupKey(
+  accessToken: string,
+  inventoryItemGroupKey: string,
+): Promise<{ ok: boolean; offers: Record<string, unknown>[]; status?: number; data?: unknown }> {
+  const result = await ebayFetch(
+    accessToken,
+    "GET",
+    `${INV_API}/offer?inventory_item_group_key=${encodeURIComponent(inventoryItemGroupKey)}`,
+  );
+  if (!result.ok) return { ok: false, offers: [], status: result.status, data: result.data };
+  const payload = isRecord(result.data) ? result.data : {};
+  const rows = Array.isArray(payload.offers) ? payload.offers.filter(isRecord) : [];
+  return { ok: true, offers: rows };
 }
 
 function offerPriceCents(offer: Record<string, unknown>): number | null {
@@ -366,6 +433,48 @@ function stripOfferReadonlyFields(offer: Record<string, unknown>): Record<string
   const writable = { ...offer };
   ["offerId", "listing", "statusEnum", "auditInfo", "format", "marketplaceId"].forEach((k) => delete writable[k]);
   return writable;
+}
+
+async function syncOfferPriceCents(
+  accessToken: string,
+  offerId: string,
+  priceCents: number,
+): Promise<{ ok: boolean; unchanged?: boolean; error?: string; details?: Record<string, unknown> }> {
+  if (!offerId) return { ok: false, error: "offerId is required" };
+  if (!Number.isFinite(priceCents) || priceCents <= 0) {
+    return { ok: false, error: "priceCents must be greater than 0" };
+  }
+
+  const current = await ebayFetch(accessToken, "GET", `${INV_API}/offer/${offerId}`);
+  if (!current.ok) {
+    return {
+      ok: false,
+      error: `Get offer failed (${current.status})`,
+      details: { offerId, upstreamStatus: current.status, upstream: current.data },
+    };
+  }
+
+  const existing = isRecord(current.data) ? current.data : {};
+  const currentCents = offerPriceCents(existing);
+  if (currentCents === priceCents) return { ok: true, unchanged: true };
+
+  const updatedOffer = stripOfferReadonlyFields(existing);
+  updatedOffer.pricingSummary = {
+    price: {
+      value: (priceCents / 100).toFixed(2),
+      currency: "USD",
+    },
+  };
+
+  const result = await ebayFetch(accessToken, "PUT", `${INV_API}/offer/${offerId}`, updatedOffer);
+  if (!result.ok && result.status !== 204) {
+    return {
+      ok: false,
+      error: `Sync offer price failed (${result.status})`,
+      details: { offerId, priceCents, upstreamStatus: result.status, upstream: result.data },
+    };
+  }
+  return { ok: true };
 }
 
 function hasAspectValue(aspects: Record<string, unknown>, aspectName: string): boolean {
@@ -750,8 +859,9 @@ serve(async (req) => {
     if (action === "create_offer") {
       const { sku, categoryId, priceCents, quantity, policies, bestOfferTerms, storeCategoryNames } = body;
       if (!sku || !categoryId) throw new Error("sku and categoryId are required");
+      if (!Number.isFinite(priceCents) || priceCents <= 0) throw new Error("priceCents must be greater than 0");
 
-      const priceValue = ((priceCents || 0) / 100).toFixed(2);
+      const priceValue = (priceCents / 100).toFixed(2);
 
       const offer: Record<string, unknown> = {
         sku,
@@ -795,6 +905,10 @@ serve(async (req) => {
         const dup25 = errData25?.errors?.find((e) => e.errorId === 25002);
         const existingOfferId = dup25?.parameters?.find((p) => p.name === "offerId")?.value;
         if (existingOfferId) {
+          const priceSync = await syncOfferPriceCents(accessToken, existingOfferId, priceCents);
+          if (!priceSync.ok) {
+            throw new Error(priceSync.error || "Failed to sync price on existing offer");
+          }
           await supabase.from("products").update({
             ebay_offer_id: existingOfferId,
             ebay_category_id: categoryId,
@@ -829,6 +943,20 @@ serve(async (req) => {
     if (action === "publish") {
       const { offerId, sku, categoryId: pubCategoryId, priceCents: pubPriceCents, quantity: publishQty } = body;
       if (!offerId) throw new Error("offerId is required");
+
+      if (pubPriceCents !== undefined && pubPriceCents !== null) {
+        if (!Number.isFinite(pubPriceCents) || pubPriceCents <= 0) {
+          throw new Error("priceCents must be greater than 0");
+        }
+        const priceSync = await syncOfferPriceCents(accessToken, offerId, pubPriceCents);
+        if (!priceSync.ok) {
+          return structuredOfferFailure(
+            "PUBLISH_PRICE_SYNC_FAILED",
+            priceSync.error || "Could not apply the listing price to the eBay offer before publish.",
+            { offerId, sku, priceCents: pubPriceCents, ...priceSync.details },
+          );
+        }
+      }
 
       const quantityCheck = await ensurePublishQuantity(accessToken, offerId, sku, positiveQuantity(publishQty));
       if (!quantityCheck.ok) {
@@ -918,6 +1046,9 @@ serve(async (req) => {
     if (action === "publish_group") {
       const { inventoryItemGroupKey, sku, categoryId: grpCategoryId, priceCents: grpPriceCents, variantQuantities } = body;
       if (!inventoryItemGroupKey) throw new Error("inventoryItemGroupKey is required");
+      if (grpPriceCents !== undefined && grpPriceCents !== null && (!Number.isFinite(grpPriceCents) || grpPriceCents <= 0)) {
+        throw new Error("priceCents must be greater than 0");
+      }
 
       const offersForGroup = await ebayFetch(
         accessToken,
@@ -932,6 +1063,20 @@ serve(async (req) => {
             "This saved eBay group has fewer than two variant offers. Publish it as a normal offer or rebuild it in a category that supports multi-variation listings.",
             { inventoryItemGroupKey, sku, offerCount: groupOffers.length },
           );
+        }
+        if (grpPriceCents && grpPriceCents > 0) {
+          for (const offer of groupOffers) {
+            const offerId = offerIdValue(offer);
+            if (!offerId) continue;
+            const priceSync = await syncOfferPriceCents(accessToken, offerId, grpPriceCents);
+            if (!priceSync.ok) {
+              return structuredOfferFailure(
+                "PUBLISH_PRICE_SYNC_FAILED",
+                priceSync.error || "Could not apply the listing price to a variant offer before publish.",
+                { inventoryItemGroupKey, sku, offerId, priceCents: grpPriceCents, ...priceSync.details },
+              );
+            }
+          }
         }
         for (const offer of groupOffers) {
           const offerId = offerIdValue(offer);
@@ -1013,10 +1158,18 @@ serve(async (req) => {
         const grpUpdates: Record<string, unknown> = {
           ebay_listing_id: listingId || null,
           ebay_status: "active",
+          ebay_item_group_key: inventoryItemGroupKey,
           updated_at: new Date().toISOString(),
         };
         if (grpCategoryId) grpUpdates.ebay_category_id = grpCategoryId;
         if (grpPriceCents) grpUpdates.ebay_price_cents = grpPriceCents;
+        if (offersForGroup.ok) {
+          const publishedGroupOffers = isRecord(offersForGroup.data) && Array.isArray(offersForGroup.data.offers)
+            ? offersForGroup.data.offers.filter(isRecord)
+            : [];
+          const primaryOfferId = publishedGroupOffers.map(offerIdValue).find(Boolean);
+          if (primaryOfferId) grpUpdates.ebay_offer_id = primaryOfferId;
+        }
         await supabase.from("products").update(grpUpdates).eq("code", sku);
       }
 
@@ -1283,7 +1436,24 @@ serve(async (req) => {
     if (action === "diagnose_group_offer_mapping") {
       const { productCode, inventoryItemGroupKey, expectedSkus, localExpectedSkus } = body;
       if (!inventoryItemGroupKey) throw new Error("inventoryItemGroupKey is required");
-      const diagnosed = await diagnoseGroupOfferMapping(accessToken, String(inventoryItemGroupKey), localExpectedSkus || expectedSkus, productCode);
+      let parentListingId: string | null = null;
+      if (typeof productCode === "string" && productCode.trim()) {
+        const { data: productRow } = await supabase
+          .from("products")
+          .select("ebay_listing_id")
+          .eq("code", productCode.trim())
+          .maybeSingle();
+        parentListingId = typeof productRow?.ebay_listing_id === "string" && productRow.ebay_listing_id.trim()
+          ? productRow.ebay_listing_id.trim()
+          : null;
+      }
+      const diagnosed = await diagnoseGroupOfferMapping(
+        accessToken,
+        String(inventoryItemGroupKey),
+        localExpectedSkus || expectedSkus,
+        productCode,
+        parentListingId,
+      );
       return new Response(
         JSON.stringify({
           success: diagnosed.ok,
@@ -1304,7 +1474,27 @@ serve(async (req) => {
 
       if (inventoryItemGroupKey) {
         const localSkus = normalizeSkuList(localExpectedSkus).length ? localExpectedSkus : variantSKUs;
-        const diagnosed = await diagnoseGroupOfferMapping(accessToken, String(inventoryItemGroupKey), localSkus, productCode || sku);
+        const dbCode = typeof productCode === "string" && productCode.trim()
+          ? productCode.trim()
+          : (typeof sku === "string" && sku.trim() ? sku.trim() : "");
+        let parentListingId: string | null = null;
+        if (dbCode) {
+          const { data: productRow } = await supabase
+            .from("products")
+            .select("ebay_listing_id")
+            .eq("code", dbCode)
+            .maybeSingle();
+          parentListingId = typeof productRow?.ebay_listing_id === "string" && productRow.ebay_listing_id.trim()
+            ? productRow.ebay_listing_id.trim()
+            : null;
+        }
+        const diagnosed = await diagnoseGroupOfferMapping(
+          accessToken,
+          String(inventoryItemGroupKey),
+          localSkus,
+          dbCode,
+          parentListingId,
+        );
         if (!diagnosed.ok) {
           return new Response(
             JSON.stringify({
@@ -1384,7 +1574,13 @@ serve(async (req) => {
 
       let offerPayload: Record<string, unknown> = {};
       if (normalizedGroupKey) {
-        const diagnosed = await diagnoseGroupOfferMapping(accessToken, normalizedGroupKey, expectedSkus, dbCode);
+        const diagnosed = await diagnoseGroupOfferMapping(
+          accessToken,
+          normalizedGroupKey,
+          expectedSkus,
+          dbCode,
+          typeof localListingId === "string" && localListingId.trim() ? localListingId.trim() : null,
+        );
         if (!diagnosed.ok) {
           return new Response(
             JSON.stringify({
@@ -2059,8 +2255,9 @@ serve(async (req) => {
       const { categoryId, priceCents, policies, bestOfferTerms, storeCategoryNames, baseProductCode, variantSKUs, variantQuantities } = body;
       if (!categoryId) throw new Error("categoryId is required");
       if (!variantSKUs?.length) throw new Error("variantSKUs is required");
+      if (!Number.isFinite(priceCents) || priceCents <= 0) throw new Error("priceCents must be greater than 0");
 
-      const priceValue = ((priceCents || 0) / 100).toFixed(2);
+      const priceValue = (priceCents / 100).toFixed(2);
       const offerIds: string[] = [];
 
       for (const sku of variantSKUs as string[]) {
@@ -2096,6 +2293,10 @@ serve(async (req) => {
           const dup = errData?.errors?.find((e) => e.errorId === 25002);
           const dupOfferId = dup?.parameters?.find((p) => p.name === "offerId")?.value;
           if (dupOfferId) {
+            const priceSync = await syncOfferPriceCents(accessToken, dupOfferId, priceCents);
+            if (!priceSync.ok) {
+              throw new Error(priceSync.error || `Failed to sync price on existing offer for ${sku}`);
+            }
             offerIds.push(dupOfferId);
             continue;
           }
@@ -2104,6 +2305,10 @@ serve(async (req) => {
           const existingOffers = (existing.data as { offers?: Array<{ offerId?: string }> })?.offers || [];
           const existingOfferId = existingOffers[0]?.offerId;
           if (existing.ok && existingOfferId) {
+            const priceSync = await syncOfferPriceCents(accessToken, existingOfferId, priceCents);
+            if (!priceSync.ok) {
+              throw new Error(priceSync.error || `Failed to sync price on existing offer for ${sku}`);
+            }
             offerIds.push(existingOfferId);
             continue;
           }
