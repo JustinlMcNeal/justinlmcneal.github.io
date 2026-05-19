@@ -157,3 +157,4 @@ export async function loadAnalyticsDashboard() {
   } catch (err) {
     console.error("Failed to load analytics:", err);
   }
+}
