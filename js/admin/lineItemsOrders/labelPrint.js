@@ -88,7 +88,7 @@ export function buildQrTarget(order, source, labelType) {
 
 /**
  * Build a complete print-window HTML document for the CTA label.
- * Label dimensions: 3.5" × 2" (set via @page CSS).
+ * Label dimensions: 6" × 4" (set via @page CSS).
  * All CSS is inline — the print window has no external stylesheets.
  * No PII is included: no email, phone, address, or internal session IDs.
  *
@@ -101,8 +101,8 @@ export function buildLabelHtml(order, labelType, options = {}) {
   const { qrDataUrl = null, qrFallbackUrl = "https://karrykraze.com", printDelayMs = 400 } = options;
 
   const qrBlock = qrDataUrl
-    ? `<img src="${qrDataUrl}" width="80" height="80" style="display:block;border:none;" alt="Scan QR code">`
-    : `<div style="width:80px;height:80px;border:1px solid #000;display:flex;align-items:center;justify-content:center;font-size:5pt;text-align:center;word-break:break-all;padding:3px;">${esc(qrFallbackUrl)}</div>`;
+    ? `<img src="${qrDataUrl}" width="176" height="176" style="display:block;width:1.82in;height:1.82in;border:0;" alt="Scan QR code">`
+    : `<div style="width:1.82in;height:1.82in;border:3px solid #000;display:flex;align-items:center;justify-content:center;font-size:7pt;text-align:center;word-break:break-all;padding:10px;line-height:1.2;">${esc(qrFallbackUrl)}</div>`;
 
   const firstName = order.first_name ? esc(order.first_name) : null;
 
@@ -125,50 +125,75 @@ export function buildLabelHtml(order, labelType, options = {}) {
   <meta charset="UTF-8">
   <title>KK CTA Label</title>
   <style>
-    @page { size: 3.5in 2in; margin: 0; }
+    @page { size: 6in 4in; margin: 0; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      width: 3.5in; height: 2in; overflow: hidden;
+      width: 6in; height: 4in; overflow: hidden;
       font-family: Arial, Helvetica, sans-serif;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
+      background: #fff;
     }
-    @media print { body { width: 3.5in; height: 2in; } }
+    @media print { body { width: 6in; height: 4in; } }
   </style>
 </head>
 <body onload="setTimeout(function(){window.print();},${printDelayMs})">
-  <div style="width:3.5in;height:2in;display:flex;flex-direction:column;border:1px solid #000;">
+  <div style="width:6in;height:4in;display:flex;flex-direction:column;border:4px solid #000;background:#fff;color:#000;position:relative;overflow:hidden;">
 
-    <!-- Header bar -->
-    <div style="background:#000;color:#fff;padding:3px 10px;font-size:8pt;font-weight:900;letter-spacing:.14em;flex-shrink:0;">
-      KARRY KRAZE
+    <!-- Header -->
+    <div style="height:.72in;display:flex;align-items:center;justify-content:space-between;gap:.18in;padding:.13in .2in .1in .2in;border-bottom:4px solid #000;background:#fff;">
+      <div style="display:flex;align-items:center;gap:.12in;min-width:0;">
+        <span style="display:inline-flex;align-items:center;justify-content:center;border:4px solid #000;background:#fff;padding:.055in .09in;height:.47in;">
+          <img src="/imgs/brand/logo-bwp.png" alt="Karry Kraze" style="display:block;height:.31in;width:auto;filter:grayscale(1) contrast(2.4);">
+        </span>
+        <div style="font-size:8.5pt;font-weight:900;text-transform:uppercase;letter-spacing:.16em;line-height:1.15;color:#111;">
+          Thank-you<br>label
+        </div>
+      </div>
+      <div style="background:#000;color:#fff;padding:.07in .11in;font-size:8.5pt;font-weight:900;text-transform:uppercase;letter-spacing:.14em;white-space:nowrap;">
+        Scan for savings
+      </div>
     </div>
 
     <!-- Body -->
-    <div style="flex:1;display:flex;flex-direction:row;align-items:center;padding:6px 10px;gap:9px;min-height:0;">
+    <div style="flex:1;display:grid;grid-template-columns:1fr 2.05in;gap:.2in;align-items:stretch;padding:.2in .22in .16in .22in;min-height:0;">
 
       <!-- Text column -->
-      <div style="flex:1;min-width:0;">
-        <div style="font-size:11pt;font-weight:900;line-height:1.15;letter-spacing:-.01em;">${headline}</div>
-        <div style="font-size:7pt;margin-top:5px;line-height:1.5;color:#111;">
-          ${esc(cta1)}<br>${esc(cta2)}
+      <div style="min-width:0;display:flex;flex-direction:column;justify-content:space-between;gap:.13in;">
+        <div>
+          <div style="font-size:27pt;font-weight:900;line-height:.96;letter-spacing:-.045em;text-transform:uppercase;">${headline}</div>
+          <div style="width:.78in;height:5px;background:#000;margin:.14in 0 .12in 0;"></div>
+          <div style="font-size:15pt;font-weight:900;line-height:1.08;letter-spacing:-.015em;color:#111;">
+            ${esc(cta1)}
+          </div>
+          <div style="font-size:11pt;margin-top:.06in;line-height:1.28;color:#444;font-weight:700;">
+            ${esc(cta2)}
+          </div>
         </div>
-        <div style="margin-top:7px;font-size:6.5pt;font-weight:700;letter-spacing:.06em;background:#f0f0f0;padding:2px 5px;display:inline-block;border:1px solid #ccc;">
-          ${esc(coupon)}
+
+        <div style="border:3px solid #000;background:#fff;padding:.1in .13in;display:inline-block;align-self:flex-start;box-shadow:.06in .06in 0 #222;">
+          <div style="font-size:7.5pt;font-weight:900;text-transform:uppercase;letter-spacing:.17em;color:#444;margin-bottom:.03in;">Use code</div>
+          <div style="font-size:23pt;font-weight:900;letter-spacing:.04em;line-height:.95;">${esc(coupon)}</div>
         </div>
       </div>
 
       <!-- QR column -->
-      <div style="flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:2px;">
-        ${qrBlock}
-        <div style="font-size:5pt;color:#666;text-align:center;line-height:1.2;">scan me</div>
+      <div style="border:3px solid #000;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:.12in .09in;min-width:0;">
+        <div style="font-size:9pt;font-weight:900;text-transform:uppercase;letter-spacing:.18em;margin-bottom:.08in;">Scan me</div>
+        <div style="border:3px solid #000;padding:.055in;background:#fff;">
+          ${qrBlock}
+        </div>
+        <div style="font-size:8pt;color:#444;text-align:center;line-height:1.2;margin-top:.08in;font-weight:800;">
+          karrykraze.com
+        </div>
       </div>
 
     </div>
 
     <!-- Footer -->
-    <div style="border-top:1px solid #d1d5db;padding:2px 10px;font-size:6pt;color:#9ca3af;text-align:right;flex-shrink:0;">
-      karrykraze.com
+    <div style="height:.34in;border-top:4px solid #000;background:#000;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 .22in;font-size:8pt;font-weight:900;text-transform:uppercase;letter-spacing:.14em;">
+      <span>Thank you for supporting Karry Kraze</span>
+      <span>${labelType === "review_cta" ? "Review reward" : "Direct order reward"}</span>
     </div>
 
   </div>
