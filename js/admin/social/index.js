@@ -1,4 +1,4 @@
-// /js/admin/social/index.js
+﻿// /js/admin/social/index.js
 // Main orchestrator for Social Media Admin
 // Modules: uploadModal, carouselBuilder, autoQueue, autopilot, imagePool, platformSettings, postDetail, analytics
 
@@ -23,7 +23,7 @@ import {
 import { initCalendar, getCalendarDateRange } from "./calendar.js";
 import { clearTemplateCache } from "./captions.js";
 
-// ── Module imports ──
+// â”€â”€ Module imports â”€â”€
 import { initUploadModal, setupUploadModal, openUploadModalWithAsset, setScoreFunctions } from "./uploadModal.js";
 import { initCarouselBuilder, setupCarouselBuilder, loadRecentCarousels, calculateEngagementScore, updateEngagementScoreUI } from "./carouselBuilder.js";
 import { initAutoQueue, setupAutoQueue, loadAutoQueueStats } from "./autoQueue.js";
@@ -32,7 +32,9 @@ import { initImagePool, setupImagePool, loadAssets } from "./imagePool.js";
 import { initPlatformSettings, setupSettingsModal, applySettings } from "./platformSettings.js";
 import { initPostDetail, setupPostDetailModal, openPostDetail } from "./postDetail.js";
 import { initAnalytics, setupAnalytics, loadAnalytics, initPostAnalyticsModal, initLearningInsights } from "./analytics.js";
-import { formatScheduleDate, formatScheduleTime } from "./utils/dates.js";
+import { initPostsContext } from "./features/posts/postsContext.js";
+import { setupQueueFilter } from "./features/posts/queueFilters.js";
+import { loadQueuePosts } from "./features/posts/queueList.js";
 
 // ============================================
 // State
@@ -502,6 +504,8 @@ async function init() {
     // Wire modules with dependencies (before data loading so callbacks are ready)
     const baseDeps = { state, els, showToast, getClient };
 
+    initPostsContext({ state, els });
+
     initUploadModal({ ...baseDeps, loadStats, switchTab, loadQueuePosts, loadCalendarPosts, populateBoardDropdown });
     setScoreFunctions({ calculateEngagementScore, updateEngagementScoreUI });
 
@@ -701,71 +705,6 @@ function setupCalendar() {
 }
 
 // ============================================
-// Queue
-// ============================================
-
-function setupQueueFilter() {
-  els.queueFilter?.addEventListener("change", loadQueuePosts);
-}
-
-async function loadQueuePosts() {
-  const platform = els.queueFilter.value;
-  const filters = { status: "queued" };
-  if (platform !== "all") filters.platform = platform;
-  const posts = await fetchPosts(filters);
-  renderQueueList(posts);
-}
-
-function renderQueueList(posts) {
-  if (!posts.length) {
-    els.queueList.innerHTML = `
-      <div class="p-8 text-center text-gray-400">
-        <p>No scheduled posts yet</p>
-        <button class="mt-2 text-sm text-black font-medium hover:underline" onclick="document.getElementById('btnUpload').click()">
-          Create your first post \u2192
-        </button>
-      </div>
-    `;
-    return;
-  }
-
-  els.queueList.innerHTML = posts.map(post => {
-    const imageUrl = post.variation?.image_path
-      ? getPublicUrl(post.variation.image_path)
-      : "/imgs/placeholder.jpg";
-
-    const scheduledDate = new Date(post.scheduled_for);
-    const dateStr = formatScheduleDate(scheduledDate);
-    const timeStr = formatScheduleTime(scheduledDate);
-
-    return `
-      <div class="queue-item cursor-pointer" data-post-id="${post.id}">
-        <img src="${imageUrl}" alt="" class="queue-item-image">
-        <div class="queue-item-content">
-          <div class="queue-item-caption">${post.caption || "No caption"}</div>
-          <div class="queue-item-meta">
-            <span class="badge badge-${post.platform}">${post.platform === "instagram" ? "\ud83d\udcf8" : "\ud83d\udccc"} ${post.platform}</span>
-            <span class="ml-2">${dateStr} at ${timeStr}</span>
-          </div>
-        </div>
-        <div class="flex items-center gap-2">
-          <span class="badge badge-${post.status}">${post.status}</span>
-        </div>
-      </div>
-    `;
-  }).join("");
-
-  // Add click handlers
-  els.queueList.querySelectorAll(".queue-item").forEach(el => {
-    el.addEventListener("click", () => {
-      const postId = el.dataset.postId;
-      const post = posts.find(p => p.id === postId);
-      if (post) openPostDetail(post);
-    });
-  });
-}
-
-// ============================================
 // Templates
 // ============================================
 
@@ -903,7 +842,7 @@ function setupBoards() {
       alert("Failed to sync boards: " + err.message);
     } finally {
       btn.disabled = false;
-      btn.textContent = "📌 Auto-Sync Boards";
+      btn.textContent = "ðŸ“Œ Auto-Sync Boards";
     }
   });
 }
