@@ -5,9 +5,9 @@
 // Amazon      → "none"        : deferred — will use channel_cta once Amazon flow is verified
 // Unknown     → "none"        : no button shown
 //
-// Discount codes shown on labels:
-//   THANKYOU15 (KK review CTA) — must exist in coupons table before printing
-//   DIRECT15   (eBay channel CTA) — must exist in coupons table before printing
+// Discount handling:
+//   KK review CTA: reward is unlocked after review; no code is printed.
+//   eBay channel CTA: QR routes to coupon landing page; no code is printed.
 //
 // See: docs/audit/implementation/ctaLabel/001_phase2_implementation_plan.md
 import { getOrderSource, esc } from "./dom.js";
@@ -65,7 +65,7 @@ export function determineLabelType(source) {
  * Build the QR target URL for the given label type.
  * KK review CTA: deep-links to leave-review.html with kk_order_id pre-filled.
  *   leave-review.html reads ?oid= to prefill the order ID field (same pattern as my-orders).
- * eBay channel CTA: points to karrykraze.com homepage with UTM attribution.
+ * eBay channel CTA: points to the direct-offer coupon page with UTM attribution.
  *
  * @param {object} order  - order row (v_order_summary_plus shape)
  * @param {string} source - "kk" | "ebay" | "amazon" | "unknown"
@@ -81,7 +81,7 @@ export function buildQrTarget(order, source, labelType) {
     return `https://karrykraze.com/pages/leave-review.html?oid=${oid}&utm_source=packing_label&utm_medium=qr&utm_campaign=review_cta`;
   }
   if (labelType === "channel_cta") {
-    return "https://karrykraze.com/?utm_source=packing_label&utm_medium=qr&utm_campaign=ebay_direct_cta";
+    return "https://karrykraze.com/pages/coupon.html?promo=direct15&utm_source=packing_label&utm_medium=qr&utm_campaign=ebay_direct_cta";
   }
   return "https://karrykraze.com";
 }
@@ -119,10 +119,10 @@ export function buildLabelHtml(order, labelType, options = {}) {
   } else {
     headline  = `Like your<br>order?`;
     cta1      = "Scan to shop direct next time";
-    cta2      = "and get 15% off your first website order.";
-    rewardLabel = "USE CODE";
-    rewardLines = ["DIRECT15"];
-    rewardLineStyle = "font-size:24pt;font-weight:900;letter-spacing:.035em;line-height:.95;";
+    cta2      = "and unlock 15% off your first website order.";
+    rewardLabel = "UNLOCK YOUR DEAL";
+    rewardLines = ["SCAN FOR 15% OFF"];
+    rewardLineStyle = "font-size:12pt;font-weight:900;letter-spacing:.035em;line-height:1;";
     footerLeft = "Shop direct with Karry Kraze";
     footerRight = "Save more";
   }
