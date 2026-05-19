@@ -11,9 +11,6 @@ import {
   fetchPosts,
   fetchSettings,
   fetchStats,
-  createBoard,
-  updateBoard,
-  deleteBoard,
   getPublicUrl
 } from "./api.js";
 import { initCalendar, getCalendarDateRange } from "./calendar.js";
@@ -39,6 +36,13 @@ import { setupPlatformConnectButtons, checkConnectionStatus } from "./features/p
 import { registerPlatformTestActions } from "./features/platforms/platformTestActions.js";
 import { postToInstagram, postToFacebook, postToPinterest } from "./features/platforms/platformPosting.js";
 import { initTemplates, setupTemplates, loadTemplates } from "./features/templates/templatesController.js";
+import {
+  initBoards,
+  setupBoards,
+  loadBoards,
+  renderBoardList,
+  populateBoardDropdown,
+} from "./features/boards/boardsController.js";
 
 // ============================================
 // State
@@ -137,42 +141,6 @@ initPlatformsContext({
 registerOAuthRedirectHandlers();
 registerPlatformTestActions();
 
-// ============================================
-// Pinterest Boards
-// ============================================
-
-async function fetchPinterestBoards() {
-  try {
-    const resp = await fetch(`${SUPABASE_FUNCTIONS_URL}/pinterest-boards`, {
-      method: "GET",
-      headers: { "Authorization": `Bearer ${SUPABASE_ANON_KEY}` }
-    });
-    const data = await resp.json();
-    if (data.success) return data.boards;
-    console.error("Failed to fetch Pinterest boards:", data.error, data.debug);
-    return [];
-  } catch (err) {
-    console.error("Pinterest boards fetch error:", err);
-    return [];
-  }
-}
-
-async function populateBoardDropdown(selectElement) {
-  if (!selectElement) return;
-  selectElement.innerHTML = '<option value="">Loading boards...</option>';
-  const boards = await fetchPinterestBoards();
-  if (boards.length === 0) {
-    selectElement.innerHTML = '<option value="">No boards found - Connect Pinterest first</option>';
-    return;
-  }
-  selectElement.innerHTML = '<option value="">Select a board...</option>';
-  boards.forEach(board => {
-    const option = document.createElement("option");
-    option.value = board.id;
-    option.textContent = board.name;
-    selectElement.appendChild(option);
-  });
-}
 
 // ============================================
 // DOM Elements
@@ -387,6 +355,13 @@ async function init() {
 
     initPostsContext({ state, els });
     initTemplates({ state, els });
+    initBoards({
+      state,
+      els,
+      getSupabaseClient,
+      SUPABASE_FUNCTIONS_URL,
+      SUPABASE_ANON_KEY,
+    });
 
     initUploadModal({ ...baseDeps, loadStats, switchTab, loadQueuePosts, loadCalendarPosts, populateBoardDropdown });
     setScoreFunctions({ calculateEngagementScore, updateEngagementScoreUI });
@@ -449,20 +424,6 @@ async function loadCategories() {
   state.categories = await fetchCategories();
 }
 
-async function loadBoards() {
-  const client = getSupabaseClient();
-  const { data: pinData } = await client
-    .from("social_settings").select("setting_value")
-    .eq("setting_key", "pinterest_connected").single();
-
-  if (!pinData?.setting_value?.connected) {
-    state.boards = [];
-    return;
-  }
-
-  state.boards = await fetchPinterestBoards();
-  await populateBoardSelect();
-}
 
 async function loadSettings() {
   state.settings = await fetchSettings();
@@ -502,120 +463,6 @@ function setupCalendar() {
   });
 }
 
-// ============================================
-// Boards
-// ============================================
-
-function setupBoards() {
-  els.btnAddBoard?.addEventListener("click", () => {
-    const name = prompt("Enter board name:");
-    if (name) addBoard(name);
-  });
-
-  document.getElementById("btnSyncBoards")?.addEventListener("click", async () => {
-    const btn = document.getElementById("btnSyncBoards");
-    btn.disabled = true;
-    btn.textContent = "Syncing...";
-    try {
-      const client = getSupabaseClient();
-      const { data: { session } } = await client.auth.getSession();
-      const resp = await fetch(`https://yxdzvzscufkvewecvagq.supabase.co/functions/v1/sync-pinterest-boards`, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${session?.access_token}`,
-          "Content-Type": "application/json",
-        },
-      });
-      const result = await resp.json();
-      if (!resp.ok || !result.success) throw new Error(result.error || "Sync failed");
-      const msg = `Boards synced!\n\nMatched: ${result.matched?.length || 0}\nCreated: ${result.created?.length || 0}\nTotal mapped: ${result.total_mapped || 0}`;
-      alert(msg);
-      await loadBoards();
-      renderBoardList();
-    } catch (err) {
-      console.error("Board sync error:", err);
-      alert("Failed to sync boards: " + err.message);
-    } finally {
-      btn.disabled = false;
-      btn.textContent = "ðŸ“Œ Auto-Sync Boards";
-    }
-  });
-}
-
-async function addBoard(name) {
-  try {
-    await createBoard({ name, is_default: state.boards.length === 0 });
-    await loadBoards();
-    renderBoardList();
-  } catch (err) {
-    console.error("Add board error:", err);
-    alert("Failed to add board");
-  }
-}
-
-function renderBoardList() {
-  if (!state.boards.length) {
-    els.boardList.innerHTML = `
-      <div class="p-8 text-center text-gray-400">
-        <p>No boards configured yet</p>
-        <p class="text-xs mt-1">Add boards to organize your Pinterest pins by category</p>
-      </div>
-    `;
-    return;
-  }
-
-  els.boardList.innerHTML = state.boards.map(board => `
-    <div class="board-item" data-board-id="${board.id}">
-      <div class="flex-1">
-        <div class="font-medium">${board.name}</div>
-        <div class="text-xs text-gray-400">
-          ${board.category?.name ? `Linked to: ${board.category.name}` : "No category linked"}
-          ${board.is_default ? " \u2022 Default board" : ""}
-        </div>
-      </div>
-      <div class="flex items-center gap-2">
-        <select class="board-category-select text-sm border rounded px-2 py-1" data-board-id="${board.id}">
-          <option value="">No category</option>
-          ${state.categories.map(c => `
-            <option value="${c.id}" ${board.category_id === c.id ? "selected" : ""}>${c.name}</option>
-          `).join("")}
-        </select>
-        <button class="btn-delete-board p-2 hover:bg-red-50 rounded text-red-500" title="Delete">\ud83d\uddd1\ufe0f</button>
-      </div>
-    </div>
-  `).join("");
-
-  // Category select handlers
-  els.boardList.querySelectorAll(".board-category-select").forEach(select => {
-    select.addEventListener("change", async () => {
-      const boardId = select.dataset.boardId;
-      const categoryId = select.value || null;
-      try {
-        await updateBoard(boardId, { category_id: categoryId });
-        await loadBoards();
-      } catch (err) {
-        console.error("Update board error:", err);
-      }
-    });
-  });
-
-  // Delete handlers
-  els.boardList.querySelectorAll(".btn-delete-board").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      const boardId = btn.closest(".board-item").dataset.boardId;
-      if (confirm("Delete this board?")) {
-        try {
-          await deleteBoard(boardId);
-          await loadBoards();
-          renderBoardList();
-        } catch (err) {
-          console.error("Delete board error:", err);
-          alert("Failed to delete board");
-        }
-      }
-    });
-  });
-}
 
 // ============================================
 // Helpers
@@ -628,9 +475,6 @@ function populateProductSelect() {
   `;
 }
 
-async function populateBoardSelect() {
-  await populateBoardDropdown(els.boardSelect);
-}
 
 // ============================================
 // Start

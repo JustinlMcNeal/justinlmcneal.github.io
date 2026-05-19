@@ -63,6 +63,7 @@ This refactor audit defines a **behavior-preserving** path to smaller, feature-b
 | 011 | [011_phase4f2_platforms_oauth_split.md](./011_phase4f2_platforms_oauth_split.md) | Phase 4f-2 platforms / OAuth |
 | 012 | [012_phase4f3_platform_posting_split.md](./012_phase4f3_platform_posting_split.md) | Phase 4f-3 platform posting |
 | 013 | [013_phase4f4_templates_split.md](./013_phase4f4_templates_split.md) | Phase 4f-4 templates |
+| 014 | [014_phase4f5_boards_split.md](./014_phase4f5_boards_split.md) | Phase 4f-5 boards |
 
 ---
 
@@ -84,7 +85,9 @@ This refactor audit defines a **behavior-preserving** path to smaller, feature-b
 
 **Phase 4f-4** — Templates extraction (done — see `013`)
 
-**Next:** Boards extraction from `index.js`.
+**Phase 4f-5** — Boards extraction (done — see `014`)
+
+**Next:** `index.js` slim-down wrap-up / optional remaining helpers.
 
 Do **not** start with `postLearning.js` or `social.html` until analytics and index slim-down are stable.
 
