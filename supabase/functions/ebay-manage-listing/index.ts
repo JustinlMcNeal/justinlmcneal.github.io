@@ -234,10 +234,14 @@ async function diagnoseGroupOfferMapping(
   const lookupSkus = groupLookup.skus;
   const grouped = await getOffersBySkus(accessToken, lookupSkus);
   const groupKeyed = await getOffersByInventoryItemGroupKey(accessToken, inventoryItemGroupKey);
-  const mergedOffers = mergeOffersByIdentity([
-    ...grouped.offers,
-    ...(groupKeyed.ok ? groupKeyed.offers : []),
-  ]);
+  const mergedOffers = await hydrateOfferSkuFields(
+    accessToken,
+    mergeOffersByIdentity([
+      ...grouped.offers,
+      ...(groupKeyed.ok ? groupKeyed.offers : []),
+    ]),
+    lookupSkus,
+  );
   const mappableOffers = mergedOffers.filter(isMappableGroupChildOffer);
   const foundOfferSkus = [...new Set(mappableOffers.map((offer) => typeof offer.sku === "string" ? offer.sku.trim() : "").filter(Boolean))];
   const activeListingIds = [...new Set([
@@ -372,6 +376,30 @@ function mergeOffersByIdentity(offers: Record<string, unknown>[]): Record<string
     byKey.set(key, offer);
   }
   return [...byKey.values()];
+}
+
+async function hydrateOfferSkuFields(
+  accessToken: string,
+  offers: Record<string, unknown>[],
+  lookupSkus: string[],
+): Promise<Record<string, unknown>[]> {
+  const rows = offers.map((offer) => ({ ...offer }));
+  for (const offer of rows) {
+    if (typeof offer.sku === "string" && offer.sku.trim()) continue;
+    const offerId = offerIdValue(offer);
+    if (!offerId) continue;
+    const detail = await ebayFetch(accessToken, "GET", `${INV_API}/offer/${offerId}`);
+    if (detail.ok && isRecord(detail.data) && typeof detail.data.sku === "string" && detail.data.sku.trim()) {
+      offer.sku = detail.data.sku.trim();
+    }
+  }
+  const withoutSku = rows.filter((offer) => offerIdValue(offer) && !(typeof offer.sku === "string" && offer.sku.trim()));
+  if (withoutSku.length && withoutSku.length === lookupSkus.length) {
+    withoutSku.forEach((offer, index) => {
+      offer.sku = lookupSkus[index];
+    });
+  }
+  return rows;
 }
 
 async function getOffersByInventoryItemGroupKey(

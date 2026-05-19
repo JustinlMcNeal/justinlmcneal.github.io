@@ -416,6 +416,7 @@ const editCtx = createEditModalContext({
     editVariantQtyOverrides   = state.editVariantQtyOverrides;
     editAspects               = state.currentAspects;
     editSalesMetrics          = state.editSalesMetrics;
+    editOfferLookupCache      = state.editOfferLookupCache;
   },
 });
 window.openEdit = editCtx.openEdit;
@@ -1094,8 +1095,9 @@ document.getElementById("btnSaveEdit").addEventListener("click", async () => {
       const groupKey   = editProduct.ebay_item_group_key;
       const groupData  = editProduct._groupData || {};
       const variantSKUs = groupData.variantSKUs || [];
+      const offerCache = editCtx.getEditOfferLookupCache();
       const unresolvedVariantOffers = variantSKUs.filter(vSku => {
-        const cached = editOfferLookupCache.get(vSku);
+        const cached = offerCache.get(vSku);
         return !cached?.success || !(cached.offers || [])[0]?.offerId;
       });
       if (editProduct._offerMappingsUnresolved || unresolvedVariantOffers.length) {
@@ -1150,7 +1152,7 @@ document.getElementById("btnSaveEdit").addEventListener("click", async () => {
       const offerLookupFailures = [];
       const variantOfferRows = [];
       for (const vSku of variantSKUs) {
-        const offersResp = editOfferLookupCache.get(vSku) || { success: false, offers: [], cached: true };
+        const offersResp = offerCache.get(vSku) || { success: false, offers: [], cached: true };
         if (!offersResp.success) {
           offerLookupFailures.push(vSku);
           continue;

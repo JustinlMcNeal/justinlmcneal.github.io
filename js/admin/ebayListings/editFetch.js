@@ -148,6 +148,34 @@ function groupOfferLookupRetryable(result) {
   return !result?.success && GROUP_OFFER_RETRY_REASONS.has(reason);
 }
 
+/**
+ * Populate per-variant SKU cache entries from a successful group offer lookup.
+ * eBay group offer rows sometimes omit sku; match by explicit sku or variantSKUs order.
+ */
+export function fanOutGroupOffersToSkuCache(cache, normalized, variantSKUs = []) {
+  if (!normalized?.success) return;
+  const offers = normalized.offers || [];
+  const bySku = new Map();
+  for (const offer of offers) {
+    const sku = typeof offer?.sku === "string" ? offer.sku.trim() : "";
+    if (sku) bySku.set(sku, offer);
+  }
+  const targetSkus = normalizeSkuList(variantSKUs).length
+    ? normalizeSkuList(variantSKUs)
+    : [...bySku.keys()];
+  for (let i = 0; i < targetSkus.length; i++) {
+    const sku = targetSkus[i];
+    const offer = bySku.get(sku) || (offers.length === targetSkus.length ? offers[i] : null);
+    if (!offer?.offerId) continue;
+    cache.set(sku, { ...normalized, success: true, offers: [offer], cached: false, cacheKey: sku });
+  }
+}
+
+function normalizeSkuList(value) {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.map(s => typeof s === "string" ? s.trim() : "").filter(Boolean))];
+}
+
 export async function getOffersByGroupForEdit(cache, inventoryItemGroupKey, variantSKUs = [], context = "edit", localExpectedSkus = [], productCode = "") {
   const key = String(inventoryItemGroupKey || "").trim();
   if (!key) return { success: false, offers: [], error: "inventoryItemGroupKey is required", cached: false };
@@ -167,10 +195,7 @@ export async function getOffersByGroupForEdit(cache, inventoryItemGroupKey, vari
   cache.set(cacheKey, normalized);
 
   if (normalized.success) {
-    for (const offer of normalized.offers || []) {
-      const offerSku = typeof offer?.sku === "string" ? offer.sku.trim() : "";
-      if (offerSku) cache.set(offerSku, { ...normalized, offers: [offer], cached: false, cacheKey: offerSku });
-    }
+    fanOutGroupOffersToSkuCache(cache, normalized, variantSKUs);
   } else {
     const log = normalized.state === "offer_mapping_unresolved" ? console.info : console.warn;
     log(`[edit:${context}] group get_offers diagnostic for ${key}; cached result to avoid repeated requests`, normalized);
