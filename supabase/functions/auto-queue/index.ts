@@ -1117,6 +1117,12 @@ Deno.serve(async (req) => {
 
     const scoringWeights = resolveScoringWeights(dbSettings);
 
+    const imageAssetPolicy =
+      dbSettings?.image_asset_policy === "legacy_pipeline" ||
+      dbSettings?.allow_catalog_fallback === true
+        ? "legacy_pipeline"
+        : "image_pool_only";
+
     // Settings object used by caption/timing logic (body overrides DB for this run)
     const settings = {
       ...(dbSettings || {}),
@@ -1480,7 +1486,7 @@ Deno.serve(async (req) => {
     // Only "ready" assets qualify for autopilot — both product_id and shot_type required
     const { data: poolAssets } = await supabase
       .from("social_assets")
-      .select("id, product_id, original_image_path, shot_type, used_count, last_used_at, quality_score")
+      .select("id, product_id, original_image_path, shot_type, used_count, last_used_at, quality_score, content_type")
       .eq("is_active", true)
       .not("product_id", "is", null)
       .not("shot_type", "is", null)
@@ -1498,59 +1504,65 @@ Deno.serve(async (req) => {
     const totalTaggedAssets = (poolAssets || []).length;
     console.log(`[auto-queue] Image Pool: ${totalTaggedAssets} ready assets (product+shot_type) across ${Object.keys(poolMap).length} products`);
 
-    // ── IMAGE PIPELINE: Load blacklist + approved AI images + gallery images ──
+    // ── IMAGE PIPELINE (legacy fallback only) ──
+    const useLegacyImageFallback = imageAssetPolicy === "legacy_pipeline";
 
-    // Load blacklisted images
-    const { data: blacklistRows } = await supabase
-      .from("image_blacklist")
-      .select("product_id, image_url")
-      .in("product_id", productIds);
-    
     const blacklistMap: Record<string, Set<string>> = {};
-    (blacklistRows || []).forEach(row => {
-      if (!blacklistMap[row.product_id]) blacklistMap[row.product_id] = new Set();
-      blacklistMap[row.product_id].add(row.image_url);
-    });
-
-    // Load approved AI-generated images (prefer most recent)
-    const { data: aiImageRows } = await supabase
-      .from("social_generated_images")
-      .select("id, product_id, public_url, style")
-      .in("product_id", productIds)
-      .eq("status", "approved")
-      .order("created_at", { ascending: false });
-    
     const aiImageMap: Record<string, any[]> = {};
-    (aiImageRows || []).forEach(row => {
-      if (!aiImageMap[row.product_id]) aiImageMap[row.product_id] = [];
-      aiImageMap[row.product_id].push(row);
-    });
-
-    // Load gallery images as fallback variety
-    const { data: galleryRows } = await supabase
-      .from("product_gallery_images")
-      .select("product_id, url")
-      .in("product_id", productIds)
-      .order("position", { ascending: true });
-    
     const galleryMap: Record<string, string[]> = {};
-    (galleryRows || []).forEach(row => {
-      if (!galleryMap[row.product_id]) galleryMap[row.product_id] = [];
-      galleryMap[row.product_id].push(row.url);
-    });
-
-    // Load image pipeline settings
-    const { data: pipelineRow } = await supabase
-      .from("social_settings")
-      .select("setting_value")
-      .eq("setting_key", "image_pipeline")
-      .single();
-    
-    const pipelineSettings = pipelineRow?.setting_value || {
-      enabled: false, auto_generate: false, require_review: true, fallback_to_catalog: true
+    let pipelineSettings: Record<string, unknown> = {
+      enabled: false, auto_generate: false, require_review: true, fallback_to_catalog: true,
     };
 
-    console.log(`[auto-queue] Image pipeline enabled=${pipelineSettings.enabled}, blacklisted=${blacklistRows?.length || 0} images, AI approved=${aiImageRows?.length || 0} images`);
+    if (useLegacyImageFallback) {
+      const { data: blacklistRows } = await supabase
+        .from("image_blacklist")
+        .select("product_id, image_url")
+        .in("product_id", productIds);
+
+      (blacklistRows || []).forEach(row => {
+        if (!blacklistMap[row.product_id]) blacklistMap[row.product_id] = new Set();
+        blacklistMap[row.product_id].add(row.image_url);
+      });
+
+      const { data: aiImageRows } = await supabase
+        .from("social_generated_images")
+        .select("id, product_id, public_url, style")
+        .in("product_id", productIds)
+        .eq("status", "approved")
+        .order("created_at", { ascending: false });
+
+      (aiImageRows || []).forEach(row => {
+        if (!aiImageMap[row.product_id]) aiImageMap[row.product_id] = [];
+        aiImageMap[row.product_id].push(row);
+      });
+
+      const { data: galleryRows } = await supabase
+        .from("product_gallery_images")
+        .select("product_id, url")
+        .in("product_id", productIds)
+        .order("position", { ascending: true });
+
+      (galleryRows || []).forEach(row => {
+        if (!galleryMap[row.product_id]) galleryMap[row.product_id] = [];
+        galleryMap[row.product_id].push(row.url);
+      });
+
+      const { data: pipelineRow } = await supabase
+        .from("social_settings")
+        .select("setting_value")
+        .eq("setting_key", "image_pipeline")
+        .single();
+
+      pipelineSettings = (pipelineRow?.setting_value as Record<string, unknown>) || pipelineSettings;
+
+      console.log(
+        `[auto-queue] Legacy image pipeline: enabled=${pipelineSettings.enabled}, ` +
+        `AI approved=${Object.values(aiImageMap).flat().length} images`
+      );
+    } else {
+      console.log(`[auto-queue] Image asset policy: ${imageAssetPolicy} (catalog/gallery/AI fallback disabled)`);
+    }
 
     // ── Helper: resolve storage path to full public URL ──
     function resolveStorageUrl(path: string): string {
@@ -1582,7 +1594,11 @@ Deno.serve(async (req) => {
         };
       }
 
-      // Priority 2: AI-generated images
+      // Priority 2: AI-generated images (legacy pipeline only)
+      if (imageAssetPolicy !== "legacy_pipeline") {
+        return { isCarousel: false, carouselUrls: [], carouselSource: "" };
+      }
+
       const aiImages = aiImageMap[productId];
       if (aiImages && aiImages.length >= 3) {
         if (Math.random() > 0.5) return { isCarousel: false, carouselUrls: [], carouselSource: "" };
@@ -1600,12 +1616,14 @@ Deno.serve(async (req) => {
 
     // ── Helper: resolve best image for a product ──
     function resolveImage(productId: string, catalogUrl: string): {
-      imageUrl: string;
+      imageUrl: string | null;
       imageSource: string;
       generatedImageId: string | null;
       needsGeneration: boolean;
       poolAssetId: string | null;
       imageReuseGuard: string;
+      assetContentType: string | null;
+      noPoolAsset?: boolean;
     } {
       const blacklisted = blacklistMap[productId] || new Set();
       const recentUrls = recentImagesByProduct[productId] || new Set();
@@ -1627,10 +1645,24 @@ Deno.serve(async (req) => {
           needsGeneration: false,
           poolAssetId: pick.id,
           imageReuseGuard: freshPool.length ? "passed" : "reused_no_alternative",
+          assetContentType: pick.content_type || "product",
         };
       }
 
-      // Priority 1: Approved AI-generated image (ALWAYS preferred for social)
+      if (imageAssetPolicy === "image_pool_only") {
+        return {
+          imageUrl: null,
+          imageSource: "none",
+          generatedImageId: null,
+          needsGeneration: false,
+          poolAssetId: null,
+          imageReuseGuard: "no_pool_asset",
+          assetContentType: null,
+          noPoolAsset: true,
+        };
+      }
+
+      // Priority 1: Approved AI-generated image (legacy pipeline)
       const aiImages = aiImageMap[productId];
       if (aiImages?.length) {
         const freshAi = aiImages.filter((img: any) => !isRecentlyUsed(img.public_url));
@@ -1644,6 +1676,7 @@ Deno.serve(async (req) => {
           needsGeneration: false,
           poolAssetId: null,
           imageReuseGuard: freshAi.length ? "passed" : "reused_no_alternative",
+          assetContentType: null,
         };
       }
 
@@ -1661,6 +1694,7 @@ Deno.serve(async (req) => {
           needsGeneration: true,
           poolAssetId: null,
           imageReuseGuard: isRecentlyUsed(tempUrl) ? "reused_no_alternative" : "passed",
+          assetContentType: null,
         };
       }
 
@@ -1678,6 +1712,7 @@ Deno.serve(async (req) => {
           needsGeneration: false,
           poolAssetId: null,
           imageReuseGuard: freshGallery.length ? "passed" : "reused_no_alternative",
+          assetContentType: null,
         };
       }
 
@@ -1688,6 +1723,7 @@ Deno.serve(async (req) => {
         needsGeneration: false,
         poolAssetId: null,
         imageReuseGuard: isRecentlyUsed(catalogUrl) ? "reused_no_alternative" : "passed",
+        assetContentType: null,
       };
     }
 
@@ -1775,6 +1811,18 @@ Deno.serve(async (req) => {
 
     for (let i = 0; i < products.length; i++) {
       const product = products[i];
+
+      if (imageAssetPolicy === "image_pool_only" && !poolMap[product.id]?.length) {
+        skippedProducts.push({
+          product_id: product.id,
+          product_name: product.name,
+          skipped_reason: "no_approved_image_pool_asset",
+          asset_policy: imageAssetPolicy,
+        });
+        console.log(`[auto-queue] Skipping "${product.name}" — no approved Image Pool asset`);
+        continue;
+      }
+
       const eligibility: EligibilityAssessment = product._eligibility || assessProductEligibility(
         product,
         product._stockInfo || getStockInfo(product.id)
@@ -1916,9 +1964,14 @@ Deno.serve(async (req) => {
         : null;
       const chosenShotType = finalAsset?.shot_type || null;
 
-      // Sprint 2 guardrail: log when no pool images for this product
-      if (!poolMap[product.id]?.length) {
-        console.log(`[auto-queue] No Image Pool assets for "${product.name}" — using fallback`);
+      if (imageResult.noPoolAsset) {
+        skippedProducts.push({
+          product_id: product.id,
+          product_name: product.name,
+          skipped_reason: "no_approved_image_pool_asset",
+          asset_policy: imageAssetPolicy,
+        });
+        continue;
       }
 
       const pendingInfo = pendingByProduct.get(product.id);
@@ -1935,6 +1988,10 @@ Deno.serve(async (req) => {
       // Build selection metadata for observability
       const selectionMeta = {
         ...scoreMeta,
+        asset_policy: imageAssetPolicy,
+        image_source: imageResult.imageSource,
+        image_pool_asset_id: imageResult.poolAssetId,
+        asset_content_type: imageResult.assetContentType || finalAsset?.content_type || null,
         shot_type: chosenShotType,
         is_resurfaced: false,
         caption_source: captionSource,
@@ -2082,6 +2139,8 @@ Deno.serve(async (req) => {
               tone: freshTone,
               resurfaced_from: hit.id,
               selection_metadata: {
+                asset_policy: "resurface_exception",
+                image_source: "resurface",
                 priority_score: null,
                 score_breakdown: null,
                 shot_type: null,
@@ -2114,12 +2173,30 @@ Deno.serve(async (req) => {
       eligible_count: generatedPosts.length,
       products_selected: products.length,
       skipped_count: skippedProducts.length,
+      no_pool_asset_skipped: skippedProducts.filter(
+        (s) => s.skipped_reason === "no_approved_image_pool_asset"
+      ).length,
       pending_queue_blocked: skippedProducts.filter(
         (s) => s.skipped_reason === "pending_queue_post"
       ).length,
+      image_asset_policy: imageAssetPolicy,
+      pool_ready_assets: totalTaggedAssets,
+      pool_ready_products: Object.keys(poolMap).length,
       multi_platform_per_product: allowMultiPlatformPerProduct,
       platforms_per_product: platformsForBatch.length,
     };
+
+    const lastRunPayload = {
+      ran_at: new Date().toISOString(),
+      preview: !!preview,
+      generated: generatedPosts.length,
+      run_summary: runSummary,
+    };
+
+    await supabase.from("social_settings").upsert({
+      setting_key: "auto_queue_last_run",
+      setting_value: lastRunPayload,
+    }, { onConflict: "setting_key" });
 
     if (preview) {
       return new Response(JSON.stringify({
@@ -2138,6 +2215,7 @@ Deno.serve(async (req) => {
           allow_multi_platform_per_product: allowMultiPlatformPerProduct,
           scoring_weights: scoringWeights,
           scoring_version: SCORING_VERSION,
+          image_asset_policy: imageAssetPolicy,
         },
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
@@ -2368,12 +2446,6 @@ Deno.serve(async (req) => {
       const learnMsg = learnErr instanceof Error ? learnErr.message : String(learnErr);
       console.error("[auto-queue] Learning aggregation failed (non-fatal):", learnMsg);
     }
-
-    // Update autopilot_last_run setting
-    await supabase.from("social_settings").upsert({
-      setting_key: "autopilot_last_run",
-      setting_value: { ran_at: new Date().toISOString(), posts_created: createdPosts.length },
-    }, { onConflict: "setting_key" });
 
     return new Response(JSON.stringify({
       success: true,

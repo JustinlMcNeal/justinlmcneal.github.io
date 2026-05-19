@@ -136,6 +136,9 @@ Deno.serve(async (req) => {
           generated: result.generated,
           current_queue: currentCount + result.generated,
           target_queue: targetCount,
+          skipped_count: result.run_summary?.skipped_count ?? 0,
+          no_pool_asset_skipped: result.run_summary?.no_pool_asset_skipped ?? 0,
+          image_asset_policy: result.run_summary?.image_asset_policy ?? "image_pool_only",
         },
       });
 

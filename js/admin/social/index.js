@@ -76,6 +76,7 @@ const state = {
   autoQueuePreview: null,
   // Image Pool state
   poolFilter: "all",
+  poolContentType: "all",
   poolSearch: "",
   poolAssets: [],
   tagEditAsset: null,
@@ -166,6 +167,7 @@ const els = {
   // Queue
   queueList: $("queueList"),
   queueFilter: $("queueFilter"),
+  listStatusFilter: $("listStatusFilter"),
   // Assets / Image Pool
   assetGrid: $("assetGrid"),
   assetSearch: $("assetSearch"),
@@ -176,6 +178,18 @@ const els = {
   btnPoolUpload: $("btnPoolUpload"),
   btnBrowseCatalog: $("btnBrowseCatalog"),
   poolFilterBtns: $("poolFilterBtns"),
+  poolContentTypeFilter: $("poolContentTypeFilter"),
+  tagContentType: $("tagContentType"),
+  aqHealthCard: $("aqHealthCard"),
+  aqHealthAutopilot: $("aqHealthAutopilot"),
+  aqHealthLastAutopilot: $("aqHealthLastAutopilot"),
+  aqHealthLastAutoQueue: $("aqHealthLastAutoQueue"),
+  aqHealthQueued: $("aqHealthQueued"),
+  aqHealthScheduled: $("aqHealthScheduled"),
+  aqHealthPoolReady: $("aqHealthPoolReady"),
+  aqHealthPoolWarning: $("aqHealthPoolWarning"),
+  aqHealthPolicy: $("aqHealthPolicy"),
+  aqHealthPreviewNote: $("aqHealthPreviewNote"),
   // Catalog Browser modal
   catalogBrowseModal: $("catalogBrowseModal"),
   catalogBrowseClose: $("catalogBrowseClose"),

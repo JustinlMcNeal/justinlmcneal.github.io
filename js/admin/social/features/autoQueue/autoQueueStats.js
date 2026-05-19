@@ -2,6 +2,7 @@
 
 import { getSupabaseClient } from "../../../../shared/supabaseClient.js";
 import { getAutoQueueContext } from "./autoQueueContext.js";
+import { loadAutomationHealth } from "./autoQueueAutomationHealth.js";
 
 export async function loadAutoQueueStats() {
   const { els } = getAutoQueueContext();
@@ -41,4 +42,6 @@ export async function loadAutoQueueStats() {
   } catch (err) {
     console.error("Failed to load auto-queue stats:", err);
   }
+
+  await loadAutomationHealth();
 }

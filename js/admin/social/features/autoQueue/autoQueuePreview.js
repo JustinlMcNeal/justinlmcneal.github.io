@@ -20,6 +20,7 @@ function formatGuardLabel(code) {
     low_stock: "Low stock",
     no_variant_stock_data: "No stock data",
     pending_queue_post: "Already queued",
+    no_approved_image_pool_asset: "No approved Image Pool asset",
   };
   return map[code] || String(code || "").replace(/_/g, " ");
 }
@@ -110,6 +111,12 @@ function renderSelectionSummary(post) {
   }
   if (post.image_source) {
     lines.push(`Image: <span class="font-mono">${escapeHtml(post.image_source)}</span>`);
+  }
+  if (meta.asset_policy) {
+    lines.push(`Asset policy: <span class="font-mono">${escapeHtml(meta.asset_policy)}</span>`);
+  }
+  if (meta.asset_content_type) {
+    lines.push(`Content type: ${escapeHtml(meta.asset_content_type)}`);
   }
   if (meta.caption_source) {
     lines.push(`Caption: ${escapeHtml(meta.caption_source)} (${escapeHtml(meta.caption_status || "")}, score ${meta.caption_confidence ?? "—"})`);
@@ -214,11 +221,19 @@ function renderSkippedPreview(skipped, runSummary) {
   }).join("");
   const more = skipped.length > 8 ? `<li class="text-gray-400">+${skipped.length - 8} more</li>` : "";
   const summary = runSummary
-    ? ` · ${runSummary.pending_queue_blocked || 0} blocked by pending queue`
+    ? ` · ${runSummary.pending_queue_blocked || 0} blocked by pending queue` +
+      (runSummary.no_pool_asset_skipped
+        ? ` · ${runSummary.no_pool_asset_skipped} no Image Pool asset`
+        : "")
     : "";
+  const policyBanner =
+    runSummary?.image_asset_policy === "image_pool_only"
+      ? `<p class="text-[11px] text-amber-900 mt-1">Catalog/gallery fallback is disabled — only Image Pool assets are used for standard auto-posting.</p>`
+      : "";
   return `
     <div class="px-4 py-3 bg-amber-50 border-b border-amber-100 text-xs">
       <p class="font-medium text-amber-900">Skipped ${skipped.length} product(s)${summary}</p>
+      ${policyBanner}
       <ul class="mt-1 text-amber-800 list-disc list-inside space-y-0.5">${items}${more}</ul>
     </div>
   `;

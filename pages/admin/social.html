@@ -156,7 +156,7 @@
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div class="flex items-center gap-1 p-1 bg-gray-100 rounded-lg w-fit" role="tablist" aria-label="Calendar hub view">
                 <button type="button" data-calendar-hub-view="calendar" class="calendar-hub-view-btn active px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md bg-white shadow-sm text-black transition-colors">📅 Calendar</button>
-                <button type="button" data-calendar-hub-view="queue" class="calendar-hub-view-btn px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md text-gray-600 hover:text-black transition-colors">📋 Queue List</button>
+                <button type="button" data-calendar-hub-view="queue" class="calendar-hub-view-btn px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md text-gray-600 hover:text-black transition-colors">📋 List View</button>
               </div>
               <div id="calendarHubNav" class="flex items-center justify-between flex-1 sm:max-w-xs sm:ml-auto gap-2">
                 <button id="calPrev" type="button" class="p-2 hover:bg-gray-100 rounded-lg transition-colors" aria-label="Previous month">
@@ -171,9 +171,14 @@
                   </svg>
                 </button>
               </div>
-              <div id="calendarHubQueueHeader" class="hidden flex items-center justify-between flex-1 sm:max-w-md sm:ml-auto gap-3">
-                <h2 class="font-bold text-sm sm:text-base">Scheduled Posts</h2>
-                <select id="queueFilter" class="text-sm border rounded-lg px-3 py-2">
+              <div id="calendarHubQueueHeader" class="hidden flex flex-wrap items-center justify-end flex-1 sm:max-w-lg sm:ml-auto gap-2">
+                <h2 class="font-bold text-sm sm:text-base sr-only">Posts</h2>
+                <select id="listStatusFilter" class="text-sm border rounded-lg px-3 py-2" aria-label="Filter by status">
+                  <option value="all">All</option>
+                  <option value="upcoming">Upcoming</option>
+                  <option value="posted">Posted</option>
+                </select>
+                <select id="queueFilter" class="text-sm border rounded-lg px-3 py-2" aria-label="Filter by platform">
                   <option value="all">All Platforms</option>
                   <option value="instagram">Instagram</option>
                   <option value="pinterest">Pinterest</option>
@@ -202,8 +207,7 @@
           <div id="calendarHubQueueView" class="hidden">
             <div id="queueList" class="divide-y">
               <div class="p-8 text-center text-gray-400">
-                <p>No scheduled posts yet</p>
-                <button class="mt-2 text-sm text-black font-medium hover:underline" onclick="document.getElementById('btnUpload').click()">Create your first post →</button>
+                <p>No posts found for this filter.</p>
               </div>
             </div>
           </div>
@@ -218,6 +222,17 @@
             <h2 class="font-bold text-lg">Image Pool</h2>
             <div class="flex items-center gap-2 sm:ml-auto flex-wrap">
               <!-- Filter buttons -->
+              <select id="poolContentTypeFilter" class="text-sm border rounded-lg px-2 py-1.5" title="Content type">
+                <option value="all">All types</option>
+                <option value="product">Product</option>
+                <option value="testimonial">Testimonial</option>
+                <option value="promo">Promo</option>
+                <option value="lifestyle">Lifestyle</option>
+                <option value="brand">Brand</option>
+                <option value="educational">Educational</option>
+                <option value="ugc">UGC</option>
+                <option value="other">Other</option>
+              </select>
               <div id="poolFilterBtns" class="flex rounded-lg border overflow-hidden text-xs font-medium">
                 <button data-filter="all" class="pool-filter-btn px-3 py-1.5 bg-black text-white">All</button>
                 <button data-filter="unused" class="pool-filter-btn px-3 py-1.5 hover:bg-gray-100">Unused</button>
@@ -275,6 +290,20 @@
             <!-- Preview -->
             <div class="flex justify-center">
               <img id="tagPreviewImg" src="/imgs/placeholder.jpg" class="w-32 h-32 rounded-xl object-cover border">
+            </div>
+            <!-- Content type -->
+            <div>
+              <label class="block text-sm font-medium mb-1">Content Type</label>
+              <select id="tagContentType" class="w-full border rounded-lg px-3 py-2 text-sm">
+                <option value="product">Product</option>
+                <option value="testimonial">Testimonial</option>
+                <option value="promo">Promo</option>
+                <option value="lifestyle">Lifestyle</option>
+                <option value="brand">Brand</option>
+                <option value="educational">Educational</option>
+                <option value="ugc">UGC</option>
+                <option value="other">Other</option>
+              </select>
             </div>
             <!-- Shot Type -->
             <div>
@@ -495,6 +524,45 @@
                   Run Now
                 </button>
               </div>
+            </div>
+          </div>
+
+          <!-- Automation Health -->
+          <div id="aqHealthCard" class="bg-white rounded-xl shadow-sm border overflow-hidden">
+            <div class="p-4 border-b">
+              <h2 class="font-bold">Automation Health</h2>
+              <p class="text-xs text-gray-500 mt-1">Status from settings and queue — not invented when data is missing.</p>
+            </div>
+            <div class="p-4 grid sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+              <div>
+                <div class="text-xs text-gray-500">Autopilot</div>
+                <div id="aqHealthAutopilot" class="font-medium text-gray-600">—</div>
+              </div>
+              <div>
+                <div class="text-xs text-gray-500">Last autopilot run</div>
+                <div id="aqHealthLastAutopilot" class="font-medium">Never</div>
+              </div>
+              <div>
+                <div class="text-xs text-gray-500">Last auto-queue run</div>
+                <div id="aqHealthLastAutoQueue" class="font-medium">Never</div>
+              </div>
+              <div>
+                <div class="text-xs text-gray-500">Queued posts</div>
+                <div id="aqHealthQueued" class="font-medium">—</div>
+              </div>
+              <div>
+                <div class="text-xs text-gray-500">Scheduled posts</div>
+                <div id="aqHealthScheduled" class="font-medium">—</div>
+              </div>
+              <div>
+                <div class="text-xs text-gray-500">Pool-ready assets</div>
+                <div id="aqHealthPoolReady" class="font-medium">—</div>
+                <p id="aqHealthPoolWarning" class="hidden text-xs text-amber-700 mt-1">Few autopilot-ready assets (need product + shot type).</p>
+              </div>
+            </div>
+            <div class="px-4 pb-4">
+              <p id="aqHealthPolicy" class="text-xs text-gray-600"></p>
+              <p id="aqHealthPreviewNote" class="hidden text-xs text-gray-500 mt-1"></p>
             </div>
           </div>
 

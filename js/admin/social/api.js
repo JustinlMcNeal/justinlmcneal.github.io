@@ -57,7 +57,7 @@ export async function fetchCategories() {
 // Social Assets (Image Pool)
 // ============================================
 
-export async function fetchAssets({ filter = "all", search = "", productId = null } = {}) {
+export async function fetchAssets({ filter = "all", search = "", productId = null, contentType = null } = {}) {
   let query = sb()
     .from("social_assets")
     .select(`
@@ -74,6 +74,10 @@ export async function fetchAssets({ filter = "all", search = "", productId = nul
 
   if (productId) {
     query = query.eq("product_id", productId);
+  }
+
+  if (contentType && contentType !== "all") {
+    query = query.eq("content_type", contentType);
   }
 
   // Unused-first, then oldest unused first
@@ -114,6 +118,7 @@ export async function uploadAssets(files, productId = null) {
         original_image_path: storagePath,
         original_filename: file.name,
         product_id: productId,
+        content_type: "product",
         used_count: 0
       });
 
@@ -125,11 +130,12 @@ export async function uploadAssets(files, productId = null) {
   return { succeeded, failed };
 }
 
-export async function updateAssetTags(assetId, { shot_type, product_id, quality_score }) {
+export async function updateAssetTags(assetId, { shot_type, product_id, quality_score, content_type }) {
   const updates = { updated_at: new Date().toISOString() };
   if (shot_type !== undefined) updates.shot_type = shot_type;
   if (product_id !== undefined) updates.product_id = product_id;
   if (quality_score !== undefined) updates.quality_score = quality_score;
+  if (content_type !== undefined) updates.content_type = content_type;
 
   const { data, error } = await sb()
     .from("social_assets")

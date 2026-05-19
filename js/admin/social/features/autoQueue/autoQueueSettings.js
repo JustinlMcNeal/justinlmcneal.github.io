@@ -132,6 +132,8 @@ export async function saveAutoQueueSettings(showFeedback = false) {
       posting_times: form.postingTimes,
       caption_tones: form.captionTones,
       scoring_weights: getScoringWeightsFromForm(),
+      image_asset_policy: "image_pool_only",
+      allow_catalog_fallback: false,
       updated_at: new Date().toISOString(),
     };
 

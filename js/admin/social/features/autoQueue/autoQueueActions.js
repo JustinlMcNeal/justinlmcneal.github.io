@@ -9,6 +9,7 @@ import {
 import { isCompareScoringEnabled } from "./scoringControls.js";
 import { renderAutoQueuePreview } from "./autoQueuePreview.js";
 import { loadAutoQueueStats } from "./autoQueueStats.js";
+import { loadAutomationHealth } from "./autoQueueAutomationHealth.js";
 
 function formatPlatformsLabel(platforms) {
   return (platforms || []).join(", ") || "instagram";
@@ -57,6 +58,7 @@ export async function previewAutoQueue() {
       compareScoring ? result.scoring_comparison : null,
       compareScoring
     );
+    await loadAutomationHealth();
   } catch (err) {
     console.error("Preview error:", err);
     alert("Failed to preview: " + err.message);

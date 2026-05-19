@@ -54,6 +54,11 @@ export function setupImagePool() {
     if (files.length) handlePoolUpload(files);
   });
 
+  _els.poolContentTypeFilter?.addEventListener("change", () => {
+    _state.poolContentType = _els.poolContentTypeFilter.value || "all";
+    loadAssets();
+  });
+
   _els.poolFilterBtns?.addEventListener("click", (e) => {
     const btn = e.target.closest(".pool-filter-btn");
     if (!btn) return;
@@ -266,6 +271,7 @@ async function importSelectedCatalogImages() {
         original_image_path: url,
         original_filename: url.split("/").pop() || "catalog-image.jpg",
         product_id: imgData.product_id,
+        content_type: "product",
         product_url: `https://karrykraze.com/pages/product.html?slug=${(_state.products || []).find(p => p.id === imgData.product_id)?.slug || ""}`,
         used_count: 0,
         is_active: true,
@@ -382,6 +388,7 @@ function renderAssetGrid(assets) {
           <div class="asset-card-info">
             ${productName ? `<div class="font-medium">${productName}</div>` : `<div class="font-medium text-yellow-300">⚠ No product</div>`}
             ${shotType ? `<span class="asset-shot-pill">${shotType}</span>` : `<span class="asset-shot-pill" style="background:rgba(239,68,68,0.85);color:#fff">needs tag</span>`}
+            ${asset.content_type && asset.content_type !== "product" ? `<span class="asset-shot-pill" style="background:rgba(99,102,241,0.85)">${asset.content_type}</span>` : ""}
             <div class="asset-quality-stars">${stars}</div>
           </div>
         </div>
@@ -482,6 +489,9 @@ function openTagModal(asset) {
   const imageUrl = asset.original_image_path ? getPublicUrl(asset.original_image_path) : "/imgs/placeholder.jpg";
   _els.tagPreviewImg.src = imageUrl;
   _els.tagShotType.value = asset.shot_type || "";
+  if (_els.tagContentType) {
+    _els.tagContentType.value = asset.content_type || "product";
+  }
 
   const quality = asset.quality_score || 3;
   _state.tagQualityScore = quality;
@@ -514,7 +524,8 @@ async function saveTagModal() {
   const tags = {
     shot_type: _els.tagShotType.value || null,
     product_id: _state.tagProductIdValue || null,
-    quality_score: _state.tagQualityScore
+    quality_score: _state.tagQualityScore,
+    content_type: _els.tagContentType?.value || "product",
   };
 
   _els.tagSaveBtn.disabled = true;
@@ -538,7 +549,8 @@ export async function loadAssets() {
   try {
     _state.poolAssets = await fetchAssets({
       filter: _state.poolFilter,
-      search: _state.poolSearch
+      search: _state.poolSearch,
+      contentType: _state.poolContentType || "all",
     });
     renderAssetGrid(_state.poolAssets);
   } catch (err) {

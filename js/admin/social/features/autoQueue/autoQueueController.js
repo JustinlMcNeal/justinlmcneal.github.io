@@ -18,6 +18,7 @@ import {
   confirmRepost,
 } from "./autoQueueRepost.js";
 import { loadAutoQueueStats } from "./autoQueueStats.js";
+import { loadAutomationHealth } from "./autoQueueAutomationHealth.js";
 
 export function initAutoQueue(deps) {
   initAutoQueueContext({
@@ -41,6 +42,13 @@ export function setupAutoQueue() {
   document.getElementById("btnConfirmRepost")?.addEventListener("click", confirmRepost);
 
   loadAutoQueueSettings();
+  loadAutomationHealth();
 }
 
-export { getAutoQueueSettings, loadAutoQueueSettings, saveAutoQueueSettings, loadAutoQueueStats };
+export {
+  getAutoQueueSettings,
+  loadAutoQueueSettings,
+  saveAutoQueueSettings,
+  loadAutoQueueStats,
+  loadAutomationHealth,
+};
