@@ -2,6 +2,7 @@
 // Post Learning Engine - Analyzes posts and learns what works
 
 import { getSupabaseClient } from "../../shared/supabaseClient.js";
+import { POST_STATUS_POSTED } from "./postStatus.js";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "../../config/env.js";
 
 // ============================================
@@ -63,7 +64,7 @@ export async function checkAndResearchCategories() {
         )
       )
     `)
-    .eq("status", "posted")
+    .eq("status", POST_STATUS_POSTED)
     .eq("platform", "instagram")
     .not("engagement_rate", "is", null);
     
@@ -338,7 +339,7 @@ export async function analyzePost(postId) {
   const { data: allPosts } = await supabase
     .from("social_posts")
     .select("likes, comments, saves, reach, engagement_rate, hashtags, caption, posted_at")
-    .eq("status", "posted")
+    .eq("status", POST_STATUS_POSTED)
     .eq("platform", "instagram")
     .not("engagement_rate", "is", null);
     
@@ -758,7 +759,7 @@ export async function updateHashtagPerformance() {
   const { data: posts, error } = await supabase
     .from("social_posts")
     .select("id, hashtags, likes, comments, saves, reach, engagement_rate")
-    .eq("status", "posted")
+    .eq("status", POST_STATUS_POSTED)
     .eq("platform", "instagram")
     .not("hashtags", "is", null);
     
@@ -844,7 +845,7 @@ export async function updateTimingPerformance() {
   const { data: posts, error } = await supabase
     .from("social_posts")
     .select("posted_at, reach, likes, comments, saves, engagement_rate")
-    .eq("status", "posted")
+    .eq("status", POST_STATUS_POSTED)
     .eq("platform", "instagram")
     .not("posted_at", "is", null);
     
@@ -1002,7 +1003,7 @@ export async function generateRecommendations() {
   const { data: recentPosts } = await supabase
     .from("social_posts")
     .select("*")
-    .eq("status", "posted")
+    .eq("status", POST_STATUS_POSTED)
     .eq("platform", "instagram")
     .order("posted_at", { ascending: false })
     .limit(30);

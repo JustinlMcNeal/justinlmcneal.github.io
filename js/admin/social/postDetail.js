@@ -8,6 +8,7 @@ import {
   getPublicUrl
 } from "./api.js";
 import { formatHashtags, parseHashtags } from "./captions.js";
+import { isPostedSuccessStatus } from "./postStatus.js";
 
 let _state, _els, _showToast, _getClient;
 let _postToInstagram, _postToFacebook, _postToPinterest;
@@ -122,19 +123,19 @@ export function openPostDetail(post) {
     boardSection?.classList.add("hidden");
   }
   
-  _els.btnPostNow.classList.toggle("hidden", post.status === "posted" || post.status === "published" || post.status === "deleted");
+  _els.btnPostNow.classList.toggle("hidden", isPostedSuccessStatus(post.status) || post.status === "deleted");
   
   const viewOnPlatformBtn = document.getElementById("btnViewOnPlatform");
   if (viewOnPlatformBtn) {
     const permalink = post.permalink || post.instagram_permalink;
-    if ((post.status === "posted" || post.status === "published") && permalink) {
+    if (isPostedSuccessStatus(post.status) && permalink) {
       viewOnPlatformBtn.classList.remove("hidden");
       viewOnPlatformBtn.href = permalink;
       viewOnPlatformBtn.textContent = post.platform === "instagram" ? "📸 View on Instagram" 
                                     : post.platform === "pinterest" ? "📌 View on Pinterest"
                                     : post.platform === "facebook" ? "📘 View on Facebook"
                                     : "🔗 View Post";
-    } else if ((post.status === "posted" || post.status === "published") && post.external_id) {
+    } else if (isPostedSuccessStatus(post.status) && post.external_id) {
       viewOnPlatformBtn.classList.remove("hidden");
       if (post.platform === "instagram") {
         viewOnPlatformBtn.href = `https://www.instagram.com/`;
@@ -147,6 +148,8 @@ export function openPostDetail(post) {
     }
   }
   
+  renderPostDetailSelection(post);
+
   const engagementSection = document.getElementById("postDetailEngagement");
   if (engagementSection) {
     if (post.likes !== undefined && post.likes !== null) {
@@ -171,8 +174,94 @@ export function openPostDetail(post) {
 
 function closePostDetail() {
   _state.editingPost = null;
+  document.getElementById("postDetailSelection")?.classList.add("hidden");
   _els.postDetailModal.classList.add("hidden");
   _els.postDetailModal.classList.remove("flex");
+}
+
+function escapeHtml(str) {
+  return String(str ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function renderPostDetailSelection(post) {
+  const el = document.getElementById("postDetailSelection");
+  if (!el) return;
+
+  const meta = post.selection_metadata && typeof post.selection_metadata === "object"
+    ? post.selection_metadata
+    : {};
+  const breakdown = meta.score_breakdown;
+  const priority = post.priority_score ?? meta.priority_score;
+  const hasContent = post.image_source || priority != null || Object.keys(meta).length > 0;
+
+  if (!hasContent) {
+    el.classList.add("hidden");
+    el.innerHTML = "";
+    return;
+  }
+
+  const lines = [];
+  if (meta.is_resurfaced || post.image_source === "resurface") {
+    lines.push("<div><span class=\"font-medium text-orange-700\">Resurfaced</span></div>");
+  }
+  if (meta.final_reason_summary) {
+    lines.push(`<div><span class="text-gray-500">Why selected:</span> ${escapeHtml(meta.final_reason_summary)}</div>`);
+  }
+  if (meta.top_boost) {
+    lines.push(`<div><span class="text-gray-500">Top boost:</span> ${escapeHtml(String(meta.top_boost).replace(/_/g, " "))}</div>`);
+  }
+  if (meta.top_penalty) {
+    lines.push(`<div><span class="text-gray-500">Top penalty:</span> ${escapeHtml(String(meta.top_penalty).replace(/_/g, " "))}</div>`);
+  }
+  if (priority != null) {
+    lines.push(`<div><span class="text-gray-500">Priority score:</span> <strong>${Number(priority).toFixed(1)}</strong></div>`);
+  }
+  if (post.image_source) {
+    lines.push(`<div><span class="text-gray-500">Image source:</span> <span class="font-mono">${escapeHtml(post.image_source)}</span></div>`);
+  }
+  if (meta.reason || meta.selection_reason) {
+    lines.push(`<div><span class="text-gray-500">Reason:</span> ${escapeHtml(meta.reason || meta.selection_reason)}</div>`);
+  }
+  if (breakdown) {
+    lines.push(
+      `<div><span class="text-gray-500">Score breakdown:</span> ` +
+      `recency ${Number(breakdown.recency ?? 0).toFixed(0)}, ` +
+      `category ${Number(breakdown.category_perf ?? 0).toFixed(0)}, ` +
+      `images ${Number(breakdown.image_freshness ?? 0).toFixed(0)}</div>`
+    );
+  }
+  if (meta.scarcity_guard_applied) {
+    lines.push(`<div><span class="text-amber-700 font-medium">Scarcity copy was guarded</span></div>`);
+  }
+  if (Array.isArray(meta.eligibility_warnings) && meta.eligibility_warnings.length) {
+    lines.push(`<div><span class="text-gray-500">Warnings:</span> ${escapeHtml(meta.eligibility_warnings.join(", "))}</div>`);
+  }
+  if (meta.duplicate_guard_result) {
+    lines.push(`<div><span class="text-gray-500">Duplicate guard:</span> ${escapeHtml(meta.duplicate_guard_result)}</div>`);
+  }
+  if (meta.image_reuse_guard && meta.image_reuse_guard !== "passed") {
+    lines.push(`<div><span class="text-gray-500">Image reuse:</span> ${escapeHtml(meta.image_reuse_guard)}</div>`);
+  }
+  if (meta.inventory_status) {
+    lines.push(`<div><span class="text-gray-500">Inventory:</span> ${escapeHtml(meta.inventory_status)}</div>`);
+  }
+  if (meta.backorder_status && meta.backorder_status !== "not_applicable") {
+    lines.push(`<div><span class="text-gray-500">Backorder:</span> ${escapeHtml(meta.backorder_status)}</div>`);
+  }
+  if (meta.caption_source) {
+    lines.push(`<div><span class="text-gray-500">Caption:</span> ${escapeHtml(meta.caption_source)} (${escapeHtml(meta.caption_status || "")})</div>`);
+  }
+
+  const detailsHtml = Object.keys(meta).length
+    ? `<details class="mt-2"><summary class="text-gray-400 cursor-pointer">Full selection metadata</summary><pre class="text-[10px] text-gray-500 mt-1 overflow-x-auto whitespace-pre-wrap">${escapeHtml(JSON.stringify(meta, null, 2))}</pre></details>`
+    : "";
+
+  el.innerHTML = `<div class="font-medium text-gray-700 mb-1">Queue selection</div>${lines.join("")}${detailsHtml}`;
+  el.classList.remove("hidden");
 }
 
 async function handleDeletePost() {

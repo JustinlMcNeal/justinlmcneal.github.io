@@ -2,6 +2,7 @@
 // Analytics Dashboard, Post Analytics, Learning Insights, Category Insights
 
 import { getPublicUrl } from "./api.js";
+import { isPostedSuccessStatus, POST_SUCCESS_STATUSES } from "./postStatus.js";
 import {
   analyzePost,
   updateHashtagPerformance,
@@ -15,6 +16,7 @@ import {
   checkAndResearchCategories,
   getAllCategoryInsights
 } from "./postLearning.js";
+import { loadScoringPerformance } from "./scoringPerformance.js";
 
 let _state, _els, _showToast, _getClient;
 let _loadCalendarPosts, _loadQueuePosts;
@@ -77,7 +79,7 @@ async function loadEngagementMetrics() {
       .from("social_posts")
       .select("id, likes, comments, saves, impressions, reach, engagement_rate, engagement_updated_at, caption, hashtags, posted_at, status, image_url, permalink")
       .eq("platform", "instagram")
-      .eq("status", "posted")
+      .in("status", POST_SUCCESS_STATUSES)
       .neq("status", "deleted")
       .not("engagement_updated_at", "is", null)
       .order("engagement_rate", { ascending: false });
@@ -85,7 +87,7 @@ async function loadEngagementMetrics() {
     if (error) throw error;
     
     const allPosts = (posts || []).filter(p => {
-      if (p.status !== "posted") return false;
+      if (!isPostedSuccessStatus(p.status)) return false;
       if (p.image_url && !p.image_url.startsWith("http")) {
         p.image_url = getPublicUrl(p.image_url);
       }
@@ -227,9 +229,9 @@ export async function loadAnalytics() {
     
     const activePosts = allPosts.filter(p => p.status !== "deleted");
     const totalPosts = activePosts.length;
-    const published = activePosts.filter(p => p.status === "published" || p.status === "posted").length;
+    const published = activePosts.filter(p => isPostedSuccessStatus(p.status)).length;
     const thisWeek = activePosts.filter(p => {
-      const isPublished = p.status === "published" || p.status === "posted";
+      const isPublished = isPostedSuccessStatus(p.status);
       const publishDate = p.posted_at || p.published_at;
       return isPublished && publishDate && new Date(publishDate) >= weekAgo;
     }).length;
@@ -243,7 +245,8 @@ export async function loadAnalytics() {
     setEl("analyticsScheduled", scheduled);
     
     loadEngagementMetrics();
-    
+    loadScoringPerformance(_getClient);
+
     // Platform breakdown
     const platforms = { instagram: 0, facebook: 0, pinterest: 0 };
     allPosts.forEach(p => { if (platforms[p.platform] !== undefined) platforms[p.platform]++; });
@@ -260,7 +263,10 @@ export async function loadAnalytics() {
     
     // Status breakdown
     const statuses = { queued: 0, published: 0, failed: 0, draft: 0, cancelled: 0 };
-    allPosts.forEach(p => { if (statuses[p.status] !== undefined) statuses[p.status]++; });
+    allPosts.forEach(p => {
+      if (isPostedSuccessStatus(p.status)) statuses.published++;
+      else if (statuses[p.status] !== undefined) statuses[p.status]++;
+    });
     setEl("analyticsStatusQueued", statuses.queued);
     setEl("analyticsStatusPublished", statuses.published);
     setEl("analyticsStatusFailed", statuses.failed);
@@ -303,7 +309,7 @@ export async function loadAnalytics() {
           const dateStr = date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
           const timeStr = date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
           const statusColors = {
-            published: "bg-green-100 text-green-700", posted: "bg-green-100 text-green-700",
+            posted: "bg-green-100 text-green-700",
             queued: "bg-blue-100 text-blue-700", failed: "bg-red-100 text-red-700",
             draft: "bg-gray-100 text-gray-700", cancelled: "bg-gray-100 text-gray-400",
             deleted: "bg-gray-200 text-gray-500 line-through"
@@ -744,7 +750,7 @@ export async function processAllPostsForLearning() {
     const { data: posts, error } = await client
       .from("social_posts")
       .select("*")
-      .eq("status", "posted")
+      .in("status", POST_SUCCESS_STATUSES)
       .order("posted_at", { ascending: false })
       .limit(100);
     

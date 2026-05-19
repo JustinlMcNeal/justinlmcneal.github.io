@@ -84,7 +84,7 @@ Deno.serve(async (req) => {
     const thresholdDate = new Date();
     thresholdDate.setDate(thresholdDate.getDate() - minDaysOld);
 
-    // Find old published posts with their product info
+    // Find old posted (live) posts with their product info
     // Join through variations -> assets -> products
     // Note: Using posted_at (or published_at for backwards compat)
     const { data: oldPosts, error: fetchError } = await supabase
@@ -113,7 +113,7 @@ Deno.serve(async (req) => {
           )
         )
       `)
-      .in("status", ["published", "posted"])
+      .eq("status", "posted")
       .lt("posted_at", thresholdDate.toISOString())
       .not("variation.asset.product_id", "is", null)
       .order("posted_at", { ascending: true })

@@ -2,6 +2,7 @@
 // API functions for social media management
 
 import { getSupabaseClient } from "../../shared/supabaseClient.js";
+import { POST_SUCCESS_STATUSES } from "./postStatus.js";
 
 const sb = () => {
   const client = getSupabaseClient();
@@ -589,27 +590,27 @@ export async function fetchStats() {
     .select("*", { count: "exact", head: true })
     .in("status", ["queued", "approved"]);
   
-  // Posted today
+  // Posted today (canonical status: posted)
   const { count: postedToday } = await sb()
     .from("social_posts")
     .select("*", { count: "exact", head: true })
-    .eq("status", "posted")
+    .in("status", POST_SUCCESS_STATUSES)
     .gte("posted_at", startOfDay)
     .lt("posted_at", endOfDay);
   
-  // Total Instagram posts (status=posted excludes deleted/failed/draft)
+  // Total Instagram posts (success statuses only)
   const { count: instagram } = await sb()
     .from("social_posts")
     .select("*", { count: "exact", head: true })
     .eq("platform", "instagram")
-    .eq("status", "posted");
+    .in("status", POST_SUCCESS_STATUSES);
   
   // Total Pinterest posts
   const { count: pinterest } = await sb()
     .from("social_posts")
     .select("*", { count: "exact", head: true })
     .eq("platform", "pinterest")
-    .eq("status", "posted");
+    .in("status", POST_SUCCESS_STATUSES);
   
   return {
     queued: queued || 0,

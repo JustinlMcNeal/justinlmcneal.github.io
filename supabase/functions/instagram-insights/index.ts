@@ -68,7 +68,7 @@ async function refreshTimingPerformance(supabase: any): Promise<void> {
   const { data: posts, error } = await supabase
     .from("social_posts")
     .select("posted_at, likes, comments, saves, reach, engagement_rate")
-    .eq("status", "posted")
+    .eq("status", "posted") // canonical success; migration 20260720 normalizes legacy "published"
     .eq("platform", "instagram")
     .not("posted_at", "is", null);
 
@@ -161,7 +161,7 @@ serve(async (req) => {
       .from("social_posts")
       .select("id, external_id, hashtags, posted_at")
       .eq("platform", "instagram")
-      .eq("status", "posted")
+      .eq("status", "posted") // canonical success; migration 20260720 normalizes legacy "published"
       .not("external_id", "is", null);
 
     if (postId) {

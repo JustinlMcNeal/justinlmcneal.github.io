@@ -816,7 +816,7 @@ export async function loadRecentCarousels() {
       const dateStr = date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
       const timeStr = date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
       const imageCount = c.image_urls?.length || 1;
-      const statusColors = { queued: "bg-blue-100 text-blue-700", posted: "bg-green-100 text-green-700", published: "bg-green-100 text-green-700", failed: "bg-red-100 text-red-700", deleted: "bg-gray-200 text-gray-500 line-through" };
+      const statusColors = { queued: "bg-blue-100 text-blue-700", posted: "bg-green-100 text-green-700", failed: "bg-red-100 text-red-700", deleted: "bg-gray-200 text-gray-500 line-through" };
       return `
         <div class="p-4 flex items-center gap-4 hover:bg-gray-50">
           <div class="relative"><img src="${c.image_url}" class="w-16 h-16 object-cover rounded-lg"><div class="absolute -bottom-1 -right-1 bg-purple-600 text-white text-xs px-1.5 py-0.5 rounded-full font-bold">${imageCount}</div></div>

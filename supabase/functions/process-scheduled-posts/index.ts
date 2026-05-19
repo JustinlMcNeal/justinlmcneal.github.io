@@ -74,7 +74,7 @@ serve(async (req) => {
         console.log(`[process-scheduled-posts] Processing post ${post.id} for ${post.platform}`);
         console.log(`[process-scheduled-posts] Post data: variation_id=${post.variation_id}, variation=`, JSON.stringify(post.variation));
 
-        // Mark as processing to prevent duplicate runs
+        // Mark as processing to prevent duplicate runs (requires social_posts_status_check includes "processing")
         await supabase
           .from("social_posts")
           .update({ status: "processing", updated_at: new Date().toISOString() })
