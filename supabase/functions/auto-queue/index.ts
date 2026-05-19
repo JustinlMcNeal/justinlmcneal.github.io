@@ -452,6 +452,622 @@ async function runLearningAggregation(supabase: any): Promise<void> {
   console.log(`[learning] Updated ${Object.keys(captionElements).length} caption elements`);
 }
 
+// ── Run settings: request body overrides social_settings.auto_queue ──
+const VALID_PLATFORMS = new Set(["instagram", "facebook", "pinterest"]);
+const VALID_TONES = new Set([
+  "casual", "urgency", "professional", "playful", "value",
+  "trending", "inspirational", "minimalist",
+]);
+
+function filterStringArray(val: unknown, allowed?: Set<string>): string[] | null {
+  if (!Array.isArray(val)) return null;
+  const items = val
+    .filter((x): x is string => typeof x === "string")
+    .map((x) => x.trim())
+    .filter(Boolean);
+  if (!items.length) return null;
+  if (allowed) {
+    const filtered = items.filter((x) => allowed.has(x));
+    return filtered.length ? filtered : null;
+  }
+  return items;
+}
+
+function parsePostingTimes(val: unknown): string[] | null {
+  const arr = filterStringArray(val);
+  if (!arr) return null;
+  const timeRe = /^([01]?\d|2[0-3]):([0-5]\d)$/;
+  const valid = arr.filter((t) => timeRe.test(t));
+  return valid.length ? valid : null;
+}
+
+function parseCount(val: unknown): number | null {
+  const n = typeof val === "number" ? val : parseInt(String(val ?? ""), 10);
+  if (!Number.isFinite(n) || n < 1 || n > 20) return null;
+  return Math.floor(n);
+}
+
+// ── Phase 3b: eligibility, duplicate guards, caption scarcity safety ──
+const PENDING_POST_STATUSES = ["queued", "draft", "processing"];
+const IMAGE_REUSE_LOOKBACK_DAYS = 14;
+
+const SCARCITY_PHRASE_RE =
+  /limited stock|last chance|selling (fast|out)|almost (gone|sold out)|low stock|won't last|flying off|few left|running out|won't be restocked|don't miss out|going,? going|almost sold|time's running out|act fast|hurry/i;
+
+type ProductStockInfo = {
+  totalStock: number | null;
+  hasActiveVariants: boolean;
+};
+
+type EligibilityAssessment = {
+  passed: boolean;
+  warnings: string[];
+  skip_reason: string | null;
+  inventory_status: "in_stock" | "low_stock" | "out_of_stock" | "unknown";
+  backorder_status: "mto" | "backorder_unknown" | "in_stock" | "not_applicable";
+};
+
+function assessProductEligibility(
+  product: Record<string, unknown>,
+  stockInfo: ProductStockInfo
+): EligibilityAssessment {
+  const warnings: string[] = [];
+  const name = String(product.name ?? "").trim();
+  const slug = String(product.slug ?? "").trim();
+  const image = String(product.catalog_image_url ?? "").trim();
+
+  if (product.is_active === false) {
+    return {
+      passed: false,
+      warnings,
+      skip_reason: "inactive",
+      inventory_status: "unknown",
+      backorder_status: "not_applicable",
+    };
+  }
+  if (!name) {
+    return {
+      passed: false,
+      warnings,
+      skip_reason: "missing_name",
+      inventory_status: "unknown",
+      backorder_status: "not_applicable",
+    };
+  }
+  if (!slug) {
+    return {
+      passed: false,
+      warnings,
+      skip_reason: "missing_slug",
+      inventory_status: "unknown",
+      backorder_status: "not_applicable",
+    };
+  }
+  if (!image) {
+    return {
+      passed: false,
+      warnings,
+      skip_reason: "no_usable_image",
+      inventory_status: "unknown",
+      backorder_status: "not_applicable",
+    };
+  }
+
+  const isMto = product.shipping_status === "mto";
+  const totalStock = stockInfo.totalStock;
+
+  let inventory_status: EligibilityAssessment["inventory_status"] = "unknown";
+  if (totalStock !== null) {
+    if (totalStock <= 0) inventory_status = "out_of_stock";
+    else if (totalStock <= 3) inventory_status = "low_stock";
+    else inventory_status = "in_stock";
+  }
+
+  let backorder_status: EligibilityAssessment["backorder_status"] = "not_applicable";
+  if (isMto) {
+    backorder_status = "mto";
+    warnings.push("made_to_order");
+  } else if (inventory_status === "out_of_stock") {
+    backorder_status = "backorder_unknown";
+    warnings.push("zero_stock_no_mto_flag");
+  }
+  if (inventory_status === "low_stock") warnings.push("low_stock");
+  if (totalStock === null && !stockInfo.hasActiveVariants) {
+    warnings.push("no_variant_stock_data");
+  }
+
+  return {
+    passed: true,
+    warnings,
+    skip_reason: null,
+    inventory_status,
+    backorder_status,
+  };
+}
+
+function isScarcityCopySafe(eligibility: EligibilityAssessment): boolean {
+  return eligibility.inventory_status === "in_stock";
+}
+
+function stripScarcityLanguage(caption: string): string {
+  if (!caption) return caption;
+  const lines = caption.split("\n");
+  const filtered = lines.filter((line) => !SCARCITY_PHRASE_RE.test(line));
+  let result = (filtered.length ? filtered : lines).join("\n");
+  result = result.replace(SCARCITY_PHRASE_RE, "").replace(/\s{2,}/g, " ").trim();
+  return result || caption;
+}
+
+function pickSafeTones(tones: string[], scarcitySafe: boolean): string[] {
+  if (scarcitySafe) return tones.length ? tones : ["casual"];
+  const filtered = tones.filter((t) => t !== "urgency");
+  return filtered.length ? filtered : ["casual", "value"];
+}
+
+function pickSafeTemplate(tone: string, scarcitySafe: boolean): string {
+  if (scarcitySafe && CAPTION_TEMPLATES[tone as keyof typeof CAPTION_TEMPLATES]) {
+    return pickRandom(CAPTION_TEMPLATES[tone as keyof typeof CAPTION_TEMPLATES]);
+  }
+  if (tone === "urgency" || !scarcitySafe) {
+    return pickRandom(CAPTION_TEMPLATES.casual);
+  }
+  return pickRandom(CAPTION_TEMPLATES[tone as keyof typeof CAPTION_TEMPLATES] || CAPTION_TEMPLATES.casual);
+}
+
+function guardCaptionScarcity(caption: string, scarcitySafe: boolean): { caption: string; guarded: boolean } {
+  if (scarcitySafe || !SCARCITY_PHRASE_RE.test(caption)) {
+    return { caption, guarded: false };
+  }
+  return { caption: stripScarcityLanguage(caption), guarded: true };
+}
+
+// ── Phase 3c: configurable scoring weights + transparency ──
+const SCORING_VERSION = "3c-v1";
+
+type ScoringWeights = {
+  recency: number;
+  category: number;
+  image_freshness: number;
+  inventory_health: number;
+  penalties_enabled: boolean;
+};
+
+const DEFAULT_SCORING_WEIGHTS: ScoringWeights = {
+  recency: 40,
+  category: 25,
+  image_freshness: 25,
+  inventory_health: 10,
+  penalties_enabled: true,
+};
+
+function clampWeight(val: unknown, fallback: number): number {
+  const n = typeof val === "number" ? val : parseInt(String(val ?? ""), 10);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(50, Math.max(0, Math.floor(n)));
+}
+
+function resolveScoringWeights(dbRow: Record<string, unknown> | null): ScoringWeights {
+  const raw = dbRow?.scoring_weights;
+  if (!raw || typeof raw !== "object") {
+    return { ...DEFAULT_SCORING_WEIGHTS };
+  }
+  const w = raw as Record<string, unknown>;
+  return {
+    recency: clampWeight(w.recency, DEFAULT_SCORING_WEIGHTS.recency),
+    category: clampWeight(w.category, DEFAULT_SCORING_WEIGHTS.category),
+    image_freshness: clampWeight(w.image_freshness, DEFAULT_SCORING_WEIGHTS.image_freshness),
+    inventory_health: clampWeight(w.inventory_health, DEFAULT_SCORING_WEIGHTS.inventory_health),
+    penalties_enabled: w.penalties_enabled !== false,
+  };
+}
+
+type ProductScoreResult = {
+  total: number;
+  recency: number;
+  category_perf: number;
+  image_freshness: number;
+  inventory_health: number;
+  inventory_penalty: number;
+  image_reuse_penalty: number;
+  penalties_applied: Record<string, number>;
+  boosts_applied: Record<string, number>;
+  penalties: string[];
+  boosts: string[];
+  category_sample_size: number;
+  top_boost: string | null;
+  top_penalty: string | null;
+  final_reason_summary: string;
+};
+
+function computeProductPriorityScore(
+  product: Record<string, unknown>,
+  eligibility: EligibilityAssessment,
+  ctx: {
+    now: number;
+    weights: ScoringWeights;
+    categoryEngMap: Record<string, number>;
+    categorySampleMap: Record<string, number>;
+    maxCatEng: number;
+    freshImageCount: Record<string, number>;
+    poolAssetCount: Record<string, number>;
+    aiImageCount: Record<string, number>;
+  }
+): ProductScoreResult {
+  const w = ctx.weights;
+  const productId = String(product.id);
+  const penalties: string[] = [];
+  const boosts: string[] = [];
+  const penaltiesApplied: Record<string, number> = {};
+  const boostsApplied: Record<string, number> = {};
+
+  // Recency: longer since last post = higher (up to weight cap)
+  let recency = w.recency;
+  if (product.last_social_post_at) {
+    const daysSince =
+      (ctx.now - new Date(String(product.last_social_post_at)).getTime()) / (1000 * 60 * 60 * 24);
+    recency = Math.min(w.recency, (daysSince / 30) * w.recency);
+  } else {
+    boosts.push("never_posted");
+    boostsApplied.never_posted = 2;
+  }
+
+  // Category: meaningful only when sample_size >= 3
+  const catName = (product.category as { name?: string } | null)?.name || "";
+  const categorySampleSize = ctx.categorySampleMap[catName] || 0;
+  const catEng = ctx.categoryEngMap[catName] || 0;
+  let category_perf = w.category * 0.35;
+  if (categorySampleSize >= 3 && ctx.maxCatEng > 0) {
+    category_perf = (catEng / ctx.maxCatEng) * w.category;
+    if (categorySampleSize >= 5 && catEng / ctx.maxCatEng >= 0.55) {
+      boosts.push("strong_category_performance");
+      boostsApplied.category_performance = Math.min(4, w.category * 0.15);
+      category_perf = Math.min(w.category, category_perf + boostsApplied.category_performance);
+    }
+  } else if (categorySampleSize > 0) {
+    penalties.push("category_low_sample");
+    penaltiesApplied.category_low_sample = 2;
+  }
+
+  // Image pool freshness
+  const freshCount = ctx.freshImageCount[productId] || 0;
+  const poolCount = ctx.poolAssetCount[productId] || 0;
+  const aiCount = ctx.aiImageCount[productId] || 0;
+  let image_freshness = Math.min(w.image_freshness, freshCount * (w.image_freshness / 4));
+  if (freshCount >= 3) {
+    boosts.push("strong_fresh_pool");
+    boostsApplied.strong_fresh_pool = 3;
+    image_freshness = Math.min(w.image_freshness, image_freshness + boostsApplied.strong_fresh_pool);
+  }
+  if (poolCount === 0) {
+    penalties.push("no_image_pool");
+    penaltiesApplied.no_image_pool = Math.min(6, w.image_freshness * 0.35);
+    image_freshness = Math.max(0, image_freshness - penaltiesApplied.no_image_pool);
+  }
+
+  // Inventory health component (positive, not exclusion)
+  let inventory_health = w.inventory_health;
+  if (eligibility.inventory_status === "in_stock") {
+    boostsApplied.in_stock = 1;
+  } else if (eligibility.inventory_status === "low_stock") {
+    inventory_health = w.inventory_health * 0.65;
+  } else if (eligibility.inventory_status === "out_of_stock") {
+    inventory_health = w.inventory_health * 0.3;
+  } else {
+    inventory_health = w.inventory_health * 0.5;
+  }
+  if (eligibility.backorder_status === "mto") {
+    inventory_health = Math.min(w.inventory_health, inventory_health * 0.85 + 1);
+  }
+
+  let inventory_penalty = 0;
+  if (w.penalties_enabled) {
+    if (eligibility.warnings.includes("zero_stock_no_mto_flag")) {
+      inventory_penalty += 8;
+      penalties.push("zero_stock_non_mto");
+      penaltiesApplied.zero_stock_non_mto = 8;
+    }
+    if (eligibility.warnings.includes("low_stock")) {
+      inventory_penalty += 3;
+      penalties.push("low_stock");
+      penaltiesApplied.low_stock = 3;
+    }
+    if (eligibility.warnings.includes("no_variant_stock_data")) {
+      inventory_penalty += 4;
+      penalties.push("missing_stock_data");
+      penaltiesApplied.missing_stock_data = 4;
+    }
+    if (poolCount === 0 && aiCount === 0) {
+      inventory_penalty += 5;
+      penalties.push("weak_image_pipeline");
+      penaltiesApplied.weak_image_pipeline = 5;
+    }
+  }
+
+  const subtotal = recency + category_perf + image_freshness + inventory_health;
+  const total = Math.max(0, subtotal - inventory_penalty);
+
+  const top_boost = boosts[0] || null;
+  const top_penalty = penalties[0] || null;
+  const parts: string[] = [`score ${total.toFixed(1)}`];
+  if (top_boost) parts.push(`boost: ${top_boost.replace(/_/g, " ")}`);
+  if (top_penalty) parts.push(`penalty: ${top_penalty.replace(/_/g, " ")}`);
+  const final_reason_summary = parts.join(" · ");
+
+  return {
+    total,
+    recency,
+    category_perf,
+    image_freshness,
+    inventory_health,
+    inventory_penalty,
+    image_reuse_penalty: 0,
+    penalties_applied: penaltiesApplied,
+    boosts_applied: boostsApplied,
+    penalties,
+    boosts,
+    category_sample_size: categorySampleSize,
+    top_boost,
+    top_penalty,
+    final_reason_summary,
+  };
+}
+
+// ── Phase 3d: legacy scoring approximation (preview comparison only) ──
+const LEGACY_SCORING_LABEL = "legacy-pre-3c";
+
+type LegacyScoreResult = {
+  total: number;
+  recency: number;
+  category_perf: number;
+  image_freshness: number;
+  reserved: number;
+};
+
+function computeLegacyPriorityScore(
+  product: Record<string, unknown>,
+  ctx: {
+    now: number;
+    categoryEngMap: Record<string, number>;
+    maxCatEng: number;
+    freshImageCount: Record<string, number>;
+  }
+): LegacyScoreResult {
+  let recency = 40;
+  if (product.last_social_post_at) {
+    const daysSince =
+      (ctx.now - new Date(String(product.last_social_post_at)).getTime()) / (1000 * 60 * 60 * 24);
+    recency = Math.min(40, (daysSince / 30) * 40);
+  }
+  const catName = (product.category as { name?: string } | null)?.name || "";
+  const catEng = ctx.categoryEngMap[catName] || 0;
+  const category_perf = ctx.maxCatEng > 0 ? (catEng / ctx.maxCatEng) * 30 : 15;
+  const freshCount = ctx.freshImageCount[String(product.id)] || 0;
+  const image_freshness = Math.min(20, freshCount * 5);
+  const reserved = 10;
+  return {
+    total: recency + category_perf + image_freshness + reserved,
+    recency,
+    category_perf,
+    image_freshness,
+    reserved,
+  };
+}
+
+type ScoringComparisonCandidate = {
+  product_id: string;
+  product_name: string;
+  current_score: number;
+  legacy_score: number;
+  score_delta: number;
+  current_rank: number;
+  legacy_rank: number;
+  rank_delta: number;
+  why_current_rank_changed: string;
+  penalties_applied: Record<string, number>;
+  boosts_applied: Record<string, number>;
+  warnings: string[];
+  selected_in_current_top: boolean;
+  selected_in_legacy_top: boolean;
+};
+
+function explainRankChange(
+  score: ProductScoreResult,
+  legacy: LegacyScoreResult,
+  currentRank: number,
+  legacyRank: number,
+  rankDelta: number
+): string {
+  const scoreDelta = Number((score.total - legacy.total).toFixed(1));
+  if (rankDelta === 0) {
+    return `Same rank (#${currentRank}); 3c score ${score.total.toFixed(1)} vs legacy ${legacy.total.toFixed(1)} (Δ ${scoreDelta >= 0 ? "+" : ""}${scoreDelta})`;
+  }
+  const dir = rankDelta > 0 ? `Up ${rankDelta}` : `Down ${Math.abs(rankDelta)}`;
+  const parts = [
+    `${dir} under 3c (now #${currentRank}, legacy #${legacyRank})`,
+    `score Δ ${scoreDelta >= 0 ? "+" : ""}${scoreDelta}`,
+  ];
+  if (score.penalties.length) parts.push(`penalties: ${score.penalties.join(", ")}`);
+  if (score.boosts.length) parts.push(`boosts: ${score.boosts.join(", ")}`);
+  if (score.inventory_penalty > 0) parts.push(`inventory penalty −${score.inventory_penalty}`);
+  return parts.join("; ");
+}
+
+function buildScoringComparison(
+  scoredProducts: Array<Record<string, unknown>>,
+  selectionCount: number,
+  skippedByGuards: number,
+  scoreCtx: {
+    now: number;
+    categoryEngMap: Record<string, number>;
+    maxCatEng: number;
+    freshImageCount: Record<string, number>;
+  }
+): { candidates: ScoringComparisonCandidate[]; summary: Record<string, unknown> } {
+  const withLegacy = scoredProducts.map((p: any) => ({
+    ...p,
+    _legacyScore: computeLegacyPriorityScore(p, scoreCtx),
+  }));
+
+  const byCurrent = [...withLegacy].sort((a: any, b: any) => b._priority - a._priority);
+  const byLegacy = [...withLegacy].sort(
+    (a: any, b: any) => b._legacyScore.total - a._legacyScore.total
+  );
+
+  const currentRankMap = new Map<string, number>();
+  const legacyRankMap = new Map<string, number>();
+  byCurrent.forEach((p: any, i: number) => currentRankMap.set(p.id, i + 1));
+  byLegacy.forEach((p: any, i: number) => legacyRankMap.set(p.id, i + 1));
+
+  const compareLimit = Math.min(byCurrent.length, Math.max(selectionCount * 3, 25));
+  const reasonCounts: Record<string, number> = {};
+  let movedUp = 0;
+  let movedDown = 0;
+  let rankUnchanged = 0;
+
+  const candidates: ScoringComparisonCandidate[] = byCurrent
+    .slice(0, compareLimit)
+    .map((p: any) => {
+      const score: ProductScoreResult = p._score;
+      const leg: LegacyScoreResult = p._legacyScore;
+      const currentRank = currentRankMap.get(p.id) ?? 0;
+      const legacyRank = legacyRankMap.get(p.id) ?? 0;
+      const rankDelta = legacyRank - currentRank;
+      const scoreDelta = Number((score.total - leg.total).toFixed(2));
+
+      if (rankDelta > 0) movedUp++;
+      else if (rankDelta < 0) movedDown++;
+      else rankUnchanged++;
+
+      for (const pen of score.penalties) {
+        const key = `penalty:${pen}`;
+        reasonCounts[key] = (reasonCounts[key] || 0) + 1;
+      }
+      for (const boost of score.boosts) {
+        const key = `boost:${boost}`;
+        reasonCounts[key] = (reasonCounts[key] || 0) + 1;
+      }
+
+      return {
+        product_id: p.id,
+        product_name: p.name,
+        current_score: Number(score.total.toFixed(2)),
+        legacy_score: Number(leg.total.toFixed(2)),
+        score_delta: scoreDelta,
+        current_rank: currentRank,
+        legacy_rank: legacyRank,
+        rank_delta: rankDelta,
+        why_current_rank_changed: explainRankChange(score, leg, currentRank, legacyRank, rankDelta),
+        penalties_applied: { ...score.penalties_applied },
+        boosts_applied: { ...score.boosts_applied },
+        warnings: (p._eligibility as EligibilityAssessment)?.warnings || [],
+        selected_in_current_top: currentRank > 0 && currentRank <= selectionCount,
+        selected_in_legacy_top: legacyRank > 0 && legacyRank <= selectionCount,
+      };
+    });
+
+  const topReasons = Object.entries(reasonCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6)
+    .map(([reason, count]) => ({ reason, count }));
+
+  return {
+    candidates,
+    summary: {
+      candidates_compared: candidates.length,
+      queue_ready_total: scoredProducts.length,
+      selection_count: selectionCount,
+      moved_up_by_new_scoring: movedUp,
+      moved_down_by_new_scoring: movedDown,
+      rank_unchanged: rankUnchanged,
+      skipped_by_guards: skippedByGuards,
+      top_reasons_for_rank_movement: topReasons,
+      legacy_scoring_label: LEGACY_SCORING_LABEL,
+      current_scoring_version: SCORING_VERSION,
+      legacy_formula: "recency 40 + category 30 (or 15 default) + images 20 + reserved 10",
+    },
+  };
+}
+
+function buildSelectionScoreMetadata(
+  score: ProductScoreResult,
+  weights: ScoringWeights,
+  imageReuseGuard?: string
+): Record<string, unknown> {
+  let image_reuse_penalty = score.image_reuse_penalty;
+  const penalties_applied = { ...score.penalties_applied };
+  if (imageReuseGuard === "reused_no_alternative") {
+    image_reuse_penalty = 3;
+    penalties_applied.image_reuse = 3;
+  }
+  const priority_score = Math.max(0, score.total - image_reuse_penalty);
+
+  return {
+    scoring_version: SCORING_VERSION,
+    priority_score,
+    score_breakdown: {
+      recency: score.recency,
+      category_perf: score.category_perf,
+      image_freshness: score.image_freshness,
+      inventory_health: score.inventory_health,
+      inventory_penalty: score.inventory_penalty,
+      image_reuse_penalty,
+      subtotal: score.total,
+    },
+    scoring_weights_used: { ...weights },
+    penalties_applied,
+    boosts_applied: score.boosts_applied,
+    inventory_penalty: score.inventory_penalty,
+    image_reuse_penalty,
+    category_sample_size: score.category_sample_size,
+    top_boost: score.top_boost,
+    top_penalty: score.top_penalty,
+    final_reason_summary: score.final_reason_summary,
+    selected_reason: "priority_score_top",
+  };
+}
+
+type AutoQueueRunSettings = {
+  count: number;
+  platforms: string[];
+  caption_tones: string[];
+  posting_times: string[];
+};
+
+function resolveAutoQueueRunSettings(
+  body: Record<string, unknown>,
+  dbRow: Record<string, unknown> | null
+): AutoQueueRunSettings {
+  const db = dbRow && typeof dbRow === "object" ? dbRow : {};
+
+  const count =
+    parseCount(body.count) ??
+    parseCount(db.count) ??
+    4;
+
+  const platforms =
+    filterStringArray(body.platforms, VALID_PLATFORMS) ??
+    filterStringArray(body.platform, VALID_PLATFORMS) ??
+    filterStringArray(db.platforms, VALID_PLATFORMS) ??
+    ["instagram"];
+
+  const caption_tones =
+    filterStringArray(body.captionTones, VALID_TONES) ??
+    filterStringArray(body.caption_tones, VALID_TONES) ??
+    filterStringArray(body.tones, VALID_TONES) ??
+    filterStringArray(db.caption_tones, VALID_TONES) ??
+    filterStringArray(db.captionTones, VALID_TONES) ??
+    ["casual"];
+
+  const posting_times =
+    parsePostingTimes(body.postingTimes) ??
+    parsePostingTimes(body.posting_times) ??
+    parsePostingTimes(db.posting_times) ??
+    parsePostingTimes(db.postingTimes) ??
+    ["10:00", "18:00"];
+
+  return { count, platforms, caption_tones, posting_times };
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
@@ -464,13 +1080,12 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     // Parse request body
-    const body = await req.json().catch(() => ({}));
-    const {
-      count = 4,           // How many posts to generate per platform
-      platforms = ["instagram"],  // Array of platforms
-      preview = false,     // If true, return posts without creating them
-      learning_only = false, // If true, just run learning aggregation and return
-    } = body;
+    const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+    const preview = body.preview === true;
+    const learning_only = body.learning_only === true;
+    const compareScoring =
+      preview &&
+      (body.compareScoring === true || body.compare_scoring === true);
 
     // ── PHASE 1B: LEARNING-ONLY MODE (called by instagram-insights) ──
     if (learning_only) {
@@ -481,22 +1096,41 @@ Deno.serve(async (req) => {
       );
     }
     
-    // Support legacy single platform param
-    const platformList = Array.isArray(platforms) ? platforms : [platforms];
-
-    console.log(`[auto-queue] Generating ${count} posts for ${platformList.join(", ")}, preview=${preview}`);
-
-    // 2. Get auto_queue settings
+    // 2. Load persisted auto_queue settings, then merge request overrides
     const { data: settingsRow } = await supabase
       .from("social_settings")
       .select("setting_value")
       .eq("setting_key", "auto_queue")
       .single();
-    
-    const settings = settingsRow?.setting_value || {
-      posting_times: ["10:00", "18:00"],
-      caption_tones: ["casual", "urgency"],
+
+    const dbSettings =
+      settingsRow?.setting_value && typeof settingsRow.setting_value === "object"
+        ? (settingsRow.setting_value as Record<string, unknown>)
+        : null;
+
+    const runSettings = resolveAutoQueueRunSettings(body, dbSettings);
+    const { count, platforms: platformList, caption_tones, posting_times } = runSettings;
+
+    const allowMultiPlatformPerProduct =
+      dbSettings?.allow_multi_platform_per_product === true ||
+      body.allow_multi_platform_per_product === true;
+
+    const scoringWeights = resolveScoringWeights(dbSettings);
+
+    // Settings object used by caption/timing logic (body overrides DB for this run)
+    const settings = {
+      ...(dbSettings || {}),
+      count,
+      platforms: platformList,
+      caption_tones,
+      posting_times,
+      allow_multi_platform_per_product: allowMultiPlatformPerProduct,
     };
+
+    console.log(
+      `[auto-queue] Run settings: count=${count} platforms=${platformList.join(",")} ` +
+      `tones=${caption_tones.join(",")} times=${posting_times.join(",")} preview=${preview}`
+    );
 
     // Load Pinterest board mapping for auto-assigning boards
     let pinterestBoardMap: Record<string, string> = {};
@@ -551,7 +1185,7 @@ Deno.serve(async (req) => {
     console.log(`[auto-queue] Posting times: ${useDataDrivenTimes ? "data-driven" : "default"} (${totalTimeSamples} samples), peak hours (ET): ${peakHoursFinal.join(",")}`);
 
     // ── SPRINT 3: PRODUCT PRIORITY SCORING + COOLDOWN ──
-    // Fetch ALL active products
+    // Fetch ALL active products (with shipping_status for MTO / backorder context)
     const { data: allProducts, error: prodError } = await supabase
       .from("products")
       .select(`
@@ -561,6 +1195,8 @@ Deno.serve(async (req) => {
         category_id,
         catalog_image_url,
         price,
+        is_active,
+        shipping_status,
         last_social_post_at,
         category:categories(id, name)
       `)
@@ -577,23 +1213,142 @@ Deno.serve(async (req) => {
         success: true,
         message: "No products available for posting",
         generated: 0,
+        run_summary: { eligible_count: 0, skipped_count: 0 },
+        skipped_products: [],
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // 3-day cooldown: exclude recently posted products
+    const allProductIds = allProducts.map((p: any) => p.id);
+
+    // Variant stock totals (sum active variant stock; null if no variants)
+    const stockByProduct: Record<string, ProductStockInfo> = {};
+    const { data: variantRows } = await supabase
+      .from("product_variants")
+      .select("product_id, stock")
+      .in("product_id", allProductIds)
+      .eq("is_active", true);
+
+    (variantRows || []).forEach((row: any) => {
+      if (!stockByProduct[row.product_id]) {
+        stockByProduct[row.product_id] = { totalStock: 0, hasActiveVariants: true };
+      }
+      const s = row.stock;
+      if (typeof s === "number" && Number.isFinite(s)) {
+        stockByProduct[row.product_id].totalStock =
+          (stockByProduct[row.product_id].totalStock ?? 0) + s;
+      }
+    });
+
+    const getStockInfo = (productId: string): ProductStockInfo =>
+      stockByProduct[productId] || { totalStock: null, hasActiveVariants: false };
+
+    // ── Phase 3b: pending queue duplicate guard ──
+    const { data: pendingPosts } = await supabase
+      .from("social_posts")
+      .select("product_id, platform, image_url, scheduled_for")
+      .in("status", PENDING_POST_STATUSES)
+      .not("product_id", "is", null);
+
+    const pendingByProduct = new Map<string, { platforms: Set<string>; count: number }>();
+    (pendingPosts || []).forEach((row: any) => {
+      if (!row.product_id) return;
+      const entry = pendingByProduct.get(row.product_id) || { platforms: new Set(), count: 0 };
+      entry.count += 1;
+      if (row.platform) entry.platforms.add(row.platform);
+      pendingByProduct.set(row.product_id, entry);
+    });
+
+    // Recent image URLs per product (avoid stale reuse when alternatives exist)
+    const imageReuseCutoff = new Date(
+      Date.now() - IMAGE_REUSE_LOOKBACK_DAYS * 24 * 60 * 60 * 1000
+    ).toISOString();
+    const { data: recentImagePosts } = await supabase
+      .from("social_posts")
+      .select("product_id, image_url")
+      .in("status", [...PENDING_POST_STATUSES, "posted"])
+      .not("product_id", "is", null)
+      .not("image_url", "is", null)
+      .gte("scheduled_for", imageReuseCutoff);
+
+    const recentImagesByProduct: Record<string, Set<string>> = {};
+    (recentImagePosts || []).forEach((row: any) => {
+      if (!row.product_id || !row.image_url) return;
+      if (!recentImagesByProduct[row.product_id]) {
+        recentImagesByProduct[row.product_id] = new Set();
+      }
+      recentImagesByProduct[row.product_id].add(row.image_url);
+    });
+
+    const skippedProducts: Array<Record<string, unknown>> = [];
+
+    // Eligibility pass (inactive/name/image already filtered at query; strict re-check)
+    const eligibilityPassed: any[] = [];
+    for (const p of allProducts) {
+      const stockInfo = getStockInfo(p.id);
+      const eligibility = assessProductEligibility(p, stockInfo);
+      if (!eligibility.passed) {
+        skippedProducts.push({
+          product_id: p.id,
+          product_name: p.name,
+          skipped_reason: eligibility.skip_reason,
+          eligibility_warnings: eligibility.warnings,
+          inventory_status: eligibility.inventory_status,
+          backorder_status: eligibility.backorder_status,
+        });
+        continue;
+      }
+      eligibilityPassed.push({ ...p, _eligibility: eligibility, _stockInfo: stockInfo });
+    }
+
+    // 3-day cooldown: exclude recently posted products (preserve existing rule)
     const cooldownMs = 3 * 24 * 60 * 60 * 1000;
     const cooldownCutoff = new Date(Date.now() - cooldownMs).toISOString();
-    const cooledProducts = allProducts.filter((p: any) =>
+    const cooledProducts = eligibilityPassed.filter((p: any) =>
       !p.last_social_post_at || p.last_social_post_at < cooldownCutoff
     );
 
-    console.log(`[auto-queue] Products: ${allProducts.length} total, ${allProducts.length - cooledProducts.length} on cooldown, ${cooledProducts.length} eligible`);
+    const cooldownSkipped = eligibilityPassed.length - cooledProducts.length;
+    if (cooldownSkipped > 0) {
+      console.log(`[auto-queue] ${cooldownSkipped} products on 3-day last_social_post_at cooldown`);
+    }
 
-    if (!cooledProducts.length) {
+    // Exclude products already in pending queue
+    const queueReadyProducts = cooledProducts.filter((p: any) => {
+      if (!pendingByProduct.has(p.id)) return true;
+      const pending = pendingByProduct.get(p.id)!;
+      skippedProducts.push({
+        product_id: p.id,
+        product_name: p.name,
+        skipped_reason: "pending_queue_post",
+        duplicate_guard_result: `already_${pending.count}_queued`,
+        pending_platforms: [...pending.platforms],
+        eligibility_warnings: p._eligibility?.warnings || [],
+      });
+      return false;
+    });
+
+    console.log(
+      `[auto-queue] Products: ${allProducts.length} total, ${eligibilityPassed.length} eligibility-pass, ` +
+      `${cooledProducts.length} off cooldown, ${queueReadyProducts.length} queue-ready, ` +
+      `${skippedProducts.length} skipped`
+    );
+
+    if (!queueReadyProducts.length) {
       return new Response(JSON.stringify({
         success: true,
-        message: "All products are on cooldown (posted within 3 days)",
+        message: cooledProducts.length
+          ? "All eligible products are on cooldown or already queued"
+          : "No products available for posting",
         generated: 0,
+        preview: preview || undefined,
+        run_summary: {
+          eligible_count: 0,
+          skipped_count: skippedProducts.length,
+          pending_queue_blocked: skippedProducts.filter(
+            (s) => s.skipped_reason === "pending_queue_post"
+          ).length,
+        },
+        skipped_products: preview ? skippedProducts : undefined,
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -604,17 +1359,20 @@ Deno.serve(async (req) => {
       .eq("pattern_type", "category_performance");
 
     const categoryEngMap: Record<string, number> = {};
+    const categorySampleMap: Record<string, number> = {};
     let maxCatEng = 0;
     (categoryPerf || []).forEach((row: any) => {
+      const key = row.pattern_key;
+      categorySampleMap[key] = Number(row.sample_size) || 0;
       if (row.sample_size >= 3 && row.pattern_value?.avg_engagement_rate) {
         const rate = Number(row.pattern_value.avg_engagement_rate) || 0;
-        categoryEngMap[row.pattern_key] = rate;
+        categoryEngMap[key] = rate;
         if (rate > maxCatEng) maxCatEng = rate;
       }
     });
 
     // Load ready pool assets per product for image freshness scoring
-    const allProductIds = cooledProducts.map((p: any) => p.id);
+    const scoredProductIds = queueReadyProducts.map((p: any) => p.id);
 
     const { data: allPoolAssets } = await supabase
       .from("social_assets")
@@ -622,50 +1380,98 @@ Deno.serve(async (req) => {
       .eq("is_active", true)
       .not("product_id", "is", null)
       .not("shot_type", "is", null)
-      .in("product_id", allProductIds);
+      .in("product_id", scoredProductIds);
 
     const freshImageCount: Record<string, number> = {};
+    const poolAssetCount: Record<string, number> = {};
     (allPoolAssets || []).forEach((a: any) => {
+      poolAssetCount[a.product_id] = (poolAssetCount[a.product_id] || 0) + 1;
       if ((a.used_count || 0) === 0) {
         freshImageCount[a.product_id] = (freshImageCount[a.product_id] || 0) + 1;
       }
     });
 
-    // ── Compute priority score for each product ──
-    // Recency 40% + Category performance 30% + Fresh images 20% + Reserved 10%
-    const now = Date.now();
-    const scoredProducts = cooledProducts.map((p: any) => {
-      // Recency score (40%): how long since last post — longer = higher
-      let recencyScore = 40; // max if never posted
-      if (p.last_social_post_at) {
-        const daysSincePost = (now - new Date(p.last_social_post_at).getTime()) / (1000 * 60 * 60 * 24);
-        recencyScore = Math.min(40, (daysSincePost / 30) * 40); // 30+ days = full 40
-      }
+    const { data: allAiRows } = await supabase
+      .from("social_generated_images")
+      .select("product_id")
+      .in("product_id", scoredProductIds)
+      .eq("status", "approved");
 
-      // Category performance score (30%): how well this category performs
-      const catName = p.category?.name || "";
-      const catEng = categoryEngMap[catName] || 0;
-      const categoryScore = maxCatEng > 0 ? (catEng / maxCatEng) * 30 : 15; // default to mid if no data
-
-      // Fresh images score (20%): unused pool images available
-      const freshCount = freshImageCount[p.id] || 0;
-      const imageScore = Math.min(20, freshCount * 5); // each fresh image = 5 pts, cap at 20
-
-      // Reserved (10%): flat bonus — future use for manual boost / seasonal priority
-      const reservedScore = 10;
-
-      const totalScore = recencyScore + categoryScore + imageScore + reservedScore;
-
-      return { ...p, _priority: totalScore, _recency: recencyScore, _catPerf: categoryScore, _imgFresh: imageScore };
+    const aiImageCount: Record<string, number> = {};
+    (allAiRows || []).forEach((row: any) => {
+      aiImageCount[row.product_id] = (aiImageCount[row.product_id] || 0) + 1;
     });
+
+    // ── Phase 3c: priority scoring with penalties/boosts ──
+    const now = Date.now();
+    const scoreCtx = {
+      now,
+      weights: scoringWeights,
+      categoryEngMap,
+      categorySampleMap,
+      maxCatEng,
+      freshImageCount,
+      poolAssetCount,
+      aiImageCount,
+    };
+
+    const scoredProducts = queueReadyProducts.map((p: any) => {
+      const eligibility: EligibilityAssessment = p._eligibility;
+      const score = computeProductPriorityScore(p, eligibility, scoreCtx);
+      return {
+        ...p,
+        _priority: score.total,
+        _score: score,
+        _recency: score.recency,
+        _catPerf: score.category_perf,
+        _imgFresh: score.image_freshness,
+      };
+    });
+
+    let scoringComparisonResult: {
+      candidates: ScoringComparisonCandidate[];
+      summary: Record<string, unknown>;
+    } | null = null;
+    const scoringComparisonByProduct: Record<string, ScoringComparisonCandidate> = {};
+
+    if (compareScoring) {
+      scoringComparisonResult = buildScoringComparison(
+        scoredProducts,
+        count,
+        skippedProducts.length,
+        {
+          now,
+          categoryEngMap,
+          maxCatEng,
+          freshImageCount,
+        }
+      );
+      for (const c of scoringComparisonResult.candidates) {
+        scoringComparisonByProduct[c.product_id] = c;
+      }
+      console.log(
+        `[auto-queue] Scoring comparison: ${scoringComparisonResult.summary.candidates_compared} candidates, ` +
+        `up=${scoringComparisonResult.summary.moved_up_by_new_scoring} down=${scoringComparisonResult.summary.moved_down_by_new_scoring}`
+      );
+    }
 
     // Sort by priority descending, take top `count`
     scoredProducts.sort((a: any, b: any) => b._priority - a._priority);
     const products = scoredProducts.slice(0, count);
 
+    console.log(
+      `[auto-queue] Scoring ${SCORING_VERSION} weights: recency=${scoringWeights.recency} ` +
+      `category=${scoringWeights.category} images=${scoringWeights.image_freshness} ` +
+      `inventory=${scoringWeights.inventory_health} penalties=${scoringWeights.penalties_enabled}`
+    );
     console.log(`[auto-queue] Top ${products.length} products by priority:`);
     products.forEach((p: any) => {
-      console.log(`  ${p.name}: score=${p._priority.toFixed(1)} (recency=${p._recency.toFixed(1)} cat=${p._catPerf.toFixed(1)} img=${p._imgFresh.toFixed(1)})`);
+      const s = p._score;
+      console.log(
+        `  ${p.name}: score=${p._priority.toFixed(1)} (recency=${s.recency.toFixed(1)} ` +
+        `cat=${s.category_perf.toFixed(1)} img=${s.image_freshness.toFixed(1)} inv=${s.inventory_health.toFixed(1)} ` +
+        `penalty=${s.inventory_penalty}) — ${s.final_reason_summary}`
+      );
     });
 
     // ── IMAGE POOL: Load ready assets (must have product_id AND shot_type) ──
@@ -799,33 +1605,45 @@ Deno.serve(async (req) => {
       generatedImageId: string | null;
       needsGeneration: boolean;
       poolAssetId: string | null;
+      imageReuseGuard: string;
     } {
       const blacklisted = blacklistMap[productId] || new Set();
+      const recentUrls = recentImagesByProduct[productId] || new Set();
+
+      const isRecentlyUsed = (url: string) => recentUrls.has(url);
 
       // Priority 0 (Sprint 2): Image Pool — tagged assets, unused-first
       const poolImages = poolMap[productId];
       if (poolImages?.length) {
-        // Already sorted by used_count ASC, last_used_at ASC NULLS FIRST
-        const pick = poolImages[0];
+        const freshPool = poolImages.filter(
+          (img: any) => !isRecentlyUsed(resolveStorageUrl(img.original_image_path))
+        );
+        const pick = (freshPool.length ? freshPool : poolImages)[0];
+        const url = resolveStorageUrl(pick.original_image_path);
         return {
-          imageUrl: resolveStorageUrl(pick.original_image_path),
+          imageUrl: url,
           imageSource: "image_pool",
           generatedImageId: null,
           needsGeneration: false,
           poolAssetId: pick.id,
+          imageReuseGuard: freshPool.length ? "passed" : "reused_no_alternative",
         };
       }
 
       // Priority 1: Approved AI-generated image (ALWAYS preferred for social)
       const aiImages = aiImageMap[productId];
       if (aiImages?.length) {
-        const pick = aiImages[Math.floor(Math.random() * aiImages.length)];
+        const freshAi = aiImages.filter((img: any) => !isRecentlyUsed(img.public_url));
+        const pick = (freshAi.length ? freshAi : aiImages)[
+          Math.floor(Math.random() * (freshAi.length || aiImages.length))
+        ];
         return {
           imageUrl: pick.public_url,
           imageSource: "ai_generated",
           generatedImageId: pick.id,
           needsGeneration: false,
           poolAssetId: null,
+          imageReuseGuard: freshAi.length ? "passed" : "reused_no_alternative",
         };
       }
 
@@ -842,18 +1660,24 @@ Deno.serve(async (req) => {
           generatedImageId: null,
           needsGeneration: true,
           poolAssetId: null,
+          imageReuseGuard: isRecentlyUsed(tempUrl) ? "reused_no_alternative" : "passed",
         };
       }
 
       // Pipeline disabled — fall through to catalog/gallery
       const galleryUrls = (galleryMap[productId] || []).filter(url => !blacklisted.has(url));
       if (galleryUrls.length) {
+        const freshGallery = galleryUrls.filter((url) => !isRecentlyUsed(url));
+        const pickUrl = (freshGallery.length ? freshGallery : galleryUrls)[
+          Math.floor(Math.random() * (freshGallery.length || galleryUrls.length))
+        ];
         return {
-          imageUrl: galleryUrls[Math.floor(Math.random() * galleryUrls.length)],
+          imageUrl: pickUrl,
           imageSource: "gallery",
           generatedImageId: null,
           needsGeneration: false,
           poolAssetId: null,
+          imageReuseGuard: freshGallery.length ? "passed" : "reused_no_alternative",
         };
       }
 
@@ -863,6 +1687,7 @@ Deno.serve(async (req) => {
         generatedImageId: null,
         needsGeneration: false,
         poolAssetId: null,
+        imageReuseGuard: isRecentlyUsed(catalogUrl) ? "reused_no_alternative" : "passed",
       };
     }
 
@@ -914,7 +1739,15 @@ Deno.serve(async (req) => {
 
     // 5. Generate posts for each product
     const generatedPosts: any[] = [];
-    const tones = settings.caption_tones || ["casual", "urgency"];
+    const baseTones = settings.caption_tones || ["casual", "urgency"];
+    const platformsForBatch = allowMultiPlatformPerProduct
+      ? platformList
+      : [platformList[0]];
+    if (!allowMultiPlatformPerProduct && platformList.length > 1) {
+      console.log(
+        `[auto-queue] Multi-platform per product disabled — using ${platformList[0]} only per product this run`
+      );
+    }
     const recentShotTypes: string[] = []; // Track for diversity guard
 
     // ── SPRINT 3: Load last 2 queued posts' shot_types for diversity guard ──
@@ -942,6 +1775,12 @@ Deno.serve(async (req) => {
 
     for (let i = 0; i < products.length; i++) {
       const product = products[i];
+      const eligibility: EligibilityAssessment = product._eligibility || assessProductEligibility(
+        product,
+        product._stockInfo || getStockInfo(product.id)
+      );
+      const scarcitySafe = isScarcityCopySafe(eligibility);
+      const tones = pickSafeTones(baseTones, scarcitySafe);
       const categoryName = product.category?.name || "item";
       const categoryKey = String(categoryName || "").trim().toLowerCase();
       
@@ -989,9 +1828,10 @@ Deno.serve(async (req) => {
         if (aiResp.ok) {
           const aiResult = await aiResp.json();
           if (aiResult.caption && aiResult.caption.length > 30) {
-            bestCaption = aiResult.caption;
+            const guarded = guardCaptionScarcity(aiResult.caption, scarcitySafe);
+            bestCaption = guarded.caption;
             bestScore = scoreCaptionConfidence(bestCaption);
-            captionSource = "ai_generated";
+            captionSource = guarded.guarded ? "ai_generated_guarded" : "ai_generated";
             console.log(`[auto-queue] AI caption for "${product.name}": len=${bestCaption.length} score=${bestScore}`);
           }
         }
@@ -1007,7 +1847,7 @@ Deno.serve(async (req) => {
 
         for (let attempt = 0; attempt < MAX_CAPTION_ATTEMPTS; attempt++) {
           const tone = pickRandom(tones);
-          const template = pickRandom(CAPTION_TEMPLATES[tone] || CAPTION_TEMPLATES.casual);
+          const template = pickSafeTemplate(tone, scarcitySafe);
           const candidate = generateCaption(template, {
             name: product.name,
             category_name: categoryName,
@@ -1035,6 +1875,10 @@ Deno.serve(async (req) => {
         bestTone = "minimalist";
         captionSource = "template";
       }
+
+      const finalGuard = guardCaptionScarcity(bestCaption, scarcitySafe);
+      bestCaption = finalGuard.caption;
+      const scarcityGuardApplied = finalGuard.guarded || captionSource === "ai_generated_guarded";
 
       console.log(`[auto-queue] Caption for "${product.name}": source=${captionSource} score=${bestScore} status=${captionStatus} tone=${bestTone}`);
 
@@ -1077,37 +1921,51 @@ Deno.serve(async (req) => {
         console.log(`[auto-queue] No Image Pool assets for "${product.name}" — using fallback`);
       }
 
+      const pendingInfo = pendingByProduct.get(product.id);
+      const duplicateGuardResult = pendingInfo
+        ? `blocked_pending_${pendingInfo.count}`
+        : "passed";
+
+      const scoreMeta = buildSelectionScoreMetadata(
+        product._score,
+        scoringWeights,
+        imageResult.imageReuseGuard
+      );
+
       // Build selection metadata for observability
       const selectionMeta = {
-        priority_score: product._priority,
-        score_breakdown: {
-          recency: product._recency,
-          category_perf: product._catPerf,
-          image_freshness: product._imgFresh,
-          reserved: 10,
-        },
+        ...scoreMeta,
         shot_type: chosenShotType,
         is_resurfaced: false,
         caption_source: captionSource,
         caption_confidence: bestScore,
         caption_status: captionStatus,
         caption_tone: bestTone,
+        eligibility_passed: true,
+        eligibility_warnings: eligibility.warnings,
+        duplicate_guard_result: duplicateGuardResult,
+        image_reuse_guard: imageResult.imageReuseGuard,
+        inventory_status: eligibility.inventory_status,
+        backorder_status: eligibility.backorder_status,
+        scarcity_guard_applied: scarcityGuardApplied,
+        multi_platform_mode: allowMultiPlatformPerProduct ? "all_platforms" : "primary_only",
       };
 
-      // Create post for EACH selected platform
-      for (const plat of platformList) {
+      // Create post for selected platform(s) — default: primary platform only per product
+      for (const plat of platformsForBatch) {
         // Re-generate caption for this specific platform if needed (IG vs FB)
         let platformCaption = bestCaption;
-        if (plat !== platformList[0]) {
+        if (plat !== platformsForBatch[0]) {
           // Regenerate with platform-specific link handling
           const tone = bestTone;
-          const toneTemplates = CAPTION_TEMPLATES[tone] || CAPTION_TEMPLATES.casual;
-          const tmpl = pickRandom(toneTemplates);
+          const tmpl = pickSafeTemplate(tone, scarcitySafe);
           platformCaption = generateCaption(tmpl, {
             name: product.name,
             category_name: categoryName,
             slug: product.slug,
           }, plat);
+          const platGuard = guardCaptionScarcity(platformCaption, scarcitySafe);
+          platformCaption = platGuard.caption;
         }
 
         // Check if this should be a carousel post
@@ -1119,6 +1977,8 @@ Deno.serve(async (req) => {
           product_slug: product.slug,
           category_id: product.category_id,
           catalog_image_url: product.catalog_image_url,
+          last_social_post_at: product.last_social_post_at || null,
+          priority_score: scoreMeta.priority_score,
           resolved_image_url: imageResult.imageUrl,
           image_source: carouselResult.isCarousel ? carouselResult.carouselSource : imageResult.imageSource,
           generated_image_id: imageResult.generatedImageId,
@@ -1136,6 +1996,7 @@ Deno.serve(async (req) => {
           scheduled_for: postingTimes[i].toISOString(),
           tone: bestTone,
           selection_metadata: selectionMeta,
+          scoring_comparison: scoringComparisonByProduct[product.id] || null,
         });
       }
     }
@@ -1173,13 +2034,22 @@ Deno.serve(async (req) => {
           
           if (resurfaceProduct) {
             // Generate a fresh caption for the resurface
-            const freshTone = pickRandom(tones);
-            const freshTemplate = pickRandom(CAPTION_TEMPLATES[freshTone] || CAPTION_TEMPLATES.casual);
-            const freshCaption = generateCaption(freshTemplate, {
-              name: resurfaceProduct.name,
-              category_name: resurfaceProduct.category?.name || "item",
-              slug: resurfaceProduct.slug,
-            }, platformList[0]);
+            const resurfaceEligibility = assessProductEligibility(
+              resurfaceProduct,
+              getStockInfo(resurfaceProduct.id)
+            );
+            const resurfaceScarcitySafe = isScarcityCopySafe(resurfaceEligibility);
+            const resurfaceTones = pickSafeTones(baseTones, resurfaceScarcitySafe);
+            const freshTone = pickRandom(resurfaceTones);
+            const freshTemplate = pickSafeTemplate(freshTone, resurfaceScarcitySafe);
+            const freshCaption = guardCaptionScarcity(
+              generateCaption(freshTemplate, {
+                name: resurfaceProduct.name,
+                category_name: resurfaceProduct.category?.name || "item",
+                slug: resurfaceProduct.slug,
+              }, platformList[0]),
+              resurfaceScarcitySafe
+            ).caption;
 
             const resurfaceCatKey = String(resurfaceProduct.category?.name || "").trim().toLowerCase();
             const categoryHashtags = hashtagMap[resurfaceCatKey] || globalHashtags;
@@ -1223,6 +2093,13 @@ Deno.serve(async (req) => {
                 caption_confidence: 100,
                 caption_status: "accepted",
                 caption_tone: freshTone,
+                eligibility_passed: true,
+                eligibility_warnings: resurfaceEligibility.warnings,
+                duplicate_guard_result: "resurface",
+                inventory_status: resurfaceEligibility.inventory_status,
+                backorder_status: resurfaceEligibility.backorder_status,
+                selected_reason: "auto_resurface_hit",
+                scarcity_guard_applied: !resurfaceScarcitySafe,
               },
             };
 
@@ -1233,11 +2110,35 @@ Deno.serve(async (req) => {
     }
 
     // If preview mode, return without saving
+    const runSummary = {
+      eligible_count: generatedPosts.length,
+      products_selected: products.length,
+      skipped_count: skippedProducts.length,
+      pending_queue_blocked: skippedProducts.filter(
+        (s) => s.skipped_reason === "pending_queue_post"
+      ).length,
+      multi_platform_per_product: allowMultiPlatformPerProduct,
+      platforms_per_product: platformsForBatch.length,
+    };
+
     if (preview) {
       return new Response(JSON.stringify({
         success: true,
         preview: true,
+        compare_scoring: compareScoring,
         posts: generatedPosts,
+        skipped_products: skippedProducts,
+        run_summary: runSummary,
+        scoring_comparison: scoringComparisonResult ?? undefined,
+        settings_used: {
+          count,
+          platforms: platformList,
+          caption_tones,
+          posting_times,
+          allow_multi_platform_per_product: allowMultiPlatformPerProduct,
+          scoring_weights: scoringWeights,
+          scoring_version: SCORING_VERSION,
+        },
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -1482,6 +2383,8 @@ Deno.serve(async (req) => {
       posts: createdPosts,
       skippedErrors: skippedErrors.length ? skippedErrors : undefined,
       generatedCount: generatedPosts.length,
+      skipped_products: skippedProducts.length ? skippedProducts : undefined,
+      run_summary: runSummary,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
   } catch (err: unknown) {

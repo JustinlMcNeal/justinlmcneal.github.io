@@ -1,10 +1,14 @@
 // Autopilot Fill - Automatically fills the queue with posts daily
 // This runs via pg_cron to ensure there are always posts scheduled ahead
-// 
+//
 // Logic:
 // 1. Check how many posts are scheduled for the next X days
 // 2. If below threshold, auto-generate more using auto-queue logic
 // 3. Respects autopilot settings (enabled, days_ahead, posts_per_day, platforms, tones)
+//
+// Volume math is unchanged here. Product selection/scoring (Phase 3c) lives in auto-queue,
+// including selection_metadata.score_breakdown, penalties_applied, and scoring_weights from
+// social_settings.auto_queue when configured.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -104,7 +108,10 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         count: postsToGenerate,
         platforms: settings.platforms,
+        captionTones: settings.tones,
+        caption_tones: settings.tones,
         tones: settings.tones,
+        postingTimes: settings.posting_times,
         posting_times: settings.posting_times,
         preview: false,
       }),

@@ -619,10 +619,55 @@
                 </div>
                 <p class="text-xs text-gray-500 mt-1">Mix multiple styles for variety in your posts</p>
               </div>
+
+              <div class="border-t pt-6">
+                <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                  <span class="text-sm font-medium text-gray-700">Scoring weights <span class="text-xs font-normal text-gray-400">(product priority)</span></span>
+                  <button type="button" id="btnResetScoringDefaults" class="text-xs text-indigo-600 hover:text-indigo-800 underline">
+                    Reset scoring defaults
+                  </button>
+                </div>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div>
+                    <label for="aqWeightRecency" class="text-xs text-gray-500">Recency</label>
+                    <input type="number" id="aqWeightRecency" min="0" max="50" value="40" class="w-full border rounded-lg px-2 py-1.5 text-sm mt-0.5">
+                  </div>
+                  <div>
+                    <label for="aqWeightCategory" class="text-xs text-gray-500">Category</label>
+                    <input type="number" id="aqWeightCategory" min="0" max="50" value="25" class="w-full border rounded-lg px-2 py-1.5 text-sm mt-0.5">
+                  </div>
+                  <div>
+                    <label for="aqWeightImageFreshness" class="text-xs text-gray-500">Image freshness</label>
+                    <input type="number" id="aqWeightImageFreshness" min="0" max="50" value="25" class="w-full border rounded-lg px-2 py-1.5 text-sm mt-0.5">
+                  </div>
+                  <div>
+                    <label for="aqWeightInventoryHealth" class="text-xs text-gray-500">Inventory health</label>
+                    <input type="number" id="aqWeightInventoryHealth" min="0" max="50" value="10" class="w-full border rounded-lg px-2 py-1.5 text-sm mt-0.5">
+                  </div>
+                </div>
+                <label class="flex items-center gap-2 mt-3 cursor-pointer">
+                  <input type="checkbox" id="aqPenaltiesEnabled" checked class="accent-indigo-600">
+                  <span class="text-sm">Apply inventory &amp; image penalties</span>
+                </label>
+                <p class="text-xs text-gray-500 mt-1">Each weight 0–50. Reset updates the form only; click Save to persist.</p>
+              </div>
+
+              <div>
+                <button type="button" id="btnSaveAutoQueueSettings" class="mt-4 px-4 py-2 text-sm font-bold border-2 border-gray-300 rounded-lg hover:border-gray-400 transition-colors">
+                  Save Auto-Queue Settings
+                </button>
+                <p class="text-xs text-gray-500 mt-1">Saved settings are used by Autopilot and as defaults for manual runs</p>
+              </div>
             </div>
           </div>
 
           <!-- Generate Button -->
+          <div class="mb-3">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" id="aqCompareScoring" checked class="accent-indigo-600">
+              <span class="text-sm text-gray-700">Compare against legacy scoring (preview only)</span>
+            </label>
+          </div>
           <div class="flex flex-col sm:flex-row gap-4">
             <button id="btnPreviewQueue" class="flex-1 px-6 py-4 text-sm font-bold border-2 border-gray-300 rounded-xl hover:border-gray-400 transition-colors flex items-center justify-center gap-2">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -842,6 +887,20 @@
                 </div>
               </div>
               <p id="analyticsLastSync" class="text-xs text-gray-400 mt-4 text-center">Sync insights to see engagement data</p>
+            </div>
+          </div>
+
+          <!-- Scoring performance (auto-queue quartiles) -->
+          <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+            <div class="p-4 border-b flex flex-wrap items-center justify-between gap-2">
+              <h2 class="font-bold">📊 Scoring performance</h2>
+              <span class="text-xs text-gray-400">Posted rows by priority score quartile</span>
+            </div>
+            <div class="p-4">
+              <div id="scoringPerformanceAlert" class="hidden text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg p-3 mb-3"></div>
+              <div id="scoringPerformanceTable" class="text-sm text-gray-500">
+                <p class="text-center py-3 text-gray-400">Open Analytics or refresh to load</p>
+              </div>
             </div>
           </div>
 
@@ -2146,6 +2205,9 @@
           </div>
         </div>
         
+        <!-- Auto-queue selection context (when present) -->
+        <div id="postDetailSelection" class="hidden text-xs bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-1"></div>
+
         <!-- Engagement Stats (shown for posted content) -->
         <div id="postDetailEngagement" class="hidden"></div>
       </div>
