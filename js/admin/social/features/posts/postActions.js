@@ -8,6 +8,7 @@ import {
 import { parseHashtags } from "../../captions.js";
 import { getPostsContext } from "./postsContext.js";
 import { closePostDetail } from "./postDetailRender.js";
+import { refreshSchedulingHub } from "./schedulingRefresh.js";
 
 export async function handleDeletePost() {
   const { state, loadStats, loadAutoQueueStats, loadCalendarPosts, loadQueuePosts } = getPostsContext();
@@ -26,8 +27,7 @@ export async function handleDeletePost() {
     await loadStats();
 
     if (state.currentTab === "autoqueue") await loadAutoQueueStats();
-    else if (state.currentTab === "calendar") await loadCalendarPosts();
-    else if (state.currentTab === "queue") await loadQueuePosts();
+    else await refreshSchedulingHub();
   } catch (err) {
     console.error("Delete post error:", err);
     alert("Failed to delete post");
@@ -55,8 +55,7 @@ export async function handleSavePost() {
     await updatePost(state.editingPost.id, updateData);
     closePostDetail();
 
-    if (state.currentTab === "calendar") await loadCalendarPosts();
-    else if (state.currentTab === "queue") await loadQueuePosts();
+    await refreshSchedulingHub();
 
     alert("Post updated!");
   } catch (err) {
@@ -100,9 +99,7 @@ export async function handlePostNow() {
       closePostDetail();
       await new Promise(r => setTimeout(r, 500));
       await loadStats();
-      if (state.currentTab === "calendar") await loadCalendarPosts();
-      else if (state.currentTab === "queue") await loadQueuePosts();
-      else await loadQueuePosts();
+      await refreshSchedulingHub();
     }
   } else if (post.platform === "pinterest") {
     const modalBoardSelect = document.getElementById("postDetailBoard");
@@ -135,9 +132,7 @@ export async function handlePostNow() {
       closePostDetail();
       await new Promise(r => setTimeout(r, 500));
       await loadStats();
-      if (state.currentTab === "calendar") await loadCalendarPosts();
-      else if (state.currentTab === "queue") await loadQueuePosts();
-      else await loadQueuePosts();
+      await refreshSchedulingHub();
     }
   } else {
     alert(`Posting to ${post.platform} is not supported yet.`);

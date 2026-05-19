@@ -72,7 +72,7 @@ export async function generateRepost() {
     } else {
       alert(`✅ Scheduled ${result.generated} reposts!`);
       await loadStats();
-      if (state.currentTab === "queue") await loadQueuePosts();
+      if (state.currentTab === "calendar" || state.currentTab === "queue") await loadQueuePosts();
     }
 
     document.getElementById("repostPreviewResults")?.classList.add("hidden");

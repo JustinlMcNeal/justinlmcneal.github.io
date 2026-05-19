@@ -27,6 +27,8 @@ import { initAnalytics, setupAnalytics, loadAnalytics, initPostAnalyticsModal, i
 import { initPostsContext } from "./features/posts/postsContext.js";
 import { setupQueueFilter } from "./features/posts/queueFilters.js";
 import { loadQueuePosts } from "./features/posts/queueList.js";
+import { setupCalendarHubView } from "./features/posts/calendarHubView.js";
+import { handlePostClick } from "./features/posts/postClickRouting.js";
 import { initSocialBootContext } from "./boot/socialBootContext.js";
 import { setupTabRouter, switchTab } from "./boot/tabRouter.js";
 import { startSocialAdminPage } from "./boot/pageBoot.js";
@@ -391,6 +393,7 @@ async function init() {
     setupUploadModal();
     setupSettingsModal();
     setupPostDetailModal();
+    setupCalendarHubView();
     setupCalendar();
     setupQueueFilter();
     setupImagePool();
@@ -451,7 +454,7 @@ async function loadCalendarPosts() {
 
 function setupCalendar() {
   calendar = initCalendar(els.calendarGrid, els.calMonth, {
-    onPostClick: (post) => openPostDetail(post)
+    onPostClick: (post) => handlePostClick(post)
   });
   els.calPrev?.addEventListener("click", () => {
     calendar.prevMonth();

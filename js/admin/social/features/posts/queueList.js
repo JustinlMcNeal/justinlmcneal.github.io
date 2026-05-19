@@ -3,14 +3,34 @@
 import { fetchPosts, getPublicUrl } from "../../api.js";
 import { formatScheduleDate, formatScheduleTime } from "../../utils/dates.js";
 import { getPostsContext } from "./postsContext.js";
-import { openPostDetail } from "./postDetailController.js";
+import { handlePostClick } from "./postClickRouting.js";
+
+/** Statuses shown in Calendar → Queue List (excludes posted / published). */
+const QUEUE_LIST_STATUSES = ["queued", "scheduled"];
 
 export async function loadQueuePosts() {
   const { els } = getPostsContext();
   const platform = els.queueFilter.value;
-  const filters = { status: "queued" };
-  if (platform !== "all") filters.platform = platform;
-  const posts = await fetchPosts(filters);
+  const baseFilters = platform !== "all" ? { platform } : {};
+
+  const batches = await Promise.all(
+    QUEUE_LIST_STATUSES.map((status) =>
+      fetchPosts({ ...baseFilters, status })
+    )
+  );
+
+  const byId = new Map();
+  for (const batch of batches) {
+    for (const post of batch) {
+      if (QUEUE_LIST_STATUSES.includes(post.status)) {
+        byId.set(post.id, post);
+      }
+    }
+  }
+
+  const posts = Array.from(byId.values()).sort(
+    (a, b) => new Date(a.scheduled_for) - new Date(b.scheduled_for)
+  );
   renderQueueList(posts);
 }
 
@@ -59,7 +79,7 @@ function renderQueueList(posts) {
     el.addEventListener("click", () => {
       const postId = el.dataset.postId;
       const post = posts.find(p => p.id === postId);
-      if (post) openPostDetail(post);
+      if (post) handlePostClick(post);
     });
   });
 }

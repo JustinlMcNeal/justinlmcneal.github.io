@@ -167,7 +167,7 @@ async function runAutopilotNow() {
     } else {
       alert(`✅ Autopilot generated ${result.generated} new posts!`);
       await _loadStats();
-      if (_state.currentTab === "queue") await _loadQueuePosts();
+      if (_state.currentTab === "calendar" || _state.currentTab === "queue") await _loadQueuePosts();
     }
     
     await loadAutopilotSettings();

@@ -1,8 +1,9 @@
 // Main tab navigation — buttons, panels, lazy tab loaders
 
 import { getSocialBootContext } from "./socialBootContext.js";
+import { setCalendarHubView } from "../features/posts/calendarHubView.js";
 
-const TAB_BTN_SELECTOR = ".tab-btn";
+const TAB_BTN_SELECTOR = ".tab-btn:not(.hidden)";
 const TAB_PANEL_SELECTOR = ".tab-panel";
 
 export function setupTabRouter() {
@@ -20,6 +21,12 @@ export function getActiveTab() {
 
 export function activateTab(tab) {
   const { state, $, tabHandlers } = getSocialBootContext();
+
+  if (tab === "queue") {
+    tab = "calendar";
+    setCalendarHubView("queue");
+  }
+
   state.currentTab = tab;
 
   document.querySelectorAll(TAB_BTN_SELECTOR).forEach(btn => {
@@ -36,9 +43,6 @@ export function activateTab(tab) {
   switch (tab) {
     case "calendar":
       tabHandlers.loadCalendarPosts?.();
-      break;
-    case "queue":
-      tabHandlers.loadQueuePosts?.();
       break;
     case "assets":
       tabHandlers.loadAssets?.();

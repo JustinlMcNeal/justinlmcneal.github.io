@@ -125,9 +125,7 @@
       <button data-tab="calendar" class="tab-btn px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-black transition-colors whitespace-nowrap">
         📅 Calendar
       </button>
-      <button data-tab="queue" class="tab-btn px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-black transition-colors whitespace-nowrap">
-        📋 Queue
-      </button>
+      <!-- Queue merged into Calendar hub — tab button removed -->
       <button data-tab="assets" class="tab-btn px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-black transition-colors whitespace-nowrap">
         🖼️ Image Pool
       </button>
@@ -151,26 +149,40 @@
 
     <!-- Tab Content -->
     <div id="tabContent">
-      <!-- Calendar View -->
+      <!-- Calendar / Queue hub -->
       <div id="tab-calendar" class="tab-panel hidden">
         <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
-          <!-- Calendar Header -->
-          <div class="flex items-center justify-between p-3 sm:p-4 border-b">
-            <button id="calPrev" class="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-              <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
-              </svg>
-            </button>
-            <h2 id="calMonth" class="text-sm sm:text-lg font-bold">January 2026</h2>
-            <button id="calNext" class="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-              <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
-              </svg>
-            </button>
+          <div class="p-3 sm:p-4 border-b flex flex-col gap-3">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div class="flex items-center gap-1 p-1 bg-gray-100 rounded-lg w-fit" role="tablist" aria-label="Calendar hub view">
+                <button type="button" data-calendar-hub-view="calendar" class="calendar-hub-view-btn active px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md bg-white shadow-sm text-black transition-colors">📅 Calendar</button>
+                <button type="button" data-calendar-hub-view="queue" class="calendar-hub-view-btn px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md text-gray-600 hover:text-black transition-colors">📋 Queue List</button>
+              </div>
+              <div id="calendarHubNav" class="flex items-center justify-between flex-1 sm:max-w-xs sm:ml-auto gap-2">
+                <button id="calPrev" type="button" class="p-2 hover:bg-gray-100 rounded-lg transition-colors" aria-label="Previous month">
+                  <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+                  </svg>
+                </button>
+                <h2 id="calMonth" class="text-sm sm:text-lg font-bold text-center flex-1">January 2026</h2>
+                <button id="calNext" type="button" class="p-2 hover:bg-gray-100 rounded-lg transition-colors" aria-label="Next month">
+                  <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+                  </svg>
+                </button>
+              </div>
+              <div id="calendarHubQueueHeader" class="hidden flex items-center justify-between flex-1 sm:max-w-md sm:ml-auto gap-3">
+                <h2 class="font-bold text-sm sm:text-base">Scheduled Posts</h2>
+                <select id="queueFilter" class="text-sm border rounded-lg px-3 py-2">
+                  <option value="all">All Platforms</option>
+                  <option value="instagram">Instagram</option>
+                  <option value="pinterest">Pinterest</option>
+                </select>
+              </div>
+            </div>
           </div>
-          
-          <!-- Calendar Grid -->
-          <div class="p-2 sm:p-4">
+
+          <div id="calendarHubCalendarView" class="p-2 sm:p-4">
             <!-- Day headers - abbreviated on mobile -->
             <div class="grid grid-cols-7 gap-1 mb-2">
               <div class="text-[10px] sm:text-xs font-medium text-gray-400 text-center py-1 sm:py-2"><span class="sm:hidden">S</span><span class="hidden sm:inline">Sun</span></div>
@@ -186,25 +198,13 @@
               <!-- Populated by JS -->
             </div>
           </div>
-        </div>
-      </div>
 
-      <!-- Queue View -->
-      <div id="tab-queue" class="tab-panel hidden">
-        <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
-          <div class="p-4 border-b flex items-center justify-between">
-            <h2 class="font-bold">Scheduled Posts</h2>
-            <select id="queueFilter" class="text-sm border rounded-lg px-3 py-2">
-              <option value="all">All Platforms</option>
-              <option value="instagram">Instagram</option>
-              <option value="pinterest">Pinterest</option>
-            </select>
-          </div>
-          <div id="queueList" class="divide-y">
-            <!-- Populated by JS -->
-            <div class="p-8 text-center text-gray-400">
-              <p>No scheduled posts yet</p>
-              <button class="mt-2 text-sm text-black font-medium hover:underline" onclick="document.getElementById('btnUpload').click()">Create your first post →</button>
+          <div id="calendarHubQueueView" class="hidden">
+            <div id="queueList" class="divide-y">
+              <div class="p-8 text-center text-gray-400">
+                <p>No scheduled posts yet</p>
+                <button class="mt-2 text-sm text-black font-medium hover:underline" onclick="document.getElementById('btnUpload').click()">Create your first post →</button>
+              </div>
             </div>
           </div>
         </div>
