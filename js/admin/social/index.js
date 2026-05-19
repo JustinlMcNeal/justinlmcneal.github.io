@@ -42,6 +42,7 @@ import { initPlatformsContext } from "./features/platforms/platformsContext.js";
 import { registerOAuthRedirectHandlers } from "./features/platforms/oauthHandlers.js";
 import { setupPlatformConnectButtons, checkConnectionStatus } from "./features/platforms/platformConnections.js";
 import { registerPlatformTestActions } from "./features/platforms/platformTestActions.js";
+import { postToInstagram, postToFacebook, postToPinterest } from "./features/platforms/platformPosting.js";
 
 // ============================================
 // State
@@ -139,61 +140,6 @@ initPlatformsContext({
 });
 registerOAuthRedirectHandlers();
 registerPlatformTestActions();
-
-// ============================================
-// Platform Posting
-// ============================================
-
-async function postToInstagram(postId, imageUrl, caption) {
-  try {
-    const resp = await fetch(`${SUPABASE_FUNCTIONS_URL}/instagram-post`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SUPABASE_ANON_KEY}` },
-      body: JSON.stringify({ postId, imageUrl, caption }),
-    });
-    const data = await resp.json();
-    if (data.success) { alert("Posted to Instagram successfully!"); return data; }
-    else { alert(`Failed to post to Instagram: ${data.error}`); return null; }
-  } catch (err) {
-    console.error("Instagram post error:", err);
-    alert("Failed to post to Instagram. Check console for details.");
-    return null;
-  }
-}
-
-async function postToFacebook(postId, imageUrl, caption, linkUrl = null) {
-  try {
-    const resp = await fetch(`${SUPABASE_FUNCTIONS_URL}/facebook-post`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SUPABASE_ANON_KEY}` },
-      body: JSON.stringify({ postId, imageUrl, caption, linkUrl }),
-    });
-    const data = await resp.json();
-    if (data.success) { alert("Posted to Facebook successfully!"); return data; }
-    else { alert(`Failed to post to Facebook: ${data.error}`); return null; }
-  } catch (err) {
-    console.error("Facebook post error:", err);
-    alert("Failed to post to Facebook. Check console for details.");
-    return null;
-  }
-}
-
-async function postToPinterest(postId, imageUrl, title, description, link, boardId) {
-  try {
-    const resp = await fetch(`${SUPABASE_FUNCTIONS_URL}/pinterest-post`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SUPABASE_ANON_KEY}` },
-      body: JSON.stringify({ postId, imageUrl, title, description, link, boardId }),
-    });
-    const data = await resp.json();
-    if (data.success) { alert("Pin created successfully!"); return data; }
-    else { alert(`Failed to post: ${data.error}`); return null; }
-  } catch (err) {
-    console.error("Pinterest post error:", err);
-    alert("Failed to post to Pinterest. Check console for details.");
-    return null;
-  }
-}
 
 // ============================================
 // Pinterest Boards
