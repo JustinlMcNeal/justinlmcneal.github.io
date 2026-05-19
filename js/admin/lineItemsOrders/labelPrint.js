@@ -106,17 +106,21 @@ export function buildLabelHtml(order, labelType, options = {}) {
 
   const firstName = order.first_name ? esc(order.first_name) : null;
 
-  let headline, cta1, cta2, coupon;
+  let headline, cta1, cta2, coupon, footerLeft, footerRight;
   if (labelType === "review_cta") {
     headline  = firstName ? `Thanks,<br>${firstName}!` : `Thanks for<br>ordering!`;
     cta1      = "Scan to leave a quick review";
     cta2      = "and get 15% off your next order.";
     coupon    = "THANKYOU15";
+    footerLeft = "Thank you for supporting Karry Kraze";
+    footerRight = "Review reward";
   } else {
     headline  = `Like your<br>order?`;
-    cta1      = `Order direct at KarryKraze.com`;
-    cta2      = `Scan for 15% off your first website order.`;
+    cta1      = "Scan to save on your next order";
+    cta2      = "and get 15% off when you shop direct.";
     coupon    = "DIRECT15";
+    footerLeft = "Shop direct with Karry Kraze";
+    footerRight = "Save more next time";
   }
 
   return `<!DOCTYPE html>
@@ -141,29 +145,24 @@ export function buildLabelHtml(order, labelType, options = {}) {
   <div style="width:6in;height:4in;display:flex;flex-direction:column;border:4px solid #000;background:#fff;color:#000;position:relative;overflow:hidden;">
 
     <!-- Header -->
-    <div style="height:.72in;display:flex;align-items:center;justify-content:space-between;gap:.18in;padding:.13in .2in .1in .2in;border-bottom:4px solid #000;background:#fff;">
-      <div style="display:flex;align-items:center;gap:.12in;min-width:0;">
-        <span style="display:inline-flex;align-items:center;justify-content:center;border:4px solid #000;background:#fff;padding:.055in .09in;height:.47in;">
-          <img src="/imgs/brand/logo-bwp.png" alt="Karry Kraze" style="display:block;height:.31in;width:auto;filter:grayscale(1) contrast(2.4);">
-        </span>
-        <div style="font-size:8.5pt;font-weight:900;text-transform:uppercase;letter-spacing:.16em;line-height:1.15;color:#111;">
-          Thank-you<br>label
-        </div>
+    <div style="height:.62in;display:flex;align-items:stretch;justify-content:space-between;border-bottom:4px solid #000;background:#fff;">
+      <div style="display:flex;align-items:center;padding:0 .22in;font-size:13pt;font-weight:900;text-transform:uppercase;letter-spacing:.18em;line-height:1;color:#111;">
+        Thank-you label
       </div>
-      <div style="background:#000;color:#fff;padding:.07in .11in;font-size:8.5pt;font-weight:900;text-transform:uppercase;letter-spacing:.14em;white-space:nowrap;">
+      <div style="display:flex;align-items:center;background:#000;color:#fff;padding:0 .2in;font-size:10pt;font-weight:900;text-transform:uppercase;letter-spacing:.14em;white-space:nowrap;">
         Scan for savings
       </div>
     </div>
 
     <!-- Body -->
-    <div style="flex:1;display:grid;grid-template-columns:1fr 2.05in;gap:.2in;align-items:stretch;padding:.2in .22in .16in .22in;min-height:0;">
+    <div style="flex:1;display:grid;grid-template-columns:1fr 2.12in;gap:.2in;align-items:stretch;padding:.2in .22in .16in .22in;min-height:0;">
 
       <!-- Text column -->
       <div style="min-width:0;display:flex;flex-direction:column;justify-content:space-between;gap:.13in;">
         <div>
-          <div style="font-size:27pt;font-weight:900;line-height:.96;letter-spacing:-.045em;text-transform:uppercase;">${headline}</div>
-          <div style="width:.78in;height:5px;background:#000;margin:.14in 0 .12in 0;"></div>
-          <div style="font-size:15pt;font-weight:900;line-height:1.08;letter-spacing:-.015em;color:#111;">
+          <div style="font-size:30pt;font-weight:900;line-height:.9;letter-spacing:-.05em;text-transform:uppercase;">${headline}</div>
+          <div style="width:1.05in;height:6px;background:#000;margin:.14in 0 .13in 0;"></div>
+          <div style="font-size:15.5pt;font-weight:900;line-height:1.08;letter-spacing:-.015em;color:#111;">
             ${esc(cta1)}
           </div>
           <div style="font-size:11pt;margin-top:.06in;line-height:1.28;color:#444;font-weight:700;">
@@ -171,19 +170,23 @@ export function buildLabelHtml(order, labelType, options = {}) {
           </div>
         </div>
 
-        <div style="border:3px solid #000;background:#fff;padding:.1in .13in;display:inline-block;align-self:flex-start;box-shadow:.06in .06in 0 #222;">
-          <div style="font-size:7.5pt;font-weight:900;text-transform:uppercase;letter-spacing:.17em;color:#444;margin-bottom:.03in;">Use code</div>
-          <div style="font-size:23pt;font-weight:900;letter-spacing:.04em;line-height:.95;">${esc(coupon)}</div>
+        <div style="border:4px solid #000;background:#fff;padding:.11in .15in;display:inline-block;align-self:flex-start;box-shadow:.045in .045in 0 #222;">
+          <div style="font-size:8pt;font-weight:900;text-transform:uppercase;letter-spacing:.18em;color:#444;margin-bottom:.035in;">Use code</div>
+          <div style="font-size:24pt;font-weight:900;letter-spacing:.035em;line-height:.95;">${esc(coupon)}</div>
         </div>
       </div>
 
       <!-- QR column -->
-      <div style="border:3px solid #000;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:.12in .09in;min-width:0;">
-        <div style="font-size:9pt;font-weight:900;text-transform:uppercase;letter-spacing:.18em;margin-bottom:.08in;">Scan me</div>
-        <div style="border:3px solid #000;padding:.055in;background:#fff;">
-          ${qrBlock}
+      <div style="border:4px solid #000;background:#fff;display:flex;flex-direction:column;align-items:stretch;justify-content:space-between;min-width:0;">
+        <div style="background:#000;color:#fff;text-align:center;font-size:11pt;font-weight:900;text-transform:uppercase;letter-spacing:.2em;padding:.08in .08in;">
+          Scan me
         </div>
-        <div style="font-size:8pt;color:#444;text-align:center;line-height:1.2;margin-top:.08in;font-weight:800;">
+        <div style="display:flex;align-items:center;justify-content:center;padding:.11in .08in;background:#fff;">
+          <div style="border:2px solid #000;padding:.07in;background:#fff;">
+            ${qrBlock}
+          </div>
+        </div>
+        <div style="border-top:2px solid #000;font-size:8.5pt;color:#444;text-align:center;line-height:1.2;padding:.06in .08in;font-weight:900;text-transform:uppercase;letter-spacing:.12em;">
           karrykraze.com
         </div>
       </div>
@@ -191,9 +194,10 @@ export function buildLabelHtml(order, labelType, options = {}) {
     </div>
 
     <!-- Footer -->
-    <div style="height:.34in;border-top:4px solid #000;background:#000;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 .22in;font-size:8pt;font-weight:900;text-transform:uppercase;letter-spacing:.14em;">
-      <span>Thank you for supporting Karry Kraze</span>
-      <span>${labelType === "review_cta" ? "Review reward" : "Direct order reward"}</span>
+    <div style="height:.36in;border-top:4px solid #000;background:#000;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 .2in;font-size:8pt;font-weight:900;text-transform:uppercase;letter-spacing:.12em;">
+      <span>${esc(footerLeft)}</span>
+      <span style="display:inline-block;width:2px;height:.17in;background:#fff;margin:0 .12in;"></span>
+      <span>${esc(footerRight)}</span>
     </div>
 
   </div>
