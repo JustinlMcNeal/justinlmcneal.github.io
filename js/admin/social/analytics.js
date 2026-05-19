@@ -17,6 +17,8 @@ import {
   getAllCategoryInsights
 } from "./postLearning.js";
 import { loadScoringPerformance } from "./scoringPerformance.js";
+import { setText } from "./utils/dom.js";
+import { formatCompactNumber } from "./utils/formatters.js";
 
 let _state, _els, _showToast, _getClient;
 let _loadCalendarPosts, _loadQueuePosts;
@@ -94,12 +96,9 @@ async function loadEngagementMetrics() {
       return true;
     });
     
-    const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-    const formatNum = (n) => n >= 1000 ? (n / 1000).toFixed(1) + "k" : n.toString();
-    
     if (allPosts.length === 0) {
-      setEl("analyticsLikes", "0"); setEl("analyticsComments", "0"); setEl("analyticsSaves", "0");
-      setEl("analyticsImpressions", "0"); setEl("analyticsReach", "0"); setEl("analyticsEngagementRate", "0%");
+      setText("analyticsLikes", "0"); setText("analyticsComments", "0"); setText("analyticsSaves", "0");
+      setText("analyticsImpressions", "0"); setText("analyticsReach", "0"); setText("analyticsEngagementRate", "0%");
       const topPostsContainer = document.getElementById("analyticsTopPosts");
       if (topPostsContainer) topPostsContainer.innerHTML = '<div class="p-4 text-center text-gray-400 text-sm">No engagement data yet</div>';
       return;
@@ -113,9 +112,9 @@ async function loadEngagementMetrics() {
     
     const avgEngRate = (allPosts.reduce((sum, p) => sum + (p.engagement_rate || 0), 0) / allPosts.length).toFixed(2);
     
-    setEl("analyticsLikes", formatNum(totals.likes)); setEl("analyticsComments", formatNum(totals.comments));
-    setEl("analyticsSaves", formatNum(totals.saves)); setEl("analyticsImpressions", formatNum(totals.impressions));
-    setEl("analyticsReach", formatNum(totals.reach)); setEl("analyticsEngagementRate", avgEngRate + "%");
+    setText("analyticsLikes", formatCompactNumber(totals.likes)); setText("analyticsComments", formatCompactNumber(totals.comments));
+    setText("analyticsSaves", formatCompactNumber(totals.saves)); setText("analyticsImpressions", formatCompactNumber(totals.impressions));
+    setText("analyticsReach", formatCompactNumber(totals.reach)); setText("analyticsEngagementRate", avgEngRate + "%");
     
     const lastUpdate = allPosts.reduce((latest, p) => {
       const d = new Date(p.engagement_updated_at); return d > latest ? d : latest;
@@ -237,12 +236,10 @@ export async function loadAnalytics() {
     }).length;
     const scheduled = activePosts.filter(p => p.status === "queued" && new Date(p.scheduled_for) > now).length;
     
-    const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-    
-    setEl("analyticsTotalPosts", totalPosts);
-    setEl("analyticsPublished", published);
-    setEl("analyticsThisWeek", thisWeek);
-    setEl("analyticsScheduled", scheduled);
+    setText("analyticsTotalPosts", totalPosts);
+    setText("analyticsPublished", published);
+    setText("analyticsThisWeek", thisWeek);
+    setText("analyticsScheduled", scheduled);
     
     loadEngagementMetrics();
     loadScoringPerformance(_getClient);
@@ -252,9 +249,9 @@ export async function loadAnalytics() {
     allPosts.forEach(p => { if (platforms[p.platform] !== undefined) platforms[p.platform]++; });
     
     const maxPlatform = Math.max(...Object.values(platforms)) || 1;
-    setEl("analyticsInstagramCount", platforms.instagram);
-    setEl("analyticsFacebookCount", platforms.facebook);
-    setEl("analyticsPinterestCount", platforms.pinterest);
+    setText("analyticsInstagramCount", platforms.instagram);
+    setText("analyticsFacebookCount", platforms.facebook);
+    setText("analyticsPinterestCount", platforms.pinterest);
     
     const setBar = (id, count) => { const el = document.getElementById(id); if (el) el.style.width = `${(count / maxPlatform) * 100}%`; };
     setBar("analyticsInstagramBar", platforms.instagram);
@@ -267,11 +264,11 @@ export async function loadAnalytics() {
       if (isPostedSuccessStatus(p.status)) statuses.published++;
       else if (statuses[p.status] !== undefined) statuses[p.status]++;
     });
-    setEl("analyticsStatusQueued", statuses.queued);
-    setEl("analyticsStatusPublished", statuses.published);
-    setEl("analyticsStatusFailed", statuses.failed);
-    setEl("analyticsStatusDraft", statuses.draft);
-    setEl("analyticsStatusCancelled", statuses.cancelled);
+    setText("analyticsStatusQueued", statuses.queued);
+    setText("analyticsStatusPublished", statuses.published);
+    setText("analyticsStatusFailed", statuses.failed);
+    setText("analyticsStatusDraft", statuses.draft);
+    setText("analyticsStatusCancelled", statuses.cancelled);
     
     // Time distribution
     const timeSlots = { "Morning (6-12)": 0, "Afternoon (12-17)": 0, "Evening (17-21)": 0, "Night (21-6)": 0 };

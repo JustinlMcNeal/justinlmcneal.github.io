@@ -9,6 +9,7 @@ import {
 } from "./api.js";
 import { formatHashtags, parseHashtags } from "./captions.js";
 import { isPostedSuccessStatus } from "./postStatus.js";
+import { escapeHtml } from "./utils/html.js";
 
 let _state, _els, _showToast, _getClient;
 let _postToInstagram, _postToFacebook, _postToPinterest;
@@ -177,14 +178,6 @@ function closePostDetail() {
   document.getElementById("postDetailSelection")?.classList.add("hidden");
   _els.postDetailModal.classList.add("hidden");
   _els.postDetailModal.classList.remove("flex");
-}
-
-function escapeHtml(str) {
-  return String(str ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
 }
 
 function renderPostDetailSelection(post) {

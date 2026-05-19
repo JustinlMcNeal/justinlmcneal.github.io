@@ -2,6 +2,11 @@
 // Read-only: engagement by auto-queue priority score quartile
 
 import { isPostedSuccessStatus, POST_SUCCESS_STATUSES } from "./postStatus.js";
+import { escapeHtml } from "./utils/html.js";
+import {
+  formatMetricNumber as fmtNum,
+  formatPercent as fmtPct,
+} from "./utils/formatters.js";
 
 /** Minimum scored posts for a confident readout */
 export const SCORING_PERF_MIN_SAMPLE = 20;
@@ -122,23 +127,6 @@ export function buildScoringQuartileReport(posts) {
     missingScoreCount: missing.length,
     hasEngagement,
   };
-}
-
-function fmtNum(n, digits = 1) {
-  if (n == null || !Number.isFinite(n)) return "—";
-  return Number(n).toFixed(digits);
-}
-
-function fmtPct(n) {
-  if (n == null || !Number.isFinite(n)) return "—";
-  return `${Number(n).toFixed(2)}%`;
-}
-
-function escapeHtml(str) {
-  return String(str ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
 }
 
 /**

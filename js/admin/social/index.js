@@ -32,6 +32,7 @@ import { initImagePool, setupImagePool, loadAssets } from "./imagePool.js";
 import { initPlatformSettings, setupSettingsModal, applySettings } from "./platformSettings.js";
 import { initPostDetail, setupPostDetailModal, openPostDetail } from "./postDetail.js";
 import { initAnalytics, setupAnalytics, loadAnalytics, initPostAnalyticsModal, initLearningInsights } from "./analytics.js";
+import { formatScheduleDate, formatScheduleTime } from "./utils/dates.js";
 
 // ============================================
 // State
@@ -734,12 +735,8 @@ function renderQueueList(posts) {
       : "/imgs/placeholder.jpg";
 
     const scheduledDate = new Date(post.scheduled_for);
-    const dateStr = scheduledDate.toLocaleDateString("en-US", {
-      weekday: "short", month: "short", day: "numeric"
-    });
-    const timeStr = scheduledDate.toLocaleTimeString("en-US", {
-      hour: "numeric", minute: "2-digit"
-    });
+    const dateStr = formatScheduleDate(scheduledDate);
+    const timeStr = formatScheduleTime(scheduledDate);
 
     return `
       <div class="queue-item cursor-pointer" data-post-id="${post.id}">
