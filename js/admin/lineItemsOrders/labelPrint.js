@@ -106,21 +106,25 @@ export function buildLabelHtml(order, labelType, options = {}) {
 
   const firstName = order.first_name ? esc(order.first_name) : null;
 
-  let headline, cta1, cta2, coupon, footerLeft, footerRight;
+  let headline, cta1, cta2, rewardLabel, rewardLines, rewardLineStyle, footerLeft, footerRight;
   if (labelType === "review_cta") {
     headline  = firstName ? `Thanks,<br>${firstName}!` : `Thanks for<br>ordering!`;
     cta1      = "Scan to leave a quick review";
-    cta2      = "and get 15% off your next order.";
-    coupon    = "THANKYOU15";
+    cta2      = "and unlock 15% off your next order.";
+    rewardLabel = "UNLOCK YOUR REWARD";
+    rewardLines = ["LEAVE A REVIEW", "GET 15% OFF"];
+    rewardLineStyle = "font-size:12pt;font-weight:900;letter-spacing:.035em;line-height:1;";
     footerLeft = "Thank you for supporting Karry Kraze";
     footerRight = "Review reward";
   } else {
     headline  = `Like your<br>order?`;
-    cta1      = "Scan to save on your next order";
-    cta2      = "and get 15% off when you shop direct.";
-    coupon    = "DIRECT15";
+    cta1      = "Scan to shop direct next time";
+    cta2      = "and get 15% off your first website order.";
+    rewardLabel = "USE CODE";
+    rewardLines = ["DIRECT15"];
+    rewardLineStyle = "font-size:24pt;font-weight:900;letter-spacing:.035em;line-height:.95;";
     footerLeft = "Shop direct with Karry Kraze";
-    footerRight = "Save more next time";
+    footerRight = "Save more";
   }
 
   return `<!DOCTYPE html>
@@ -158,7 +162,7 @@ export function buildLabelHtml(order, labelType, options = {}) {
     <div style="flex:1;display:grid;grid-template-columns:1fr 2.12in;gap:.2in;align-items:stretch;padding:.2in .22in .16in .22in;min-height:0;">
 
       <!-- Text column -->
-      <div style="min-width:0;display:flex;flex-direction:column;justify-content:space-between;gap:.13in;">
+      <div style="min-width:0;height:260px;max-height:100%;display:flex;flex-direction:column;justify-content:space-between;gap:.13in;">
         <div>
           <div style="font-size:30pt;font-weight:900;line-height:.9;letter-spacing:-.05em;text-transform:uppercase;">${headline}</div>
           <div style="width:1.05in;height:6px;background:#000;margin:.14in 0 .13in 0;"></div>
@@ -170,19 +174,19 @@ export function buildLabelHtml(order, labelType, options = {}) {
           </div>
         </div>
 
-        <div style="border:4px solid #000;background:#fff;padding:.11in .15in;display:inline-block;align-self:flex-start;box-shadow:.045in .045in 0 #222;">
-          <div style="font-size:8pt;font-weight:900;text-transform:uppercase;letter-spacing:.18em;color:#444;margin-bottom:.035in;">Use code</div>
-          <div style="font-size:24pt;font-weight:900;letter-spacing:.035em;line-height:.95;">${esc(coupon)}</div>
+        <div style="border:4px solid #000;background:#fff;padding:.11in .15in;height:70px;display:inline-block;align-self:flex-start;box-shadow:.045in .045in 0 #222;margin-bottom:10px;">
+          <div style="font-size:8pt;font-weight:900;text-transform:uppercase;letter-spacing:.18em;color:#444;margin-bottom:.035in;">${esc(rewardLabel)}</div>
+          <div style="${rewardLineStyle}">${rewardLines.map(line => esc(line)).join("<br>")}</div>
         </div>
       </div>
 
       <!-- QR column -->
-      <div style="border:4px solid #000;background:#fff;display:flex;flex-direction:column;align-items:stretch;justify-content:space-between;min-width:0;">
+      <div style="border:4px solid #000;background:#fff;height:260px;display:flex;flex-direction:column;align-items:stretch;justify-content:space-between;min-width:0;">
         <div style="background:#000;color:#fff;text-align:center;font-size:11pt;font-weight:900;text-transform:uppercase;letter-spacing:.2em;padding:.08in .08in;">
           Scan me
         </div>
-        <div style="display:flex;align-items:center;justify-content:center;padding:.11in .08in;background:#fff;">
-          <div style="border:2px solid #000;padding:.07in;background:#fff;">
+        <div style="display:flex;align-items:center;justify-content:center;height:160px;background:#fff;">
+          <div style="border:0;background:#fff;">
             ${qrBlock}
           </div>
         </div>
