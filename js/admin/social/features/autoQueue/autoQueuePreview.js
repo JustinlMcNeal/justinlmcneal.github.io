@@ -21,6 +21,7 @@ function formatGuardLabel(code) {
     no_variant_stock_data: "No stock data",
     pending_queue_post: "Already queued",
     no_approved_image_pool_asset: "No approved Image Pool asset",
+    no_default_pinterest_board: "No default Pinterest board",
   };
   return map[code] || String(code || "").replace(/_/g, " ");
 }
@@ -117,6 +118,12 @@ function renderSelectionSummary(post) {
   }
   if (meta.asset_content_type) {
     lines.push(`Content type: ${escapeHtml(meta.asset_content_type)}`);
+  }
+  if (post.platform === "pinterest" && meta.pinterest_board_id) {
+    lines.push(
+      `Pinterest board: ${escapeHtml(meta.pinterest_board_name || meta.pinterest_board_id)} ` +
+      `(${escapeHtml(meta.board_routing_method || "")}${meta.board_routing_warning ? ", " + escapeHtml(String(meta.board_routing_warning).replace(/_/g, " ")) : ""})`
+    );
   }
   if (meta.caption_source) {
     lines.push(`Caption: ${escapeHtml(meta.caption_source)} (${escapeHtml(meta.caption_status || "")}, score ${meta.caption_confidence ?? "—"})`);

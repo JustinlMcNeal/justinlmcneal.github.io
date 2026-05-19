@@ -156,7 +156,10 @@ export function populatePostDetailModal(post) {
     if (boardSelect && state.boards?.length) {
       boardSelect.innerHTML = `
         <option value="">Select a board...</option>
-        ${state.boards.map(b => `<option value="${b.id}" ${b.id === post.pinterest_board_id ? "selected" : ""}>${b.name}</option>`).join("")}
+        ${state.boards.map(b => {
+          const pid = b.pinterest_board_id || b.id;
+          return `<option value="${pid}" ${pid === post.pinterest_board_id ? "selected" : ""}>${b.name}</option>`;
+        }).join("")}
       `;
     }
   } else {

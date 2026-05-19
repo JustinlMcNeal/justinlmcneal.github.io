@@ -1026,6 +1026,100 @@ function buildSelectionScoreMetadata(
   };
 }
 
+type PinterestStrategyBoard = {
+  id: string;
+  name: string;
+  pinterest_board_id: string | null;
+  category_id: string | null;
+  mapped_category_ids: string[] | null;
+  content_types: string[] | null;
+  intent_key: string | null;
+  is_default: boolean | null;
+  is_active: boolean | null;
+};
+
+type PinterestBoardRouting = {
+  pinterest_board_id: string | null;
+  pinterest_board_name: string | null;
+  board_routing_method: "mapped" | "fallback" | "none";
+  board_routing_warning: string | null;
+  board_intent_key: string | null;
+};
+
+function resolvePinterestBoardRouting(params: {
+  boards: PinterestStrategyBoard[];
+  defaultPinterestBoardId: string;
+  legacyCategoryMap: Record<string, string>;
+  categoryId: string | null;
+  contentType: string;
+}): PinterestBoardRouting {
+  const { boards, defaultPinterestBoardId, legacyCategoryMap, categoryId, contentType } = params;
+  const active = boards.filter((b) => b.is_active !== false && b.pinterest_board_id);
+
+  let best: PinterestStrategyBoard | null = null;
+  let bestScore = 0;
+
+  for (const board of active) {
+    let score = 0;
+    const types = board.content_types?.length ? board.content_types : ["product"];
+    if (types.includes(contentType)) score += 2;
+
+    const catIds = board.mapped_category_ids?.length
+      ? board.mapped_category_ids
+      : board.category_id
+        ? [board.category_id]
+        : [];
+
+    if (categoryId && catIds.includes(categoryId)) score += 3;
+
+    if (score > bestScore) {
+      bestScore = score;
+      best = board;
+    }
+  }
+
+  if (best && bestScore >= 2 && best.pinterest_board_id) {
+    return {
+      pinterest_board_id: best.pinterest_board_id,
+      pinterest_board_name: best.name,
+      board_routing_method: "mapped",
+      board_routing_warning: null,
+      board_intent_key: best.intent_key,
+    };
+  }
+
+  const defaultRow = active.find((b) => b.is_default);
+  const fallbackId = defaultRow?.pinterest_board_id || defaultPinterestBoardId || null;
+
+  if (fallbackId) {
+    return {
+      pinterest_board_id: fallbackId,
+      pinterest_board_name: defaultRow?.name || null,
+      board_routing_method: "fallback",
+      board_routing_warning: "no_mapped_board_found",
+      board_intent_key: defaultRow?.intent_key || null,
+    };
+  }
+
+  if (categoryId && legacyCategoryMap[categoryId]) {
+    return {
+      pinterest_board_id: legacyCategoryMap[categoryId],
+      pinterest_board_name: null,
+      board_routing_method: "mapped",
+      board_routing_warning: "legacy_category_map",
+      board_intent_key: null,
+    };
+  }
+
+  return {
+    pinterest_board_id: null,
+    pinterest_board_name: null,
+    board_routing_method: "none",
+    board_routing_warning: "no_default_pinterest_board",
+    board_intent_key: null,
+  };
+}
+
 type AutoQueueRunSettings = {
   count: number;
   platforms: string[];
@@ -1138,10 +1232,13 @@ Deno.serve(async (req) => {
       `tones=${caption_tones.join(",")} times=${posting_times.join(",")} preview=${preview}`
     );
 
-    // Load Pinterest board mapping for auto-assigning boards
+    // Load Pinterest board strategy (search-intent routing)
     let pinterestBoardMap: Record<string, string> = {};
     let pinterestDefaultBoard = "";
-    if (platformList.includes("pinterest")) {
+    let pinterestStrategyBoards: PinterestStrategyBoard[] = [];
+    const usesPinterest = platformList.includes("pinterest");
+
+    if (usesPinterest) {
       const { data: boardMapRow } = await supabase
         .from("social_settings")
         .select("setting_value")
@@ -1150,9 +1247,27 @@ Deno.serve(async (req) => {
       if (boardMapRow?.setting_value) {
         pinterestBoardMap = boardMapRow.setting_value.board_map || {};
         pinterestDefaultBoard = boardMapRow.setting_value.default_board_id || "";
-        console.log(`[auto-queue] Pinterest board map loaded: ${Object.keys(pinterestBoardMap).length} categories mapped, default=${pinterestDefaultBoard}`);
-      } else {
-        console.warn("[auto-queue] No Pinterest board map found — run sync-pinterest-boards first");
+      }
+
+      const { data: strategyRows } = await supabase
+        .from("pinterest_boards")
+        .select(
+          "id, name, pinterest_board_id, category_id, mapped_category_ids, content_types, intent_key, is_default, is_active"
+        )
+        .eq("is_active", true);
+
+      pinterestStrategyBoards = (strategyRows || []) as PinterestStrategyBoard[];
+
+      const dbDefault = pinterestStrategyBoards.find((b) => b.is_default)?.pinterest_board_id;
+      if (dbDefault) pinterestDefaultBoard = dbDefault;
+
+      console.log(
+        `[auto-queue] Pinterest strategy boards: ${pinterestStrategyBoards.length} active, ` +
+        `legacy category map: ${Object.keys(pinterestBoardMap).length}, default=${pinterestDefaultBoard || "none"}`
+      );
+
+      if (!pinterestDefaultBoard && !pinterestStrategyBoards.length) {
+        console.warn("[auto-queue] No Pinterest board strategy — set a default board in Boards tab");
       }
     }
 
@@ -2028,6 +2143,37 @@ Deno.serve(async (req) => {
         // Check if this should be a carousel post
         const carouselResult = shouldUseCarousel(product.id, plat);
 
+        const postSelectionMeta = { ...selectionMeta };
+
+        if (plat === "pinterest") {
+          const boardRouting = resolvePinterestBoardRouting({
+            boards: pinterestStrategyBoards,
+            defaultPinterestBoardId: pinterestDefaultBoard,
+            legacyCategoryMap: pinterestBoardMap,
+            categoryId: product.category_id,
+            contentType: imageResult.assetContentType || "product",
+          });
+
+          if (!boardRouting.pinterest_board_id) {
+            skippedProducts.push({
+              product_id: product.id,
+              product_name: product.name,
+              platform: "pinterest",
+              skipped_reason: "no_default_pinterest_board",
+              board_routing_warning: boardRouting.board_routing_warning,
+            });
+            continue;
+          }
+
+          Object.assign(postSelectionMeta, {
+            pinterest_board_id: boardRouting.pinterest_board_id,
+            pinterest_board_name: boardRouting.pinterest_board_name,
+            board_routing_method: boardRouting.board_routing_method,
+            board_routing_warning: boardRouting.board_routing_warning,
+            board_intent_key: boardRouting.board_intent_key,
+          });
+        }
+
         generatedPosts.push({
           product_id: product.id,
           product_name: product.name,
@@ -2052,8 +2198,11 @@ Deno.serve(async (req) => {
           link_url: `https://karrykraze.com/pages/product.html?slug=${product.slug}&utm_source=${plat}&utm_medium=social&utm_campaign=autopilot&utm_content=${product.slug}`,
           scheduled_for: postingTimes[i].toISOString(),
           tone: bestTone,
-          selection_metadata: selectionMeta,
+          selection_metadata: postSelectionMeta,
           scoring_comparison: scoringComparisonByProduct[product.id] || null,
+          pinterest_board_id: plat === "pinterest"
+            ? (postSelectionMeta.pinterest_board_id as string)
+            : undefined,
         });
       }
     }
@@ -2374,13 +2523,14 @@ Deno.serve(async (req) => {
           selection_metadata: post.selection_metadata || null,
         };
 
-        // Auto-assign Pinterest board based on product category
-        if (post.platform === "pinterest") {
-          const boardId = (post.category_id && pinterestBoardMap[post.category_id]) || pinterestDefaultBoard;
-          if (boardId) {
-            postPayload.pinterest_board_id = boardId;
-            console.log(`[auto-queue] Pinterest board auto-assigned: ${boardId} for "${post.product_name}"`);
-          }
+        // Pinterest board from strategy routing (preview metadata)
+        if (post.platform === "pinterest" && post.pinterest_board_id) {
+          postPayload.pinterest_board_id = post.pinterest_board_id;
+          const meta = post.selection_metadata || {};
+          console.log(
+            `[auto-queue] Pinterest board ${post.pinterest_board_id} for "${post.product_name}" ` +
+            `(${meta.board_routing_method || "unknown"}${meta.board_routing_warning ? ", warn=" + meta.board_routing_warning : ""})`
+          );
         }
 
         // Add carousel fields if this is a carousel post

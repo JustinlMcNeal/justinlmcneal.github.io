@@ -508,6 +508,73 @@ export async function getBoardForCategory(categoryId) {
   return defaultBoard || null;
 }
 
+export async function upsertPinterestBoardFromApi({ pinterest_board_id, name }) {
+  const { data: existing } = await sb()
+    .from("pinterest_boards")
+    .select("id")
+    .eq("pinterest_board_id", pinterest_board_id)
+    .maybeSingle();
+
+  const patch = {
+    name,
+    pinterest_board_id,
+    synced_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  if (existing?.id) {
+    return updateBoard(existing.id, patch);
+  }
+
+  return createBoard({
+    name,
+    pinterest_board_id,
+    is_active: true,
+    intent_key: "other",
+    content_types: ["product"],
+    mapped_category_ids: [],
+    is_default: false,
+    synced_at: patch.synced_at,
+  });
+}
+
+export async function setDefaultPinterestBoard(boardUuid) {
+  await sb()
+    .from("pinterest_boards")
+    .update({ is_default: false, updated_at: new Date().toISOString() })
+    .eq("is_default", true);
+
+  if (!boardUuid) return null;
+  return updateBoard(boardUuid, { is_default: true });
+}
+
+export async function fetchPinterestBoardUsageStats() {
+  const { data, error } = await sb()
+    .from("social_posts")
+    .select("pinterest_board_id, scheduled_for, status")
+    .eq("platform", "pinterest")
+    .not("pinterest_board_id", "is", null);
+
+  if (error) throw error;
+
+  const byBoard = {};
+  (data || []).forEach((row) => {
+    const id = row.pinterest_board_id;
+    if (!id) return;
+    if (!byBoard[id]) {
+      byBoard[id] = { post_count: 0, last_used_at: null };
+    }
+    byBoard[id].post_count += 1;
+    const t = row.scheduled_for ? new Date(row.scheduled_for).getTime() : 0;
+    const prev = byBoard[id].last_used_at
+      ? new Date(byBoard[id].last_used_at).getTime()
+      : 0;
+    if (t > prev) byBoard[id].last_used_at = row.scheduled_for;
+  });
+
+  return byBoard;
+}
+
 // ============================================
 // Settings
 // ============================================

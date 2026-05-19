@@ -359,6 +359,7 @@ async function init() {
         loadQueuePosts,
         loadAssets,
         loadTemplates,
+        loadBoards,
         renderBoardList,
         loadAutoQueueStats,
         loadAnalytics,

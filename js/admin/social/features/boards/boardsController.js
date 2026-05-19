@@ -1,7 +1,7 @@
 // Pinterest boards — init, setup, load
 
 import { initBoardsContext, getBoardsContext } from "./boardsContext.js";
-import { fetchPinterestBoards, addBoard, syncPinterestBoards } from "./boardActions.js";
+import { loadBoardStrategyData, addBoard, syncPinterestBoards } from "./boardActions.js";
 import { populateBoardDropdown, renderBoardList } from "./boardsRender.js";
 
 export { populateBoardDropdown, renderBoardList };
@@ -14,7 +14,7 @@ export function setupBoards() {
   const { els } = getBoardsContext();
 
   els.btnAddBoard?.addEventListener("click", () => {
-    const name = prompt("Enter board name:");
+    const name = prompt("Enter board name (local registry only — does not create on Pinterest):");
     if (name) addBoard(name);
   });
 
@@ -24,17 +24,19 @@ export function setupBoards() {
 }
 
 export async function loadBoards() {
-  const { state, els, getSupabaseClient } = getBoardsContext();
+  const { state, getSupabaseClient } = getBoardsContext();
   const client = getSupabaseClient();
   const { data: pinData } = await client
-    .from("social_settings").select("setting_value")
-    .eq("setting_key", "pinterest_connected").single();
+    .from("social_settings")
+    .select("setting_value")
+    .eq("setting_key", "pinterest_connected")
+    .single();
 
   if (!pinData?.setting_value?.connected) {
     state.boards = [];
     return;
   }
 
-  state.boards = await fetchPinterestBoards();
-  await populateBoardDropdown(els.boardSelect);
+  await loadBoardStrategyData();
+  await populateBoardDropdown(getBoardsContext().els.boardSelect);
 }

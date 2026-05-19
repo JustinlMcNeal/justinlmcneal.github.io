@@ -427,17 +427,18 @@
       <div id="tab-boards" class="tab-panel hidden">
         <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
           <div class="p-4 border-b flex items-center justify-between">
-            <h2 class="font-bold">Pinterest Boards</h2>
+            <h2 class="font-bold">Pinterest Board Strategy</h2>
+            <p class="text-xs text-gray-500 hidden sm:block">Search-intent routing · Pinterest only</p>
             <div class="flex gap-2">
-              <button id="btnSyncBoards" class="text-sm font-medium bg-red-600 text-white px-3 py-1.5 rounded-lg hover:bg-red-700 transition-colors">📌 Auto-Sync Boards</button>
+              <button id="btnSyncBoards" class="text-sm font-medium bg-red-600 text-white px-3 py-1.5 rounded-lg hover:bg-red-700 transition-colors">Sync from Pinterest</button>
               <button id="btnAddBoard" class="text-sm font-medium text-black hover:underline">+ Add Board</button>
             </div>
           </div>
+          <p id="boardStrategyWarning" class="hidden mx-4 mt-2 text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2"></p>
           <div id="boardList" class="divide-y">
-            <!-- Populated by JS -->
             <div class="p-8 text-center text-gray-400">
-              <p>No boards configured yet</p>
-              <p class="text-xs mt-1">Click "Auto-Sync Boards" to create boards for each product category</p>
+              <p>Connect Pinterest to load boards</p>
+              <p class="text-xs mt-1">Mark one board as default fallback for unmapped pins</p>
             </div>
           </div>
         </div>

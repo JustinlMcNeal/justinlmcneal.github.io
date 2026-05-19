@@ -1,21 +1,25 @@
-// Pinterest boards — fetch, sync, CRUD actions
+// Pinterest boards — fetch, sync, CRUD, strategy
 
 import {
   createBoard,
   updateBoard,
   deleteBoard,
+  fetchBoards,
+  upsertPinterestBoardFromApi,
+  setDefaultPinterestBoard,
+  fetchPinterestBoardUsageStats,
 } from "../../api.js";
 import { getBoardsContext } from "./boardsContext.js";
 
-export async function fetchPinterestBoards() {
+export async function fetchPinterestApiBoards() {
   const { SUPABASE_FUNCTIONS_URL, SUPABASE_ANON_KEY } = getBoardsContext();
   try {
     const resp = await fetch(`${SUPABASE_FUNCTIONS_URL}/pinterest-boards`, {
       method: "GET",
-      headers: { "Authorization": `Bearer ${SUPABASE_ANON_KEY}` },
+      headers: { Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
     });
     const data = await resp.json();
-    if (data.success) return data.boards;
+    if (data.success) return data.boards || [];
     console.error("Failed to fetch Pinterest boards:", data.error, data.debug);
     return [];
   } catch (err) {
@@ -24,10 +28,59 @@ export async function fetchPinterestBoards() {
   }
 }
 
+export async function syncApiBoardsToDatabase(apiBoards) {
+  for (const b of apiBoards || []) {
+    if (!b?.id || !b?.name) continue;
+    await upsertPinterestBoardFromApi({
+      pinterest_board_id: String(b.id),
+      name: b.name,
+    });
+  }
+}
+
+export async function loadBoardStrategyData() {
+  const { state } = getBoardsContext();
+  const apiBoards = await fetchPinterestApiBoards();
+  if (apiBoards.length) {
+    await syncApiBoardsToDatabase(apiBoards);
+  }
+
+  const boards = await fetchBoards();
+  let usage = {};
+  try {
+    usage = await fetchPinterestBoardUsageStats();
+  } catch (err) {
+    console.warn("[boards] Usage stats unavailable:", err);
+  }
+
+  const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  state.boards = boards.map((board) => {
+    const pid = board.pinterest_board_id;
+    const u = pid ? usage[pid] : null;
+    const lastUsed = u?.last_used_at ? new Date(u.last_used_at).getTime() : null;
+    return {
+      ...board,
+      _post_count: u?.post_count || 0,
+      _last_used_at: u?.last_used_at || null,
+      _stale: lastUsed != null && lastUsed < thirtyDaysAgo,
+    };
+  });
+
+  state.boardUsage = usage;
+  return state.boards;
+}
+
 export async function addBoard(name) {
   const { state } = getBoardsContext();
   try {
-    await createBoard({ name, is_default: state.boards.length === 0 });
+    await createBoard({
+      name,
+      is_default: state.boards.length === 0,
+      intent_key: "other",
+      content_types: ["product"],
+      mapped_category_ids: [],
+      is_active: true,
+    });
     const { loadBoards, renderBoardList } = await import("./boardsController.js");
     await loadBoards();
     renderBoardList();
@@ -48,7 +101,7 @@ export async function syncPinterestBoards() {
     const resp = await fetch(`https://yxdzvzscufkvewecvagq.supabase.co/functions/v1/sync-pinterest-boards`, {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${session?.access_token}`,
+        Authorization: `Bearer ${session?.access_token}`,
         "Content-Type": "application/json",
       },
     });
@@ -64,13 +117,40 @@ export async function syncPinterestBoards() {
     alert("Failed to sync boards: " + err.message);
   } finally {
     btn.disabled = false;
-    btn.textContent = "📌 Auto-Sync Boards";
+    btn.textContent = "Sync from Pinterest";
+  }
+}
+
+export async function updateBoardStrategy(boardId, updates) {
+  try {
+    await updateBoard(boardId, updates);
+    const { loadBoards } = await import("./boardsController.js");
+    await loadBoards();
+  } catch (err) {
+    console.error("Update board strategy error:", err);
+    throw err;
+  }
+}
+
+export async function setBoardAsDefault(boardUuid) {
+  try {
+    await setDefaultPinterestBoard(boardUuid);
+    const { loadBoards, renderBoardList } = await import("./boardsController.js");
+    await loadBoards();
+    renderBoardList();
+  } catch (err) {
+    console.error("Set default board error:", err);
+    alert("Failed to set default board");
   }
 }
 
 export async function updateBoardCategory(boardId, categoryId) {
   try {
-    await updateBoard(boardId, { category_id: categoryId });
+    const mapped = categoryId ? [categoryId] : [];
+    await updateBoard(boardId, {
+      category_id: categoryId,
+      mapped_category_ids: mapped,
+    });
     const { loadBoards } = await import("./boardsController.js");
     await loadBoards();
   } catch (err) {
@@ -88,4 +168,9 @@ export async function deleteBoardById(boardId) {
     console.error("Delete board error:", err);
     alert("Failed to delete board");
   }
+}
+
+/** @deprecated use loadBoardStrategyData */
+export async function fetchPinterestBoards() {
+  return fetchPinterestApiBoards();
 }

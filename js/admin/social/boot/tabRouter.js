@@ -51,7 +51,7 @@ export function activateTab(tab) {
       tabHandlers.loadTemplates?.();
       break;
     case "boards":
-      tabHandlers.renderBoardList?.();
+      tabHandlers.loadBoards?.().then(() => tabHandlers.renderBoardList?.());
       break;
     case "autoqueue":
       tabHandlers.loadAutoQueueStats?.();
