@@ -5,6 +5,7 @@
 //       because they interact with API calls and workspace state.
 import { sh, fmtDate } from "./workspaceUtils.js";
 import { esc, moneyFromCents, getOrderSource } from "./dom.js";
+import { getCtaEligibility } from "./ctaPrintFlow.js";
 
 export function renderFulfillment(order, shipment) {
   const labelStatus = shipment?.label_status || "pending";
@@ -127,6 +128,8 @@ export function renderFulfillment(order, shipment) {
   </section>
   <div class="border-t-4 border-gray-100"></div>`;
 
+  html += buildCtaLabelSection(order);
+
   // Edit Shipment Fields
   html += `<section>
     ${sh("Edit Shipment")}
@@ -195,6 +198,30 @@ export function renderFulfillment(order, shipment) {
   html += buildRefundSectionHtml(order);
   html += "</div>";
   return html;
+}
+
+function buildCtaLabelSection(order) {
+  const { eligible, message } = getCtaEligibility(order);
+
+  let body;
+  if (eligible) {
+    body = `<div class="flex flex-wrap items-center gap-3">
+      <button type="button" data-print-cta-workspace
+        class="px-4 py-2 text-xs font-black uppercase tracking-wider border-4 border-black bg-white text-black hover:bg-black hover:text-white transition">
+        Print CTA Label
+      </button>
+      <span data-cta-print-status class="hidden text-xs font-bold text-black/70"></span>
+    </div>`;
+  } else {
+    body = `<p class="text-xs text-black/55 font-bold leading-snug">${esc(message)}</p>`;
+  }
+
+  return `<section>
+    ${sh("Packing Insert / CTA Label")}
+    <p class="text-xs text-black/60 font-bold mb-3">Print a 6x4 CTA insert for this order.</p>
+    ${body}
+  </section>
+  <div class="border-t-4 border-gray-100"></div>`;
 }
 
 // ── Refund section builder (module-private) ───────────────────────

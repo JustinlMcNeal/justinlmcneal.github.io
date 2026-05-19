@@ -3,15 +3,13 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "/js/config/env.js";
 import { initAdminNav } from "/js/shared/adminNav.js";
 import { initFooter } from "/js/shared/footer.js";
-import { els, wireDomHelpers, setStatus, setCountLabel, moneyFromCents, getOrderSource, esc } from "./dom.js";
+import { els, wireDomHelpers, setStatus, setCountLabel, moneyFromCents } from "./dom.js";
 import { state } from "./state.js";
 import { fetchOrderSummaryPage, fetchOrderSummaryAllForExport, fetchOrderKpis } from "./api.js";
 import { renderOrdersRows } from "./renderTable.js";
 import { downloadShipReadyCSV } from "./shipReadyCsv.js";
 import { wireAmazonImport } from "./amazonImport.js";
 import { initWorkspace, openWorkspace } from "./workspace.js";
-import { printLabel, determineLabelType } from "./labelPrint.js";
-import { trackCtaLabelPrint, createCtaLabelLink } from "./api.js";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const ADMIN_ENTRY_PAGE = "/pages/admin/index.html";
@@ -297,114 +295,12 @@ function wireLoadControls() {
   els.btnLoadMore.addEventListener("click", () => loadMore());
 }
 
-// ── CTA label row extras ─────────────────────────────────────────
-// Returns getRowExtras injection object for renderOrdersRows.
-// Only KK and eBay orders get a Print CTA button; all others return {}.
-function _ctaRowExtras(row) {
-  const source = getOrderSource(row);
-  if (determineLabelType(source) === "none") return {};
-  // KK review CTA requires kk_order_id — verify-order only accepts kk_order_id values.
-  // Suppress button when missing rather than showing a QR that points to a broken lookup.
-  if (source === "kk" && !row.kk_order_id) return {};
-  const sid = esc(row.stripe_checkout_session_id || "");
-  return {
-    desktopActionContent: `<button type="button" data-print-cta="${sid}"
-      class="inline-flex items-center gap-2 border-[4px] border-black bg-white px-3 py-2
-             font-black uppercase tracking-[.14em] text-[11px]
-             hover:bg-black hover:text-white transition ml-2"
-      title="Print CTA label">Print CTA</button>`,
-    mobileActionBlock: `<div class="mt-3 flex justify-end">
-      <button type="button" data-print-cta="${sid}"
-        class="inline-flex items-center gap-2 border-[4px] border-black bg-white px-3 py-2
-               font-black uppercase tracking-[.14em] text-[11px]
-               hover:bg-black hover:text-white transition"
-        title="Print CTA label">Print CTA Label</button>
-    </div>`,
-  };
-}
-
-// Wire event delegation for [data-print-cta] buttons.
-// Uses stopPropagation to prevent mobile card data-view from firing.
-function wireCta() {
-  els.ordersRows?.addEventListener("click", async (e) => {
-    const btn = e.target.closest("[data-print-cta]");
-    if (!btn) return;
-    e.stopPropagation();
-    const sessionId = btn.getAttribute("data-print-cta");
-    const row = state.rows.find((r) => r.stripe_checkout_session_id === sessionId);
-    if (!row) return;
-    const origText = btn.textContent.trim();
-    btn.disabled = true;
-    btn.textContent = "\u23F3";
-    try {
-      let trackingFailed = false;
-      let linkCreated = false;
-      await printLabel(row, {
-        onPrinted: async ({ order, source, labelType, qrTarget, rewriteQr }) => {
-          // Step 1: Record print event in cta_label_prints
-          const trackResult = await trackCtaLabelPrint({
-            sessionId:   order.stripe_checkout_session_id,
-            kkOrderId:   order.kk_order_id || null,
-            orderSource: source,
-            labelType,
-            metadata: { qr_target: qrTarget },
-          });
-
-          if (!trackResult.ok) {
-            trackingFailed = true;
-            console.warn("[wireCta] CTA print tracking failed:", trackResult.error);
-            // Fallback: write direct URL label so admin can still print
-            await rewriteQr(qrTarget);
-            return;
-          }
-
-          // Step 2: Create tracking link token via Edge Function
-          const linkResult = await createCtaLabelLink({
-            printId:        trackResult.id,
-            sessionId:      order.stripe_checkout_session_id,
-            kkOrderId:      order.kk_order_id || null,
-            orderSource:    source,
-            labelType,
-            destinationUrl: qrTarget,
-            metadata:       { qr_target: qrTarget },
-          });
-
-          if (!linkResult.ok) {
-            trackingFailed = true;
-            console.warn("[wireCta] CTA label link creation failed:", linkResult.error);
-            // Fallback: write direct URL label
-            await rewriteQr(qrTarget);
-            return;
-          }
-
-          // Step 3: Rewrite print window with tracking QR
-          linkCreated = true;
-          await rewriteQr(linkResult.trackingUrl);
-        },
-      });
-      if (!trackingFailed && linkCreated) {
-        setStatus("CTA label opened for printing. Scan tracking enabled.");
-      } else if (trackingFailed) {
-        setStatus("CTA label opened. Scan tracking unavailable \u2014 direct QR shown.");
-      } else {
-        setStatus("CTA label opened for printing.");
-      }
-    } catch (err) {
-      setStatus("CTA label failed: " + (err.message || String(err)), true);
-    } finally {
-      btn.disabled = false;
-      btn.textContent = origText;
-    }
-  });
-}
-
 function wireEvents() {
   wireAmazonModal();
   wireFilterControls();
   wireExportControls();
   wireMobileFilterSheet();
   wireLoadControls();
-  wireCta();
 }
 
 function readFilters() {
@@ -497,7 +393,6 @@ async function loadMore({ reset = false } = {}) {
       rows: state.rows,
       onEdit: (row) => openWorkspace(row, { tab: "fulfillment" }),
       onView: (row) => openWorkspace(row, { tab: "overview" }),
-      getRowExtras: _ctaRowExtras,
     });
 
     // Count label shows "loaded / total"

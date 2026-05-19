@@ -26,6 +26,7 @@ import { renderFinancials } from "./workspaceFinancials.js";
 import { renderFulfillment } from "./workspaceFulfillment.js";
 import { renderLabels } from "./workspaceLabels.js";
 import { renderIds } from "./workspaceIds.js";
+import { printCtaForOrder } from "./ctaPrintFlow.js";
 function cleanStr(v) {
   const s = String(v ?? "").trim();
   return s.length ? s : null;
@@ -255,6 +256,7 @@ function _renderTabBody(tab) {
     _populateFulfillmentFields(order, shipment);
     _wireRefundButtons(wsBody, order);
     _wireLabelButtons(wsBody, order, shipment);
+    _wireCtaPrintButton(wsBody, order);
     _trackDirty(wsBody);
   } else if (tab === "labels") {
     _wireCopyButtons(wsBody);
@@ -548,6 +550,44 @@ function _wireRefundButtons(container, order) {
       }
     });
   }
+}
+
+async function _refreshCtaLabelHistory() {
+  if (!_currentRow || !_detail) return;
+  try {
+    _detail.ctaLabelHistory = await fetchCtaLabelHistory(_currentRow.stripe_checkout_session_id);
+    if (_currentTab === "labels") {
+      _renderTabBody("labels");
+    }
+  } catch (err) {
+    console.warn("[workspace] CTA label history refresh failed:", err);
+  }
+}
+
+function _wireCtaPrintButton(container, order) {
+  const btn = container.querySelector("[data-print-cta-workspace]");
+  if (!btn) return;
+
+  const statusEl = container.querySelector("[data-cta-print-status]");
+
+  btn.addEventListener("click", async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const result = await printCtaForOrder(order, { buttonEl: btn });
+    setStatus(result.message, Boolean(result.isError));
+
+    if (statusEl) {
+      statusEl.textContent = result.message;
+      statusEl.classList.toggle("hidden", !result.message);
+      statusEl.classList.toggle("text-red-600", Boolean(result.isError));
+      statusEl.classList.toggle("text-emerald-700", result.ok && !result.isError);
+    }
+
+    if (result.ok) {
+      await _refreshCtaLabelHistory();
+    }
+  });
 }
 
 // ── wire label buttons ────────────────────────────────────────────

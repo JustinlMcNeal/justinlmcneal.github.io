@@ -207,7 +207,7 @@ export function renderLabels(order, history = {}) {
         ? `<div class="space-y-3">${prints.map((print) => renderPrintRow(print, history)).join("")}</div>`
         : emptyState(
             eligible
-              ? "No CTA labels printed for this order yet. Use the Print CTA button from the order row to create one."
+              ? "No CTA labels printed for this order yet. Use Print CTA Label in the Fulfillment tab to create one."
               : "CTA labels are currently enabled for KK website and eBay orders only."
           )
     }

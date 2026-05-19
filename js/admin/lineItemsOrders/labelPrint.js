@@ -75,7 +75,7 @@ export function determineLabelType(source) {
 export function buildQrTarget(order, source, labelType) {
   if (labelType === "review_cta") {
     // Use kk_order_id — verify-order edge function does .eq("kk_order_id", ...) so only
-    // kk_order_id values work. If missing, _ctaRowExtras already suppresses the button;
+    // kk_order_id values work. If missing, workspace eligibility hides the print button;
     // this path is only reached when kk_order_id is present.
     const oid = encodeURIComponent(order.kk_order_id || "");
     return `https://karrykraze.com/pages/leave-review.html?oid=${oid}&utm_source=packing_label&utm_medium=qr&utm_campaign=review_cta`;
@@ -282,7 +282,7 @@ export async function printLabel(order, { onPrinted } = {}) {
 
 /**
  * @deprecated Phase 2B stub — superseded by the onPrinted callback pattern in Phase 2C.
- * Tracking is now handled in index.js wireCta via trackCtaLabelPrint (api.js).
+ * Tracking is now handled in ctaPrintFlow.js via trackCtaLabelPrint (api.js).
  * Kept to avoid breaking any external callers; safe to remove in Phase 3.
  */
 export async function trackLabelPrint(_sessionId, _labelType) {

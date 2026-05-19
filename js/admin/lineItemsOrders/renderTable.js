@@ -377,11 +377,8 @@ export function renderOrdersRows({ tbodyEl, rows = [], onEdit, onView, countLabe
   });
 
   // bind view
-  // Guard: ignore clicks that originate inside [data-print-cta] buttons — those are handled
-  // by wireCta delegation and must not also open the workspace (mobile stopPropagation fix).
   tbodyEl.querySelectorAll("[data-view]").forEach((btn) => {
     btn.addEventListener("click", (e) => {
-      if (e.target.closest("[data-print-cta]")) return;
       const idx = Number(btn.getAttribute("data-view"));
       const row = rows[idx];
       if (row) onView?.(row);
