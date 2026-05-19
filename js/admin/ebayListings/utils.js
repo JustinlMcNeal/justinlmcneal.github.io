@@ -83,6 +83,36 @@ export function logOfferPriceCents(context, priceCents) {
   console.info("[ebay-listing] offer price", { ...context, priceCents });
 }
 
+/** Parse a positive integer quantity, or null if missing/invalid/zero. */
+export function positiveInt(value) {
+  const n = typeof value === "number" ? value : parseInt(String(value ?? ""), 10);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.floor(n);
+}
+
+/**
+ * Resolve per-variant offer quantity for group listing saves.
+ * Reads live DOM qty first; never returns 0 (eBay rejects 0 on active offer PUT).
+ */
+export function resolveVariantOfferQuantity(vSku, { offerRow, overrides, fallback } = {}) {
+  const input = document.querySelector(`[data-var-qty-sku="${CSS.escape(vSku)}"]`);
+  const fromInput = positiveInt(input?.value);
+  if (fromInput !== null) return fromInput;
+  const fromOffer = positiveInt(offerRow?.availableQuantity);
+  if (fromOffer !== null) return fromOffer;
+  const fromOverride = positiveInt(overrides?.[vSku]);
+  if (fromOverride !== null) return fromOverride;
+  return positiveInt(fallback);
+}
+
+/** Read per-variant qty from edit modal DOM (allows 0 for inventory item updates). */
+export function readVariantQtyInput(vSku) {
+  const input = document.querySelector(`[data-var-qty-sku="${CSS.escape(vSku)}"]`);
+  if (!input) return null;
+  const n = parseInt(input.value, 10);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
 /** Read package weight/dimensions from form inputs and return eBay payload. */
 export function buildPackageWeightAndSize(prefix) {
   const w  = parseFloat(document.getElementById(`${prefix}WeightOz`).value);

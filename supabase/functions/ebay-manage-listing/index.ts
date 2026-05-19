@@ -829,28 +829,48 @@ serve(async (req) => {
       const { sku, product, packageWeightAndSize } = body;
       if (!sku) throw new Error("sku is required");
 
+      let existingItem: Record<string, unknown> = {};
+      if (action === "update_item") {
+        const currentItem = await ebayFetch(accessToken, "GET", `${INV_API}/inventory_item/${encodeURIComponent(sku)}`);
+        if (currentItem.ok && isRecord(currentItem.data)) existingItem = currentItem.data;
+      }
+      const existingProduct = isRecord(existingItem.product) ? existingItem.product : {};
+      const existingAvailability = isRecord(existingItem.availability) ? existingItem.availability : {};
+      const existingShip = isRecord(existingAvailability.shipToLocationAvailability)
+        ? existingAvailability.shipToLocationAvailability
+        : {};
+      const resolvedQty = quantityValue(product.quantity) ?? quantityValue(existingShip.quantity) ?? 0;
+
       // product = { title, description, imageUrls[], aspects{}, condition, quantity, lotSize }
       const invItem: Record<string, unknown> = {
-        condition: product.condition || "NEW",
+        condition: product.condition || existingItem.condition || "NEW",
         availability: {
           shipToLocationAvailability: {
-            quantity: product.quantity ?? 0,
+            quantity: resolvedQty,
           },
         },
         product: {
-          title: product.title,
-          description: product.description || "",
-          imageUrls: product.imageUrls || [],
-          aspects: normalizeProductAspects(product.aspects, product.title),
+          ...existingProduct,
+          title: product.title ?? existingProduct.title,
+          description: product.description ?? existingProduct.description ?? "",
+          imageUrls: product.imageUrls?.length ? product.imageUrls : (existingProduct.imageUrls || []),
+          aspects: normalizeProductAspects(
+            product.aspects ?? existingProduct.aspects,
+            product.title ?? existingProduct.title,
+          ),
         },
       };
 
       if (product.lotSize && product.lotSize > 1) {
         invItem.lotSize = product.lotSize;
+      } else if (existingItem.lotSize) {
+        invItem.lotSize = existingItem.lotSize;
       }
 
       if (packageWeightAndSize) {
         invItem.packageWeightAndSize = packageWeightAndSize;
+      } else if (existingItem.packageWeightAndSize) {
+        invItem.packageWeightAndSize = existingItem.packageWeightAndSize;
       }
 
       // PUT /inventory_item/{sku} — creates or replaces
@@ -1247,9 +1267,14 @@ serve(async (req) => {
 
       const updatedOffer: Record<string, unknown> = {
         ...existing,
-        availableQuantity: quantity ?? existing.availableQuantity,
         categoryId: categoryId || existing.categoryId,
       };
+      const desiredOfferQty = positiveQuantity(quantity);
+      if (desiredOfferQty !== null) {
+        updatedOffer.availableQuantity = desiredOfferQty;
+      } else if (positiveQuantity(existing.availableQuantity) !== null) {
+        updatedOffer.availableQuantity = existing.availableQuantity;
+      }
       // Remove eBay read-only fields that cause 85001 errors on PUT /offer
       const EBAY_OFFER_READONLY = ["offerId", "listing", "statusEnum", "auditInfo", "format", "marketplaceId"];
       EBAY_OFFER_READONLY.forEach((k) => delete updatedOffer[k]);

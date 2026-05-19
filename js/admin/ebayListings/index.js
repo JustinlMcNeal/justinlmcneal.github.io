@@ -28,6 +28,8 @@ import {
   addAiBadge,
   readMoneyInputCents,
   logOfferPriceCents,
+  readVariantQtyInput,
+  resolveVariantOfferQuantity,
 } from "./utils.js";
 
 import { quillToolbar, descState, resetQuillEditorMount, toggleDescMode, getDescriptionHtml } from "./editor.js";
@@ -1132,7 +1134,10 @@ document.getElementById("btnSaveEdit").addEventListener("click", async () => {
 
         const variantImageUrls = [...new Set((editVariantImageOverrides[vSku] || varItem.product?.imageUrls || []).filter(Boolean))].slice(0, 24);
 
-        const resolvedQty          = editVariantQtyOverrides[vSku] ?? varItem.availability?.shipToLocationAvailability?.quantity ?? quantity;
+        const resolvedQty = readVariantQtyInput(vSku)
+          ?? editVariantQtyOverrides[vSku]
+          ?? varItem.availability?.shipToLocationAvailability?.quantity
+          ?? quantity;
         const variantUpdateProduct = { title, description, condition, imageUrls: variantImageUrls, aspects: mergedAspects,
           quantity: resolvedQty };
         if (editLotSize > 1) variantUpdateProduct.lotSize = editLotSize;
@@ -1165,19 +1170,25 @@ document.getElementById("btnSaveEdit").addEventListener("click", async () => {
       }
       for (const { vSku, offerRow } of variantOfferRows) {
         if (!offerRow?.offerId) continue;
-        const offerResult = await callEdge("ebay-manage-listing", {
+        const offerQty = resolveVariantOfferQuantity(vSku, {
+          offerRow,
+          overrides: editVariantQtyOverrides,
+          fallback:  quantity,
+        });
+        const offerPayload = {
           action:           "update_offer",
           offerId:          offerRow.offerId,
           sku:              editProduct.code,
           expectedSku:      vSku,
           listingId:        editProduct.ebay_listing_id,
           priceCents,
-          quantity:         editVariantQtyOverrides[vSku] ?? offerRow.availableQuantity ?? quantity,
           categoryId:       editCategoryId || undefined,
           policies:         getSelectedPolicies("edit"),
           // Best Offer not permitted on group (variant) listings (eBay error 25737)
           storeCategoryNames: editStoreCat ? [editStoreCat] : [],
-        });
+        };
+        if (offerQty !== null) offerPayload.quantity = offerQty;
+        const offerResult = await callEdge("ebay-manage-listing", offerPayload);
         if (!offerResult.success) throw new Error(offerUpdateErrorMessage(offerResult, `Offer update failed for ${vSku}`));
       }
     } else {
