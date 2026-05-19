@@ -1,7 +1,7 @@
 # Admin Social — Refactor / Modularization Index
 
 **Date:** 2026-05-19  
-**Type:** Planning audit only (no code moves)  
+**Type:** Planning audit + Phase 4 implementation (4b–4f-5)  
 **Prerequisites:** [`docs/audit/pages/admin-social/`](../admin-social/) — especially [`023`](../admin-social/023_admin_social_milestone_wrapup.md), [`001`](../admin-social/001_admin_social_file_map.md), [`002`](../admin-social/002_admin_social_current_ui_behavior.md), [`004`](../admin-social/004_admin_social_pipeline.md), [`016`](../admin-social/016_admin_social_phase3_autoqueue_autopilot_audit.md)  
 **Out of scope:** Public `/pages/social.html`, edge function logic changes, DB migrations, deployments
 
@@ -9,24 +9,24 @@
 
 ## 1. Purpose
 
-The Admin Social Media Manager works, but **maintainability is degrading**: several JS modules exceed 500–1,400 lines, and `pages/admin/social.html` is ~2,400 lines of markup. That makes AI-assisted edits and human review **slow and error-prone**.
+The Admin Social Media Manager works, but **maintainability was degrading**: several JS modules exceeded 500–1,400 lines, and `pages/admin/social.html` is ~2,400 lines of markup. That makes AI-assisted edits and human review **slow and error-prone**.
 
-This refactor audit defines a **behavior-preserving** path to smaller, feature-based ES modules under `js/admin/social/` so features can be added, removed, or changed with less cross-file risk.
+This refactor audit defined a **behavior-preserving** path to smaller, feature-based ES modules under `js/admin/social/` so features can be added, removed, or changed with less cross-file risk.
 
 ---
 
-## 2. Current pain points
+## 2. Current pain points (original audit)
 
 | Pain | Impact |
 |------|--------|
 | **Monolithic HTML** (~2,389 lines) | Hard to find tab/modal markup; high merge conflict risk |
 | **`postLearning.js` (~1,385 lines)** | Learning + AI + DB writes in one file; analytics depends on it |
-| **`analytics.js` (~972 lines)** | Tab load, insights sync, modals, learning UI, category research |
-| **`index.js` (~954 lines)** | Boot, OAuth, posting, templates, boards, queue, tabs, global state |
-| **`autoQueue.js` (~753 lines)** | Settings, preview, scoring UI, repost, edge calls |
-| **Duplicated fetch patterns** | `fetch(\`${SUPABASE_URL}/functions/v1/...\`)` vs `client.functions.invoke` vs hardcoded project URL |
-| **Implicit coupling via `init(deps)`** | Modules need `_getClient`, URLs, callbacks injected from `index.js` |
-| **Global `state` in index** | Upload, pool, carousel, templates share one object |
+| **`analytics.js` (~972 lines)** | Resolved → `features/analytics/*` |
+| **`index.js` (~954 lines)** | Reduced → ~483 lines; more extractions possible |
+| **`autoQueue.js` (~753 lines)** | Resolved → `features/autoQueue/*` |
+| **Duplicated fetch patterns** | Partially addressed; full centralization deferred |
+| **Implicit coupling via `init(deps)`** | Addressed via `*Context.js` per feature |
+| **Global `state` in index** | Still shared for upload/pool/carousel |
 | **Alert-based UX** | Not a refactor blocker, but obscures failure paths during testing |
 
 ---
@@ -35,8 +35,8 @@ This refactor audit defines a **behavior-preserving** path to smaller, feature-b
 
 1. **Feature folders** under `js/admin/social/features/<name>/` with thin controllers + focused helpers.  
 2. **Shared `services/`** for Supabase table access (gradually split from `api.js`) and **edge function wrappers** (single place for URLs/headers).  
-3. **Shared `utils/`** for pure formatters, DOM helpers, dates — extracted first (lowest risk).  
-4. **Keep `index.js` as orchestrator** until Phase 4f; shrink it by moving OAuth, templates, boards, queue into feature modules.  
+3. **Shared `utils/`** for pure formatters, DOM helpers, dates — **done** (Phase 4b).  
+4. **Keep `index.js` as orchestrator** — shrinking continues (calendar, loaders, toast).  
 5. **Defer HTML split** until JS boundaries are stable (optional Phase 4g: partials or tab fragments).  
 6. **No build step** — remain native ES modules loaded from `social.html`.  
 7. **Target file size:** ~300–600 lines per module where practical.
@@ -64,43 +64,69 @@ This refactor audit defines a **behavior-preserving** path to smaller, feature-b
 | 012 | [012_phase4f3_platform_posting_split.md](./012_phase4f3_platform_posting_split.md) | Phase 4f-3 platform posting |
 | 013 | [013_phase4f4_templates_split.md](./013_phase4f4_templates_split.md) | Phase 4f-4 templates |
 | 014 | [014_phase4f5_boards_split.md](./014_phase4f5_boards_split.md) | Phase 4f-5 boards |
+| 015 | [015_phase4_refactor_milestone_wrapup.md](./015_phase4_refactor_milestone_wrapup.md) | **Phase 4 milestone wrap-up** |
 
 ---
 
-## 5. Recommended first implementation phase
+## 5. Milestone status (Phase 4 code)
 
-**Phase 4b** — Extract **pure utilities** (done — see `006`)
+| Phase | Status |
+|-------|--------|
+| 4a | Done (docs only) |
+| 4b | Done — `006` |
+| 4c | Done — `007` (committed with 4b in `3ec2eab`) |
+| 4d | Done — `008` |
+| 4e | Done — `009` |
+| 4f-1 … 4f-5 | Done — `010`–`014` |
+| 4g+ (HTML, postLearning, upload) | **Not started** |
 
-**Phase 4c** — Split `autoQueue.js` (done — see `007`)
-
-**Phase 4d** — Split `analytics.js` (done — see `008`)
-
-**Phase 4e** — Split `postDetail.js` / queue from `index.js` (done — see `009`)
-
-**Phase 4f-1** — Tab router + page boot (done — see `010`)
-
-**Phase 4f-2** — OAuth + platform connect (done — see `011`)
-
-**Phase 4f-3** — Platform posting helpers (done — see `012`)
-
-**Phase 4f-4** — Templates extraction (done — see `013`)
-
-**Phase 4f-5** — Boards extraction (done — see `014`)
-
-**Next:** `index.js` slim-down wrap-up / optional remaining helpers.
-
-Do **not** start with `postLearning.js` or `social.html` until analytics and index slim-down are stable.
+**Next recommended step:** [015 §10](./015_phase4_refactor_milestone_wrapup.md) — **smoke test, then push**; optional further `index.js` loader extraction.
 
 ---
 
-## 6. Success criteria (whole refactor program)
+## 6. Current modular layout (`js/admin/social/`)
 
-- [ ] No intentional behavior change (verify via manual smoke checklist per phase)  
-- [ ] `pages/admin/social.html` still loads `index.js` only as entry module  
-- [ ] Each feature area editable in isolation (~1–3 files)  
-- [ ] Edge/auth call patterns centralized enough to fix hardcoded URLs in one follow-up (Phase 4b+ / infra doc 023 § Phase 4b)  
-- [ ] Largest files under ~600 lines except HTML (until HTML phase)
+```
+utils/                    # Phase 4b
+boot/                     # Phase 4f-1
+features/
+  autoQueue/              # Phase 4c
+  analytics/              # Phase 4d
+  posts/                  # Phase 4e
+  platforms/              # Phase 4f-2, 4f-3
+  templates/              # Phase 4f-4
+  boards/                 # Phase 4f-5
+```
+
+**Compatibility barrels (legacy paths):** `analytics.js`, `autoQueue.js`, `postDetail.js`, `scoringPerformance.js`
+
+**Legacy / root modules still at `js/admin/social/`:**
+
+| Module | ~Lines | Role |
+|--------|--------|------|
+| `index.js` | 483 | Entry orchestrator, state, calendar, data loaders |
+| `api.js` | 621 | Supabase CRUD monolith |
+| `postLearning.js` | 1,425 | Learning engine (analytics dependency) |
+| `uploadModal.js` | 954 | New post wizard |
+| `carouselBuilder.js` | 829 | Carousel composer |
+| `imagePool.js` | 548 | Asset pool tab |
+| `captions.js` | 890 | Caption/hashtag AI + templates cache |
+| `calendar.js` | 280 | Calendar grid (used by index) |
+| `platformSettings.js` | 278 | Settings modal |
+| `autopilot.js` | 181 | Autopilot UI |
+| `postStatus.js` | small | Status constants |
+| `imageProcessor.js` | 180 | Client crop helpers |
 
 ---
 
-*Planning only — no files moved in this audit.*
+## 7. Success criteria (whole refactor program)
+
+- [x] Feature folders for auto-queue, analytics, posts, platforms, templates, boards  
+- [x] `pages/admin/social.html` still loads `index.js` only as entry module  
+- [ ] No intentional behavior change — **verify via [015 §8](./015_phase4_refactor_milestone_wrapup.md)**  
+- [ ] Edge/auth call patterns centralized enough for one follow-up  
+- [ ] Largest files under ~600 lines except HTML — **postLearning, uploadModal, api still exceed**
+
+---
+
+*See [015_phase4_refactor_milestone_wrapup.md](./015_phase4_refactor_milestone_wrapup.md) for commits, smoke checklist, risks, and push recommendation.*
