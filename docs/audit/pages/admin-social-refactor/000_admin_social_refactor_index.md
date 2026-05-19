@@ -57,6 +57,7 @@ This refactor audit defines a **behavior-preserving** path to smaller, feature-b
 | 005 | [005_phase4b_first_refactor_prompt.md](./005_phase4b_first_refactor_prompt.md) | Copy-paste Cursor prompt for first code phase |
 | 006 | [006_phase4b_utilities_extraction.md](./006_phase4b_utilities_extraction.md) | Phase 4b completion |
 | 007 | [007_phase4c_autoqueue_split.md](./007_phase4c_autoqueue_split.md) | Phase 4c auto-queue split |
+| 008 | [008_phase4d_analytics_split.md](./008_phase4d_analytics_split.md) | Phase 4d analytics split |
 
 ---
 
@@ -66,7 +67,9 @@ This refactor audit defines a **behavior-preserving** path to smaller, feature-b
 
 **Phase 4c** — Split `autoQueue.js` (done — see `007`)
 
-**Next:** **Phase 4d** — Split `analytics.js` into `features/analytics/*` with barrel re-export.
+**Phase 4d** — Split `analytics.js` (done — see `008`)
+
+**Next:** **Phase 4e** — Split `postDetail.js` / queue rendering from `index.js`.
 
 Do **not** start with `postLearning.js` or `social.html` until analytics and index slim-down are stable.
 
