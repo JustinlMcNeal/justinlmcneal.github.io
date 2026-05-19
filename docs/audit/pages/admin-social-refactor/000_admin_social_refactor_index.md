@@ -60,6 +60,7 @@ This refactor audit defines a **behavior-preserving** path to smaller, feature-b
 | 008 | [008_phase4d_analytics_split.md](./008_phase4d_analytics_split.md) | Phase 4d analytics split |
 | 009 | [009_phase4e_posts_queue_split.md](./009_phase4e_posts_queue_split.md) | Phase 4e posts / queue split |
 | 010 | [010_phase4f1_tab_router_boot_split.md](./010_phase4f1_tab_router_boot_split.md) | Phase 4f-1 tab router / boot |
+| 011 | [011_phase4f2_platforms_oauth_split.md](./011_phase4f2_platforms_oauth_split.md) | Phase 4f-2 platforms / OAuth |
 
 ---
 
@@ -75,7 +76,9 @@ This refactor audit defines a **behavior-preserving** path to smaller, feature-b
 
 **Phase 4f-1** — Tab router + page boot (done — see `010`)
 
-**Next:** **Phase 4f-2** — OAuth + platform connect extraction.
+**Phase 4f-2** — OAuth + platform connect (done — see `011`)
+
+**Next:** Templates/boards split or `postTo*` extraction (per `004`).
 
 Do **not** start with `postLearning.js` or `social.html` until analytics and index slim-down are stable.
 
