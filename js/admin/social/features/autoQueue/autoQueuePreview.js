@@ -266,7 +266,14 @@ function formatPreviewRunBanner(settingsUsed, compareEnabled) {
   parts.push(`penalties <strong>${w.penalties_enabled !== false ? "on" : "off"}</strong>`);
   parts.push(`compare <strong>${compareEnabled ? "on" : "off"}</strong>`);
   if (settingsUsed.allow_multi_platform_per_product === false && (settingsUsed.platforms?.length || 0) > 1) {
-    parts.push('<span class="text-amber-700">one platform/product</span>');
+    parts.push('<span class="text-amber-700">one platform/product (round-robin)</span>');
+  }
+  const dist = settingsUsed.platform_distribution;
+  if (dist && typeof dist === "object" && Object.keys(dist).length) {
+    const distStr = Object.entries(dist)
+      .map(([plat, n]) => `${plat} ${n}`)
+      .join(", ");
+    parts.push(`dist <strong>${escapeHtml(distStr)}</strong>`);
   }
   return parts.join(" · ");
 }
@@ -283,7 +290,10 @@ export function renderAutoQueuePreview(posts, settingsUsed, skippedProducts, run
   els.aqPreviewResults?.classList.remove("hidden");
 
   const settingsNote = settingsUsed
-    ? `<p class="text-xs text-gray-500 px-4 py-2 bg-gray-50 border-b">Run: ${formatPreviewRunBanner(settingsUsed, compareEnabled)}</p>`
+    ? `<p class="text-xs text-gray-500 px-4 py-2 bg-gray-50 border-b">Run: ${formatPreviewRunBanner(
+        { ...settingsUsed, ...(runSummary || {}) },
+        compareEnabled
+      )}</p>`
     : "";
 
   const skippedBlock = renderSkippedPreview(skipped, runSummary);

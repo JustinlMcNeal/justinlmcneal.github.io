@@ -1891,12 +1891,13 @@ Deno.serve(async (req) => {
     // 5. Generate posts for each product
     const generatedPosts: any[] = [];
     const baseTones = settings.caption_tones || ["casual", "urgency"];
-    const platformsForBatch = allowMultiPlatformPerProduct
-      ? platformList
-      : [platformList[0]];
     if (!allowMultiPlatformPerProduct && platformList.length > 1) {
       console.log(
-        `[auto-queue] Multi-platform per product disabled — using ${platformList[0]} only per product this run`
+        `[auto-queue] One platform per product — round-robin across: ${platformList.join(", ")}`
+      );
+    } else if (!allowMultiPlatformPerProduct) {
+      console.log(
+        `[auto-queue] One platform per product — ${platformList[0] || "none"} only`
       );
     }
     const recentShotTypes: string[] = []; // Track for diversity guard
@@ -1926,6 +1927,10 @@ Deno.serve(async (req) => {
 
     for (let i = 0; i < products.length; i++) {
       const product = products[i];
+      const platformsForProduct = allowMultiPlatformPerProduct
+        ? platformList
+        : [platformList[i % platformList.length]];
+      const primaryPlatform = platformsForProduct[0];
 
       if (imageAssetPolicy === "image_pool_only" && !poolMap[product.id]?.length) {
         skippedProducts.push({
@@ -1985,7 +1990,7 @@ Deno.serve(async (req) => {
               price: product.price,
             },
             tone: bestTone,
-            platform: platformList[0],
+            platform: primaryPlatform,
           }),
         });
         if (aiResp.ok) {
@@ -2015,7 +2020,7 @@ Deno.serve(async (req) => {
             name: product.name,
             category_name: categoryName,
             slug: product.slug,
-          }, platformList[0]);
+          }, primaryPlatform);
 
           const score = scoreCaptionConfidence(candidate);
           if (score > bestScore) {
@@ -2033,7 +2038,7 @@ Deno.serve(async (req) => {
         bestCaption = generateCaption(
           pickRandom(CAPTION_TEMPLATES.minimalist),
           { name: product.name, category_name: categoryName, slug: product.slug },
-          platformList[0]
+          primaryPlatform
         );
         bestTone = "minimalist";
         captionSource = "template";
@@ -2120,14 +2125,15 @@ Deno.serve(async (req) => {
         inventory_status: eligibility.inventory_status,
         backorder_status: eligibility.backorder_status,
         scarcity_guard_applied: scarcityGuardApplied,
-        multi_platform_mode: allowMultiPlatformPerProduct ? "all_platforms" : "primary_only",
+        multi_platform_mode: allowMultiPlatformPerProduct ? "all_platforms" : "round_robin_single",
+        assigned_platform: primaryPlatform,
       };
 
-      // Create post for selected platform(s) — default: primary platform only per product
-      for (const plat of platformsForBatch) {
+      // Create post for selected platform(s) — one per product (round-robin) or all platforms
+      for (const plat of platformsForProduct) {
         // Re-generate caption for this specific platform if needed (IG vs FB)
         let platformCaption = bestCaption;
-        if (plat !== platformsForBatch[0]) {
+        if (plat !== primaryPlatform) {
           // Regenerate with platform-specific link handling
           const tone = bestTone;
           const tmpl = pickSafeTemplate(tone, scarcitySafe);
@@ -2317,6 +2323,12 @@ Deno.serve(async (req) => {
       }
     }
 
+    const platformDistribution = generatedPosts.reduce((acc: Record<string, number>, p: any) => {
+      const plat = p.platform || "unknown";
+      acc[plat] = (acc[plat] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
     // If preview mode, return without saving
     const runSummary = {
       eligible_count: generatedPosts.length,
@@ -2332,7 +2344,9 @@ Deno.serve(async (req) => {
       pool_ready_assets: totalTaggedAssets,
       pool_ready_products: Object.keys(poolMap).length,
       multi_platform_per_product: allowMultiPlatformPerProduct,
-      platforms_per_product: platformsForBatch.length,
+      one_platform_per_product: !allowMultiPlatformPerProduct,
+      platforms_per_product: allowMultiPlatformPerProduct ? platformList.length : 1,
+      platform_distribution: platformDistribution,
     };
 
     const lastRunPayload = {

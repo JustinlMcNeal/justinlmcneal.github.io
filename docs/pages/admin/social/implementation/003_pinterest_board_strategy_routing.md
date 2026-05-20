@@ -55,6 +55,16 @@ Routing score (auto-queue):
 
 ---
 
+## Auto-queue platform distribution (one platform per product)
+
+When `allow_multi_platform_per_product` is **false** and multiple platforms are selected (e.g. Instagram + Pinterest), auto-queue assigns **one platform per product** in **scoring order** using **round-robin** across the selected list (product 1 → first platform, product 2 → second, then wrap). This preserves duplicate-product protection while still generating Pinterest posts so board routing can be exercised in preview and autopilot.
+
+Preview `run_summary` includes `platform_distribution` (e.g. `{ instagram: 2, pinterest: 2 }`) and `one_platform_per_product: true`.
+
+When `allow_multi_platform_per_product` is **true**, each selected product still gets **all** selected platforms (unchanged).
+
+---
+
 ## No auto-create decision
 
 - This phase does **not** add board creation to auto-queue or new recommenders.
