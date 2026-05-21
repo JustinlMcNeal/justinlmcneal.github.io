@@ -35,10 +35,19 @@ export async function loadAutoQueueStats() {
 
     const recent = (total || 0) - (ready || 0);
 
+    const { count: poolReady } = await client
+      .from("social_assets")
+      .select("*", { count: "exact", head: true })
+      .eq("is_active", true)
+      .not("product_id", "is", null)
+      .not("shot_type", "is", null);
+
     if (els.aqStatTotal) els.aqStatTotal.textContent = total || 0;
     if (els.aqStatNeverPosted) els.aqStatNeverPosted.textContent = neverPosted || 0;
     if (els.aqStatReady) els.aqStatReady.textContent = ready || 0;
     if (els.aqStatRecent) els.aqStatRecent.textContent = recent;
+    const poolEl = document.getElementById("aqStatPoolReady");
+    if (poolEl) poolEl.textContent = String(poolReady ?? 0);
   } catch (err) {
     console.error("Failed to load auto-queue stats:", err);
   }

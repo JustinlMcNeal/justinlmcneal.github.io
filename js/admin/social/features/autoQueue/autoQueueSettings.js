@@ -143,12 +143,12 @@ export async function saveAutoQueueSettings(showFeedback = false) {
     }, { onConflict: "setting_key" });
 
     if (showFeedback) {
-      showToast?.("Auto-queue settings saved") || alert("Auto-queue settings saved");
+      showToast?.("Optimization defaults saved") || alert("Optimization defaults saved");
     }
     return merged;
   } catch (err) {
     console.error("[auto-queue] Failed to save settings:", err);
-    if (showFeedback) alert("Failed to save auto-queue settings");
+    if (showFeedback) alert("Failed to save optimization defaults");
     throw err;
   }
 }

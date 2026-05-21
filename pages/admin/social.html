@@ -447,8 +447,16 @@
       <!-- Auto-Queue View -->
       <div id="tab-autoqueue" class="tab-panel hidden">
         <div class="grid gap-6">
-          
-          <!-- AUTOPILOT TOGGLE CARD -->
+
+          <!-- 1. Autopilot Control Center -->
+          <section id="aqSectionAutopilot" class="space-y-4">
+            <div class="border-b border-gray-200 pb-2">
+              <h2 class="text-lg font-black text-gray-900">Autopilot Control Center</h2>
+              <p class="text-sm text-gray-600 mt-1 max-w-3xl">
+                Autopilot keeps the schedule filled automatically using approved Image Pool assets, platform readiness checks, and optimization defaults. Run Now fills the queue once; cron does the same on schedule.
+              </p>
+            </div>
+
           <div id="autopilotCard" class="bg-gradient-to-r from-purple-500 to-indigo-600 rounded-xl p-6 text-white">
             <div class="flex items-center justify-between">
               <div class="flex items-start gap-4">
@@ -460,7 +468,7 @@
                 <div class="flex-1">
                   <h2 class="text-xl font-black mb-1">🤖 Autopilot Mode</h2>
                   <p class="text-white/90 text-sm">
-                    Set it and forget it! Autopilot automatically keeps your queue full.
+                    Automatic queue filling — schedule volume and platforms. Uses the same post engine as manual runs.
                   </p>
                   <div id="autopilotStatus" class="mt-2 text-xs text-white/70">
                     Checking status...
@@ -530,11 +538,10 @@
             </div>
           </div>
 
-          <!-- Automation Health -->
           <div id="aqHealthCard" class="bg-white rounded-xl shadow-sm border overflow-hidden">
             <div class="p-4 border-b">
-              <h2 class="font-bold">Automation Health</h2>
-              <p class="text-xs text-gray-500 mt-1">Status from settings and queue — not invented when data is missing.</p>
+              <h3 class="font-bold">Automation Health</h3>
+              <p class="text-xs text-gray-500 mt-1">Publish readiness, last runs, queue counts, and latest failures — live from settings and the database.</p>
             </div>
             <div class="p-4 grid sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
               <div>
@@ -571,35 +578,21 @@
               <p id="aqHealthPreviewNote" class="hidden text-xs text-gray-500 mt-1"></p>
             </div>
           </div>
+          </section>
 
-          <!-- Auto-Queue Info Card -->
-          <div class="bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl p-6 text-white">
-            <div class="flex items-start gap-4">
-              <div class="p-3 bg-white/20 rounded-xl">
-                <svg class="w-8 h-8" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-                </svg>
-              </div>
-              <div class="flex-1">
-                <h2 class="text-xl font-black mb-2">⚡ Manual Queue Generation</h2>
-                <p class="text-white/90 text-sm leading-relaxed">
-                  Manually generate social media posts from your product catalog. 
-                  The system picks products that haven't been posted recently and creates 
-                  unique captions with smart scheduling.
-                </p>
-              </div>
+          <!-- 2. Manual Queue Builder -->
+          <section id="aqSectionManual" class="space-y-4">
+            <div class="border-b border-gray-200 pb-2">
+              <h2 class="text-lg font-black text-gray-900">Manual Queue Builder</h2>
+              <p class="text-sm text-gray-600 mt-1 max-w-3xl">
+                Preview and generate posts now. Uses the same engine as autopilot, but only runs when you click Preview or Generate &amp; Save to Queue.
+              </p>
             </div>
-          </div>
 
-          <!-- Settings Card -->
           <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
-            <div class="p-4 border-b">
-              <h2 class="font-bold">Auto-Queue Settings</h2>
-            </div>
             <div class="p-6 space-y-6">
-              <!-- Posts per batch -->
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">Posts to Generate</label>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Posts to generate (this run)</label>
                 <select id="aqPostCount" class="w-full sm:w-48 border rounded-lg px-3 py-2 text-sm">
                   <option value="2">2 posts</option>
                   <option value="4" selected>4 posts</option>
@@ -607,12 +600,11 @@
                   <option value="8">8 posts</option>
                   <option value="10">10 posts</option>
                 </select>
-                <p class="text-xs text-gray-500 mt-1">How many posts to create in each batch</p>
+                <p class="text-xs text-gray-500 mt-1">Batch size for Preview / Generate only — not autopilot schedule volume</p>
               </div>
 
-              <!-- Platform selection -->
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">Platforms</label>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Platforms (this run)</label>
                 <div class="flex flex-wrap gap-4">
                   <label class="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" id="aqPlatformInstagram" value="instagram" checked class="accent-pink-500">
@@ -627,9 +619,58 @@
                     <span class="text-sm">📌 Pinterest</span>
                   </label>
                 </div>
-                <p class="text-xs text-gray-500 mt-1">Posts will be created for each selected platform</p>
+                <p class="text-xs text-gray-500 mt-1">Round-robin one platform per product when multiple are selected (unless multi-platform mode is enabled in defaults)</p>
               </div>
 
+              <div>
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" id="aqCompareScoring" checked class="accent-indigo-600">
+                  <span class="text-sm text-gray-700">Compare against legacy scoring (preview only)</span>
+                </label>
+              </div>
+
+              <div class="flex flex-col sm:flex-row gap-4">
+                <button id="btnPreviewQueue" class="flex-1 px-6 py-4 text-sm font-bold border-2 border-gray-300 rounded-xl hover:border-gray-400 transition-colors flex items-center justify-center gap-2">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                  </svg>
+                  Preview Posts
+                </button>
+                <button id="btnGenerateQueue" class="flex-1 px-6 py-4 text-sm font-bold bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                  </svg>
+                  Generate &amp; Save to Queue
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div id="aqPreviewResults" class="hidden">
+            <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+              <div class="p-4 border-b flex items-center justify-between">
+                <h3 class="font-bold">Preview: Generated Posts</h3>
+                <button id="btnConfirmQueue" class="px-4 py-2 text-sm font-bold bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+                  Confirm &amp; Schedule All
+                </button>
+              </div>
+              <div id="aqPreviewList" class="divide-y"></div>
+            </div>
+          </div>
+          </section>
+
+          <!-- 3. Optimization Defaults -->
+          <section id="aqSectionDefaults" class="space-y-4">
+            <div class="border-b border-gray-200 pb-2">
+              <h2 class="text-lg font-black text-gray-900">Optimization Defaults</h2>
+              <p class="text-sm text-gray-600 mt-1 max-w-3xl">
+                Shared defaults stored in <code class="text-xs bg-gray-100 px-1 rounded">social_settings.auto_queue</code>. Used by manual runs and the auto-queue engine (scoring, times, caption mix). Future AI / OpenClaw learning can tune these from performance data.
+              </p>
+            </div>
+
+          <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+            <div class="p-6 space-y-6">
               <!-- Posting times -->
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-2">Posting Times</label>
@@ -651,7 +692,7 @@
                     <span class="text-sm">8:00 PM</span>
                   </label>
                 </div>
-                <p class="text-xs text-gray-500 mt-1">Posts will be spread across these times</p>
+                <p class="text-xs text-gray-500 mt-1">Default time slots for scheduling new posts (manual runs; autopilot may use its own saved time defaults until unified)</p>
               </div>
 
               <!-- Caption tones (8 styles with 50+ templates) -->
@@ -726,84 +767,71 @@
                 <p class="text-xs text-gray-500 mt-1">Each weight 0–50. Reset updates the form only; click Save to persist.</p>
               </div>
 
+              <p class="text-xs text-gray-500 border-t pt-4">
+                Image asset policy: standard posting uses <strong>Image Pool only</strong> (product + shot type). Catalog/gallery fallback is disabled unless legacy pipeline is enabled in settings.
+              </p>
+
               <div>
-                <button type="button" id="btnSaveAutoQueueSettings" class="mt-4 px-4 py-2 text-sm font-bold border-2 border-gray-300 rounded-lg hover:border-gray-400 transition-colors">
-                  Save Auto-Queue Settings
+                <button type="button" id="btnSaveAutoQueueSettings" class="mt-2 px-4 py-2 text-sm font-bold border-2 border-gray-300 rounded-lg hover:border-gray-400 transition-colors">
+                  Save Optimization Defaults
                 </button>
-                <p class="text-xs text-gray-500 mt-1">Saved settings are used by Autopilot and as defaults for manual runs</p>
+                <p class="text-xs text-gray-500 mt-1">
+                  Persists to <code class="text-xs bg-gray-100 px-1 rounded">auto_queue</code> — used by manual Preview/Generate and product scoring in the engine. Autopilot schedule volume is controlled in Autopilot Mode above.
+                </p>
               </div>
             </div>
           </div>
+          </section>
 
-          <!-- Generate Button -->
-          <div class="mb-3">
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" id="aqCompareScoring" checked class="accent-indigo-600">
-              <span class="text-sm text-gray-700">Compare against legacy scoring (preview only)</span>
-            </label>
-          </div>
-          <div class="flex flex-col sm:flex-row gap-4">
-            <button id="btnPreviewQueue" class="flex-1 px-6 py-4 text-sm font-bold border-2 border-gray-300 rounded-xl hover:border-gray-400 transition-colors flex items-center justify-center gap-2">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-              </svg>
-              Preview Posts
-            </button>
-            <button id="btnGenerateQueue" class="flex-1 px-6 py-4 text-sm font-bold bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-              </svg>
-              Generate & Schedule
-            </button>
-          </div>
-
-          <!-- Preview Results -->
-          <div id="aqPreviewResults" class="hidden">
-            <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
-              <div class="p-4 border-b flex items-center justify-between">
-                <h2 class="font-bold">Preview: Generated Posts</h2>
-                <button id="btnConfirmQueue" class="px-4 py-2 text-sm font-bold bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
-                  Confirm & Schedule All
-                </button>
-              </div>
-              <div id="aqPreviewList" class="divide-y">
-                <!-- Populated by JS -->
-              </div>
+          <!-- 4. Eligibility Snapshot -->
+          <section id="aqSectionEligibility" class="space-y-4">
+            <div class="border-b border-gray-200 pb-2">
+              <h2 class="text-lg font-black text-gray-900">Eligibility Snapshot</h2>
+              <p class="text-sm text-gray-600 mt-1 max-w-3xl">
+                Catalog readiness for automation — which products can be picked and whether Image Pool assets are tagged. Queue counts live in Automation Health.
+              </p>
             </div>
-          </div>
 
-          <!-- Product Stats -->
           <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
-            <div class="p-4 border-b">
-              <h2 class="font-bold">Product Posting Status</h2>
-            </div>
             <div class="p-6">
-              <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
+              <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 text-center">
                 <div>
                   <div id="aqStatTotal" class="text-2xl font-black">0</div>
-                  <div class="text-xs text-gray-500">Total Products</div>
+                  <div class="text-xs text-gray-500">Active products</div>
                 </div>
                 <div>
                   <div id="aqStatNeverPosted" class="text-2xl font-black text-green-600">0</div>
-                  <div class="text-xs text-gray-500">Never Posted</div>
+                  <div class="text-xs text-gray-500">Never posted</div>
                 </div>
                 <div>
                   <div id="aqStatReady" class="text-2xl font-black text-blue-600">0</div>
-                  <div class="text-xs text-gray-500">Ready to Post</div>
+                  <div class="text-xs text-gray-500">Ready (14d+ gap)</div>
                 </div>
                 <div>
                   <div id="aqStatRecent" class="text-2xl font-black text-gray-400">0</div>
-                  <div class="text-xs text-gray-500">Posted Recently</div>
+                  <div class="text-xs text-gray-500">Posted recently</div>
+                </div>
+                <div>
+                  <div id="aqStatPoolReady" class="text-2xl font-black text-indigo-600">0</div>
+                  <div class="text-xs text-gray-500">Pool-ready assets</div>
                 </div>
               </div>
               <p class="text-xs text-gray-400 text-center mt-4">
-                Products are considered "ready" if they haven't been posted in the last 14 days
+                Ready = active product with catalog image, not posted in the last 14 days. Pool-ready = Image Pool row with product + shot type (required for auto-queue).
               </p>
             </div>
           </div>
+          </section>
 
-          <!-- Auto-Repost Old Posts -->
+          <!-- 5. Resurface Winners -->
+          <section id="aqSectionResurface" class="space-y-4">
+            <div class="border-b border-gray-200 pb-2">
+              <h2 class="text-lg font-black text-gray-900">Resurface Winners (content strategy)</h2>
+              <p class="text-sm text-gray-600 mt-1 max-w-3xl">
+                Autopilot can reuse proven posts after enough time, with fresh captions. Large auto-queue batches may already swap in one resurface slot automatically; use the controls below to test the dedicated repost workflow.
+              </p>
+            </div>
+
           <div class="bg-gradient-to-r from-amber-500 to-orange-500 rounded-xl p-6 text-white">
             <div class="flex items-start gap-4">
               <div class="p-3 bg-white/20 rounded-xl">
@@ -812,14 +840,16 @@
                 </svg>
               </div>
               <div class="flex-1">
-                <h2 class="text-xl font-black mb-2">🔄 Resurface Old Hits</h2>
-                <p class="text-white/90 text-sm leading-relaxed mb-4">
-                  Automatically repost your best content from 30+ days ago with fresh captions. 
-                  Maximize your content's reach!
+                <h3 class="text-lg font-black mb-2">Manual test controls</h3>
+                <p class="text-white/90 text-sm leading-relaxed mb-2">
+                  Does not delete originals on Pinterest. Scheduled as new queue posts with updated copy.
+                </p>
+                <p class="text-white/80 text-xs mb-4">
+                  Follow-up: autopilot on/off toggle for resurface per run (not in this release).
                 </p>
                 <div class="flex flex-wrap gap-3">
                   <div class="flex items-center gap-2">
-                    <label class="text-sm text-white/80">Posts to repost:</label>
+                    <label class="text-sm text-white/80">Max per run:</label>
                     <select id="repostCount" class="border-0 bg-white/20 rounded-lg px-3 py-1.5 text-sm text-white">
                       <option value="1">1</option>
                       <option value="2" selected>2</option>
@@ -839,17 +869,16 @@
                 </div>
                 <div class="flex gap-3 mt-4">
                   <button id="btnPreviewRepost" class="px-4 py-2 bg-white/20 text-white font-bold rounded-lg text-sm hover:bg-white/30 transition-colors">
-                    👀 Preview
+                    Test resurface candidates
                   </button>
                   <button id="btnGenerateRepost" class="px-4 py-2 bg-white text-orange-600 font-bold rounded-lg text-sm hover:bg-white/90 transition-colors">
-                    🔄 Repost Now
+                    Repost winners now
                   </button>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- Repost Preview Results -->
           <div id="repostPreviewResults" class="hidden">
             <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
               <div class="p-4 border-b flex items-center justify-between">
@@ -858,11 +887,11 @@
                   Confirm & Schedule
                 </button>
               </div>
-              <div id="repostPreviewList" class="divide-y">
-                <!-- Populated by JS -->
-              </div>
+              <div id="repostPreviewList" class="divide-y"></div>
             </div>
           </div>
+          </section>
+
         </div>
       </div>
 
