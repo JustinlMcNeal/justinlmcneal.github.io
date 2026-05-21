@@ -84,9 +84,18 @@ Every run (including no-op and errors) upserts:
 - Primary fix: after failed `postToInstagram`, **re-query** `social_posts`; if `posted`, show soft-success and refresh hub.
 - Edge: if IG publish succeeds but DB update fails, response includes `success: true` + `db_warning` (UI still treats as success via `success` flag).
 
+## Follow-up: auto-queue insert failures (2026-05-21)
+
+**Symptom:** `run_summary.posts_built: 6`, `generated: 0`, `skipped_count: 0`.
+
+**Root cause:** Image Pool products often have **multiple** active `social_assets` rows. Insert path used `.single()` on `product_id`, which fails when >1 row. Code then tried `INSERT` with an `original_image_path` that already exists → unique index `uq_social_assets_active_path` violation → every post failed to save.
+
+**Fix (auto-queue v58+):** Resolve asset via `pool_asset_id`, then path match, then `limit(1)`; only insert new asset when none exist. Variation lookup uses `limit(1)` instead of `.single()`. `posts_built` / `posts_saved` in `run_summary`.
+
 ## Risks
 
 - Deploy **autopilot-fill** and **instagram-post** required for server fixes in production.
+- Deploy **auto-queue** required for Generate & Schedule / Run Now to persist posts.
 - First Run Now after deploy will overwrite stale `autopilot_last_run` even if zero posts created (intended).
 - Window counts in health “in window” may differ from global Queued/Scheduled totals (by design).
 

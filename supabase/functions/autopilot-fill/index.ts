@@ -252,10 +252,19 @@ Deno.serve(async (req) => {
     }
 
     const generated = Number(result.generated) || 0;
+    const postsBuilt =
+      Number(result.generatedCount) ||
+      Number(result.run_summary?.posts_built) ||
+      0;
     const skippedCount = result.run_summary?.skipped_count ?? 0;
     const noPoolSkipped = result.run_summary?.no_pool_asset_skipped ?? 0;
+    const skippedErrors = Array.isArray(result.skippedErrors)
+      ? (result.skippedErrors as string[]).slice(0, 5)
+      : [];
 
-    console.log(`[autopilot] auto-queue generated ${generated} posts`);
+    console.log(
+      `[autopilot] auto-queue built=${postsBuilt} saved=${generated} skipped_errors=${skippedErrors.length}`
+    );
 
     let status = "success";
     let reason: string | null = null;
@@ -263,12 +272,20 @@ Deno.serve(async (req) => {
 
     if (generated === 0) {
       status = "no_op";
-      reason = "no_candidates";
-      const skipHint =
-        skippedCount > 0
-          ? `${skippedCount} product(s) skipped (see auto-queue run_summary)`
-          : "auto-queue returned zero posts";
-      message = `No posts created (${currentCount}/${targetCount} in fill window, need ${deficit} more). ${skipHint}`;
+      if (postsBuilt > 0) {
+        reason = "insert_failed";
+        const errHint = skippedErrors.length
+          ? skippedErrors.join("; ")
+          : "Database insert failed (see auto-queue logs)";
+        message = `No posts saved (${currentCount}/${targetCount} in fill window, need ${deficit} more). Built ${postsBuilt} in memory. ${errHint}`;
+      } else {
+        reason = "no_candidates";
+        const skipHint =
+          skippedCount > 0
+            ? `${skippedCount} product(s) skipped (see auto-queue run_summary)`
+            : "auto-queue returned zero posts";
+        message = `No posts created (${currentCount}/${targetCount} in fill window, need ${deficit} more). ${skipHint}`;
+      }
     }
 
     await writeAutopilotLastRun(supabase, {
@@ -289,6 +306,8 @@ Deno.serve(async (req) => {
       window_start: windowStart.toISOString(),
       window_end: windowEnd.toISOString(),
       auto_queue_message: result.message ?? null,
+      posts_built: postsBuilt,
+      skipped_errors: skippedErrors.length ? skippedErrors : undefined,
     });
 
     return new Response(
@@ -302,10 +321,12 @@ Deno.serve(async (req) => {
         deficit,
         generated,
         posts_created: generated,
+        posts_built: postsBuilt,
         current: currentCount,
         target: targetCount,
         posts: result.posts,
         run_summary: result.run_summary,
+        skippedErrors: skippedErrors.length ? skippedErrors : undefined,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

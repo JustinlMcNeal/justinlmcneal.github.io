@@ -1162,6 +1162,108 @@ function resolveAutoQueueRunSettings(
   return { count, platforms, caption_tones, posting_times };
 }
 
+/** Full public URL → bucket-relative path for social_assets.original_image_path */
+function storagePathFromPublicUrl(supabaseUrl: string, url: string): string {
+  const prefix = `${supabaseUrl}/storage/v1/object/public/social-media/`;
+  if (url.startsWith(prefix)) return url.slice(prefix.length);
+  return url;
+}
+
+/** Image Pool products often have many active assets; never use .single() here. */
+async function resolveAssetIdForQueuedPost(
+  supabase: ReturnType<typeof createClient>,
+  supabaseUrl: string,
+  post: {
+    pool_asset_id?: string | null;
+    product_id: string;
+    resolved_image_url: string;
+  }
+): Promise<{ assetId: string | null; error?: string }> {
+  if (post.pool_asset_id) {
+    const { data, error } = await supabase
+      .from("social_assets")
+      .select("id")
+      .eq("id", post.pool_asset_id)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (error) return { assetId: null, error: error.message };
+    if (data?.id) return { assetId: data.id };
+  }
+
+  const storagePath = storagePathFromPublicUrl(supabaseUrl, post.resolved_image_url);
+  const { data: byPath, error: pathErr } = await supabase
+    .from("social_assets")
+    .select("id")
+    .eq("is_active", true)
+    .eq("original_image_path", storagePath)
+    .maybeSingle();
+  if (pathErr) return { assetId: null, error: pathErr.message };
+  if (byPath?.id) return { assetId: byPath.id };
+
+  const { data: productAssets, error: listErr } = await supabase
+    .from("social_assets")
+    .select("id")
+    .eq("product_id", post.product_id)
+    .eq("is_active", true)
+    .order("used_count", { ascending: true })
+    .limit(1);
+  if (listErr) return { assetId: null, error: listErr.message };
+  if (productAssets?.[0]?.id) return { assetId: productAssets[0].id };
+
+  return { assetId: null };
+}
+
+async function resolveVariationIdForQueuedPost(
+  supabase: ReturnType<typeof createClient>,
+  assetId: string,
+  post: { platform: string; resolved_image_url: string; product_name: string; product_slug: string }
+): Promise<{ variationId: string | null; error?: string }> {
+  const { data: existingRows, error: listErr } = await supabase
+    .from("social_variations")
+    .select("id")
+    .eq("asset_id", assetId)
+    .eq("platform", post.platform)
+    .limit(1);
+
+  if (listErr) return { variationId: null, error: listErr.message };
+
+  if (existingRows?.[0]?.id) {
+    const variationId = existingRows[0].id;
+    await supabase
+      .from("social_variations")
+      .update({ image_path: post.resolved_image_url })
+      .eq("id", variationId);
+    return { variationId };
+  }
+
+  const { data: newVariation, error: varErr } = await supabase
+    .from("social_variations")
+    .insert({
+      asset_id: assetId,
+      platform: post.platform,
+      variant_type:
+        post.platform === "instagram"
+          ? "square_1x1"
+          : post.platform === "facebook"
+          ? "landscape_16x9"
+          : "vertical_2x3",
+      aspect_ratio:
+        post.platform === "instagram" ? "1:1" : post.platform === "facebook" ? "16:9" : "2:3",
+      image_path: post.resolved_image_url,
+      width: post.platform === "instagram" ? 1080 : post.platform === "facebook" ? 1200 : 1000,
+      height: post.platform === "instagram" ? 1080 : post.platform === "facebook" ? 630 : 1500,
+    })
+    .select("id")
+    .single();
+
+  if (varErr) {
+    console.error(`[auto-queue] Failed to create variation for ${post.product_name}:`, varErr);
+    return { variationId: null, error: varErr.message };
+  }
+
+  return { variationId: newVariation.id };
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
@@ -2329,9 +2431,11 @@ Deno.serve(async (req) => {
       return acc;
     }, {} as Record<string, number>);
 
-    // If preview mode, return without saving
-    const runSummary = {
+    const buildRunSummary = (savedCount: number) => ({
       eligible_count: generatedPosts.length,
+      posts_built: generatedPosts.length,
+      posts_saved: savedCount,
+      insert_failed_count: Math.max(0, generatedPosts.length - savedCount),
       products_selected: products.length,
       skipped_count: skippedProducts.length,
       no_pool_asset_skipped: skippedProducts.filter(
@@ -2347,21 +2451,20 @@ Deno.serve(async (req) => {
       one_platform_per_product: !allowMultiPlatformPerProduct,
       platforms_per_product: allowMultiPlatformPerProduct ? platformList.length : 1,
       platform_distribution: platformDistribution,
-    };
-
-    const lastRunPayload = {
-      ran_at: new Date().toISOString(),
-      preview: !!preview,
-      generated: generatedPosts.length,
-      run_summary: runSummary,
-    };
-
-    await supabase.from("social_settings").upsert({
-      setting_key: "auto_queue_last_run",
-      setting_value: lastRunPayload,
-    }, { onConflict: "setting_key" });
+    });
 
     if (preview) {
+      const runSummary = buildRunSummary(0);
+      await supabase.from("social_settings").upsert({
+        setting_key: "auto_queue_last_run",
+        setting_value: {
+          ran_at: new Date().toISOString(),
+          preview: true,
+          generated: generatedPosts.length,
+          run_summary: runSummary,
+        },
+      }, { onConflict: "setting_key" });
+
       return new Response(JSON.stringify({
         success: true,
         preview: true,
@@ -2389,33 +2492,33 @@ Deno.serve(async (req) => {
     
     for (const post of generatedPosts) {
       try {
-        // Check if asset already exists for this product
-        let assetId: string;
-        const { data: existingAsset } = await supabase
-          .from("social_assets")
-          .select("id")
-          .eq("product_id", post.product_id)
-          .eq("is_active", true)
-          .single();
+        let assetId: string | null = null;
+        const assetResolve = await resolveAssetIdForQueuedPost(supabase, supabaseUrl, post);
 
-        if (existingAsset) {
-          assetId = existingAsset.id;
-          console.log(`[auto-queue] Using existing asset for product ${post.product_id}`);
-          // Update existing asset with best available image
-          await supabase
-            .from("social_assets")
-            .update({ original_image_path: post.resolved_image_url })
-            .eq("id", assetId);
+        if (assetResolve.error) {
+          console.warn(
+            `[auto-queue] Asset lookup warning for ${post.product_name}:`,
+            assetResolve.error
+          );
+        }
+
+        if (assetResolve.assetId) {
+          assetId = assetResolve.assetId;
+          console.log(
+            `[auto-queue] Using pool asset ${assetId} for ${post.product_name}` +
+              (post.pool_asset_id ? ` (pool_asset_id=${post.pool_asset_id})` : "")
+          );
         } else {
-          // Create new asset pointing to resolved image (AI-generated, gallery, or catalog)
+          const storagePath = storagePathFromPublicUrl(supabaseUrl, post.resolved_image_url);
           const { data: newAsset, error: assetErr } = await supabase
             .from("social_assets")
             .insert({
               product_id: post.product_id,
-              original_image_path: post.resolved_image_url, // Use best available image
+              original_image_path: storagePath,
               original_filename: `${post.product_slug}.jpg`,
               product_url: post.link_url,
               is_active: true,
+              content_type: "product",
             })
             .select("id")
             .single();
@@ -2429,45 +2532,14 @@ Deno.serve(async (req) => {
           console.log(`[auto-queue] Created new asset ${assetId} for product ${post.product_id}`);
         }
 
-        // Check if variation exists for this platform
-        let variationId: string;
-        const { data: existingVariation } = await supabase
-          .from("social_variations")
-          .select("id")
-          .eq("asset_id", assetId)
-          .eq("platform", post.platform)
-          .single();
-
-        if (existingVariation) {
-          variationId = existingVariation.id;
-          // Update existing variation with best available image
-          await supabase
-            .from("social_variations")
-            .update({ image_path: post.resolved_image_url })
-            .eq("id", variationId);
-        } else {
-          // Create variation pointing to resolved image
-          const { data: newVariation, error: varErr } = await supabase
-            .from("social_variations")
-            .insert({
-              asset_id: assetId,
-              platform: post.platform,
-              variant_type: post.platform === "instagram" ? "square_1x1" : post.platform === "facebook" ? "landscape_16x9" : "vertical_2x3",
-              aspect_ratio: post.platform === "instagram" ? "1:1" : post.platform === "facebook" ? "16:9" : "2:3",
-              image_path: post.resolved_image_url, // Use best available image
-              width: post.platform === "instagram" ? 1080 : post.platform === "facebook" ? 1200 : 1000,
-              height: post.platform === "instagram" ? 1080 : post.platform === "facebook" ? 630 : 1500,
-            })
-            .select("id")
-            .single();
-
-          if (varErr) {
-            console.error(`[auto-queue] Failed to create variation for ${post.product_name}:`, varErr);
-            skippedErrors.push(`variation:${post.product_name}:${varErr.message}`);
-            continue;
-          }
-          variationId = newVariation.id;
+        const variationResolve = await resolveVariationIdForQueuedPost(supabase, assetId, post);
+        if (!variationResolve.variationId) {
+          skippedErrors.push(
+            `variation:${post.product_name}:${variationResolve.error || "unknown"}`
+          );
+          continue;
         }
+        const variationId = variationResolve.variationId;
 
         // ── Trigger AI generation if needed ──
         let finalGeneratedImageId = post.generated_image_id;
@@ -2523,6 +2595,7 @@ Deno.serve(async (req) => {
         // Create the post (carousel or single image)
         const postPayload: Record<string, any> = {
           variation_id: variationId,
+          product_id: post.product_id,
           platform: post.platform,
           caption: post.caption,
           hashtags: post.hashtags,
@@ -2610,6 +2683,18 @@ Deno.serve(async (req) => {
       const learnMsg = learnErr instanceof Error ? learnErr.message : String(learnErr);
       console.error("[auto-queue] Learning aggregation failed (non-fatal):", learnMsg);
     }
+
+    const runSummary = buildRunSummary(createdPosts.length);
+
+    await supabase.from("social_settings").upsert({
+      setting_key: "auto_queue_last_run",
+      setting_value: {
+        ran_at: new Date().toISOString(),
+        preview: false,
+        generated: createdPosts.length,
+        run_summary: runSummary,
+      },
+    }, { onConflict: "setting_key" });
 
     return new Response(JSON.stringify({
       success: true,

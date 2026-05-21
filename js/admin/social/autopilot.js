@@ -82,7 +82,12 @@ function formatRunNowAlert(result) {
   }
 
   if (deficit > 0 && generated === 0) {
-    const detail = result.message || "Auto-queue did not create any posts. Try Auto-Queue Preview for skip reasons.";
+    const built = result.posts_built ?? result.run_summary?.posts_built;
+    const detail =
+      result.message ||
+      (built
+        ? `Auto-queue built ${built} post(s) but saved 0 (database insert failed).`
+        : "Auto-queue did not create any posts. Try Auto-Queue Preview for skip reasons.");
     return `No posts were created (${current}/${target} in window; need ${deficit} more).\n\n${detail}`;
   }
 
