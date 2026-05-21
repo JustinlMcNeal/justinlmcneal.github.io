@@ -18,24 +18,89 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+const FILL_STATUSES = ["queued", "draft"];
+
+/** Tomorrow 00:00 UTC through tomorrow + daysAhead (exclusive end). */
+function getAutopilotFillWindow(daysAhead: number) {
+  const now = new Date();
+  const windowStart = new Date(now);
+  windowStart.setUTCDate(windowStart.getUTCDate() + 1);
+  windowStart.setUTCHours(0, 0, 0, 0);
+
+  const windowEnd = new Date(windowStart);
+  windowEnd.setUTCDate(windowEnd.getUTCDate() + daysAhead);
+
+  return { windowStart, windowEnd, now };
+}
+
+function sanitizeError(message: string): string {
+  return String(message || "Unknown error")
+    .slice(0, 300)
+    .replace(/Bearer\s+\S+/gi, "Bearer [redacted]");
+}
+
+async function writeAutopilotLastRun(
+  supabase: ReturnType<typeof createClient>,
+  payload: Record<string, unknown>
+) {
+  await supabase.from("social_settings").upsert(
+    {
+      setting_key: "autopilot_last_run",
+      setting_value: {
+        ...payload,
+        ran_at: new Date().toISOString(),
+      },
+    },
+    { onConflict: "setting_key" }
+  );
+}
+
+async function countPostsInFillWindow(
+  supabase: ReturnType<typeof createClient>,
+  windowStart: Date,
+  windowEnd: Date
+): Promise<number> {
+  const { count, error } = await supabase
+    .from("social_posts")
+    .select("*", { count: "exact", head: true })
+    .in("status", FILL_STATUSES)
+    .gte("scheduled_for", windowStart.toISOString())
+    .lt("scheduled_for", windowEnd.toISOString());
+
+  if (error) {
+    console.error("[autopilot] Count query error:", error);
+    throw error;
+  }
+
+  return count ?? 0;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsHeaders });
   }
 
-  try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // 1. Get autopilot settings
+  const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+  const source = body.source === "manual" ? "manual" : "cron";
+
+  let settings: Record<string, unknown> = {};
+  let targetCount = 0;
+  let currentCount = 0;
+  let deficit = 0;
+  let platforms: string[] = [];
+
+  try {
     const { data: settingsRow } = await supabase
       .from("social_settings")
       .select("setting_value")
       .eq("setting_key", "autopilot")
       .single();
 
-    const settings = settingsRow?.setting_value || {
+    settings = (settingsRow?.setting_value as Record<string, unknown>) || {
       enabled: false,
       days_ahead: 7,
       posts_per_day: 2,
@@ -44,70 +109,132 @@ Deno.serve(async (req) => {
       posting_times: ["10:00", "18:00"],
     };
 
-    // Check if autopilot is enabled
-    if (!settings.enabled) {
+    const enabled = settings.enabled === true;
+    const daysAhead = Number(settings.days_ahead) || 7;
+    const postsPerDay = Number(settings.posts_per_day) || 2;
+    platforms = Array.isArray(settings.platforms) ? (settings.platforms as string[]) : ["instagram"];
+
+    if (!platforms.length) {
+      await writeAutopilotLastRun(supabase, {
+        source,
+        enabled,
+        status: "no_op",
+        reason: "no_platforms",
+        message: "No platforms selected in autopilot settings",
+        target_count: 0,
+        current_count: 0,
+        deficit: 0,
+        posts_created: 0,
+        generated: 0,
+        platforms: [],
+      });
+      return new Response(
+        JSON.stringify({
+          success: true,
+          skipped: true,
+          status: "no_op",
+          reason: "no_platforms",
+          message: "No platforms selected in autopilot settings",
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const { windowStart, windowEnd } = getAutopilotFillWindow(daysAhead);
+    targetCount = daysAhead * postsPerDay * platforms.length;
+
+    if (!enabled) {
       console.log("[autopilot] Autopilot is disabled, skipping");
-      return new Response(JSON.stringify({
-        success: true,
+      await writeAutopilotLastRun(supabase, {
+        source,
+        enabled: false,
+        status: "no_op",
+        reason: "disabled",
         message: "Autopilot is disabled",
-        skipped: true,
-      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        target_count: targetCount,
+        current_count: 0,
+        deficit: targetCount,
+        posts_created: 0,
+        generated: 0,
+        platforms,
+        window_start: windowStart.toISOString(),
+        window_end: windowEnd.toISOString(),
+      });
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: "Autopilot is disabled",
+          skipped: true,
+          status: "no_op",
+          reason: "disabled",
+          target_count: targetCount,
+          current_count: 0,
+          deficit: targetCount,
+          generated: 0,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     console.log("[autopilot] Running with settings:", settings);
 
-    // 2. Count posts scheduled for the next X days
-    //    Start from tomorrow so today's posts (which will publish today)
-    //    don't consume the "days ahead" quota
-    const now = new Date();
-    const tomorrowStart = new Date(now);
-    tomorrowStart.setUTCDate(tomorrowStart.getUTCDate() + 1);
-    tomorrowStart.setUTCHours(0, 0, 0, 0);
-    
-    const futureDate = new Date(tomorrowStart);
-    futureDate.setDate(futureDate.getDate() + settings.days_ahead);
+    currentCount = await countPostsInFillWindow(supabase, windowStart, windowEnd);
+    deficit = Math.max(0, targetCount - currentCount);
 
-    const { count: scheduledCount } = await supabase
-      .from("social_posts")
-      .select("*", { count: "exact", head: true })
-      .in("status", ["queued", "draft"])
-      .gte("scheduled_for", tomorrowStart.toISOString())
-      .lte("scheduled_for", futureDate.toISOString());
+    console.log(
+      `[autopilot] Window ${windowStart.toISOString()} → ${windowEnd.toISOString()} | ` +
+        `current=${currentCount} target=${targetCount} deficit=${deficit}`
+    );
 
-    const targetCount = settings.days_ahead * settings.posts_per_day * settings.platforms.length;
-    const currentCount = scheduledCount || 0;
-    const deficit = targetCount - currentCount;
-
-    console.log(`[autopilot] Current: ${currentCount}, Target: ${targetCount}, Deficit: ${deficit}`);
-
-    // 3. If we have enough posts, skip
     if (deficit <= 0) {
       console.log("[autopilot] Queue is full, no new posts needed");
-      return new Response(JSON.stringify({
-        success: true,
-        message: `Queue is full (${currentCount}/${targetCount} posts)`,
-        current: currentCount,
-        target: targetCount,
+      await writeAutopilotLastRun(supabase, {
+        source,
+        enabled: true,
+        status: "no_op",
+        reason: "queue_full",
+        message: `Queue is at target (${currentCount}/${targetCount} posts in fill window)`,
+        target_count: targetCount,
+        current_count: currentCount,
+        deficit: 0,
+        posts_created: 0,
         generated: 0,
-      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        platforms,
+        window_start: windowStart.toISOString(),
+        window_end: windowEnd.toISOString(),
+      });
+      return new Response(
+        JSON.stringify({
+          success: true,
+          status: "no_op",
+          reason: "queue_full",
+          message: `Queue is at target (${currentCount}/${targetCount} posts in fill window)`,
+          current_count: currentCount,
+          target_count: targetCount,
+          deficit: 0,
+          generated: 0,
+          posts_created: 0,
+          current: currentCount,
+          target: targetCount,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    // 4. Calculate how many posts to generate (per platform)
-    const postsToGenerate = Math.ceil(deficit / settings.platforms.length);
-    console.log(`[autopilot] Generating ${postsToGenerate} posts per platform`);
+    const postsToGenerate = Math.ceil(deficit / platforms.length);
+    console.log(`[autopilot] Generating up to ${postsToGenerate} product slot(s) per platform`);
 
-    // 5. Call auto-queue function to generate posts
     const autoQueueUrl = `${supabaseUrl}/functions/v1/auto-queue`;
-    
+
     const response = await fetch(autoQueueUrl, {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${supabaseKey}`,
+        Authorization: `Bearer ${supabaseKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
         count: postsToGenerate,
-        platforms: settings.platforms,
+        platforms,
         captionTones: settings.tones,
         caption_tones: settings.tones,
         tones: settings.tones,
@@ -124,41 +251,101 @@ Deno.serve(async (req) => {
       throw new Error(result.error || `auto-queue returned ${response.status}`);
     }
 
-    console.log(`[autopilot] Generated ${result.generated} posts`);
+    const generated = Number(result.generated) || 0;
+    const skippedCount = result.run_summary?.skipped_count ?? 0;
+    const noPoolSkipped = result.run_summary?.no_pool_asset_skipped ?? 0;
 
-    // 6. Log autopilot activity
-    await supabase
-      .from("social_settings")
-      .upsert({
-        setting_key: "autopilot_last_run",
-        setting_value: {
-          ran_at: new Date().toISOString(),
-          generated: result.generated,
-          current_queue: currentCount + result.generated,
-          target_queue: targetCount,
-          skipped_count: result.run_summary?.skipped_count ?? 0,
-          no_pool_asset_skipped: result.run_summary?.no_pool_asset_skipped ?? 0,
-          image_asset_policy: result.run_summary?.image_asset_policy ?? "image_pool_only",
-        },
-      });
+    console.log(`[autopilot] auto-queue generated ${generated} posts`);
 
-    return new Response(JSON.stringify({
-      success: true,
-      message: `Autopilot generated ${result.generated} posts`,
-      current: currentCount,
-      target: targetCount,
-      generated: result.generated,
-      posts: result.posts,
-    }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    let status = "success";
+    let reason: string | null = null;
+    let message = `Autopilot generated ${generated} post(s)`;
 
-  } catch (err: unknown) {
-    console.error("[autopilot] Error:", err);
-    return new Response(JSON.stringify({
-      success: false,
-      error: err instanceof Error ? err.message : String(err),
-    }), { 
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" } 
+    if (generated === 0) {
+      status = "no_op";
+      reason = "no_candidates";
+      const skipHint =
+        skippedCount > 0
+          ? `${skippedCount} product(s) skipped (see auto-queue run_summary)`
+          : "auto-queue returned zero posts";
+      message = `No posts created (${currentCount}/${targetCount} in fill window, need ${deficit} more). ${skipHint}`;
+    }
+
+    await writeAutopilotLastRun(supabase, {
+      source,
+      enabled: true,
+      status,
+      reason,
+      message,
+      target_count: targetCount,
+      current_count: currentCount,
+      deficit,
+      posts_created: generated,
+      generated,
+      skipped_count: skippedCount,
+      no_pool_asset_skipped: noPoolSkipped,
+      image_asset_policy: result.run_summary?.image_asset_policy ?? "image_pool_only",
+      platforms,
+      window_start: windowStart.toISOString(),
+      window_end: windowEnd.toISOString(),
+      auto_queue_message: result.message ?? null,
     });
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        status,
+        reason,
+        message,
+        current_count: currentCount,
+        target_count: targetCount,
+        deficit,
+        generated,
+        posts_created: generated,
+        current: currentCount,
+        target: targetCount,
+        posts: result.posts,
+        run_summary: result.run_summary,
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  } catch (err: unknown) {
+    const errorMessage = sanitizeError(err instanceof Error ? err.message : String(err));
+    console.error("[autopilot] Error:", errorMessage);
+
+    try {
+      await writeAutopilotLastRun(supabase, {
+        source,
+        enabled: settings.enabled === true,
+        status: "error",
+        reason: "error",
+        message: errorMessage,
+        target_count: targetCount,
+        current_count: currentCount,
+        deficit,
+        posts_created: 0,
+        generated: 0,
+        platforms,
+        error: errorMessage,
+      });
+    } catch (logErr) {
+      console.error("[autopilot] Failed to write error last_run:", logErr);
+    }
+
+    return new Response(
+      JSON.stringify({
+        success: false,
+        status: "error",
+        reason: "error",
+        error: errorMessage,
+        current_count: currentCount,
+        target_count: targetCount,
+        deficit,
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
   }
 });

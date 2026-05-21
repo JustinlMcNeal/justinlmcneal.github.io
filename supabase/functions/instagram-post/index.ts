@@ -190,6 +190,18 @@ serve(async (req) => {
         updatedData: updateResult.data, 
         error: updateResult.error 
       }));
+
+      if (updateResult.error) {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            media_id: publishResult.id,
+            container_id: containerId,
+            db_warning: "Posted to Instagram but failed to update post record in database",
+          }),
+          { headers: corsHeaders }
+        );
+      }
     } else {
       console.log("No postId provided, skipping status update");
     }

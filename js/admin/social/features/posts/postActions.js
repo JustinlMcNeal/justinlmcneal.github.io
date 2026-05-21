@@ -5,6 +5,7 @@ import {
   deletePost,
   recalculateProductPostDate,
 } from "../../api.js";
+import { getSupabaseClient } from "../../../../shared/supabaseClient.js";
 import { parseHashtags } from "../../captions.js";
 import { getPostsContext } from "./postsContext.js";
 import { closePostDetail } from "./postDetailRender.js";
@@ -64,6 +65,21 @@ export async function handleSavePost() {
   }
 }
 
+async function verifyPostPublishedOnServer(postId) {
+  try {
+    const client = getSupabaseClient();
+    const { data } = await client
+      .from("social_posts")
+      .select("status, permalink, instagram_permalink")
+      .eq("id", postId)
+      .maybeSingle();
+    return data;
+  } catch (err) {
+    console.warn("[post] verify published status failed:", err);
+    return null;
+  }
+}
+
 export async function handlePostNow() {
   const {
     state, els, postToInstagram, postToFacebook, postToPinterest,
@@ -100,6 +116,17 @@ export async function handlePostNow() {
       await new Promise(r => setTimeout(r, 500));
       await loadStats();
       await refreshSchedulingHub();
+    } else {
+      const verified = await verifyPostPublishedOnServer(post.id);
+      if (verified?.status === "posted") {
+        alert(
+          "Posted to Instagram. The first response reported an error, but the post is now marked posted in the database — check View on Instagram."
+        );
+        closePostDetail();
+        await new Promise(r => setTimeout(r, 500));
+        await loadStats();
+        await refreshSchedulingHub();
+      }
     }
   } else if (post.platform === "pinterest") {
     const modalBoardSelect = document.getElementById("postDetailBoard");

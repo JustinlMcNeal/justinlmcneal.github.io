@@ -80,11 +80,22 @@ export async function loadAutomationHealth() {
     const lastAutoQueue = autoQueueRun?.ran_at || null;
 
     const generatedCount =
-      autopilotRun?.generated ?? autopilotRun?.posts_created ?? null;
+      autopilotRun?.posts_created ?? autopilotRun?.generated ?? null;
 
     let autopilotDetail = formatRelativeTime(lastAutopilot);
     if (generatedCount != null) {
       autopilotDetail += ` · ${generatedCount} post(s)`;
+    }
+    if (autopilotRun?.status) {
+      autopilotDetail += ` · ${autopilotRun.status}`;
+    }
+    if (autopilotRun?.reason === "queue_full") {
+      autopilotDetail += " (at target)";
+    } else if (autopilotRun?.reason === "no_candidates") {
+      autopilotDetail += " (none created)";
+    }
+    if (autopilotRun?.target_count != null && autopilotRun?.current_count != null) {
+      autopilotDetail += ` · ${autopilotRun.current_count}/${autopilotRun.target_count} in window`;
     }
     if (autopilotRun?.no_pool_asset_skipped > 0) {
       autopilotDetail += ` · ${autopilotRun.no_pool_asset_skipped} skipped (no pool)`;

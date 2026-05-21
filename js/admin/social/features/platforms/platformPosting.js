@@ -10,9 +10,14 @@ export async function postToInstagram(postId, imageUrl, caption) {
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SUPABASE_ANON_KEY}` },
       body: JSON.stringify({ postId, imageUrl, caption }),
     });
-    const data = await resp.json();
-    if (data.success) { alert("Posted to Instagram successfully!"); return data; }
-    else { alert(`Failed to post to Instagram: ${data.error}`); return null; }
+    const data = await resp.json().catch(() => ({}));
+    if (resp.ok && data.success) {
+      alert("Posted to Instagram successfully!");
+      return data;
+    }
+    const errMsg = data.error || (resp.ok ? "Unknown error" : `HTTP ${resp.status}`);
+    alert(`Failed to post to Instagram: ${errMsg}`);
+    return { success: false, error: errMsg, httpStatus: resp.status };
   } catch (err) {
     console.error("Instagram post error:", err);
     alert("Failed to post to Instagram. Check console for details.");
