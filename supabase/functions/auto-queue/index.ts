@@ -124,6 +124,84 @@ function pickRandom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+/** Load account-level caption learnings from Deep Analysis (post_learning_patterns). */
+async function loadCaptionAccountLearnings(supabase: ReturnType<typeof createClient>) {
+  const empty = {
+    ai_learnings: [] as Array<{ pattern?: string; apply_to_future?: string; insight?: string }>,
+    ids: [] as string[],
+    count: 0,
+  };
+  try {
+    const { data, error } = await supabase
+      .from("post_learning_patterns")
+      .select("id, pattern_type, pattern_value, last_calculated")
+      .in("pattern_type", ["ai_learning", "ai_insight"])
+      .order("last_calculated", { ascending: false })
+      .limit(20);
+
+    if (error) {
+      console.warn("[auto-queue] Caption learnings query failed:", error.message);
+      return empty;
+    }
+
+    const seen = new Set<string>();
+    const ai_learnings: Array<{ pattern?: string; apply_to_future?: string; insight?: string }> = [];
+    const ids: string[] = [];
+
+    for (const row of data || []) {
+      const pv = row.pattern_value as Record<string, string> | null;
+      if (!pv) continue;
+      const line = (pv.apply_to_future || pv.insight || pv.pattern || "").trim();
+      if (!line) continue;
+      const key = line.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      ai_learnings.push({
+        pattern: pv.pattern,
+        apply_to_future: pv.apply_to_future,
+        insight: pv.insight,
+      });
+      if (row.id) ids.push(row.id);
+      if (ai_learnings.length >= 5) break;
+    }
+
+    return { ai_learnings, ids, count: ai_learnings.length };
+  } catch (err: unknown) {
+    console.warn(
+      "[auto-queue] Caption learnings load error:",
+      err instanceof Error ? err.message : String(err)
+    );
+    return empty;
+  }
+}
+
+/** Category insights for per-product caption context. */
+async function loadCategoryInsightMap(supabase: ReturnType<typeof createClient>) {
+  const map: Record<string, Record<string, unknown>> = {};
+  try {
+    const { data, error } = await supabase
+      .from("post_learning_patterns")
+      .select("pattern_key, pattern_value")
+      .eq("pattern_type", "category_insight");
+
+    if (error) {
+      console.warn("[auto-queue] Category insights query failed:", error.message);
+      return map;
+    }
+
+    for (const row of data || []) {
+      const key = String(row.pattern_key || "").trim().toLowerCase();
+      if (key && row.pattern_value) map[key] = row.pattern_value as Record<string, unknown>;
+    }
+  } catch (err: unknown) {
+    console.warn(
+      "[auto-queue] Category insights load error:",
+      err instanceof Error ? err.message : String(err)
+    );
+  }
+  return map;
+}
+
 // Generate caption from template — platform-aware
 function generateCaption(
   template: string,
@@ -2221,6 +2299,13 @@ Deno.serve(async (req) => {
     });
     console.log(`[auto-queue] Learned hashtags: ${(topHashtags || []).length} qualifying (times_used>=2, avg_eng>=2)`);
 
+    const accountCaptionLearnings = await loadCaptionAccountLearnings(supabase);
+    const categoryInsightMap = await loadCategoryInsightMap(supabase);
+    console.log(
+      `[auto-queue] Caption account learnings: ${accountCaptionLearnings.count} pattern(s), ` +
+      `${Object.keys(categoryInsightMap).length} category insight(s)`
+    );
+
     // 4. Get posting times (Sprint 3: data-driven when enough data)
     const postingTimes = getNextPostingTimes(
       peakHoursFinal,
@@ -2315,6 +2400,17 @@ Deno.serve(async (req) => {
       let bestTone = pickRandom(tones);
       let captionSource = "template";
 
+      const categoryInsight = categoryInsightMap[categoryKey] || null;
+      const learningPatternsForAi: Record<string, unknown> = {
+        ai_learnings: accountCaptionLearnings.ai_learnings,
+      };
+      if (categoryInsight) {
+        learningPatternsForAi.category_insights = categoryInsight;
+      }
+      const learningPatternsUsedCount =
+        accountCaptionLearnings.count + (categoryInsight ? 1 : 0);
+      const learningGuidanceUsed = learningPatternsUsedCount > 0;
+
       // Step 1: Try AI caption
       try {
         const aiUrl = `${supabaseUrl}/functions/v1/ai-generate`;
@@ -2333,6 +2429,7 @@ Deno.serve(async (req) => {
             },
             tone: bestTone,
             platform: primaryPlatform,
+            learningPatterns: learningPatternsForAi,
           }),
         });
         if (aiResp.ok) {
@@ -2469,6 +2566,10 @@ Deno.serve(async (req) => {
         scarcity_guard_applied: scarcityGuardApplied,
         multi_platform_mode: allowMultiPlatformPerProduct ? "all_platforms" : "round_robin_single",
         assigned_platform: primaryPlatform,
+        learning_guidance_used: learningGuidanceUsed,
+        learning_patterns_used_count: learningPatternsUsedCount,
+        learning_pattern_ids: accountCaptionLearnings.ids.slice(0, 10),
+        learning_guidance_source: learningGuidanceUsed ? "post_learning_patterns" : null,
       };
 
       // Create post for selected platform(s) — one per product (round-robin) or all platforms

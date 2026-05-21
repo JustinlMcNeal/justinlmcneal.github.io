@@ -100,6 +100,13 @@ export function renderPostDetailSelection(post) {
   if (meta.caption_source) {
     lines.push(`<div><span class="text-gray-500">Caption:</span> ${escapeHtml(meta.caption_source)} (${escapeHtml(meta.caption_status || "")})</div>`);
   }
+  if (meta.learning_guidance_used) {
+    const n = meta.learning_patterns_used_count ?? 0;
+    lines.push(
+      `<div><span class="text-gray-500">Caption learnings:</span> ` +
+      `<span class="text-emerald-700">${n} pattern(s) from post history</span></div>`
+    );
+  }
 
   const detailsHtml = Object.keys(meta).length
     ? `<details class="mt-2"><summary class="text-gray-400 cursor-pointer">Full selection metadata</summary><pre class="text-[10px] text-gray-500 mt-1 overflow-x-auto whitespace-pre-wrap">${escapeHtml(JSON.stringify(meta, null, 2))}</pre></details>`

@@ -203,15 +203,15 @@ function buildLearningContext(patterns?: Record<string, any>, topPosts?: Array<{
 - Hashtag count: ${hashtagCount.min}-${hashtagCount.max} hashtags work best
 `;
 
-    // Include AI-learned insights
+    // Include AI-learned insights (Deep Analysis / account history)
     if (patterns.ai_learnings && patterns.ai_learnings.length > 0) {
-      context += `\nAI-LEARNED INSIGHTS FROM POST ANALYSIS:
+      context += `\nRECENT ACCOUNT LEARNINGS (from your own post performance — soft guidance only):
 ${patterns.ai_learnings.slice(0, 5).map((l: any, i: number) => {
         const advice = l.apply_to_future || l.insight || l.pattern;
         return `${i + 1}. ${advice}`;
       }).join("\n")}
 
-IMPORTANT: Apply these learnings to create better captions. These are patterns that worked well in previous posts.
+Use these only when natural for this product, tone, and platform. Do not force every pattern on every caption (e.g. do not add a question to every post). Vary hooks and style. Product and tone still come first.
 `;
     }
 

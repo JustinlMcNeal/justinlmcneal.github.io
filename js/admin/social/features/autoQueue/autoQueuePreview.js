@@ -128,6 +128,10 @@ function renderSelectionSummary(post) {
   if (meta.caption_source) {
     lines.push(`Caption: ${escapeHtml(meta.caption_source)} (${escapeHtml(meta.caption_status || "")}, score ${meta.caption_confidence ?? "—"})`);
   }
+  if (meta.learning_guidance_used) {
+    const n = meta.learning_patterns_used_count ?? 0;
+    lines.push(`<span class="text-emerald-700 font-medium">Account learnings applied (${n})</span>`);
+  }
   if (meta.shot_type) {
     lines.push(`Shot: ${escapeHtml(meta.shot_type)}`);
   }
