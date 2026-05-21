@@ -19,6 +19,7 @@ import { initCalendar, getCalendarDateRange } from "./calendar.js";
 import { initUploadModal, setupUploadModal, openUploadModalWithAsset, setScoreFunctions } from "./uploadModal.js";
 import { initCarouselBuilder, setupCarouselBuilder, loadRecentCarousels, calculateEngagementScore, updateEngagementScoreUI } from "./carouselBuilder.js";
 import { initAutoQueue, setupAutoQueue, loadAutoQueueStats } from "./autoQueue.js";
+import { loadAutomationHealth } from "./features/autoQueue/autoQueueAutomationHealth.js";
 import { initAutopilot, setupAutopilot } from "./autopilot.js";
 import { initImagePool, setupImagePool, loadAssets } from "./imagePool.js";
 import { initPlatformSettings, setupSettingsModal, applySettings } from "./platformSettings.js";
@@ -190,6 +191,9 @@ const els = {
   aqHealthPoolWarning: $("aqHealthPoolWarning"),
   aqHealthPolicy: $("aqHealthPolicy"),
   aqHealthPreviewNote: $("aqHealthPreviewNote"),
+  aqHealthTokenWarning: $("aqHealthTokenWarning"),
+  aqHealthTokenList: $("aqHealthTokenList"),
+  aqHealthRecentFailure: $("aqHealthRecentFailure"),
   // Catalog Browser modal
   catalogBrowseModal: $("catalogBrowseModal"),
   catalogBrowseClose: $("catalogBrowseClose"),
@@ -386,7 +390,7 @@ async function init() {
     initCarouselBuilder({ ...baseDeps, SUPABASE_FUNCTIONS_URL, loadStats, switchTab, loadQueuePosts, loadCalendarPosts, populateBoardDropdown });
 
     initAutoQueue({ ...baseDeps, SUPABASE_FUNCTIONS_URL, loadStats, switchTab, loadQueuePosts });
-    initAutopilot({ ...baseDeps, loadStats, loadQueuePosts });
+    initAutopilot({ ...baseDeps, loadStats, loadQueuePosts, loadAutomationHealth });
     initImagePool({ ...baseDeps, openUploadModalWithAsset });
     initPlatformSettings({ ...baseDeps, loadSettings });
     initPostDetail({
@@ -399,9 +403,19 @@ async function init() {
 
     // Load initial data (after modules are wired so callbacks like applySettings work)
     await Promise.all([
-      loadProducts(), loadCategories(), loadBoards(),
-      loadSettings(), loadStats(), checkConnectionStatus()
+      loadProducts(),
+      loadCategories(),
+      loadSettings(),
+      loadStats(),
+      checkConnectionStatus(),
     ]);
+
+    try {
+      await loadBoards({ syncFromApi: true });
+    } catch (boardErr) {
+      console.warn("[social] Pinterest boards load failed (page will still open):", boardErr?.message || boardErr);
+      state.boards = [];
+    }
 
     // Setup UI
     setupTabRouter();

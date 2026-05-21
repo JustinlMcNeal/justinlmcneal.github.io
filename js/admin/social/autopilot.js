@@ -2,9 +2,14 @@
 // Autopilot Mode — hands-free scheduling
 
 import { getSupabaseClient } from "../../shared/supabaseClient.js";
+import {
+  assessAutopilotPlatformHealth,
+  fetchTokenHealthSettings,
+  hasBlockingAutopilotTokenIssues,
+} from "./features/platforms/tokenHealth.js";
 
 let _state, _els, _showToast, _getClient;
-let _loadStats, _loadQueuePosts;
+let _loadStats, _loadQueuePosts, _loadAutomationHealth;
 
 export function initAutopilot(deps) {
   _state = deps.state;
@@ -13,6 +18,7 @@ export function initAutopilot(deps) {
   _getClient = deps.getClient;
   _loadStats = deps.loadStats;
   _loadQueuePosts = deps.loadQueuePosts;
+  _loadAutomationHealth = deps.loadAutomationHealth;
 }
 
 export function setupAutopilot() {
@@ -28,8 +34,52 @@ export function setupAutopilot() {
   
   btnSave?.addEventListener("click", saveAutopilotSettings);
   btnRun?.addEventListener("click", runAutopilotNow);
-  
+
+  ["autopilotPlatformInstagram", "autopilotPlatformFacebook", "autopilotPlatformPinterest"].forEach(
+    (id) => {
+      document.getElementById(id)?.addEventListener("change", () => {
+        updateAutopilotTokenWarningsFromForm();
+      });
+    }
+  );
+
   loadAutopilotSettings();
+}
+
+async function updateAutopilotTokenWarningsFromForm() {
+  const toggle = document.getElementById("autopilotToggle");
+  const warningEl = document.getElementById("autopilotTokenWarning");
+  const platformWarnEl = document.getElementById("autopilotPlatformWarnings");
+  if (!warningEl && !platformWarnEl) return;
+
+  const enabled = toggle?.checked === true;
+  const platforms = [];
+  if (document.getElementById("autopilotPlatformInstagram")?.checked) platforms.push("instagram");
+  if (document.getElementById("autopilotPlatformFacebook")?.checked) platforms.push("facebook");
+  if (document.getElementById("autopilotPlatformPinterest")?.checked) platforms.push("pinterest");
+
+  try {
+    const client = getSupabaseClient();
+    const tokenSettings = await fetchTokenHealthSettings(client);
+    const assessments = assessAutopilotPlatformHealth({ platforms }, tokenSettings);
+    const blocked = enabled && hasBlockingAutopilotTokenIssues(assessments);
+
+    warningEl?.classList.toggle("hidden", !blocked);
+    if (warningEl && blocked) {
+      warningEl.textContent =
+        "⚠ Autopilot is on, but one or more selected platforms cannot publish. Reconnect using the Connect buttons in the page header before queued posts will go live.";
+    }
+
+    if (platformWarnEl) {
+      const lines = assessments
+        .filter((a) => !a.canPublish)
+        .map((a) => `• ${a.displayName}: ${a.statusLine}${a.action ? ` — ${a.action}` : ""}`);
+      platformWarnEl.textContent = lines.length ? lines.join("\n") : "";
+      platformWarnEl.classList.toggle("hidden", !enabled || lines.length === 0);
+    }
+  } catch (err) {
+    console.warn("[autopilot] Token warning check failed:", err);
+  }
 }
 
 export async function loadAutopilotSettings() {
@@ -69,11 +119,13 @@ export async function loadAutopilotSettings() {
     if (pinCb) pinCb.checked = platforms.includes("pinterest");
     
     if (statusEl) {
-      statusEl.textContent = settings.enabled 
+      statusEl.textContent = settings.enabled
         ? `✅ Active - keeping ${settings.days_ahead} days of posts queued`
         : "❌ Disabled - enable for hands-free posting";
     }
-    
+
+    await updateAutopilotTokenWarningsFromForm();
+
     const { data: lastRunRow } = await client
       .from("social_settings")
       .select("setting_value")
@@ -123,11 +175,14 @@ async function saveAutopilotSettings() {
       }, { onConflict: "setting_key" });
     
     if (statusEl) {
-      statusEl.textContent = settings.enabled 
+      statusEl.textContent = settings.enabled
         ? `✅ Active - keeping ${settings.days_ahead} days of posts queued`
         : "❌ Disabled - enable for hands-free posting";
     }
-    
+
+    await updateAutopilotTokenWarningsFromForm();
+    await _loadAutomationHealth?.();
+
     console.log("[autopilot] Settings saved:", settings);
   } catch (err) {
     console.error("Failed to save autopilot settings:", err);

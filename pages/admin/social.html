@@ -465,6 +465,7 @@
                   <div id="autopilotStatus" class="mt-2 text-xs text-white/70">
                     Checking status...
                   </div>
+                  <p id="autopilotTokenWarning" class="hidden mt-2 text-xs font-medium text-amber-200 bg-amber-900/30 rounded-lg px-3 py-2"></p>
                 </div>
               </div>
               <label class="relative inline-flex items-center cursor-pointer">
@@ -516,6 +517,7 @@
                     <span class="text-sm">📌 Pinterest</span>
                   </label>
                 </div>
+                <p id="autopilotPlatformWarnings" class="hidden mt-2 text-xs text-amber-100 whitespace-pre-line"></p>
               </div>
               <div class="mt-4 flex gap-3">
                 <button id="btnSaveAutopilot" class="px-4 py-2 bg-white text-purple-600 font-bold rounded-lg text-sm hover:bg-white/90 transition-colors">
@@ -561,7 +563,10 @@
                 <p id="aqHealthPoolWarning" class="hidden text-xs text-amber-700 mt-1">Few autopilot-ready assets (need product + shot type).</p>
               </div>
             </div>
-            <div class="px-4 pb-4">
+            <div class="px-4 pb-4 space-y-3">
+              <div id="aqHealthTokenWarning" class="hidden text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 font-medium"></div>
+              <div id="aqHealthTokenList" class="text-sm"></div>
+              <div id="aqHealthRecentFailure" class="hidden text-xs bg-red-50 border border-red-200 rounded-lg px-3 py-2"></div>
               <p id="aqHealthPolicy" class="text-xs text-gray-600"></p>
               <p id="aqHealthPreviewNote" class="hidden text-xs text-gray-500 mt-1"></p>
             </div>

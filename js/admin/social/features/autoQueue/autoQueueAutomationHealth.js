@@ -1,6 +1,16 @@
 // Automation health summary (Auto-Queue tab) — truthful DB-backed fields only
 
 import { getSupabaseClient } from "../../../../shared/supabaseClient.js";
+import {
+  assessAutopilotPlatformHealth,
+  assessPlatformPublishHealth,
+  escapeHtml,
+  fetchLatestFailedPost,
+  fetchTokenHealthSettings,
+  hasBlockingAutopilotTokenIssues,
+  renderTokenHealthListHtml,
+  sanitizePublishError,
+} from "../platforms/tokenHealth.js";
 import { getAutoQueueContext } from "./autoQueueContext.js";
 
 function formatRelativeTime(iso) {
@@ -19,6 +29,10 @@ function setText(el, text) {
   if (el) el.textContent = text;
 }
 
+function setHtml(el, html) {
+  if (el) el.innerHTML = html;
+}
+
 export async function loadAutomationHealth() {
   const { els, state } = getAutoQueueContext();
   if (!els.aqHealthCard) return;
@@ -29,10 +43,16 @@ export async function loadAutomationHealth() {
     const { data: settingsRows } = await client
       .from("social_settings")
       .select("setting_key, setting_value")
-      .in("setting_key", ["autopilot", "autopilot_last_run", "auto_queue_last_run", "auto_queue"]);
+      .in("setting_key", [
+        "autopilot",
+        "autopilot_last_run",
+        "auto_queue_last_run",
+        "auto_queue",
+      ]);
 
     const byKey = Object.fromEntries((settingsRows || []).map((r) => [r.setting_key, r.setting_value]));
-    const autopilotOn = byKey.autopilot?.enabled === true;
+    const autopilotSettings = byKey.autopilot || {};
+    const autopilotOn = autopilotSettings.enabled === true;
     const autoQueueSettings = byKey.auto_queue || {};
     const imagePolicy =
       autoQueueSettings.image_asset_policy === "legacy_pipeline" ||
@@ -40,8 +60,18 @@ export async function loadAutomationHealth() {
         ? "legacy_pipeline"
         : "image_pool_only";
 
-    setText(els.aqHealthAutopilot, autopilotOn ? "Enabled" : "Disabled");
-    els.aqHealthAutopilot?.classList.toggle("text-green-700", autopilotOn);
+    let autopilotLabel = autopilotOn ? "Enabled" : "Disabled";
+    if (autopilotOn) {
+      const tokenSettings = await fetchTokenHealthSettings(client);
+      const platformHealth = assessAutopilotPlatformHealth(autopilotSettings, tokenSettings);
+      if (hasBlockingAutopilotTokenIssues(platformHealth)) {
+        autopilotLabel = "Enabled — publish blocked";
+      }
+    }
+
+    setText(els.aqHealthAutopilot, autopilotLabel);
+    els.aqHealthAutopilot?.classList.toggle("text-green-700", autopilotOn && autopilotLabel === "Enabled");
+    els.aqHealthAutopilot?.classList.toggle("text-amber-700", autopilotOn && autopilotLabel.includes("blocked"));
     els.aqHealthAutopilot?.classList.toggle("text-gray-600", !autopilotOn);
 
     const autopilotRun = byKey.autopilot_last_run;
@@ -49,9 +79,12 @@ export async function loadAutomationHealth() {
     const lastAutopilot = autopilotRun?.ran_at || null;
     const lastAutoQueue = autoQueueRun?.ran_at || null;
 
+    const generatedCount =
+      autopilotRun?.generated ?? autopilotRun?.posts_created ?? null;
+
     let autopilotDetail = formatRelativeTime(lastAutopilot);
-    if (autopilotRun?.generated != null) {
-      autopilotDetail += ` · ${autopilotRun.generated} post(s)`;
+    if (generatedCount != null) {
+      autopilotDetail += ` · ${generatedCount} post(s)`;
     }
     if (autopilotRun?.no_pool_asset_skipped > 0) {
       autopilotDetail += ` · ${autopilotRun.no_pool_asset_skipped} skipped (no pool)`;
@@ -98,9 +131,59 @@ export async function loadAutomationHealth() {
     }
     setText(els.aqHealthPreviewNote, previewNote);
     els.aqHealthPreviewNote?.classList.toggle("hidden", !previewNote);
+
+    const tokenSettings = await fetchTokenHealthSettings(client);
+    const platformHealth = assessAutopilotPlatformHealth(autopilotSettings, tokenSettings);
+    const tokenBlocking = autopilotOn && hasBlockingAutopilotTokenIssues(platformHealth);
+
+    els.aqHealthTokenWarning?.classList.toggle("hidden", !tokenBlocking);
+    if (els.aqHealthTokenWarning && tokenBlocking) {
+      setText(
+        els.aqHealthTokenWarning,
+        "Autopilot is active, but selected platforms cannot publish until tokens are refreshed. Use the Connect buttons in the page header to reconnect."
+      );
+    }
+
+    if (els.aqHealthTokenList) {
+      const listLabel = autopilotOn
+        ? "Publish readiness (autopilot platforms):"
+        : "Platform tokens (reconnect via header Connect buttons):";
+      setHtml(
+        els.aqHealthTokenList,
+        `<p class="text-xs font-medium text-gray-600 mb-1">${escapeHtml(listLabel)}</p>${renderTokenHealthListHtml(
+          autopilotOn
+            ? platformHealth
+            : ["instagram", "facebook", "pinterest"].map((p) =>
+                assessPlatformPublishHealth(p, tokenSettings)
+              )
+        )}`
+      );
+    }
+
+    const latestFailed = await fetchLatestFailedPost(client);
+    const showFailure = Boolean(latestFailed?.error_message);
+    els.aqHealthRecentFailure?.classList.toggle("hidden", !showFailure);
+    if (els.aqHealthRecentFailure && latestFailed) {
+      const when = latestFailed.updated_at || latestFailed.scheduled_for;
+      const whenStr = when ? formatRelativeTime(when) : "recently";
+      const err = sanitizePublishError(latestFailed.error_message);
+      let action = "Review platform connection and retry after reconnecting.";
+      if (/instagram token expired/i.test(err)) action = "Reconnect Instagram in the header.";
+      else if (/pinterest token expired/i.test(err)) action = "Reconnect Pinterest in the header.";
+      else if (/not connected/i.test(err)) action = "Reconnect the platform shown below.";
+
+      setHtml(
+        els.aqHealthRecentFailure,
+        `<p class="text-xs font-medium text-red-900 mb-1">Latest publish failure (${escapeHtml(whenStr)})</p>
+         <p class="text-xs text-red-800"><strong>${escapeHtml(latestFailed.platform || "unknown")}</strong>: ${escapeHtml(err)}</p>
+         <p class="text-xs text-amber-900 mt-1">${escapeHtml(action)}</p>`
+      );
+    }
   } catch (err) {
     console.error("[auto-queue] Automation health load failed:", err);
     setText(els.aqHealthAutopilot, "—");
     setText(els.aqHealthPolicy, "Could not load automation health.");
+    els.aqHealthTokenWarning?.classList.add("hidden");
+    els.aqHealthRecentFailure?.classList.add("hidden");
   }
 }

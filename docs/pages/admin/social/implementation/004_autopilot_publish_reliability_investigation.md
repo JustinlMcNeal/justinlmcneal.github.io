@@ -319,6 +319,22 @@ Pushed **`da5b90a`** `fix(admin-social): distribute auto-queue platforms fairly`
 
 ---
 
+## Token-health findings (UI follow-up)
+
+| Platform | Production state (2026-05-21) | UI now shows |
+|----------|------------------------------|--------------|
+| Instagram | `instagram_token_expires_at` **2026-05-14** (expired) | Expired + reconnect action |
+| Pinterest | `pinterest_token_expires_at` **2026-05-19** (expired) | Expired + reconnect / refresh hint |
+| Facebook | `facebook_page_token` **missing** when selected | Missing token + reconnect via IG OAuth |
+
+**Refresh-token root cause (summary):** Instagram refresh uses `fb_exchange_token` only inside the 7-day window; **already-expired** tokens require **manual reconnect**. Pinterest refresh may succeed via `pinterest_refresh_token` but **`pinterest_token_expires_at` is not updated** on refresh, so health can look expired until reconnect. Cron `succeeded` ≠ token refresh success.
+
+**UI changes:** See `005_automation_health_token_visibility.md`.
+
+**Remaining operator action:** Reconnect Instagram and Pinterest (and Facebook if enabled) via header Connect buttons; confirm Automation Health turns green; then refill queue.
+
+---
+
 ## Investigation artifacts
 
-Read-only SQL: `scripts/investigation/q01_settings.sql` … `q15_history_window.sql` (not committed).
+Read-only SQL: `scripts/investigation/q*.sql` (local operator tools, not committed).
