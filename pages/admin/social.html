@@ -941,11 +941,18 @@
                 </svg>
               </div>
               <div>
-                <h2 class="text-xl font-black">📊 Performance Dashboard</h2>
-                <p class="text-white/90 text-sm">Track your social media performance and optimize your strategy</p>
+                <h2 class="text-xl font-black">📊 Analytics & Learning</h2>
+                <p class="text-white/90 text-sm">Performance health, what worked, post-level analysis, and data for Autopilot</p>
               </div>
             </div>
           </div>
+
+          <!-- 1. Performance Overview -->
+          <div class="space-y-6">
+            <div class="border-b border-gray-200 pb-2">
+              <h2 class="text-lg font-black text-gray-900">1. Performance Overview</h2>
+              <p class="text-sm text-gray-600 mt-1">High-level posting and engagement health. Sync Insights refreshes Instagram metrics.</p>
+            </div>
 
           <!-- Key Metrics Row -->
           <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -982,7 +989,7 @@
                 </div>
                 <h2 class="font-bold">Instagram Engagement</h2>
               </div>
-              <button id="btnSyncInstagramInsights" class="px-3 py-1.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs font-bold rounded-lg hover:opacity-90 transition-opacity flex items-center gap-1">
+              <button id="btnSyncInstagramInsights" type="button" title="Refreshes Instagram metrics like likes, saves, reach, and engagement." class="px-3 py-1.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs font-bold rounded-lg hover:opacity-90 transition-opacity flex items-center gap-1">
                 <svg id="syncInsightsSpinner" class="w-3 h-3 animate-spin hidden" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                 </svg>
@@ -1022,9 +1029,71 @@
                   <div class="text-xs text-gray-500">Eng. Rate</div>
                 </div>
               </div>
-              <p id="analyticsLastSync" class="text-xs text-gray-400 mt-4 text-center">Sync insights to see engagement data</p>
+              <p class="text-xs text-gray-500 mt-3 text-center">Sync Insights: refreshes Instagram metrics like likes, saves, reach, and engagement.</p>
+              <p id="analyticsLastSync" class="text-xs text-gray-400 mt-1 text-center">Sync insights to see engagement data</p>
             </div>
           </div>
+
+          <!-- When We Posted (scheduling volume — not best times) -->
+          <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+            <div class="p-4 border-b">
+              <h2 class="font-bold">When We Posted</h2>
+              <p class="text-xs text-gray-500 mt-1">Posting volume by time of day from scheduled times. This shows when posts were scheduled/posted — it does not prove these are the best times.</p>
+            </div>
+            <div class="p-6">
+              <div id="analyticsTimeChart" class="space-y-3"></div>
+              <p id="analyticsTimeChartNote" class="text-xs text-gray-400 mt-4 text-center">Loading posting volume…</p>
+            </div>
+          <!-- Recent Activity -->
+          <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+            <div class="p-4 border-b">
+              <h2 class="font-bold">Recent Activity</h2>
+            </div>
+            <div id="analyticsRecentActivity" class="divide-y max-h-80 overflow-y-auto">
+              <div class="p-4 text-center text-gray-400 text-sm">Loading...</div>
+            </div>
+          </div>
+
+          <!-- Status Breakdown -->
+          <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+            <div class="p-4 border-b flex items-center justify-between">
+              <h2 class="font-bold">Post Status Overview</h2>
+              <button id="btnRefreshAnalytics" class="text-xs text-blue-600 hover:underline">Refresh</button>
+            </div>
+            <div class="p-6">
+              <div class="grid grid-cols-2 sm:grid-cols-5 gap-4 text-center">
+                <div>
+                  <div id="analyticsStatusQueued" class="text-2xl font-black text-blue-600">0</div>
+                  <div class="text-xs text-gray-500">Queued</div>
+                </div>
+                <div>
+                  <div id="analyticsStatusPublished" class="text-2xl font-black text-green-600">0</div>
+                  <div class="text-xs text-gray-500">Published</div>
+                </div>
+                <div>
+                  <div id="analyticsStatusFailed" class="text-2xl font-black text-red-600">0</div>
+                  <div class="text-xs text-gray-500">Failed</div>
+                </div>
+                <div>
+                  <div id="analyticsStatusDraft" class="text-2xl font-black text-gray-400">0</div>
+                  <div class="text-xs text-gray-500">Draft</div>
+                </div>
+                <div>
+                  <div id="analyticsStatusCancelled" class="text-2xl font-black text-gray-300">0</div>
+                  <div class="text-xs text-gray-500">Cancelled</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          </div><!-- /Performance Overview -->
+
+          <!-- 2. What's Working -->
+          <div class="space-y-6">
+            <div class="border-b border-gray-200 pb-2">
+              <h2 class="text-lg font-black text-gray-900">2. What’s Working</h2>
+              <p class="text-sm text-gray-600 mt-1">Posts, scores, hashtags, platforms, and tones that perform best on your account.</p>
+            </div>
 
           <!-- Scoring performance (auto-queue quartiles) -->
           <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
@@ -1048,22 +1117,6 @@
             </div>
             <div id="analyticsTopPosts" class="divide-y max-h-80 overflow-y-auto">
               <div class="p-4 text-center text-gray-400 text-sm">Sync insights to see top posts</div>
-            </div>
-          </div>
-
-          <!-- All Posts Browser -->
-          <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
-            <div class="p-4 border-b flex items-center justify-between">
-              <h2 class="font-bold">📋 Browse All Posts</h2>
-              <select id="analyticsPostFilter" class="text-xs border rounded-lg px-2 py-1">
-                <option value="all">All Time</option>
-                <option value="week">This Week</option>
-                <option value="month" selected>This Month</option>
-                <option value="3months">Last 3 Months</option>
-              </select>
-            </div>
-            <div id="analyticsAllPosts" class="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-1 p-2 max-h-64 overflow-y-auto">
-              <div class="col-span-full p-4 text-center text-gray-400 text-sm">Sync insights to browse posts</div>
             </div>
           </div>
 
@@ -1132,32 +1185,6 @@
             </div>
           </div>
 
-          <!-- Posting Activity & Best Times -->
-          <div class="grid md:grid-cols-2 gap-6">
-            <!-- Recent Activity -->
-            <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
-              <div class="p-4 border-b">
-                <h2 class="font-bold">Recent Activity</h2>
-              </div>
-              <div id="analyticsRecentActivity" class="divide-y max-h-80 overflow-y-auto">
-                <div class="p-4 text-center text-gray-400 text-sm">Loading...</div>
-              </div>
-            </div>
-
-            <!-- Best Posting Times -->
-            <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
-              <div class="p-4 border-b">
-                <h2 class="font-bold">Posting Distribution</h2>
-              </div>
-              <div class="p-6">
-                <div id="analyticsTimeChart" class="space-y-3">
-                  <!-- Time bars will be populated by JS -->
-                </div>
-                <p class="text-xs text-gray-400 mt-4 text-center">Posts by time of day (based on scheduled times)</p>
-              </div>
-            </div>
-          </div>
-
           <!-- Caption Tone Performance -->
           <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
             <div class="p-4 border-b">
@@ -1170,41 +1197,38 @@
             </div>
           </div>
 
-          <!-- Status Breakdown -->
+          </div><!-- /What's Working -->
+
+          <!-- 3. Post Library & Deep Analysis -->
+          <div class="space-y-6">
+            <div class="border-b border-gray-200 pb-2">
+              <h2 class="text-lg font-black text-gray-900">3. Post Library &amp; Deep Analysis</h2>
+              <p class="text-sm text-gray-600 mt-1">Browse posts and open one for details. <strong>Run Deep Analysis</strong> uses AI on that post and saves post-level learnings (cached ~7 days).</p>
+            </div>
+
           <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
             <div class="p-4 border-b flex items-center justify-between">
-              <h2 class="font-bold">Post Status Overview</h2>
-              <button id="btnRefreshAnalytics" class="text-xs text-blue-600 hover:underline">Refresh</button>
+              <h2 class="font-bold">📋 Browse All Posts</h2>
+              <select id="analyticsPostFilter" class="text-xs border rounded-lg px-2 py-1">
+                <option value="all">All Time</option>
+                <option value="week">This Week</option>
+                <option value="month" selected>This Month</option>
+                <option value="3months">Last 3 Months</option>
+              </select>
             </div>
-            <div class="p-6">
-              <div class="grid grid-cols-2 sm:grid-cols-5 gap-4 text-center">
-                <div>
-                  <div id="analyticsStatusQueued" class="text-2xl font-black text-blue-600">0</div>
-                  <div class="text-xs text-gray-500">Queued</div>
-                </div>
-                <div>
-                  <div id="analyticsStatusPublished" class="text-2xl font-black text-green-600">0</div>
-                  <div class="text-xs text-gray-500">Published</div>
-                </div>
-                <div>
-                  <div id="analyticsStatusFailed" class="text-2xl font-black text-red-600">0</div>
-                  <div class="text-xs text-gray-500">Failed</div>
-                </div>
-                <div>
-                  <div id="analyticsStatusDraft" class="text-2xl font-black text-gray-400">0</div>
-                  <div class="text-xs text-gray-500">Draft</div>
-                </div>
-                <div>
-                  <div id="analyticsStatusCancelled" class="text-2xl font-black text-gray-300">0</div>
-                  <div class="text-xs text-gray-500">Cancelled</div>
-                </div>
-              </div>
+            <div id="analyticsAllPosts" class="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-1 p-2 max-h-64 overflow-y-auto">
+              <div class="col-span-full p-4 text-center text-gray-400 text-sm">Sync insights to browse posts</div>
             </div>
           </div>
 
-          <!-- ========================================== -->
-          <!-- 🧠 AI LEARNING INSIGHTS DASHBOARD -->
-          <!-- ========================================== -->
+          </div><!-- /Post Library -->
+
+          <!-- 4. Learning Engine -->
+          <div class="space-y-6">
+            <div class="border-b border-gray-200 pb-2">
+              <h2 class="text-lg font-black text-gray-900">4. Learning Engine</h2>
+              <p class="text-sm text-gray-600 mt-1">What Karry Kraze data taught the system — tables Autopilot can use after <strong>Update Learnings</strong>.</p>
+            </div>
           
           <!-- Learning Header -->
           <div class="bg-gradient-to-r from-emerald-600 to-teal-500 rounded-xl p-4 sm:p-6 text-white">
@@ -1215,15 +1239,27 @@
                 </svg>
               </div>
               <div class="flex-1">
-                <h2 class="text-lg sm:text-xl font-black">🧠 AI Learning Insights</h2>
-                <p class="text-white/90 text-xs sm:text-sm">Your posts are being analyzed to learn what works best</p>
+                <h2 class="text-lg sm:text-xl font-black">Learning actions</h2>
+                <p class="text-white/90 text-xs sm:text-sm">Update Learnings rebuilds hashtag, timing, caption, and recommendation tables from stored post history (no live Instagram API call).</p>
               </div>
-              <button id="btnRefreshLearnings" type="button" title="Rebuilds hashtag, posting-time, and recommendation tables from your posted history (no Instagram API call)." class="w-full sm:w-auto px-4 py-2 bg-white/20 text-white font-bold rounded-lg text-xs sm:text-sm hover:bg-white/30 transition-colors flex items-center justify-center gap-2">
+              <button id="btnRefreshLearnings" type="button" title="Rebuilds hashtag, timing, caption, and recommendation tables from stored post history." class="w-full sm:w-auto px-4 py-2 bg-white/20 text-white font-bold rounded-lg text-xs sm:text-sm hover:bg-white/30 transition-colors flex items-center justify-center gap-2">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                 </svg>
                 Update Learnings
               </button>
+            </div>
+          </div>
+
+          <!-- Account Learning Summary -->
+          <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+            <div class="p-4 border-b">
+              <h2 class="font-bold">Account Learning Summary</h2>
+              <p class="text-xs text-gray-500 mt-1">Data-backed findings from your account only. Missing values mean not enough synced posts yet.</p>
+              <p id="accountLearningLastUpdate" class="text-xs text-gray-400 mt-2"></p>
+            </div>
+            <div id="accountLearningSummaryBody" class="p-4">
+              <p class="text-sm text-gray-500">Loading account summary…</p>
             </div>
           </div>
 
@@ -1254,8 +1290,8 @@
                 <span class="text-base sm:text-xl">⏰</span>
                 <h3 class="font-bold text-xs sm:text-sm">Best Time</h3>
               </div>
-              <div id="learningBestTime" class="text-lg sm:text-2xl font-black text-emerald-600">5:00 AM</div>
-              <p class="text-[10px] sm:text-xs text-gray-500 mt-0.5 sm:mt-1">Based on engagement</p>
+              <div id="learningBestTime" class="text-lg sm:text-2xl font-black text-emerald-600">—</div>
+              <p id="learningBestTimeSub" class="text-[10px] sm:text-xs text-gray-500 mt-0.5 sm:mt-1">When posts performed best (engagement)</p>
             </div>
             
             <!-- Best Day -->
@@ -1264,8 +1300,8 @@
                 <span class="text-base sm:text-xl">📅</span>
                 <h3 class="font-bold text-xs sm:text-sm">Best Day</h3>
               </div>
-              <div id="learningBestDay" class="text-lg sm:text-2xl font-black text-blue-600">Monday</div>
-              <p class="text-[10px] sm:text-xs text-gray-500 mt-0.5 sm:mt-1">Highest engagement</p>
+              <div id="learningBestDay" class="text-lg sm:text-2xl font-black text-blue-600">—</div>
+              <p id="learningBestDaySub" class="text-[10px] sm:text-xs text-gray-500 mt-0.5 sm:mt-1">Highest engagement day</p>
             </div>
             
             <!-- Optimal Hashtag Count -->
@@ -1284,8 +1320,8 @@
                 <span class="text-base sm:text-xl">🔥</span>
                 <h3 class="font-bold text-xs sm:text-sm">Top Signal</h3>
               </div>
-              <div id="learningTopSignal" class="text-lg sm:text-2xl font-black text-orange-600">Shares</div>
-              <p class="text-[10px] sm:text-xs text-gray-500 mt-0.5 sm:mt-1">Instagram's priority</p>
+              <div id="learningTopSignal" class="text-lg sm:text-2xl font-black text-orange-600">—</div>
+              <p id="learningTopSignalSub" class="text-[10px] sm:text-xs text-gray-500 mt-0.5 sm:mt-1">Strongest metric per reach on your posts</p>
             </div>
           </div>
 
@@ -1330,7 +1366,7 @@
                   </tbody>
                 </table>
               </div>
-              <p class="text-xs text-gray-400 mt-3 text-center">🟢 High engagement • 🟡 Medium • 🔴 Low</p>
+              <p class="text-xs text-gray-400 mt-3 text-center">🟢 Higher engagement • Amber ring = directional (n&lt;3) • “-” = no posts in slot yet</p>
             </div>
           </div>
 
@@ -1338,6 +1374,7 @@
           <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
             <div class="p-4 border-b">
               <h2 class="font-bold">✍️ Caption Best Practices</h2>
+              <p class="text-xs text-gray-500 mt-1">From your post history when enough data exists; otherwise shows “not enough data yet.”</p>
             </div>
             <div class="p-4">
               <div class="grid md:grid-cols-2 gap-4">
@@ -1391,48 +1428,13 @@
             </div>
           </div>
 
-          <!-- 2026 Instagram Algorithm Tips -->
-          <div class="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl shadow-sm border overflow-hidden">
-            <div class="p-4 border-b border-purple-100">
-              <h2 class="font-bold flex items-center gap-2">
-                <span>📱</span> Instagram Algorithm Tips (2026)
-              </h2>
+          <details class="rounded-xl border border-gray-200 bg-gray-50 text-sm">
+            <summary class="p-3 cursor-pointer font-medium text-gray-700">General platform notes (not account-specific)</summary>
+            <div class="p-4 border-t text-xs text-gray-600 space-y-2">
+              <p>Industry guidance only — Autopilot and this dashboard prioritize Karry Kraze metrics and learning tables.</p>
+              <p>Shares and saves often matter for reach; hooks and replies help engagement. Use Sync Insights + Update Learnings for your account.</p>
             </div>
-            <div class="p-4">
-              <div class="grid md:grid-cols-3 gap-4">
-                <div class="bg-white rounded-lg p-4 shadow-sm">
-                  <div class="text-2xl mb-2">📤</div>
-                  <h3 class="font-bold text-sm mb-1">Shares are King</h3>
-                  <p class="text-xs text-gray-600">In 2026, shares are the top ranking signal. Create content people want to send to friends.</p>
-                </div>
-                <div class="bg-white rounded-lg p-4 shadow-sm">
-                  <div class="text-2xl mb-2">🔖</div>
-                  <h3 class="font-bold text-sm mb-1">Saves = Value</h3>
-                  <p class="text-xs text-gray-600">High saves signal valuable content. Create tips, tutorials, or info worth bookmarking.</p>
-                </div>
-                <div class="bg-white rounded-lg p-4 shadow-sm">
-                  <div class="text-2xl mb-2">⚡</div>
-                  <h3 class="font-bold text-sm mb-1">Hook in 3 Seconds</h3>
-                  <p class="text-xs text-gray-600">Capture attention immediately. Your first 3 seconds determine if people keep watching.</p>
-                </div>
-                <div class="bg-white rounded-lg p-4 shadow-sm">
-                  <div class="text-2xl mb-2">🎠</div>
-                  <h3 class="font-bold text-sm mb-1">Carousels Win</h3>
-                  <p class="text-xs text-gray-600">Carousel posts have ~2.4% engagement rate - highest of all formats.</p>
-                </div>
-                <div class="bg-white rounded-lg p-4 shadow-sm">
-                  <div class="text-2xl mb-2">💬</div>
-                  <h3 class="font-bold text-sm mb-1">Reply to Comments</h3>
-                  <p class="text-xs text-gray-600">Quick replies boost algorithm ranking and build community engagement.</p>
-                </div>
-                <div class="bg-white rounded-lg p-4 shadow-sm">
-                  <div class="text-2xl mb-2">🎥</div>
-                  <h3 class="font-bold text-sm mb-1">Reels Under 90s</h3>
-                  <p class="text-xs text-gray-600">Keep Reels under 90 seconds for best reach. Under 3 min for recommendations.</p>
-                </div>
-              </div>
-            </div>
-          </div>
+          </details>
 
           <!-- 🧠 AI Learning Dashboard - What AI Learned -->
           <div class="bg-gradient-to-br from-violet-50 via-purple-50 to-fuchsia-50 rounded-xl shadow-sm border border-purple-200 overflow-hidden">
@@ -1485,6 +1487,8 @@
               </div>
             </details>
           </div>
+
+          </div><!-- /Learning Engine -->
 
         </div>
       </div>
@@ -2564,7 +2568,7 @@
       
       <!-- Fixed Footer -->
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0 p-3 sm:p-4 border-t bg-white rounded-b-2xl flex-shrink-0">
-        <button id="btnRunDeepAnalysis" class="w-full sm:w-auto px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-200 flex items-center justify-center sm:justify-start gap-2">
+        <button id="btnRunDeepAnalysis" type="button" title="Uses AI to analyze this specific post and save post-level learnings." class="w-full sm:w-auto px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-200 flex items-center justify-center sm:justify-start gap-2">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
           </svg>

@@ -14,6 +14,14 @@ import {
 import { isPostedSuccessStatus, POST_SUCCESS_STATUSES } from "../../postStatus.js";
 import { getAnalyticsContext } from "./analyticsContext.js";
 import { loadCategoryInsightsUI } from "./categoryInsights.js";
+import { loadAccountLearningSummary, computeTopEngagementSignal } from "./accountLearningSummary.js";
+
+function timingConfidenceLabel(totalPosts) {
+  const n = Number(totalPosts) || 0;
+  if (n >= 10) return "Data-driven";
+  if (n >= 3) return "Directional";
+  return "Needs more data";
+}
 
 export async function loadLearningInsights() {
   const client = getAnalyticsContext().getClient();
@@ -25,18 +33,49 @@ export async function loadLearningInsights() {
     
     if (times && times.length > 0) {
       const bestTime = times[0];
-      if (bestTimeEl) bestTimeEl.textContent = formatHour(bestTime.hour_of_day);
-      
+      const timePosts = Number(bestTime.total_posts) || 0;
+      if (bestTimeEl) {
+        const label = timingConfidenceLabel(timePosts);
+        bestTimeEl.textContent =
+          timePosts > 0
+            ? `${formatHour(bestTime.hour_of_day)} ET · ${label}`
+            : "Not enough data yet";
+      }
+      const bestTimeSub = document.getElementById("learningBestTimeSub");
+      if (bestTimeSub) {
+        bestTimeSub.textContent =
+          timePosts > 0
+            ? `${parseFloat(bestTime.avg_engagement_rate || 0).toFixed(1)}% avg · n=${timePosts} posts`
+            : "Sync insights and update learnings";
+      }
+
       const bestDay = times.reduce((best, t) => {
         const tRate = parseFloat(t.avg_engagement_rate) || 0;
         const bRate = best ? (parseFloat(best.avg_engagement_rate) || 0) : 0;
-        if (!best || tRate > bRate) return t;
+        const tN = Number(t.total_posts) || 0;
+        const bN = best ? Number(best.total_posts) || 0 : 0;
+        if (!best || tRate > bRate || (tRate === bRate && tN > bN)) return t;
         return best;
       }, null);
       if (bestDayEl && bestDay) {
         const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-        bestDayEl.textContent = days[bestDay.day_of_week] || "Any";
+        const dayPosts = Number(bestDay.total_posts) || 0;
+        bestDayEl.textContent =
+          dayPosts > 0
+            ? `${days[bestDay.day_of_week] || "Any"} · ${timingConfidenceLabel(dayPosts)}`
+            : "Not enough data yet";
       }
+      const bestDaySub = document.getElementById("learningBestDaySub");
+      if (bestDaySub && bestDay) {
+        const dayPosts = Number(bestDay.total_posts) || 0;
+        bestDaySub.textContent =
+          dayPosts > 0
+            ? `${parseFloat(bestDay.avg_engagement_rate || 0).toFixed(1)}% avg · n=${dayPosts} posts`
+            : "Based on synced engagement when available";
+      }
+    } else {
+      if (bestTimeEl) bestTimeEl.textContent = "Not enough data yet";
+      if (bestDayEl) bestDayEl.textContent = "Not enough data yet";
     }
     
     await loadTimingHeatmap(client);
@@ -47,10 +86,19 @@ export async function loadLearningInsights() {
       hashtagsEl.innerHTML = hashtags.map((h, i) => {
         const engRate = parseFloat(h.avg_engagement_rate) || 0;
         const timesUsed = h.times_used || 0;
+        const conf =
+          timesUsed >= 5 ? "Data-driven" : timesUsed >= 2 ? "Directional" : "Needs more data";
+        const confClass =
+          timesUsed >= 5
+            ? "text-emerald-700 bg-emerald-50"
+            : timesUsed >= 2
+              ? "text-amber-800 bg-amber-50"
+              : "text-gray-600 bg-gray-100";
         return `
         <div class="flex items-center justify-between py-2 ${i < hashtags.length - 1 ? 'border-b' : ''}">
           <div class="flex items-center gap-2"><span class="text-sm font-medium text-gray-700">#${h.hashtag}</span></div>
-          <div class="flex items-center gap-3 text-xs">
+          <div class="flex items-center gap-3 text-xs flex-wrap justify-end">
+            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${confClass}">${conf}</span>
             <span class="text-gray-500">${timesUsed} uses</span>
             <span class="${engRate >= 3 ? 'text-green-600' : engRate >= 1 ? 'text-blue-600' : 'text-gray-500'} font-bold">${engRate.toFixed(1)}% eng</span>
           </div>
@@ -83,9 +131,52 @@ export async function loadLearningInsights() {
     if (hashtagCountEl && patterns) {
       const hashtagPattern = patterns.find(p => p.pattern_type === "hashtag_count");
       if (hashtagPattern) hashtagCountEl.textContent = `${hashtagPattern.optimal_value}-${Math.min(parseInt(hashtagPattern.optimal_value) + 2, 5)}`;
+      else hashtagCountEl.textContent = "Not enough data yet";
     }
+
+    await loadCaptionPatternsFromData(patterns);
+    await loadTopSignalFromPosts(client);
+
+    await loadAccountLearningSummary();
   } catch (err) {
     console.error("Error loading learning insights:", err);
+  }
+}
+
+async function loadTopSignalFromPosts(client) {
+  const el = document.getElementById("learningTopSignal");
+  if (!el) return;
+  const { data: posts } = await client
+    .from("social_posts")
+    .select("shares, saves, comments, reach")
+    .in("status", POST_SUCCESS_STATUSES)
+    .eq("platform", "instagram");
+  const signal = computeTopEngagementSignal(posts || []);
+  el.textContent = signal || "Not enough data yet";
+  const sub = document.getElementById("learningTopSignalSub");
+  if (sub) {
+    sub.textContent = signal
+      ? "From your synced Instagram posts"
+      : "Sync insights on 3+ posts with reach";
+  }
+}
+
+async function loadCaptionPatternsFromData(patterns) {
+  const dos = document.getElementById("learningCaptionDos");
+  const donts = document.getElementById("learningCaptionDonts");
+  const captionPattern = patterns?.find((p) => p.pattern_type === "caption_length");
+  if (captionPattern && dos) {
+    const conf = Math.round((parseFloat(captionPattern.confidence_score) || 0) * 100);
+    dos.innerHTML = `
+      <li class="flex items-start gap-2"><span>•</span><span>Your posts average best around <strong>${captionPattern.optimal_value}</strong> characters (${conf}% confidence from history)</span></li>
+      <li class="flex items-start gap-2"><span>•</span><span>Include a clear call-to-action when it fits the product</span></li>`;
+  } else if (dos) {
+    dos.innerHTML = `<li class="text-gray-600">Not enough data yet — sync insights and update learnings after more posts.</li>`;
+  }
+  if (donts) {
+    donts.innerHTML = captionPattern
+      ? `<li class="flex items-start gap-2"><span>•</span><span>Avoid extremes far from your optimal length band until more samples exist</span></li>`
+      : `<li class="text-gray-600">Not enough data yet for account-specific avoid list.</li>`;
   }
 }
 
@@ -96,23 +187,49 @@ async function loadTimingHeatmap(client) {
   try {
     const times = await getBestPostingTimes(client);
     const heatmap = {};
-    for (let d = 0; d < 7; d++) heatmap[d] = {};
-    if (times) times.forEach(t => { heatmap[t.day_of_week] = heatmap[t.day_of_week] || {}; heatmap[t.day_of_week][t.hour_of_day] = parseFloat(t.avg_engagement_rate) || 0; });
-    
+    const samples = {};
+    for (let d = 0; d < 7; d++) {
+      heatmap[d] = {};
+      samples[d] = {};
+    }
+    if (times) {
+      times.forEach((t) => {
+        heatmap[t.day_of_week] = heatmap[t.day_of_week] || {};
+        samples[t.day_of_week] = samples[t.day_of_week] || {};
+        heatmap[t.day_of_week][t.hour_of_day] = parseFloat(t.avg_engagement_rate) || 0;
+        samples[t.day_of_week][t.hour_of_day] = Number(t.total_posts) || 0;
+      });
+    }
+
     let maxEng = 0;
-    Object.values(heatmap).forEach(hours => Object.values(hours).forEach(eng => { if (eng > maxEng) maxEng = eng; }));
-    
+    Object.values(heatmap).forEach((hours) =>
+      Object.values(hours).forEach((eng) => {
+        if (eng > maxEng) maxEng = eng;
+      })
+    );
+
     const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     const hours = [6, 9, 12, 15, 18, 21];
-    
-    tbody.innerHTML = days.map((day, dayIdx) => {
-      const cells = hours.map(hour => {
-        const eng = heatmap[dayIdx]?.[hour] || 0;
-        const intensity = maxEng > 0 ? eng / maxEng : 0;
-        return `<td class="p-2 text-center text-xs ${getHeatmapColor(intensity)}">${eng > 0 ? eng.toFixed(1) + '%' : '-'}</td>`;
-      }).join("");
-      return `<tr><td class="p-2 text-xs font-medium text-gray-600">${day}</td>${cells}</tr>`;
-    }).join("");
+
+    tbody.innerHTML = days
+      .map((day, dayIdx) => {
+        const cells = hours
+          .map((hour) => {
+            const eng = heatmap[dayIdx]?.[hour] || 0;
+            const n = samples[dayIdx]?.[hour] || 0;
+            const intensity = maxEng > 0 ? eng / maxEng : 0;
+            const lowN = n > 0 && n < 3;
+            const title = n
+              ? `${eng.toFixed(1)}% avg engagement · ${n} post(s)${lowN ? " · directional only" : ""}`
+              : "No posts in this slot yet";
+            const label =
+              eng > 0 ? `${eng.toFixed(1)}%${n ? `<br><span class="opacity-80">n=${n}</span>` : ""}` : "-";
+            return `<td class="p-2 text-center text-xs ${getHeatmapColor(intensity)}${lowN ? " ring-1 ring-amber-400/80" : ""}" title="${title}">${label}</td>`;
+          })
+          .join("");
+        return `<tr><td class="p-2 text-xs font-medium text-gray-600">${day}</td>${cells}</tr>`;
+      })
+      .join("");
   } catch (err) {
     console.error("Error loading timing heatmap:", err);
   }
@@ -183,7 +300,10 @@ export function initLearningInsights() {
   const analyticsTab = document.querySelector('[data-tab="analytics"]');
   if (analyticsTab) {
     analyticsTab.addEventListener("click", () => {
-      setTimeout(() => { loadLearningInsights(); loadCategoryInsightsUI(); }, 100);
+      setTimeout(() => {
+        loadLearningInsights();
+        loadCategoryInsightsUI();
+      }, 100);
     });
   }
   
@@ -196,6 +316,7 @@ export function initLearningInsights() {
         await processAllPostsForLearning();
         await loadLearningInsights();
         await loadCategoryInsightsUI();
+        await loadAccountLearningSummary();
       } catch (err) { console.error("Failed to refresh learnings:", err); }
       const { showToast } = getAnalyticsContext();
       showToast?.("Learning tables rebuilt from posted history.", "success");
@@ -239,4 +360,4 @@ export function initLearningInsights() {
     loadLearningInsights();
     loadCategoryInsightsUI();
   }
-}
+}

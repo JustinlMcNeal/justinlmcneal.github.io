@@ -128,18 +128,21 @@ export async function loadEngagementMetrics() {
             const colors = eff > 3 ? "bg-green-100 text-green-700 border-green-200" 
                          : eff > 1.5 ? "bg-blue-100 text-blue-700 border-blue-200"
                          : "bg-gray-100 text-gray-700 border-gray-200";
+            const uses = Number(h.times_used) || 0;
+            const conf =
+              uses >= 5 ? "Data-driven" : uses >= 2 ? "Directional" : "Needs more data";
             return `
-              <span class="inline-flex items-center gap-1 px-2 py-1 border rounded-full ${colors}" style="font-size: ${size}rem">
+              <span class="inline-flex items-center gap-1 px-2 py-1 border rounded-full ${colors}" style="font-size: ${size}rem" title="${conf} · ${uses} use(s)">
                 #${h.hashtag}
                 <span class="text-xs opacity-70">${eff.toFixed(1)}%</span>
               </span>
             `;
           }).join("")}
         </div>
-        <p class="text-xs text-gray-400 mt-4">Size and color indicate engagement effectiveness. Green = high performing.</p>
+        <p class="text-xs text-gray-400 mt-4">Size and color indicate engagement effectiveness. Hover for sample size; tags with &lt;2 uses are directional only (Autopilot prefers 2+).</p>
       `;
     }
   } catch (err) {
     console.error("Failed to load engagement metrics:", err);
   }
-}
+}

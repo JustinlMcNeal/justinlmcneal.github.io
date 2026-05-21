@@ -77,7 +77,10 @@ export async function loadAnalyticsDashboard() {
     });
     
     const maxTime = Math.max(...Object.values(timeSlots)) || 1;
+    const totalScheduled = Object.values(timeSlots).reduce((a, b) => a + b, 0);
+    const afternoonShare = totalScheduled > 0 ? timeSlots["Afternoon (12-17)"] / totalScheduled : 0;
     const timeChart = document.getElementById("analyticsTimeChart");
+    const timeFootnote = document.getElementById("analyticsTimeChartNote");
     if (timeChart) {
       timeChart.innerHTML = Object.entries(timeSlots).map(([label, count]) => `
         <div class="flex items-center gap-3">
@@ -88,6 +91,15 @@ export async function loadAnalyticsDashboard() {
           <div class="w-8 text-xs font-bold text-gray-700">${count}</div>
         </div>
       `).join("");
+    }
+    if (timeFootnote) {
+      let note =
+        `${totalScheduled} posts with scheduled times. Volume by local browser hour — not proof of best posting times.`;
+      if (afternoonShare >= 0.45) {
+        note +=
+          " Afternoon-heavy bars often reflect scheduling habit, not optimal engagement.";
+      }
+      timeFootnote.textContent = note;
     }
     
     // Recent activity
