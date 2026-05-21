@@ -4,6 +4,28 @@ import { analyzePost } from "../../postLearning.js";
 import { getAnalyticsContext } from "./analyticsContext.js";
 import { syncInstagramInsights } from "./instagramInsights.js";
 
+/** Reuse cached post_performance_analysis younger than this (ms). */
+const DEEP_ANALYSIS_STALE_MS = 7 * 24 * 60 * 60 * 1000;
+/** Avoid duplicate auto-runs when reopening the same post modal quickly. */
+const DEEP_ANALYSIS_DEBOUNCE_MS = 60 * 1000;
+const deepAnalysisAutoRunAt = new Map();
+
+function setAnalysisStatus(text, tone = "muted") {
+  const el = document.getElementById("postAnalyticsAnalysisStatus");
+  if (!el) return;
+  el.textContent = text || "";
+  el.classList.remove("text-purple-600/90", "text-amber-700", "text-gray-500");
+  if (tone === "amber") el.classList.add("text-amber-700");
+  else if (tone === "gray") el.classList.add("text-gray-500");
+  else el.classList.add("text-purple-600/90");
+}
+
+function isAnalysisStale(updatedAt) {
+  if (!updatedAt) return true;
+  const t = new Date(updatedAt).getTime();
+  if (Number.isNaN(t)) return true;
+  return Date.now() - t > DEEP_ANALYSIS_STALE_MS;
+}
 
 export async function openPostAnalytics(postId) {
   const modal = document.getElementById("postAnalyticsModal");
@@ -109,16 +131,49 @@ export async function openPostAnalytics(postId) {
     else if (viewBtn) viewBtn.classList.add("hidden");
     
     modal.dataset.postId = postId;
-    
-    if (post.engagement_updated_at) {
-      const { data: savedAnalysis } = await getAnalyticsContext().getClient()
-        .from("post_performance_analysis")
-        .select("*")
-        .eq("post_id", postId)
-        .maybeSingle();
-      
-      if (savedAnalysis) displayAnalysis(savedAnalysis);
-      else runDeepPostAnalysis(postId);
+
+    const { data: savedAnalysis } = await getAnalyticsContext().getClient()
+      .from("post_performance_analysis")
+      .select("*")
+      .eq("post_id", postId)
+      .maybeSingle();
+
+    if (!post.engagement_updated_at) {
+      setAnalysisStatus(
+        "Sync insights first for live metrics. Run Deep Analysis anytime to build scores.",
+        "gray"
+      );
+      if (savedAnalysis) {
+        displayAnalysis(savedAnalysis);
+        setAnalysisStatus(
+          `Showing saved analysis from ${new Date(savedAnalysis.updated_at).toLocaleString()} (metrics may be outdated).`,
+          "amber"
+        );
+      }
+    } else if (savedAnalysis && !isAnalysisStale(savedAnalysis.updated_at)) {
+      displayAnalysis(savedAnalysis);
+      setAnalysisStatus(
+        `Cached analysis · last analyzed ${new Date(savedAnalysis.updated_at).toLocaleString()}`,
+        "muted"
+      );
+    } else {
+      const lastAuto = deepAnalysisAutoRunAt.get(postId) || 0;
+      const debounced = Date.now() - lastAuto < DEEP_ANALYSIS_DEBOUNCE_MS;
+      if (savedAnalysis && debounced) {
+        displayAnalysis(savedAnalysis);
+        setAnalysisStatus(
+          `Cached (stale) · last analyzed ${new Date(savedAnalysis.updated_at).toLocaleString()}. Use Run Deep Analysis to refresh.`,
+          "amber"
+        );
+      } else {
+        if (savedAnalysis) {
+          setAnalysisStatus("Analysis is stale — refreshing…", "amber");
+        } else {
+          setAnalysisStatus("No saved analysis — running once…", "muted");
+        }
+        deepAnalysisAutoRunAt.set(postId, Date.now());
+        await runDeepPostAnalysis(postId, { force: false });
+      }
     }
   } catch (err) {
     console.error("Error opening post analytics:", err);
@@ -129,6 +184,13 @@ export async function openPostAnalytics(postId) {
 
 function displayAnalysis(analysis) {
   if (!analysis) return;
+
+  if (analysis.updated_at) {
+    setAnalysisStatus(
+      `Last analyzed ${new Date(analysis.updated_at).toLocaleString()}`,
+      "muted"
+    );
+  }
 
   const scoreSection = document.getElementById("postAnalyticsScoreSection");
   if (scoreSection) {
@@ -217,18 +279,27 @@ function displayAnalysis(analysis) {
   }
 }
 
-async function runDeepPostAnalysis(postId) {
+async function runDeepPostAnalysis(postId, { force = true } = {}) {
   const btn = document.getElementById("btnRunDeepAnalysis");
   if (btn) {
     btn.disabled = true;
     btn.innerHTML = `<svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Analyzing...`;
   }
-  
+
+  if (force) {
+    setAnalysisStatus("Running fresh AI analysis…", "muted");
+  }
+
   try {
     const analysis = await analyzePost(postId);
+    if (analysis && !analysis.updated_at) {
+      analysis.updated_at = new Date().toISOString();
+    }
     displayAnalysis(analysis);
+    deepAnalysisAutoRunAt.set(postId, Date.now());
   } catch (err) {
     console.error("Error running deep analysis:", err);
+    setAnalysisStatus("Deep analysis failed — try again or check console.", "amber");
   } finally {
     if (btn) {
       btn.disabled = false;
@@ -270,6 +341,6 @@ export function initPostAnalyticsModal() {
   
   document.getElementById("btnRunDeepAnalysis")?.addEventListener("click", async () => {
     const postId = modal?.dataset.postId;
-    if (postId) await runDeepPostAnalysis(postId);
+    if (postId) await runDeepPostAnalysis(postId, { force: true });
   });
-}
+}
