@@ -1264,6 +1264,244 @@ async function resolveVariationIdForQueuedPost(
   return { variationId: newVariation.id };
 }
 
+type AutopilotResurfaceConfig = {
+  enabled: boolean;
+  minAgeDays: number;
+  maxPerRun: number;
+};
+
+function parseAutopilotResurfaceConfig(body: Record<string, unknown>): {
+  isAutopilotSource: boolean;
+  config: AutopilotResurfaceConfig;
+} {
+  const source = String(body.source ?? "").toLowerCase();
+  const isAutopilotSource = source === "autopilot";
+  if (!isAutopilotSource) {
+    return {
+      isAutopilotSource: false,
+      config: { enabled: false, minAgeDays: 30, maxPerRun: 0 },
+    };
+  }
+
+  const explicitlyOff =
+    body.resurfaceInAutopilot === false || body.resurface_in_autopilot === false;
+  const explicitlyOn =
+    body.resurfaceInAutopilot === true || body.resurface_in_autopilot === true;
+  const enabled = explicitlyOff ? false : explicitlyOn ? true : true;
+
+  const minAgeDays = Math.max(
+    7,
+    Math.min(365, Number(body.resurfaceMinAgeDays ?? body.resurface_min_age_days) || 30)
+  );
+  const maxPerRun = Math.max(
+    0,
+    Math.min(3, Number(body.resurfaceMaxPerRun ?? body.resurface_max_per_run) ?? 1)
+  );
+
+  return {
+    isAutopilotSource: true,
+    config: {
+      enabled: enabled && maxPerRun > 0,
+      minAgeDays,
+      maxPerRun,
+    },
+  };
+}
+
+async function applyAutopilotResurfaceStrategy(
+  supabase: ReturnType<typeof createClient>,
+  generatedPosts: any[],
+  config: AutopilotResurfaceConfig,
+  ctx: {
+    allProducts: any[];
+    platformList: string[];
+    baseTones: string[];
+    hashtagMap: Record<string, string[]>;
+    globalHashtags: string[];
+    topHashtagsByCategory: Record<string, string[]>;
+    topHashtagsGeneral: string[];
+    getStockInfo: (id: string) => { quantity?: number; backorder?: boolean };
+  }
+): Promise<{
+  resurfacedCount: number;
+  skippedReason: string | null;
+}> {
+  if (!config.enabled || config.maxPerRun <= 0 || generatedPosts.length === 0) {
+    return {
+      resurfacedCount: 0,
+      skippedReason: !config.enabled ? "disabled" : config.maxPerRun <= 0 ? "max_zero" : "empty_batch",
+    };
+  }
+
+  const { data: engagementData } = await supabase
+    .from("social_posts")
+    .select("engagement_rate")
+    .eq("status", "posted")
+    .not("engagement_rate", "is", null)
+    .gt("engagement_rate", 0);
+
+  if (!engagementData?.length || engagementData.length < 5) {
+    return { resurfacedCount: 0, skippedReason: "insufficient_engagement_data" };
+  }
+
+  const rates = engagementData.map((r: { engagement_rate: number }) => r.engagement_rate).sort(
+    (a: number, b: number) => a - b
+  );
+  const medianRate = rates[Math.floor(rates.length / 2)];
+  const resurfaceCutoff = new Date(
+    Date.now() - config.minAgeDays * 24 * 60 * 60 * 1000
+  ).toISOString();
+
+  const { data: oldHits } = await supabase
+    .from("social_posts")
+    .select(
+      "id, product_id, image_url, platform, engagement_rate, caption, hashtags, link_url, scheduled_for"
+    )
+    .eq("status", "posted")
+    .lt("scheduled_for", resurfaceCutoff)
+    .gt("engagement_rate", medianRate)
+    .order("engagement_rate", { ascending: false })
+    .limit(20);
+
+  if (!oldHits?.length) {
+    return { resurfacedCount: 0, skippedReason: "no_eligible_winners" };
+  }
+
+  const minAgeMs = config.minAgeDays * 24 * 60 * 60 * 1000;
+  const nowMs = Date.now();
+  const usedProductIds = new Set<string>();
+  const usedSourcePostIds = new Set<string>();
+  let resurfacedCount = 0;
+
+  const slotsToTry = Math.min(config.maxPerRun, generatedPosts.length);
+
+  for (let slot = 0; slot < slotsToTry; slot++) {
+    const hit = oldHits.find((h: { id: string; product_id: string }) => {
+      if (usedSourcePostIds.has(h.id) || usedProductIds.has(h.product_id)) return false;
+      const resurfaceProduct = ctx.allProducts.find((p: { id: string }) => p.id === h.product_id);
+      if (!resurfaceProduct) return false;
+      if (resurfaceProduct.last_social_post_at) {
+        const daysSince = (nowMs - new Date(String(resurfaceProduct.last_social_post_at)).getTime()) /
+          (1000 * 60 * 60 * 24);
+        if (daysSince < config.minAgeDays) return false;
+      }
+      const batchHasProduct = generatedPosts.some(
+        (p: { product_id: string; selection_metadata?: { is_resurfaced?: boolean } }, idx: number) =>
+          p.product_id === h.product_id &&
+          idx !== generatedPosts.length - 1 - slot &&
+          !p.selection_metadata?.is_resurfaced
+      );
+      if (batchHasProduct) return false;
+      return true;
+    });
+
+    if (!hit) break;
+
+    const resurfaceProduct = ctx.allProducts.find((p: { id: string }) => p.id === hit.product_id);
+    if (!resurfaceProduct) continue;
+
+    const resurfaceEligibility = assessProductEligibility(
+      resurfaceProduct,
+      ctx.getStockInfo(resurfaceProduct.id)
+    );
+    const resurfaceScarcitySafe = isScarcityCopySafe(resurfaceEligibility);
+    const resurfaceTones = pickSafeTones(ctx.baseTones, resurfaceScarcitySafe);
+    const freshTone = pickRandom(resurfaceTones);
+    const freshTemplate = pickSafeTemplate(freshTone, resurfaceScarcitySafe);
+    const resurfacePlatform = hit.platform || ctx.platformList[0];
+    const freshCaption = guardCaptionScarcity(
+      generateCaption(freshTemplate, {
+        name: resurfaceProduct.name,
+        category_name: resurfaceProduct.category?.name || "item",
+        slug: resurfaceProduct.slug,
+      }, resurfacePlatform),
+      resurfaceScarcitySafe
+    ).caption;
+
+    const resurfaceCatKey = String(resurfaceProduct.category?.name || "")
+      .trim()
+      .toLowerCase();
+    const categoryHashtags = ctx.hashtagMap[resurfaceCatKey] || ctx.globalHashtags;
+    const learnedForCat = ctx.topHashtagsByCategory[resurfaceCatKey] || [];
+    const learnedGeneral = ctx.topHashtagsGeneral.filter((t) => !categoryHashtags.includes(t));
+    const hashtags = mergeHashtags(
+      "#karrykraze",
+      learnedForCat,
+      learnedGeneral,
+      categoryHashtags
+    );
+
+    const lastIdx = generatedPosts.length - 1 - slot;
+    const slotPost = generatedPosts[lastIdx];
+    if (!slotPost) break;
+
+    generatedPosts[lastIdx] = {
+      product_id: hit.product_id,
+      product_name: resurfaceProduct.name,
+      product_slug: resurfaceProduct.slug,
+      catalog_image_url: resurfaceProduct.catalog_image_url,
+      resolved_image_url: hit.image_url,
+      image_source: "resurface",
+      generated_image_id: null,
+      pool_asset_id: null,
+      needs_generation: false,
+      is_carousel: false,
+      carousel_urls: [],
+      category_name: resurfaceProduct.category?.name || "item",
+      platform: hit.platform || platformList[0],
+      caption: freshCaption,
+      caption_confidence: 100,
+      caption_status: "accepted",
+      hashtags,
+      link_url:
+        hit.link_url ||
+        `https://karrykraze.com/pages/product.html?slug=${resurfaceProduct.slug}&utm_source=${hit.platform || platformList[0]}&utm_medium=social&utm_campaign=autopilot&utm_content=${resurfaceProduct.slug}`,
+      scheduled_for: slotPost.scheduled_for,
+      tone: freshTone,
+      resurfaced_from: hit.id,
+      selection_metadata: {
+        asset_policy: "resurface_exception",
+        image_source: "resurface",
+        priority_score: null,
+        score_breakdown: null,
+        shot_type: null,
+        is_resurfaced: true,
+        content_mix_type: "resurface",
+        resurfaced_from_post_id: hit.id,
+        resurface_source_post_id: hit.id,
+        resurface_min_age_days: config.minAgeDays,
+        resurface_method: "autopilot_strategy",
+        resurface_rank_reason: "above_median_engagement",
+        original_engagement_rate: hit.engagement_rate,
+        median_engagement_rate: medianRate,
+        caption_attempts: 1,
+        caption_confidence: 100,
+        caption_status: "accepted",
+        caption_tone: freshTone,
+        eligibility_passed: true,
+        eligibility_warnings: resurfaceEligibility.warnings,
+        duplicate_guard_result: "resurface",
+        inventory_status: resurfaceEligibility.inventory_status,
+        backorder_status: resurfaceEligibility.backorder_status,
+        selected_reason: "auto_resurface_hit",
+        scarcity_guard_applied: !resurfaceScarcitySafe,
+      },
+    };
+
+    usedProductIds.add(hit.product_id);
+    usedSourcePostIds.add(hit.id);
+    resurfacedCount++;
+    console.log(
+      `[auto-queue] Autopilot resurface: "${resurfaceProduct.name}" (engagement ${hit.engagement_rate}%, median ${medianRate}%)`
+    );
+  }
+
+  return {
+    resurfacedCount,
+    skippedReason: resurfacedCount > 0 ? null : "no_eligible_winners",
+  };
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
@@ -1279,6 +1517,8 @@ Deno.serve(async (req) => {
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
     const preview = body.preview === true;
     const learning_only = body.learning_only === true;
+    const { isAutopilotSource, config: autopilotResurfaceConfig } =
+      parseAutopilotResurfaceConfig(body);
     const compareScoring =
       preview &&
       (body.compareScoring === true || body.compare_scoring === true);
@@ -2315,114 +2555,40 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ── SPRINT 3: AUTO-RESURFACE OLD HITS ──
-    // Every 4th post slot: find old posts (30+ days) with above-median engagement
-    if (generatedPosts.length >= 4) {
-      // Get median engagement rate
-      const { data: engagementData } = await supabase
-        .from("social_posts")
-        .select("engagement_rate")
-        .eq("status", "posted")
-        .not("engagement_rate", "is", null)
-        .gt("engagement_rate", 0);
+    let resurfaceRunMeta: Record<string, unknown> = {
+      resurface_enabled: isAutopilotSource && autopilotResurfaceConfig.enabled,
+      resurface_limit: isAutopilotSource ? autopilotResurfaceConfig.maxPerRun : 0,
+      resurfaced_count: 0,
+      new_product_count: generatedPosts.length,
+      resurface_skipped_reason: null as string | null,
+    };
 
-      if (engagementData?.length >= 5) {
-        const rates = engagementData.map((r: any) => r.engagement_rate).sort((a: number, b: number) => a - b);
-        const medianRate = rates[Math.floor(rates.length / 2)];
-
-        // Find old hits: posted 30+ days ago, above-median engagement
-        const resurfaceCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-        const { data: oldHits } = await supabase
-          .from("social_posts")
-          .select("id, product_id, image_url, platform, engagement_rate, caption, hashtags, link_url")
-          .eq("status", "posted")
-          .lt("scheduled_for", resurfaceCutoff)
-          .gt("engagement_rate", medianRate)
-          .order("engagement_rate", { ascending: false })
-          .limit(3);
-
-        if (oldHits?.length) {
-          // Pick one old hit and make it the 4th slot (replace the last generated post)
-          const hit = oldHits[0];
-          const resurfaceProduct = allProducts.find((p: any) => p.id === hit.product_id);
-          
-          if (resurfaceProduct) {
-            // Generate a fresh caption for the resurface
-            const resurfaceEligibility = assessProductEligibility(
-              resurfaceProduct,
-              getStockInfo(resurfaceProduct.id)
-            );
-            const resurfaceScarcitySafe = isScarcityCopySafe(resurfaceEligibility);
-            const resurfaceTones = pickSafeTones(baseTones, resurfaceScarcitySafe);
-            const freshTone = pickRandom(resurfaceTones);
-            const freshTemplate = pickSafeTemplate(freshTone, resurfaceScarcitySafe);
-            const freshCaption = guardCaptionScarcity(
-              generateCaption(freshTemplate, {
-                name: resurfaceProduct.name,
-                category_name: resurfaceProduct.category?.name || "item",
-                slug: resurfaceProduct.slug,
-              }, platformList[0]),
-              resurfaceScarcitySafe
-            ).caption;
-
-            const resurfaceCatKey = String(resurfaceProduct.category?.name || "").trim().toLowerCase();
-            const categoryHashtags = hashtagMap[resurfaceCatKey] || globalHashtags;
-            const learnedForCat = topHashtagsByCategory[resurfaceCatKey] || [];
-            const learnedGeneral = topHashtagsGeneral.filter(t => !categoryHashtags.includes(t));
-            const hashtags = mergeHashtags("#karrykraze", learnedForCat, learnedGeneral, categoryHashtags);
-
-            // Replace the last post slot with the resurfaced post
-            const lastIdx = generatedPosts.length - 1;
-            generatedPosts[lastIdx] = {
-              product_id: hit.product_id,
-              product_name: resurfaceProduct.name,
-              product_slug: resurfaceProduct.slug,
-              catalog_image_url: resurfaceProduct.catalog_image_url,
-              resolved_image_url: hit.image_url,
-              image_source: "resurface",
-              generated_image_id: null,
-              pool_asset_id: null,
-              needs_generation: false,
-              is_carousel: false,
-              carousel_urls: [],
-              category_name: resurfaceProduct.category?.name || "item",
-              platform: hit.platform || platformList[0],
-              caption: freshCaption,
-              caption_confidence: 100,
-              caption_status: "accepted",
-              hashtags,
-              link_url: hit.link_url || `https://karrykraze.com/pages/product.html?slug=${resurfaceProduct.slug}&utm_source=${hit.platform || platformList[0]}&utm_medium=social&utm_campaign=autopilot&utm_content=${resurfaceProduct.slug}`,
-              scheduled_for: generatedPosts[lastIdx].scheduled_for,
-              tone: freshTone,
-              resurfaced_from: hit.id,
-              selection_metadata: {
-                asset_policy: "resurface_exception",
-                image_source: "resurface",
-                priority_score: null,
-                score_breakdown: null,
-                shot_type: null,
-                is_resurfaced: true,
-                resurfaced_from_post_id: hit.id,
-                original_engagement_rate: hit.engagement_rate,
-                median_engagement_rate: medianRate,
-                caption_attempts: 1,
-                caption_confidence: 100,
-                caption_status: "accepted",
-                caption_tone: freshTone,
-                eligibility_passed: true,
-                eligibility_warnings: resurfaceEligibility.warnings,
-                duplicate_guard_result: "resurface",
-                inventory_status: resurfaceEligibility.inventory_status,
-                backorder_status: resurfaceEligibility.backorder_status,
-                selected_reason: "auto_resurface_hit",
-                scarcity_guard_applied: !resurfaceScarcitySafe,
-              },
-            };
-
-            console.log(`[auto-queue] Auto-resurface: "${resurfaceProduct.name}" (original engagement: ${hit.engagement_rate}%, median: ${medianRate}%)`);
-          }
+    if (isAutopilotSource && !preview) {
+      const resurfaceResult = await applyAutopilotResurfaceStrategy(
+        supabase,
+        generatedPosts,
+        autopilotResurfaceConfig,
+        {
+          allProducts,
+          platformList,
+          baseTones,
+          hashtagMap,
+          globalHashtags,
+          topHashtagsByCategory,
+          topHashtagsGeneral,
+          getStockInfo,
         }
-      }
+      );
+      resurfaceRunMeta.resurfaced_count = resurfaceResult.resurfacedCount;
+      resurfaceRunMeta.new_product_count = generatedPosts.filter(
+        (p: { selection_metadata?: { is_resurfaced?: boolean } }) =>
+          !p.selection_metadata?.is_resurfaced
+      ).length;
+      resurfaceRunMeta.resurface_skipped_reason = resurfaceResult.skippedReason;
+    } else if (isAutopilotSource && !autopilotResurfaceConfig.enabled) {
+      resurfaceRunMeta.resurface_skipped_reason = "disabled";
+    } else if (!isAutopilotSource) {
+      resurfaceRunMeta.resurface_skipped_reason = "not_autopilot_run";
     }
 
     const platformDistribution = generatedPosts.reduce((acc: Record<string, number>, p: any) => {
@@ -2451,6 +2617,7 @@ Deno.serve(async (req) => {
       one_platform_per_product: !allowMultiPlatformPerProduct,
       platforms_per_product: allowMultiPlatformPerProduct ? platformList.length : 1,
       platform_distribution: platformDistribution,
+      ...resurfaceRunMeta,
     });
 
     if (preview) {

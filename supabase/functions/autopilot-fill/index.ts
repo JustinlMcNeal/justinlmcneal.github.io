@@ -107,6 +107,9 @@ Deno.serve(async (req) => {
       platforms: ["instagram"],
       tones: ["casual", "urgency"],
       posting_times: ["10:00", "18:00"],
+      resurface_in_autopilot: true,
+      resurface_min_age_days: 30,
+      resurface_max_per_run: 1,
     };
 
     const enabled = settings.enabled === true;
@@ -226,6 +229,16 @@ Deno.serve(async (req) => {
 
     const autoQueueUrl = `${supabaseUrl}/functions/v1/auto-queue`;
 
+    const resurfaceInAutopilot = settings.resurface_in_autopilot !== false;
+    const resurfaceMinAgeDays = Math.max(
+      7,
+      Math.min(365, Number(settings.resurface_min_age_days) || 30)
+    );
+    const resurfaceMaxPerRun = Math.max(
+      0,
+      Math.min(3, Number(settings.resurface_max_per_run) ?? 1)
+    );
+
     const response = await fetch(autoQueueUrl, {
       method: "POST",
       headers: {
@@ -241,6 +254,13 @@ Deno.serve(async (req) => {
         postingTimes: settings.posting_times,
         posting_times: settings.posting_times,
         preview: false,
+        source: "autopilot",
+        resurfaceInAutopilot,
+        resurfaceMinAgeDays,
+        resurfaceMaxPerRun,
+        resurface_in_autopilot: resurfaceInAutopilot,
+        resurface_min_age_days: resurfaceMinAgeDays,
+        resurface_max_per_run: resurfaceMaxPerRun,
       }),
     });
 
@@ -256,6 +276,11 @@ Deno.serve(async (req) => {
       Number(result.generatedCount) ||
       Number(result.run_summary?.posts_built) ||
       0;
+    const resurfacedCount = Number(result.run_summary?.resurfaced_count) || 0;
+    const newProductCount =
+      result.run_summary?.new_product_count != null
+        ? Number(result.run_summary.new_product_count)
+        : Math.max(0, generated - resurfacedCount);
     const skippedCount = result.run_summary?.skipped_count ?? 0;
     const noPoolSkipped = result.run_summary?.no_pool_asset_skipped ?? 0;
     const skippedErrors = Array.isArray(result.skippedErrors)
@@ -269,6 +294,14 @@ Deno.serve(async (req) => {
     let status = "success";
     let reason: string | null = null;
     let message = `Autopilot generated ${generated} post(s)`;
+    if (generated > 0 && resurfacedCount > 0) {
+      message = `Created ${generated} post(s): ${newProductCount} new, ${resurfacedCount} resurfaced`;
+    } else if (generated === 0 && resurfaceInAutopilot) {
+      const skipReason = result.run_summary?.resurface_skipped_reason;
+      if (skipReason === "no_eligible_winners" || skipReason === "insufficient_engagement_data") {
+        message = `No posts created. Resurface enabled but no eligible winners (${skipReason}).`;
+      }
+    }
 
     if (generated === 0) {
       status = "no_op";
@@ -299,6 +332,12 @@ Deno.serve(async (req) => {
       deficit,
       posts_created: generated,
       generated,
+      resurfaced_count: resurfacedCount,
+      new_product_count: newProductCount,
+      resurface_enabled: resurfaceInAutopilot,
+      resurface_limit: resurfaceMaxPerRun,
+      resurface_min_age_days: resurfaceMinAgeDays,
+      resurface_skipped_reason: result.run_summary?.resurface_skipped_reason ?? null,
       skipped_count: skippedCount,
       no_pool_asset_skipped: noPoolSkipped,
       image_asset_policy: result.run_summary?.image_asset_policy ?? "image_pool_only",
@@ -326,6 +365,10 @@ Deno.serve(async (req) => {
         target: targetCount,
         posts: result.posts,
         run_summary: result.run_summary,
+        resurfaced_count: resurfacedCount,
+        new_product_count: newProductCount,
+        resurface_enabled: resurfaceInAutopilot,
+        resurface_limit: resurfaceMaxPerRun,
         skippedErrors: skippedErrors.length ? skippedErrors : undefined,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }

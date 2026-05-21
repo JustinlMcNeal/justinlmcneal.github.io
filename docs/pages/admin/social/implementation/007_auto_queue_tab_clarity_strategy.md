@@ -73,17 +73,14 @@ When `generatedPosts.length >= 4` after normal product picks, the edge function 
 
 No `resurface_old_hits` in `social_settings` for autopilot-fill today. Min age for engine auto-resurface is **hardcoded 30 days** in `auto-queue`.
 
-### Phase decision
+### Phase decision (007)
 
-**Do not** add new autopilot-fill → auto-queue resurface flags in this phase (risk of extra resurfaced posts per Run Now without tuning).  
-**Do** clarify in UI that engine may already mix in one resurface slot on large batches; manual section is for testing full repost workflow.
+Deferred autopilot resurface flags to **008** (`008_autopilot_resurface_strategy.md`).
 
-### Follow-up (optional)
+### Follow-up
 
-- `auto_queue.resurface_in_autopilot: boolean`
-- `resurface_min_age_days`, `resurface_max_per_run`
-- Pass from `autopilot-fill` only when enabled
 - Unify autopilot tones/times with Optimization Defaults form
+- OpenClaw tuning of resurface min age / max per run
 
 ## Files changed
 

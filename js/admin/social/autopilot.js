@@ -46,12 +46,29 @@ export function setupAutopilot() {
   loadAutopilotSettings();
 }
 
+function formatResurfaceMixLine(lastRun) {
+  const resurfaced = lastRun?.resurfaced_count ?? lastRun?.run_summary?.resurfaced_count;
+  const newCount = lastRun?.new_product_count ?? lastRun?.run_summary?.new_product_count;
+  if (resurfaced == null && newCount == null) return "";
+  const r = Number(resurfaced) || 0;
+  const n = newCount != null ? Number(newCount) : null;
+  if (r > 0 && n != null) return ` · ${n} new, ${r} resurfaced`;
+  if (r > 0) return ` · ${r} resurfaced`;
+  if (lastRun?.resurface_enabled === false) return " · resurface off";
+  const skip = lastRun?.resurface_skipped_reason ?? lastRun?.run_summary?.resurface_skipped_reason;
+  if (lastRun?.resurface_enabled !== false && skip === "no_eligible_winners") {
+    return " · resurface on, no winners";
+  }
+  return "";
+}
+
 function formatAutopilotLastRunLabel(lastRun) {
   if (!lastRun?.ran_at) return null;
   const runDate = new Date(lastRun.ran_at);
   let text = runDate.toLocaleString();
   const created = lastRun.posts_created ?? lastRun.generated;
   if (created != null) text += ` · ${created} post(s)`;
+  text += formatResurfaceMixLine(lastRun);
   if (lastRun.status) text += ` · ${lastRun.status}`;
   if (lastRun.reason === "queue_full") text += " (at target)";
   if (lastRun.reason === "no_candidates") text += " (none created)";
@@ -78,7 +95,18 @@ function formatRunNowAlert(result) {
   }
 
   if (deficit > 0 && generated > 0) {
-    return `Created ${generated} new post(s). Window fill: ${current + generated}/${target} (was ${current}/${target}, needed ${deficit}).`;
+    const resurfaced = result.resurfaced_count ?? result.run_summary?.resurfaced_count ?? 0;
+    const newCount =
+      result.new_product_count ??
+      result.run_summary?.new_product_count ??
+      Math.max(0, generated - resurfaced);
+    const mix =
+      resurfaced > 0
+        ? `Created ${generated} post(s): ${newCount} new, ${resurfaced} resurfaced.`
+        : result.resurface_enabled === false
+          ? `Created ${generated} post(s) (resurface disabled).`
+          : `Created ${generated} new post(s).`;
+    return `${mix} Window fill: ${current + generated}/${target} (was ${current}/${target}, needed ${deficit}).`;
   }
 
   if (deficit > 0 && generated === 0) {
@@ -144,6 +172,9 @@ export async function loadAutopilotSettings() {
       enabled: false,
       days_ahead: 7,
       posts_per_day: 2,
+      resurface_in_autopilot: true,
+      resurface_min_age_days: 30,
+      resurface_max_per_run: 1,
     };
 
     const toggle = document.getElementById("autopilotToggle");
@@ -164,6 +195,28 @@ export async function loadAutopilotSettings() {
     if (igCb) igCb.checked = platforms.includes("instagram");
     if (fbCb) fbCb.checked = platforms.includes("facebook");
     if (pinCb) pinCb.checked = platforms.includes("pinterest");
+
+    const resurfaceEnabled = document.getElementById("autopilotResurfaceEnabled");
+    const resurfaceMinAge = document.getElementById("autopilotResurfaceMinAge");
+    const resurfaceMax = document.getElementById("autopilotResurfaceMaxPerRun");
+    const resurfaceNote = document.getElementById("autopilotResurfacePolicyNote");
+    if (resurfaceEnabled) {
+      resurfaceEnabled.checked = settings.resurface_in_autopilot !== false;
+    }
+    if (resurfaceMinAge) {
+      resurfaceMinAge.value = String(settings.resurface_min_age_days ?? 30);
+    }
+    if (resurfaceMax) {
+      resurfaceMax.value = String(settings.resurface_max_per_run ?? 1);
+    }
+    if (resurfaceNote) {
+      const on = settings.resurface_in_autopilot !== false;
+      const max = settings.resurface_max_per_run ?? 1;
+      const age = settings.resurface_min_age_days ?? 30;
+      resurfaceNote.textContent = on
+        ? `Cap: ${max} per run · min ${age} days · above-median engagement`
+        : "Autopilot resurface is off — only new product picks";
+    }
 
     if (statusEl) {
       statusEl.textContent = settings.enabled
@@ -201,6 +254,16 @@ async function saveAutopilotSettings() {
     if (document.getElementById("autopilotPlatformFacebook")?.checked) platforms.push("facebook");
     if (document.getElementById("autopilotPlatformPinterest")?.checked) platforms.push("pinterest");
 
+    const resurfaceOn = document.getElementById("autopilotResurfaceEnabled")?.checked !== false;
+    const resurfaceMinAge = parseInt(
+      document.getElementById("autopilotResurfaceMinAge")?.value || "30",
+      10
+    );
+    const resurfaceMax = parseInt(
+      document.getElementById("autopilotResurfaceMaxPerRun")?.value || "1",
+      10
+    );
+
     const settings = {
       enabled: toggle?.checked || false,
       days_ahead: parseInt(daysSelect?.value || "7", 10),
@@ -208,6 +271,9 @@ async function saveAutopilotSettings() {
       platforms: platforms.length ? platforms : ["instagram"],
       tones: ["casual", "urgency"],
       posting_times: ["10:00", "18:00"],
+      resurface_in_autopilot: resurfaceOn,
+      resurface_min_age_days: resurfaceMinAge,
+      resurface_max_per_run: Math.max(0, Math.min(3, resurfaceMax)),
     };
 
     await client

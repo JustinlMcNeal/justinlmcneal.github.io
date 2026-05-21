@@ -576,6 +576,7 @@
               <div id="aqHealthRecentFailure" class="hidden text-xs bg-red-50 border border-red-200 rounded-lg px-3 py-2"></div>
               <p id="aqHealthPolicy" class="text-xs text-gray-600"></p>
               <p id="aqHealthPreviewNote" class="hidden text-xs text-gray-500 mt-1"></p>
+              <p id="aqHealthResurface" class="text-xs text-gray-600"></p>
             </div>
           </div>
           </section>
@@ -828,9 +829,41 @@
             <div class="border-b border-gray-200 pb-2">
               <h2 class="text-lg font-black text-gray-900">Resurface Winners (content strategy)</h2>
               <p class="text-sm text-gray-600 mt-1 max-w-3xl">
-                Autopilot can reuse proven posts after enough time, with fresh captions. Large auto-queue batches may already swap in one resurface slot automatically; use the controls below to test the dedicated repost workflow.
+                Autopilot may include a small number of proven winners when filling the queue. Manual controls below are for testing or forcing a repost.
               </p>
             </div>
+
+          <div class="bg-white rounded-xl shadow-sm border p-6">
+            <h3 class="font-bold text-gray-900 mb-1">Autopilot resurface strategy</h3>
+            <p class="text-sm text-gray-600 mb-4">
+              Saved with <strong>Save Settings</strong> in Autopilot Control Center. Future AI / OpenClaw can tune these from performance data.
+            </p>
+            <div class="flex flex-wrap gap-6 items-start">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" id="autopilotResurfaceEnabled" checked class="accent-purple-600 rounded">
+                <span class="text-sm font-medium text-gray-800">Enable resurface in Autopilot</span>
+              </label>
+              <div>
+                <label class="text-xs text-gray-500 block mb-1" for="autopilotResurfaceMinAge">Minimum age (days)</label>
+                <select id="autopilotResurfaceMinAge" class="border rounded-lg px-3 py-2 text-sm">
+                  <option value="14">14</option>
+                  <option value="30" selected>30</option>
+                  <option value="60">60</option>
+                  <option value="90">90</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-xs text-gray-500 block mb-1" for="autopilotResurfaceMaxPerRun">Max resurfaced per run</label>
+                <select id="autopilotResurfaceMaxPerRun" class="border rounded-lg px-3 py-2 text-sm">
+                  <option value="0">0 (off)</option>
+                  <option value="1" selected>1</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                </select>
+              </div>
+            </div>
+            <p id="autopilotResurfacePolicyNote" class="text-xs text-gray-500 mt-3">Cap: 1 per run · winners must be above median engagement · avoids repeat products in the same batch</p>
+          </div>
 
           <div class="bg-gradient-to-r from-amber-500 to-orange-500 rounded-xl p-6 text-white">
             <div class="flex items-start gap-4">
@@ -842,10 +875,10 @@
               <div class="flex-1">
                 <h3 class="text-lg font-black mb-2">Manual test controls</h3>
                 <p class="text-white/90 text-sm leading-relaxed mb-2">
-                  Does not delete originals on Pinterest. Scheduled as new queue posts with updated copy.
+                  Uses the <code class="text-xs bg-white/20 px-1 rounded">auto-repost</code> workflow — preview or schedule reposts on demand. Does not delete originals on Pinterest.
                 </p>
                 <p class="text-white/80 text-xs mb-4">
-                  Follow-up: autopilot on/off toggle for resurface per run (not in this release).
+                  Separate from Autopilot’s automatic bounded resurface above.
                 </p>
                 <div class="flex flex-wrap gap-3">
                   <div class="flex items-center gap-2">

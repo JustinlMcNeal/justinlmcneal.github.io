@@ -100,7 +100,35 @@ export async function loadAutomationHealth() {
     if (autopilotRun?.no_pool_asset_skipped > 0) {
       autopilotDetail += ` · ${autopilotRun.no_pool_asset_skipped} skipped (no pool)`;
     }
+    const resurfaced =
+      autopilotRun?.resurfaced_count ?? autopilotRun?.run_summary?.resurfaced_count;
+    const newProducts =
+      autopilotRun?.new_product_count ?? autopilotRun?.run_summary?.new_product_count;
+    if (resurfaced != null && Number(resurfaced) > 0) {
+      autopilotDetail += ` · ${newProducts ?? "?"} new, ${resurfaced} resurfaced`;
+    } else if (autopilotSettings.resurface_in_autopilot === false) {
+      autopilotDetail += " · resurface disabled";
+    } else if (
+      autopilotRun?.resurface_skipped_reason === "no_eligible_winners" ||
+      autopilotRun?.run_summary?.resurface_skipped_reason === "no_eligible_winners"
+    ) {
+      autopilotDetail += " · resurface on, no winners";
+    }
     setText(els.aqHealthLastAutopilot, autopilotDetail);
+
+    const resurfaceHealthEl = document.getElementById("aqHealthResurface");
+    if (resurfaceHealthEl) {
+      const enabled = autopilotSettings.resurface_in_autopilot !== false;
+      const max = autopilotSettings.resurface_max_per_run ?? 1;
+      const age = autopilotSettings.resurface_min_age_days ?? 30;
+      let resurfaceLine = enabled
+        ? `Resurface strategy: on (max ${max}/run, min ${age}d)`
+        : "Resurface strategy: off";
+      if (autopilotRun?.ran_at && enabled && Number(resurfaced || 0) === 0 && generatedCount > 0) {
+        resurfaceLine += " · last run: no resurfaced slots used";
+      }
+      setText(resurfaceHealthEl, resurfaceLine);
+    }
 
     let queueRunDetail = formatRelativeTime(lastAutoQueue);
     if (autoQueueRun?.preview) queueRunDetail += " (preview)";
