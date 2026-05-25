@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { publishMediaContainer } from "../_shared/instagramPublish.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -90,71 +91,29 @@ serve(async (req) => {
 
     const containerId = mediaResult.id;
 
-    // Step 2: Poll for container status (Instagram processes the image)
-    let containerStatus = "IN_PROGRESS";
-    let attempts = 0;
-    const maxAttempts = 30; // Wait up to ~30 seconds
+    // Publish with retries — status_code polling often returns Authorization Error
+    // even when the container is valid and publish succeeds.
+    const publishOutcome = await publishMediaContainer(userId, containerId, accessToken);
 
-    while (containerStatus === "IN_PROGRESS" && attempts < maxAttempts) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      const statusResp = await fetch(
-        `https://graph.facebook.com/v18.0/${containerId}?fields=status_code&access_token=${accessToken}`
-      );
-      const statusData = await statusResp.json();
-      
-      containerStatus = statusData.status_code;
-      attempts++;
-    }
-
-    if (containerStatus !== "FINISHED") {
+    if ("error" in publishOutcome) {
       if (postId) {
         await supabase
           .from("social_posts")
           .update({
             status: "failed",
-            error_message: `Container processing failed: ${containerStatus}`,
+            error_message: publishOutcome.error,
             updated_at: new Date().toISOString()
           })
           .eq("id", postId);
       }
 
       return new Response(
-        JSON.stringify({ success: false, error: `Media processing failed: ${containerStatus}` }),
+        JSON.stringify({ success: false, error: publishOutcome.error }),
         { headers: corsHeaders, status: 400 }
       );
     }
 
-    // Step 3: Publish the container
-    const publishParams = new URLSearchParams({
-      creation_id: containerId,
-      access_token: accessToken
-    });
-
-    const publishResp = await fetch(
-      `https://graph.facebook.com/v18.0/${userId}/media_publish?${publishParams.toString()}`,
-      { method: "POST" }
-    );
-
-    const publishResult = await publishResp.json();
-
-    if (publishResult.error) {
-      if (postId) {
-        await supabase
-          .from("social_posts")
-          .update({
-            status: "failed",
-            error_message: publishResult.error.message || "Failed to publish",
-            updated_at: new Date().toISOString()
-          })
-          .eq("id", postId);
-      }
-
-      return new Response(
-        JSON.stringify({ success: false, error: publishResult.error.message || "Failed to publish media" }),
-        { headers: corsHeaders, status: 400 }
-      );
-    }
+    const publishResult = { id: publishOutcome.id };
 
     // Update post status to posted
     if (postId) {

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { isMediaNotReadyError, publishMediaContainer } from "../_shared/instagramPublish.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -122,70 +123,43 @@ serve(async (req) => {
       console.log(`Container ${i + 1} created: ${mediaResult.id}`);
     }
 
-    // STEP 2: Wait for all containers to be ready
-    console.log("Waiting for all containers to be ready...");
-    
-    for (let i = 0; i < containerIds.length; i++) {
-      const containerId = containerIds[i];
-      let containerStatus = "IN_PROGRESS";
-      let attempts = 0;
-      const maxAttempts = 30;
+    // Brief pause so child containers can process before carousel assembly.
+    await new Promise((resolve) => setTimeout(resolve, 2000));
 
-      while (containerStatus === "IN_PROGRESS" && attempts < maxAttempts) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        const statusResp = await fetch(
-          `https://graph.facebook.com/v18.0/${containerId}?fields=status_code&access_token=${accessToken}`
-        );
-        const statusData = await statusResp.json();
-        
-        containerStatus = statusData.status_code;
-        attempts++;
-      }
-
-      if (containerStatus !== "FINISHED") {
-        console.error(`Container ${i + 1} failed to process: ${containerStatus}`);
-        
-        if (postId) {
-          await supabase
-            .from("social_posts")
-            .update({
-              status: "failed",
-              error_message: `Image ${i + 1} processing failed: ${containerStatus}`,
-              updated_at: new Date().toISOString()
-            })
-            .eq("id", postId);
-        }
-
-        return new Response(
-          JSON.stringify({ 
-            success: false, 
-            error: `Image ${i + 1} processing failed: ${containerStatus}` 
-          }),
-          { headers: corsHeaders, status: 400 }
-        );
-      }
-
-      console.log(`Container ${i + 1} ready`);
-    }
-
-    // STEP 3: Create the carousel container
+    // STEP 2: Create the carousel container (retry if children not ready)
     console.log("Creating carousel container...");
     
-    const carouselResp = await fetch(`https://graph.facebook.com/v18.0/${userId}/media`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        media_type: "CAROUSEL",
-        children: containerIds.join(","),
-        caption: caption || "",
-        access_token: accessToken
-      })
-    });
+    let carouselContainerId: string | null = null;
+    const maxCarouselCreateAttempts = 15;
 
-    const carouselResult = await carouselResp.json();
+    for (let attempt = 0; attempt < maxCarouselCreateAttempts; attempt++) {
+      if (attempt > 0) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
 
-    if (carouselResult.error) {
+      const carouselResp = await fetch(`https://graph.facebook.com/v18.0/${userId}/media`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          media_type: "CAROUSEL",
+          children: containerIds.join(","),
+          caption: caption || "",
+          access_token: accessToken
+        })
+      });
+
+      const carouselResult = await carouselResp.json();
+
+      if (carouselResult.id) {
+        carouselContainerId = carouselResult.id;
+        break;
+      }
+
+      if (carouselResult.error && isMediaNotReadyError(carouselResult.error)) {
+        console.log(`Carousel create not ready (attempt ${attempt + 1}/${maxCarouselCreateAttempts})`);
+        continue;
+      }
+
       console.error("Failed to create carousel container:", carouselResult.error);
       
       if (postId) {
@@ -193,7 +167,7 @@ serve(async (req) => {
           .from("social_posts")
           .update({
             status: "failed",
-            error_message: `Carousel creation failed: ${carouselResult.error.message}`,
+            error_message: `Carousel creation failed: ${carouselResult.error?.message || "Unknown error"}`,
             updated_at: new Date().toISOString()
           })
           .eq("id", postId);
@@ -202,79 +176,46 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: `Carousel creation failed: ${carouselResult.error.message}` 
+          error: `Carousel creation failed: ${carouselResult.error?.message || "Unknown error"}` 
         }),
         { headers: corsHeaders, status: 400 }
       );
     }
 
-    const carouselContainerId = carouselResult.id;
+    if (!carouselContainerId) {
+      const errMsg = "Carousel creation timed out waiting for child media";
+      if (postId) {
+        await supabase
+          .from("social_posts")
+          .update({
+            status: "failed",
+            error_message: errMsg,
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", postId);
+      }
+      return new Response(
+        JSON.stringify({ success: false, error: errMsg }),
+        { headers: corsHeaders, status: 400 }
+      );
+    }
+
     console.log("Carousel container created:", carouselContainerId);
 
-    // STEP 4: Wait for carousel container to be ready
-    let carouselStatus = "IN_PROGRESS";
-    let carouselAttempts = 0;
-    const maxCarouselAttempts = 30;
-
-    while (carouselStatus === "IN_PROGRESS" && carouselAttempts < maxCarouselAttempts) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      const statusResp = await fetch(
-        `https://graph.facebook.com/v18.0/${carouselContainerId}?fields=status_code&access_token=${accessToken}`
-      );
-      const statusData = await statusResp.json();
-      
-      carouselStatus = statusData.status_code;
-      carouselAttempts++;
-    }
-
-    if (carouselStatus !== "FINISHED") {
-      console.error("Carousel container failed to process:", carouselStatus);
-      
-      if (postId) {
-        await supabase
-          .from("social_posts")
-          .update({
-            status: "failed",
-            error_message: `Carousel processing failed: ${carouselStatus}`,
-            updated_at: new Date().toISOString()
-          })
-          .eq("id", postId);
-      }
-
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: `Carousel processing failed: ${carouselStatus}` 
-        }),
-        { headers: corsHeaders, status: 400 }
-      );
-    }
-
-    // STEP 5: Publish the carousel
+    // STEP 3: Publish the carousel
     console.log("Publishing carousel...");
     
-    const publishParams = new URLSearchParams({
-      creation_id: carouselContainerId,
-      access_token: accessToken
-    });
+    const publishOutcome = await publishMediaContainer(userId, carouselContainerId, accessToken);
 
-    const publishResp = await fetch(
-      `https://graph.facebook.com/v18.0/${userId}/media_publish?${publishParams.toString()}`,
-      { method: "POST" }
-    );
-
-    const publishResult = await publishResp.json();
-
-    if (publishResult.error) {
-      console.error("Failed to publish carousel:", publishResult.error);
+    if ("error" in publishOutcome) {
+      console.error("Failed to publish carousel:", publishOutcome.error);
       
       if (postId) {
         await supabase
           .from("social_posts")
           .update({
             status: "failed",
-            error_message: `Publish failed: ${publishResult.error.message}`,
+            error_message: `Publish failed: ${publishOutcome.error}`,
             updated_at: new Date().toISOString()
           })
           .eq("id", postId);
@@ -283,11 +224,13 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: `Publish failed: ${publishResult.error.message}` 
+          error: `Publish failed: ${publishOutcome.error}` 
         }),
         { headers: corsHeaders, status: 400 }
       );
     }
+
+    const publishResult = { id: publishOutcome.id };
 
     console.log("Carousel published successfully:", publishResult.id);
 
