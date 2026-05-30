@@ -1,0 +1,1627 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#f58f86" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="apple-touch-icon" href="/imgs/icons/apple-touch-icon.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/imgs/icons/favicon-32x32.png" />
+  <title>Admin · Amazon Listings</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            kkpink: '#f58f86',
+            kkpeach: '#f6dcc6',
+          },
+          borderWidth: {
+            '4': '4px',
+          }
+        }
+      }
+    }
+  </script>
+
+  <link rel="stylesheet" href="/css/theme/base.css">
+  <link rel="stylesheet" href="/css/theme/components.css">
+  <link rel="stylesheet" href="/css/pages/admin/amazon.css">
+</head>
+
+<body class="kk-page kk-admin bg-gray-50 min-h-screen">
+
+  <div id="kkAdminNavMount"></div>
+
+  <main class="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8 overflow-x-hidden" id="amazonListingsPage" data-page="amazon-listings">
+
+    <p id="amazonPreviewNote" class="sr-only">Amazon Listings admin. Sync, search, filters, export, and row actions use Supabase edge functions and client-side listing data.</p>
+
+    <!-- Page Header -->
+    <header class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6">
+      <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+        <div>
+          <div class="inline-block bg-black text-white px-2 py-1 text-[10px] font-black uppercase tracking-[.25em] mb-2">
+            Admin Panel
+          </div>
+          <h1 class="text-2xl sm:text-4xl font-black tracking-tight">Amazon Listings</h1>
+          <p class="text-xs sm:text-sm text-gray-500 mt-1 max-w-xl">
+            Manage Amazon products, inventory, pricing, and listing health.
+          </p>
+        </div>
+        <div class="flex flex-col gap-2 w-full sm:w-auto sm:items-end">
+          <div class="flex flex-wrap gap-2 w-full sm:w-auto sm:justify-end">
+            <button
+              type="button"
+              disabled
+              data-action="sync-amazon"
+              aria-disabled="true"
+              title="Connect Amazon before syncing"
+              class="inline-flex items-center justify-center gap-2 border-4 border-black bg-black text-white px-3 sm:px-4 py-2.5 font-black uppercase tracking-[.12em] text-[10px] sm:text-xs opacity-60 cursor-not-allowed flex-1 sm:flex-none min-h-[44px]"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+              </svg>
+              Sync Amazon
+            </button>
+            <button
+              type="button"
+              data-action="push-kk-product"
+              title="Open push workflow for a KK product"
+              class="inline-flex items-center justify-center gap-2 border-4 border-black bg-white text-black px-3 sm:px-4 py-2.5 font-black uppercase tracking-[.12em] text-[10px] sm:text-xs flex-1 sm:flex-none min-h-[44px] hover:bg-gray-50"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+              </svg>
+              Push KK Product
+            </button>
+            <button
+              type="button"
+              data-action="import-map-existing"
+              title="Open map existing Amazon listing workflow"
+              class="inline-flex items-center justify-center gap-2 border-4 border-black bg-white text-black px-3 sm:px-4 py-2.5 font-black uppercase tracking-[.12em] text-[10px] sm:text-xs flex-1 sm:flex-none min-h-[44px] hover:bg-gray-50"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+              </svg>
+              Import / Map Existing
+            </button>
+            <button
+              type="button"
+              data-action="export-listings"
+              title="Export filtered synced listings to CSV"
+              class="inline-flex items-center justify-center gap-2 border-2 border-black bg-white text-black px-3 sm:px-4 py-2.5 font-bold uppercase tracking-[.12em] text-[10px] sm:text-xs flex-1 sm:flex-none min-h-[44px] hover:bg-gray-50"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+              </svg>
+              Export
+            </button>
+          </div>
+          <p class="text-[11px] sm:text-xs text-gray-400 max-w-xl sm:text-right leading-relaxed">
+            Existing Seller Central listings can be mapped later; new KK products can be prepared for Amazon from here.
+          </p>
+        </div>
+      </div>
+    </header>
+
+    <!-- Amazon Auth Panel -->
+    <section id="amazonAuthPanel" class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-5 mb-4 sm:mb-6" data-auth-state="loading" aria-live="polite">
+      <div id="amazonAuthPanelLoading" class="flex items-center gap-3 text-sm text-gray-600">
+        <div class="w-5 h-5 border-2 border-black border-t-kkpink rounded-full animate-spin shrink-0" aria-hidden="true"></div>
+        <span>Checking Amazon connection…</span>
+      </div>
+
+      <div id="amazonAuthPanelConnected" class="hidden">
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div>
+            <p class="text-xs font-black uppercase tracking-[.14em] text-green-700">Amazon connected</p>
+            <dl class="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-2 text-sm">
+              <div>
+                <dt class="text-[11px] text-gray-400 uppercase tracking-wide">Seller</dt>
+                <dd id="amazonAuthSellerId" class="font-mono font-medium">—</dd>
+              </div>
+              <div>
+                <dt class="text-[11px] text-gray-400 uppercase tracking-wide">Marketplace</dt>
+                <dd id="amazonAuthMarketplace" class="font-medium">—</dd>
+              </div>
+              <div>
+                <dt class="text-[11px] text-gray-400 uppercase tracking-wide">Last token refresh</dt>
+                <dd id="amazonAuthLastRefresh" class="font-medium">—</dd>
+              </div>
+            </dl>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" data-action="disconnect-amazon" class="inline-flex items-center justify-center border-2 border-black bg-white text-black px-3 py-2 text-[10px] font-black uppercase tracking-[.12em] min-h-[40px] hover:bg-gray-50">Disconnect</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="amazonAuthPanelDisconnected" class="hidden">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <p class="text-xs font-black uppercase tracking-[.14em] text-gray-700">Amazon is not connected</p>
+            <p id="amazonAuthDisconnectedDetail" class="text-sm text-gray-500 mt-1">Connect Seller Central to sync listings. Search, filters, table settings, and export still work on cached listing data.</p>
+          </div>
+          <button type="button" data-action="connect-amazon" class="inline-flex items-center justify-center border-4 border-black bg-black text-white px-4 py-2.5 text-[10px] font-black uppercase tracking-[.12em] min-h-[44px] hover:bg-gray-900">Connect Amazon</button>
+        </div>
+      </div>
+
+      <div id="amazonAuthPanelRevoked" class="hidden">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <p class="text-xs font-black uppercase tracking-[.14em] text-amber-800">Amazon connection needs attention</p>
+            <p class="text-sm text-gray-500 mt-1">Reconnect to continue syncing. Seller: <span id="amazonAuthRevokedSellerId" class="font-mono font-medium">—</span></p>
+          </div>
+          <button type="button" data-action="reconnect-amazon" class="inline-flex items-center justify-center border-4 border-black bg-black text-white px-4 py-2.5 text-[10px] font-black uppercase tracking-[.12em] min-h-[44px] hover:bg-gray-900">Reconnect Amazon</button>
+        </div>
+      </div>
+
+      <div id="amazonAuthPanelError" class="hidden">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <p class="text-xs font-black uppercase tracking-[.14em] text-red-700">Could not load Amazon status</p>
+            <p class="text-sm text-gray-500 mt-1">Check your connection and try again.</p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" data-action="retry-auth-status" class="inline-flex items-center justify-center border-2 border-black bg-white text-black px-4 py-2.5 text-[10px] font-black uppercase tracking-[.12em] min-h-[44px] hover:bg-gray-50">Retry</button>
+            <button type="button" data-action="reconnect-amazon" class="inline-flex items-center justify-center border-4 border-black bg-black text-white px-4 py-2.5 text-[10px] font-black uppercase tracking-[.12em] min-h-[44px] hover:bg-gray-900">Connect Amazon</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="amazonToast" class="hidden mt-3 rounded-xl border px-4 py-3 text-sm font-medium" role="status" aria-live="polite"></div>
+    </section>
+
+    <div id="amazonListingsContent">
+
+    <!-- Stats Cards -->
+    <section class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 mb-4 sm:mb-6" id="amazonStats" aria-label="Listing statistics">
+      <article class="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 shadow-sm hover:shadow-md transition-shadow" data-stat="total">
+        <div class="flex items-start justify-between gap-2">
+          <div class="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center text-gray-700" aria-hidden="true">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+            </svg>
+          </div>
+        </div>
+        <p class="text-2xl sm:text-3xl font-black mt-3" data-value="842">842</p>
+        <p class="text-[10px] sm:text-xs font-black uppercase tracking-[.14em] text-gray-500 mt-1">Total Listings</p>
+        <p class="text-[11px] text-gray-400 mt-2 hidden sm:block">All SKUs synced to Amazon</p>
+      </article>
+
+      <article class="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 shadow-sm hover:shadow-md transition-shadow" data-stat="active">
+        <div class="flex items-start justify-between gap-2">
+          <div class="w-9 h-9 rounded-lg bg-green-50 flex items-center justify-center text-green-700" aria-hidden="true">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+          </div>
+        </div>
+        <p class="text-2xl sm:text-3xl font-black mt-3 text-green-700" data-value="612">612</p>
+        <p class="text-[10px] sm:text-xs font-black uppercase tracking-[.14em] text-gray-500 mt-1">Active</p>
+        <p class="text-[11px] text-gray-400 mt-2 hidden sm:block">Buyable on Amazon.com</p>
+      </article>
+
+      <article class="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 shadow-sm hover:shadow-md transition-shadow" data-stat="low-stock">
+        <div class="flex items-start justify-between gap-2">
+          <div class="w-9 h-9 rounded-lg bg-amber-50 flex items-center justify-center text-amber-700" aria-hidden="true">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+            </svg>
+          </div>
+        </div>
+        <p class="text-2xl sm:text-3xl font-black mt-3 text-amber-600" data-value="68">68</p>
+        <p class="text-[10px] sm:text-xs font-black uppercase tracking-[.14em] text-gray-500 mt-1">Low Stock</p>
+        <p class="text-[11px] text-gray-400 mt-2 hidden sm:block">At or below reorder threshold</p>
+      </article>
+
+      <article class="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 shadow-sm hover:shadow-md transition-shadow" data-stat="issues">
+        <div class="flex items-start justify-between gap-2">
+          <div class="w-9 h-9 rounded-lg bg-red-50 flex items-center justify-center text-red-700" aria-hidden="true">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+          </div>
+        </div>
+        <p class="text-2xl sm:text-3xl font-black mt-3 text-red-600" data-value="23">23</p>
+        <p class="text-[10px] sm:text-xs font-black uppercase tracking-[.14em] text-gray-500 mt-1">Issues</p>
+        <p class="text-[11px] text-gray-400 mt-2 hidden sm:block">Needs review or suppression fix</p>
+      </article>
+    </section>
+
+    <!-- Amazon view tabs -->
+    <nav class="mb-4 sm:mb-6" id="amazonViewTabs" aria-label="Listing work areas">
+      <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+        <p class="text-[9px] font-black uppercase tracking-[.18em] text-gray-500 shrink-0">Work Area</p>
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-2 flex-1" role="tablist" aria-label="Amazon listing views">
+          <button
+            type="button"
+            role="tab"
+            id="amazonTabSynced"
+            aria-selected="true"
+            aria-controls="amazonViewSynced"
+            data-view="synced"
+            tabindex="0"
+            title="Synced Amazon listings connected to KK products"
+            class="flex flex-col items-start px-3 py-2.5 rounded-xl border-4 border-black bg-black text-white text-left min-h-[44px]"
+          >
+            <span class="text-[10px] font-black uppercase tracking-[.12em]">Synced Listings</span>
+            <span class="text-lg font-black mt-0.5" data-count="842">842</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            id="amazonTabReadyToPush"
+            aria-selected="false"
+            aria-controls="amazonViewReadyToPush"
+            data-view="ready-to-push"
+            tabindex="-1"
+            title="KK products ready to push to Amazon"
+            class="flex flex-col items-start px-3 py-2.5 rounded-xl border-2 border-black bg-white text-black text-left min-h-[44px] hover:bg-gray-50"
+          >
+            <span class="text-[10px] font-black uppercase tracking-[.12em]">Ready to Push</span>
+            <span class="text-lg font-black mt-0.5" data-count="0">0</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            id="amazonTabNeedsMapping"
+            aria-selected="false"
+            aria-controls="amazonViewNeedsMapping"
+            data-view="needs-mapping"
+            tabindex="-1"
+            title="Seller Central listings needing KK mapping"
+            class="flex flex-col items-start px-3 py-2.5 rounded-xl border-2 border-black bg-white text-black text-left min-h-[44px] hover:bg-gray-50"
+          >
+            <span class="text-[10px] font-black uppercase tracking-[.12em]">Needs Mapping</span>
+            <span class="text-lg font-black mt-0.5" data-count="18">18</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            id="amazonTabDraftsIssues"
+            aria-selected="false"
+            aria-controls="amazonViewDraftsIssues"
+            data-view="drafts-issues"
+            tabindex="-1"
+            title="Drafts, issues, and sync warnings"
+            class="flex flex-col items-start px-3 py-2.5 rounded-xl border-2 border-black bg-white text-black text-left min-h-[44px] hover:bg-gray-50"
+          >
+            <span class="text-[10px] font-black uppercase tracking-[.12em]">Drafts / Issues</span>
+            <span class="text-lg font-black mt-0.5" data-count="23">23</span>
+          </button>
+        </div>
+      </div>
+      <p class="text-[11px] text-gray-400 mt-2 hidden sm:block">Four work areas — use tabs to switch views. Filters apply to Synced Listings only.</p>
+    </nav>
+
+    <!-- Amazon view: Synced Listings (default visible) -->
+    <div id="amazonViewSynced" data-amazon-view-panel="synced" role="tabpanel" aria-labelledby="amazonTabSynced">
+      <header class="mb-4 sm:mb-6">
+        <h2 class="text-lg sm:text-xl font-black tracking-tight">Synced Listings</h2>
+        <p class="text-xs sm:text-sm text-gray-500 mt-1">Amazon listings already connected to Karry Kraze products.</p>
+      </header>
+
+    <!-- Filters / Search Toolbar -->
+    <section class="bg-white rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4 mb-4 sm:mb-6" id="amazonFilters" aria-label="Search and filters">
+      <div class="flex flex-col gap-3">
+        <div class="flex-1">
+          <label for="amazonSearchInput" class="block text-[9px] sm:text-[10px] font-black uppercase tracking-[.18em] mb-1 sm:mb-2 text-gray-500">
+            Search Listings
+          </label>
+          <div class="relative">
+            <input
+              id="amazonSearchInput"
+              type="search"
+              placeholder="Search by product title, ASIN, or SKU..."
+              aria-describedby="amazonPreviewNote"
+              class="w-full border-4 border-black px-3 sm:px-4 py-2.5 sm:py-3 text-base sm:text-sm outline-none pr-10 bg-white"
+            />
+            <svg class="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+            </svg>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-end gap-2 sm:gap-3">
+          <div class="flex flex-col gap-1 min-w-[120px] flex-1 sm:flex-none">
+            <label for="amazonStatusFilter" class="text-[9px] font-black uppercase tracking-[.14em] text-gray-500">Status</label>
+            <select id="amazonStatusFilter" class="border-2 border-black px-2 py-2 text-xs font-bold bg-white w-full min-h-[44px]">
+              <option value="">All Statuses</option>
+              <option value="active">Active</option>
+              <option value="low_stock">Low Stock</option>
+              <option value="out_of_stock">Out of Stock</option>
+              <option value="draft">Draft</option>
+              <option value="issue">Issue</option>
+            </select>
+          </div>
+
+          <div class="flex flex-col gap-1 min-w-[120px] flex-1 sm:flex-none">
+            <label for="amazonCategoryFilter" class="text-[9px] font-black uppercase tracking-[.14em] text-gray-500">Category</label>
+            <select id="amazonCategoryFilter" class="border-2 border-black px-2 py-2 text-xs font-bold bg-white w-full min-h-[44px]">
+              <option value="">All Categories</option>
+              <option value="bags">Bags</option>
+              <option value="jewelry">Jewelry</option>
+              <option value="accessories">Accessories</option>
+              <option value="headwear">Headwear</option>
+              <option value="keychains">Keychains</option>
+            </select>
+          </div>
+
+          <div class="flex flex-col gap-1 min-w-[140px] flex-1 sm:flex-none">
+            <label for="amazonMarketplaceFilter" class="text-[9px] font-black uppercase tracking-[.14em] text-gray-500">Marketplace</label>
+            <select id="amazonMarketplaceFilter" class="border-2 border-black px-2 py-2 text-xs font-bold bg-white w-full min-h-[44px]">
+              <option value="">All Marketplaces</option>
+              <option value="US">US · Amazon.com</option>
+              <option value="CA">CA · Amazon.ca</option>
+              <option value="MX">MX · Amazon.com.mx</option>
+            </select>
+          </div>
+
+          <div class="flex flex-col gap-1 min-w-[120px] flex-1 sm:flex-none">
+            <label for="amazonInventoryFilter" class="text-[9px] font-black uppercase tracking-[.14em] text-gray-500">Inventory</label>
+            <select id="amazonInventoryFilter" class="border-2 border-black px-2 py-2 text-xs font-bold bg-white w-full min-h-[44px]">
+              <option value="">All Inventory</option>
+              <option value="in_stock">In Stock</option>
+              <option value="low">Low Stock</option>
+              <option value="out">Out of Stock</option>
+            </select>
+          </div>
+
+          <div class="flex flex-col gap-1 min-w-[140px] flex-1 sm:flex-none">
+            <label for="amazonPriceCompareFilter" class="text-[9px] font-black uppercase tracking-[.14em] text-gray-500">KK vs Amazon Price</label>
+            <select id="amazonPriceCompareFilter" class="border-2 border-black px-2 py-2 text-xs font-bold bg-white w-full min-h-[44px]">
+              <option value="">All Prices</option>
+              <option value="mismatch">Any Mismatch</option>
+              <option value="amazon_higher">Amazon Higher</option>
+              <option value="amazon_lower">Amazon Lower</option>
+              <option value="match">Matches KK</option>
+            </select>
+          </div>
+
+          <div class="flex flex-col gap-1 min-w-[140px] flex-1 sm:flex-none">
+            <label for="amazonInventoryCompareFilter" class="text-[9px] font-black uppercase tracking-[.14em] text-gray-500">KK vs Amazon Stock</label>
+            <select id="amazonInventoryCompareFilter" class="border-2 border-black px-2 py-2 text-xs font-bold bg-white w-full min-h-[44px]">
+              <option value="">All Stock</option>
+              <option value="mismatch">Any Mismatch</option>
+              <option value="amazon_higher">Amazon Higher</option>
+              <option value="amazon_lower">Amazon Lower</option>
+              <option value="match">Matches KK</option>
+              <option value="fba_managed">FBA Managed</option>
+            </select>
+          </div>
+
+          <div class="flex flex-col gap-1 min-w-[140px] flex-1 sm:flex-none">
+            <label for="amazonHealthFilter" class="text-[9px] font-black uppercase tracking-[.14em] text-gray-500">Listing Health</label>
+            <select id="amazonHealthFilter" class="border-2 border-black px-2 py-2 text-xs font-bold bg-white w-full min-h-[44px]">
+              <option value="">All Health</option>
+              <option value="healthy">Healthy</option>
+              <option value="warning">Warnings</option>
+              <option value="error">Errors</option>
+              <option value="suppressed">Suppressed</option>
+              <option value="sync_error">Sync Errors</option>
+              <option value="unknown">Unknown</option>
+              <option value="has_issues">Has Open Issues</option>
+            </select>
+          </div>
+
+          <div class="flex flex-col gap-1 min-w-[140px] flex-1 sm:flex-none">
+            <label for="amazonFulfillmentFilter" class="text-[9px] font-black uppercase tracking-[.14em] text-gray-500">Fulfillment</label>
+            <select id="amazonFulfillmentFilter" class="border-2 border-black px-2 py-2 text-xs font-bold bg-white w-full min-h-[44px]">
+              <option value="">All Fulfillment</option>
+              <option value="fba">FBA</option>
+              <option value="fbm">FBM</option>
+              <option value="unknown">Unknown</option>
+              <option value="has_reserved">Has FBA Reserved</option>
+              <option value="has_inbound">Has FBA Inbound</option>
+            </select>
+          </div>
+
+          <div class="flex flex-col gap-1 min-w-[140px] flex-1 sm:flex-none">
+            <label for="amazonSortFilter" class="text-[9px] font-black uppercase tracking-[.14em] text-gray-500">Sort By</label>
+            <select id="amazonSortFilter" class="border-2 border-black px-2 py-2 text-xs font-bold bg-white w-full min-h-[44px]">
+              <option value="last_synced_desc">Last Synced (newest)</option>
+              <option value="title_asc">Title A–Z</option>
+              <option value="price_desc">Price (high to low)</option>
+              <option value="profit_desc">Profit (high to low)</option>
+              <option value="inventory_asc">Inventory (low to high)</option>
+            </select>
+          </div>
+
+          <button
+            type="button"
+            data-action="table-settings"
+            aria-label="Table settings"
+            title="Table density and column visibility"
+            class="border-2 border-black p-2.5 bg-white text-black hover:bg-gray-50 self-end min-h-[44px] min-w-[44px]"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Bulk selection bar -->
+    <section id="amazonBulkBar" class="hidden bg-white rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4 mb-4 sm:mb-6" aria-label="Bulk listing actions">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <p class="text-xs sm:text-sm font-bold">
+          <span id="amazonBulkSelectionCount">0 selected</span>
+          <span class="text-gray-500 font-medium"> · bulk price/qty via Listings API</span>
+        </p>
+        <div class="flex flex-wrap gap-2">
+          <button type="button" data-action="select-all-filtered" class="border-2 border-black bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wide min-h-[44px] hover:bg-gray-50">Select Filtered</button>
+          <button type="button" data-action="clear-listing-selection" class="border-2 border-gray-300 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wide text-gray-700 min-h-[44px] hover:bg-gray-50">Clear</button>
+          <button type="button" data-action="open-bulk-patch-modal" class="border-4 border-black bg-black text-white px-3 py-2 text-[10px] font-black uppercase tracking-wide min-h-[44px] hover:opacity-90">Bulk Update</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Sync summary + run log -->
+    <section class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden mb-4 sm:mb-6" id="amazonSyncOpsBar" aria-label="Amazon sync status">
+      <div class="px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-gray-100">
+        <p id="amazonSyncFreshness" class="text-[11px] text-gray-500">Loading sync summary…</p>
+        <button type="button" id="amazonSyncHistoryToggle" aria-expanded="false" aria-controls="amazonSyncHistoryPanel" class="text-[10px] font-black uppercase tracking-[.12em] text-gray-600 hover:text-black self-start sm:self-auto">View sync log ▾</button>
+      </div>
+      <div id="amazonSyncHistoryPanel" class="hidden px-4 sm:px-6 py-4 bg-gray-50/80" aria-label="Amazon sync run log">
+        <div class="flex flex-col sm:flex-row sm:items-end gap-2 sm:gap-3 mb-3">
+          <div class="flex flex-col gap-1 min-w-[140px]">
+            <label for="amazonSyncTypeFilter" class="text-[9px] font-black uppercase tracking-[.14em] text-gray-500">Sync type</label>
+            <select id="amazonSyncTypeFilter" class="border-2 border-black px-2 py-2 text-xs font-bold bg-white w-full min-h-[40px]">
+              <option value="">All types</option>
+              <option value="incremental">Scheduled</option>
+              <option value="manual">Manual</option>
+              <option value="single_sku">Single SKU</option>
+              <option value="full">Full</option>
+            </select>
+          </div>
+          <div class="flex flex-col gap-1 min-w-[140px]">
+            <label for="amazonSyncStatusFilter" class="text-[9px] font-black uppercase tracking-[.14em] text-gray-500">Status</label>
+            <select id="amazonSyncStatusFilter" class="border-2 border-black px-2 py-2 text-xs font-bold bg-white w-full min-h-[40px]">
+              <option value="">All statuses</option>
+              <option value="success">Success</option>
+              <option value="partial_success">Partial success</option>
+              <option value="failed">Failed</option>
+              <option value="running">Running</option>
+            </select>
+          </div>
+          <p class="text-[11px] text-gray-400 sm:ml-auto">Last 50 runs · click Details for row errors</p>
+        </div>
+        <div class="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+          <table class="w-full border-collapse text-sm min-w-[720px]">
+            <thead class="bg-black text-white text-left uppercase tracking-[.1em] text-[10px] font-black">
+              <tr>
+                <th scope="col" class="px-3 py-2">When</th>
+                <th scope="col" class="px-3 py-2">Type</th>
+                <th scope="col" class="px-3 py-2">Mkt</th>
+                <th scope="col" class="px-3 py-2 text-center">Status</th>
+                <th scope="col" class="px-3 py-2 text-right">Seen</th>
+                <th scope="col" class="px-3 py-2 text-right hidden sm:table-cell">New</th>
+                <th scope="col" class="px-3 py-2 text-right hidden sm:table-cell">Updated</th>
+                <th scope="col" class="px-3 py-2 text-right">Failed</th>
+                <th scope="col" class="px-3 py-2 hidden md:table-cell">Trigger</th>
+                <th scope="col" class="px-3 py-2 hidden lg:table-cell">Pages</th>
+                <th scope="col" class="px-3 py-2 text-right"><span class="sr-only">Details</span></th>
+              </tr>
+            </thead>
+            <tbody id="amazonSyncRunsBody">
+              <tr><td colspan="11" class="px-3 py-6 text-center text-sm text-gray-400">Open sync log to load runs.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Listings Table (Desktop) -->
+    <section class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden mb-4 sm:mb-6 hidden lg:block" id="amazonTableSection" aria-label="Amazon listings table">
+      <div class="px-4 sm:px-6 py-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <h3 class="text-sm sm:text-base font-black uppercase tracking-[.1em]">Listing Table</h3>
+        <div class="flex items-center gap-2">
+          <span id="amazonTableCountLabel" class="text-xs text-gray-400 font-medium">Loading…</span>
+          <span id="amazonStaleCountLabel" class="hidden text-[10px] font-black uppercase tracking-wide text-orange-700 bg-orange-50 border border-orange-200 rounded-full px-2 py-0.5">0 stale</span>
+          <span id="amazonPriceMismatchCountLabel" class="hidden text-[10px] font-black uppercase tracking-wide text-amber-800 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">0 price mismatch</span>
+          <span id="amazonInventoryMismatchCountLabel" class="hidden text-[10px] font-black uppercase tracking-wide text-violet-800 bg-violet-50 border border-violet-200 rounded-full px-2 py-0.5">0 stock mismatch</span>
+          <span id="amazonListingHealthCountLabel" class="text-[10px] font-black uppercase tracking-wide text-red-800 bg-red-50 border border-red-200 rounded-full px-2 py-0.5">0 health issues</span>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto amazon-table-scroll max-h-[70vh]">
+        <table class="w-full border-collapse text-sm amazon-table-density-comfortable" id="amazonListingsTable">
+          <thead class="bg-black text-white sticky top-0 z-10">
+            <tr class="text-left uppercase tracking-[.1em] text-[10px] font-black">
+              <th scope="col" class="px-2 py-2.5 w-10" data-amazon-col="select">
+                <input type="checkbox" id="amazonSelectAllPage" aria-label="Select all listings on this page" class="w-4 h-4 border-2 border-white rounded-sm" />
+              </th>
+              <th scope="col" class="px-4 py-2.5 min-w-[220px]" data-amazon-col="product">Product</th>
+              <th scope="col" class="px-4 py-2.5" data-amazon-col="asin">ASIN</th>
+              <th scope="col" class="px-4 py-2.5" data-amazon-col="sku">SKU</th>
+              <th scope="col" class="px-4 py-2.5 text-right" data-amazon-col="price">Price</th>
+              <th scope="col" class="px-4 py-2.5 text-right hidden xl:table-cell" data-amazon-col="amazonFee" title="Product Fees API estimate when loaded; 15% referral fallback otherwise. Click cell for breakdown.">Amazon Fee</th>
+              <th scope="col" class="px-4 py-2.5 text-right" data-amazon-col="profit" title="Amazon price minus KK COGS and estimated referral fee">Est. Profit</th>
+              <th scope="col" class="px-4 py-2.5 text-center hidden xl:table-cell" data-amazon-col="fulfillment" title="FBA vs FBM fulfillment channel">Fulfillment</th>
+              <th scope="col" class="px-4 py-2.5 text-center" data-amazon-col="inventory">Inventory</th>
+              <th scope="col" class="px-4 py-2.5 text-center hidden 2xl:table-cell" data-amazon-col="fbaReserved" title="FBA reserved quantity">FBA Reserved</th>
+              <th scope="col" class="px-4 py-2.5 text-center hidden 2xl:table-cell" data-amazon-col="fbaInbound" title="FBA inbound shipment quantity">FBA Inbound</th>
+              <th scope="col" class="px-4 py-2.5 text-center" data-amazon-col="status">Status</th>
+              <th scope="col" class="px-4 py-2.5 hidden xl:table-cell" data-amazon-col="lastSynced">Last Synced</th>
+              <th scope="col" class="px-4 py-2.5 text-right" data-amazon-col="actions"><span class="sr-only">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody id="amazonListingsBody">
+            <tr class="amazon-listing-row border-b border-gray-100 hover:bg-gray-50 transition-colors" data-listing-id="1" data-status="active" data-asin="B0KK4TOTE1" data-sku="KK-TOTE-BLSH">
+              <td class="px-4 py-2.5">
+                <div class="flex items-center gap-3">
+                  <div class="w-11 h-11 rounded-lg bg-kkpeach/60 border border-gray-200 flex-shrink-0" aria-hidden="true"></div>
+                  <div>
+                    <p class="font-bold text-sm leading-tight">Blush Everyday Tote</p>
+                    <p class="text-[11px] text-gray-400 mt-0.5">Blush · One Size</p>
+                  </div>
+                </div>
+              </td>
+              <td class="px-4 py-2.5 font-mono text-xs text-gray-600">B0KK4TOTE1</td>
+              <td class="px-4 py-2.5 font-mono text-xs text-gray-600">KK-TOTE-BLSH</td>
+              <td class="px-4 py-2.5 text-right font-bold">$34.99</td>
+              <td class="px-4 py-2.5 text-right text-gray-500 hidden xl:table-cell">$8.42</td>
+              <td class="px-4 py-2.5 text-right font-bold text-green-700">$12.18</td>
+              <td class="px-4 py-2.5 text-center"><span class="font-bold">48</span> <span class="text-[10px] text-gray-400 block">units</span></td>
+              <td class="px-4 py-2.5 text-center"><span class="inline-flex px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide bg-green-100 text-green-800">Active</span></td>
+              <td class="px-4 py-2.5 text-xs text-gray-500 hidden xl:table-cell">May 28, 2026</td>
+              <td class="px-4 py-2.5 text-right">
+                <button type="button" data-action="row-menu" data-listing-id="1" data-status="active" aria-haspopup="menu" aria-expanded="false" aria-label="Actions for Blush Everyday Tote" title="Open row actions menu" class="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded border-2 border-black bg-white text-[10px] font-black uppercase tracking-wide text-gray-700 hover:bg-gray-50 min-h-[36px] whitespace-nowrap">Actions <span aria-hidden="true">▾</span></button>
+              </td>
+            </tr>
+
+            <tr class="amazon-listing-row border-b border-gray-100 hover:bg-gray-50 transition-colors" data-listing-id="2" data-status="active" data-asin="B0KK4NCKL2" data-sku="KK-NCK-GOLD">
+              <td class="px-4 py-2.5">
+                <div class="flex items-center gap-3">
+                  <div class="w-11 h-11 rounded-lg bg-kkpeach/60 border border-gray-200 flex-shrink-0" aria-hidden="true"></div>
+                  <div>
+                    <p class="font-bold text-sm leading-tight">Gold Layered Pendant Necklace</p>
+                    <p class="text-[11px] text-gray-400 mt-0.5">Gold · 18"</p>
+                  </div>
+                </div>
+              </td>
+              <td class="px-4 py-2.5 font-mono text-xs text-gray-600">B0KK4NCKL2</td>
+              <td class="px-4 py-2.5 font-mono text-xs text-gray-600">KK-NCK-GOLD</td>
+              <td class="px-4 py-2.5 text-right font-bold">$22.99</td>
+              <td class="px-4 py-2.5 text-right text-gray-500 hidden xl:table-cell">$5.84</td>
+              <td class="px-4 py-2.5 text-right font-bold text-green-700">$7.65</td>
+              <td class="px-4 py-2.5 text-center"><span class="font-bold">112</span> <span class="text-[10px] text-gray-400 block">units</span></td>
+              <td class="px-4 py-2.5 text-center"><span class="inline-flex px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide bg-green-100 text-green-800">Active</span></td>
+              <td class="px-4 py-2.5 text-xs text-gray-500 hidden xl:table-cell">May 28, 2026</td>
+              <td class="px-4 py-2.5 text-right"><button type="button" data-action="row-menu" data-listing-id="2" data-status="active" aria-haspopup="menu" aria-expanded="false" aria-label="Actions for Gold Layered Pendant Necklace" title="Open row actions menu" class="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded border-2 border-black bg-white text-[10px] font-black uppercase tracking-wide text-gray-700 hover:bg-gray-50 min-h-[36px] whitespace-nowrap">Actions <span aria-hidden="true">▾</span></button></td>
+            </tr>
+
+            <tr class="amazon-listing-row border-b border-gray-100 hover:bg-gray-50 transition-colors" data-listing-id="3" data-status="low_stock" data-asin="B0KK4SUNG3" data-sku="KK-SUN-CAT">
+              <td class="px-4 py-2.5">
+                <div class="flex items-center gap-3">
+                  <div class="w-11 h-11 rounded-lg bg-kkpeach/60 border border-gray-200 flex-shrink-0" aria-hidden="true"></div>
+                  <div>
+                    <p class="font-bold text-sm leading-tight">Oversized Cat Eye Sunglasses</p>
+                    <p class="text-[11px] text-gray-400 mt-0.5">Tortoise</p>
+                  </div>
+                </div>
+              </td>
+              <td class="px-4 py-2.5 font-mono text-xs text-gray-600">B0KK4SUNG3</td>
+              <td class="px-4 py-2.5 font-mono text-xs text-gray-600">KK-SUN-CAT</td>
+              <td class="px-4 py-2.5 text-right font-bold">$18.99</td>
+              <td class="px-4 py-2.5 text-right text-gray-500 hidden xl:table-cell">$4.91</td>
+              <td class="px-4 py-2.5 text-right font-bold text-green-700">$5.58</td>
+              <td class="px-4 py-2.5 text-center"><span class="font-bold text-amber-600">6</span> <span class="text-[10px] text-amber-500 block">low</span></td>
+              <td class="px-4 py-2.5 text-center"><span class="inline-flex px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide bg-amber-100 text-amber-800">Low Stock</span></td>
+              <td class="px-4 py-2.5 text-xs text-gray-500 hidden xl:table-cell">May 27, 2026</td>
+              <td class="px-4 py-2.5 text-right"><button type="button" data-action="row-menu" data-listing-id="3" data-status="low_stock" aria-haspopup="menu" aria-expanded="false" aria-label="Actions for Oversized Cat Eye Sunglasses" title="Open row actions menu" class="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded border-2 border-black bg-white text-[10px] font-black uppercase tracking-wide text-gray-700 hover:bg-gray-50 min-h-[36px] whitespace-nowrap">Actions <span aria-hidden="true">▾</span></button></td>
+            </tr>
+
+            <tr class="amazon-listing-row border-b border-gray-100 hover:bg-gray-50 transition-colors" data-listing-id="4" data-status="active" data-asin="B0KK4CLTCH4" data-sku="KK-CLT-SAND">
+              <td class="px-4 py-2.5">
+                <div class="flex items-center gap-3">
+                  <div class="w-11 h-11 rounded-lg bg-kkpeach/60 border border-gray-200 flex-shrink-0" aria-hidden="true"></div>
+                  <div>
+                    <p class="font-bold text-sm leading-tight">Woven Vegan Leather Clutch</p>
+                    <p class="text-[11px] text-gray-400 mt-0.5">Sand</p>
+                  </div>
+                </div>
+              </td>
+              <td class="px-4 py-2.5 font-mono text-xs text-gray-600">B0KK4CLTCH4</td>
+              <td class="px-4 py-2.5 font-mono text-xs text-gray-600">KK-CLT-SAND</td>
+              <td class="px-4 py-2.5 text-right font-bold">$28.99</td>
+              <td class="px-4 py-2.5 text-right text-gray-500 hidden xl:table-cell">$7.12</td>
+              <td class="px-4 py-2.5 text-right font-bold text-green-700">$9.87</td>
+              <td class="px-4 py-2.5 text-center"><span class="font-bold">29</span> <span class="text-[10px] text-gray-400 block">units</span></td>
+              <td class="px-4 py-2.5 text-center"><span class="inline-flex px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide bg-green-100 text-green-800">Active</span></td>
+              <td class="px-4 py-2.5 text-xs text-gray-500 hidden xl:table-cell">May 28, 2026</td>
+              <td class="px-4 py-2.5 text-right"><button type="button" data-action="row-menu" data-listing-id="4" data-status="active" aria-haspopup="menu" aria-expanded="false" aria-label="Actions for Woven Vegan Leather Clutch" title="Open row actions menu" class="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded border-2 border-black bg-white text-[10px] font-black uppercase tracking-wide text-gray-700 hover:bg-gray-50 min-h-[36px] whitespace-nowrap">Actions <span aria-hidden="true">▾</span></button></td>
+            </tr>
+
+            <tr class="amazon-listing-row border-b border-gray-100 hover:bg-gray-50 transition-colors" data-listing-id="5" data-status="active" data-asin="B0KK4KEYC5" data-sku="KK-KEY-CHRY">
+              <td class="px-4 py-2.5">
+                <div class="flex items-center gap-3">
+                  <div class="w-11 h-11 rounded-lg bg-kkpeach/60 border border-gray-200 flex-shrink-0" aria-hidden="true"></div>
+                  <div>
+                    <p class="font-bold text-sm leading-tight">Cherry Charm Keychain</p>
+                    <p class="text-[11px] text-gray-400 mt-0.5">Red Cherry</p>
+                  </div>
+                </div>
+              </td>
+              <td class="px-4 py-2.5 font-mono text-xs text-gray-600">B0KK4KEYC5</td>
+              <td class="px-4 py-2.5 font-mono text-xs text-gray-600">KK-KEY-CHRY</td>
+              <td class="px-4 py-2.5 text-right font-bold">$12.99</td>
+              <td class="px-4 py-2.5 text-right text-gray-500 hidden xl:table-cell">$3.42</td>
+              <td class="px-4 py-2.5 text-right font-bold text-green-700">$3.07</td>
+              <td class="px-4 py-2.5 text-center"><span class="font-bold">215</span> <span class="text-[10px] text-gray-400 block">units</span></td>
+              <td class="px-4 py-2.5 text-center"><span class="inline-flex px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide bg-green-100 text-green-800">Active</span></td>
+              <td class="px-4 py-2.5 text-xs text-gray-500 hidden xl:table-cell">May 29, 2026</td>
+              <td class="px-4 py-2.5 text-right"><button type="button" data-action="row-menu" data-listing-id="5" data-status="active" aria-haspopup="menu" aria-expanded="false" aria-label="Actions for Cherry Charm Keychain" title="Open row actions menu" class="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded border-2 border-black bg-white text-[10px] font-black uppercase tracking-wide text-gray-700 hover:bg-gray-50 min-h-[36px] whitespace-nowrap">Actions <span aria-hidden="true">▾</span></button></td>
+            </tr>
+
+            <tr class="amazon-listing-row border-b border-gray-100 hover:bg-gray-50 transition-colors" data-listing-id="6" data-status="out_of_stock" data-asin="B0KK4CAP66" data-sku="KK-CAP-CRME">
+              <td class="px-4 py-2.5">
+                <div class="flex items-center gap-3">
+                  <div class="w-11 h-11 rounded-lg bg-gray-100 border border-gray-200 flex-shrink-0 opacity-60" aria-hidden="true"></div>
+                  <div>
+                    <p class="font-bold text-sm leading-tight text-gray-600">Embroidered Baseball Cap</p>
+                    <p class="text-[11px] text-gray-400 mt-0.5">Cream · OSFA</p>
+                  </div>
+                </div>
+              </td>
+              <td class="px-4 py-2.5 font-mono text-xs text-gray-600">B0KK4CAP66</td>
+              <td class="px-4 py-2.5 font-mono text-xs text-gray-600">KK-CAP-CRME</td>
+              <td class="px-4 py-2.5 text-right font-bold">$24.99</td>
+              <td class="px-4 py-2.5 text-right text-gray-500 hidden xl:table-cell">$6.25</td>
+              <td class="px-4 py-2.5 text-right font-bold text-gray-400">$8.74</td>
+              <td class="px-4 py-2.5 text-center"><span class="font-bold text-red-500">0</span> <span class="text-[10px] text-red-400 block">out</span></td>
+              <td class="px-4 py-2.5 text-center"><span class="inline-flex px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide bg-gray-200 text-gray-700">Out of Stock</span></td>
+              <td class="px-4 py-2.5 text-xs text-gray-500 hidden xl:table-cell">May 25, 2026</td>
+              <td class="px-4 py-2.5 text-right">
+                <button type="button" data-action="row-menu" data-listing-id="6" data-status="out_of_stock" aria-haspopup="menu" aria-expanded="false" aria-label="Actions for Embroidered Baseball Cap" title="Open row actions menu" class="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded border-2 border-black bg-white text-[10px] font-black uppercase tracking-wide text-gray-700 hover:bg-gray-50 min-h-[36px] whitespace-nowrap">Actions <span aria-hidden="true">▾</span></button>
+              </td>
+            </tr>
+
+            <tr class="amazon-listing-row border-b border-gray-100 hover:bg-gray-50 transition-colors" data-listing-id="7" data-status="draft" data-asin="" data-sku="KK-BN-CAT">
+              <td class="px-4 py-2.5">
+                <div class="flex items-center gap-3">
+                  <div class="w-11 h-11 rounded-lg bg-kkpeach/40 border border-dashed border-gray-300 flex-shrink-0" aria-hidden="true"></div>
+                  <div>
+                    <p class="font-bold text-sm leading-tight">Cat Ear Beanie</p>
+                    <p class="text-[11px] text-gray-400 mt-0.5">Lilac</p>
+                  </div>
+                </div>
+              </td>
+              <td class="px-4 py-2.5 font-mono text-xs text-gray-400">—</td>
+              <td class="px-4 py-2.5 font-mono text-xs text-gray-600">KK-BN-CAT</td>
+              <td class="px-4 py-2.5 text-right font-bold text-gray-400">—</td>
+              <td class="px-4 py-2.5 text-right text-gray-400 hidden xl:table-cell">—</td>
+              <td class="px-4 py-2.5 text-right text-gray-400">—</td>
+              <td class="px-4 py-2.5 text-center text-gray-400">—</td>
+              <td class="px-4 py-2.5 text-center"><span class="inline-flex px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide bg-blue-50 text-blue-700">Draft</span></td>
+              <td class="px-4 py-2.5 text-xs text-gray-400 hidden xl:table-cell">Not synced</td>
+              <td class="px-4 py-2.5 text-right">
+                <button type="button" data-action="row-menu" data-listing-id="7" data-status="draft" aria-haspopup="menu" aria-expanded="false" aria-label="Actions for Cat Ear Beanie" title="Open row actions menu" class="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded border-2 border-black bg-white text-[10px] font-black uppercase tracking-wide text-gray-700 hover:bg-gray-50 min-h-[36px] whitespace-nowrap">Actions <span aria-hidden="true">▾</span></button>
+              </td>
+            </tr>
+
+            <tr class="amazon-listing-row border-b border-gray-100 hover:bg-gray-50 transition-colors" data-listing-id="8" data-status="issue" data-asin="B0KK4CUPC8" data-sku="KK-KEY-CUP">
+              <td class="px-4 py-2.5">
+                <div class="flex items-center gap-3">
+                  <div class="w-11 h-11 rounded-lg bg-kkpeach/60 border border-red-200 flex-shrink-0" aria-hidden="true"></div>
+                  <div>
+                    <p class="font-bold text-sm leading-tight">Y2K Cup Charm Keychain</p>
+                    <p class="text-[11px] text-gray-400 mt-0.5">Pink Glitter</p>
+                  </div>
+                </div>
+              </td>
+              <td class="px-4 py-2.5 font-mono text-xs text-gray-600">B0KK4CUPC8</td>
+              <td class="px-4 py-2.5 font-mono text-xs text-gray-600">KK-KEY-CUP</td>
+              <td class="px-4 py-2.5 text-right font-bold">$14.99</td>
+              <td class="px-4 py-2.5 text-right text-gray-500 hidden xl:table-cell">$3.89</td>
+              <td class="px-4 py-2.5 text-right font-bold text-amber-600">$2.60</td>
+              <td class="px-4 py-2.5 text-center"><span class="font-bold">14</span> <span class="text-[10px] text-gray-400 block">units</span></td>
+              <td class="px-4 py-2.5 text-center"><span class="inline-flex px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide bg-red-100 text-red-800">Issue</span></td>
+              <td class="px-4 py-2.5 text-xs text-gray-500 hidden xl:table-cell">May 26, 2026</td>
+              <td class="px-4 py-2.5 text-right">
+                <button type="button" data-action="row-menu" data-listing-id="8" data-status="issue" aria-haspopup="menu" aria-expanded="false" aria-label="Actions for Y2K Cup Charm Keychain" title="Open row actions menu" class="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded border-2 border-black bg-white text-[10px] font-black uppercase tracking-wide text-gray-700 hover:bg-gray-50 min-h-[36px] whitespace-nowrap">Actions <span aria-hidden="true">▾</span></button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Mobile Listing Cards -->
+    <section class="lg:hidden space-y-3 mb-4 sm:mb-6" id="amazonMobileCards" aria-label="Amazon listings cards">
+      <h2 class="sr-only">Listing cards</h2>
+      <article class="amazon-mobile-card bg-white rounded-xl border border-gray-200 p-4 shadow-sm active:bg-gray-50" data-listing-id="1" data-status="active" data-asin="B0KK4TOTE1" data-sku="KK-TOTE-BLSH">
+        <div class="flex gap-3">
+          <div class="w-14 h-14 rounded-lg bg-kkpeach/60 border border-gray-200 flex-shrink-0" aria-hidden="true"></div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-start justify-between gap-2">
+              <h3 class="font-bold text-sm leading-tight">Blush Everyday Tote</h3>
+              <span class="inline-flex px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-green-100 text-green-800 flex-shrink-0">Active</span>
+            </div>
+            <p class="text-[11px] text-gray-400 mt-0.5">Blush · One Size</p>
+            <dl class="grid grid-cols-2 gap-x-3 gap-y-1 mt-3 text-xs">
+              <div><dt class="text-gray-400">ASIN</dt><dd class="font-mono font-medium">B0KK4TOTE1</dd></div>
+              <div><dt class="text-gray-400">SKU</dt><dd class="font-mono font-medium">KK-TOTE-BLSH</dd></div>
+              <div><dt class="text-gray-400">Price</dt><dd class="font-bold">$34.99</dd></div>
+              <div><dt class="text-gray-400">Profit</dt><dd class="font-bold text-green-700">$12.18</dd></div>
+              <div><dt class="text-gray-400">Inventory</dt><dd class="font-bold">48 units</dd></div>
+              <div><dt class="text-gray-400">Synced</dt><dd>May 28, 2026</dd></div>
+            </dl>
+          </div>
+        </div>
+        <button type="button" data-action="row-menu" data-listing-id="1" data-status="active" aria-haspopup="menu" aria-expanded="false" aria-label="Actions for Blush Everyday Tote" title="Open row actions menu" class="mt-3 w-full inline-flex items-center justify-center gap-1 border-2 border-black bg-white py-2.5 text-xs font-black uppercase tracking-[.12em] text-gray-700 hover:bg-gray-50 min-h-[44px]">Actions <span aria-hidden="true">▾</span></button>
+      </article>
+
+      <article class="amazon-mobile-card bg-white rounded-xl border border-gray-200 p-4 shadow-sm active:bg-gray-50" data-listing-id="2" data-status="active" data-asin="B0KK4NCKL2" data-sku="KK-NCK-GOLD">
+        <div class="flex gap-3">
+          <div class="w-14 h-14 rounded-lg bg-kkpeach/60 border border-gray-200 flex-shrink-0" aria-hidden="true"></div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-start justify-between gap-2">
+              <h3 class="font-bold text-sm leading-tight">Gold Layered Pendant Necklace</h3>
+              <span class="inline-flex px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-green-100 text-green-800 flex-shrink-0">Active</span>
+            </div>
+            <p class="text-[11px] text-gray-400 mt-0.5">Gold · 18"</p>
+            <dl class="grid grid-cols-2 gap-x-3 gap-y-1 mt-3 text-xs">
+              <div><dt class="text-gray-400">ASIN</dt><dd class="font-mono font-medium">B0KK4NCKL2</dd></div>
+              <div><dt class="text-gray-400">SKU</dt><dd class="font-mono font-medium">KK-NCK-GOLD</dd></div>
+              <div><dt class="text-gray-400">Price</dt><dd class="font-bold">$22.99</dd></div>
+              <div><dt class="text-gray-400">Profit</dt><dd class="font-bold text-green-700">$7.65</dd></div>
+              <div><dt class="text-gray-400">Inventory</dt><dd class="font-bold">112 units</dd></div>
+              <div><dt class="text-gray-400">Synced</dt><dd>May 28, 2026</dd></div>
+            </dl>
+          </div>
+        </div>
+        <button type="button" data-action="row-menu" data-listing-id="2" data-status="active" aria-haspopup="menu" aria-expanded="false" aria-label="Actions for Gold Layered Pendant Necklace" title="Open row actions menu" class="mt-3 w-full inline-flex items-center justify-center gap-1 border-2 border-black bg-white py-2.5 text-xs font-black uppercase tracking-[.12em] text-gray-700 hover:bg-gray-50 min-h-[44px]">Actions <span aria-hidden="true">▾</span></button>
+      </article>
+
+      <article class="amazon-mobile-card bg-white rounded-xl border border-amber-200 p-4 shadow-sm active:bg-gray-50" data-listing-id="3" data-status="low_stock" data-asin="B0KK4SUNG3" data-sku="KK-SUN-CAT">
+        <div class="flex gap-3">
+          <div class="w-14 h-14 rounded-lg bg-kkpeach/60 border border-gray-200 flex-shrink-0" aria-hidden="true"></div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-start justify-between gap-2">
+              <h3 class="font-bold text-sm leading-tight">Oversized Cat Eye Sunglasses</h3>
+              <span class="inline-flex px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-amber-100 text-amber-800 flex-shrink-0">Low Stock</span>
+            </div>
+            <p class="text-[11px] text-gray-400 mt-0.5">Tortoise</p>
+            <dl class="grid grid-cols-2 gap-x-3 gap-y-1 mt-3 text-xs">
+              <div><dt class="text-gray-400">ASIN</dt><dd class="font-mono font-medium">B0KK4SUNG3</dd></div>
+              <div><dt class="text-gray-400">SKU</dt><dd class="font-mono font-medium">KK-SUN-CAT</dd></div>
+              <div><dt class="text-gray-400">Price</dt><dd class="font-bold">$18.99</dd></div>
+              <div><dt class="text-gray-400">Profit</dt><dd class="font-bold text-green-700">$5.58</dd></div>
+              <div><dt class="text-gray-400">Inventory</dt><dd class="font-bold text-amber-600">6 units</dd></div>
+              <div><dt class="text-gray-400">Synced</dt><dd>May 27, 2026</dd></div>
+            </dl>
+          </div>
+        </div>
+        <button type="button" data-action="row-menu" data-listing-id="3" data-status="low_stock" aria-haspopup="menu" aria-expanded="false" aria-label="Actions for Oversized Cat Eye Sunglasses" title="Open row actions menu" class="mt-3 w-full inline-flex items-center justify-center gap-1 border-2 border-black bg-white py-2.5 text-xs font-black uppercase tracking-[.12em] text-gray-700 hover:bg-gray-50 min-h-[44px]">Actions <span aria-hidden="true">▾</span></button>
+      </article>
+
+      <article class="amazon-mobile-card bg-white rounded-xl border border-gray-200 p-4 shadow-sm active:bg-gray-50" data-listing-id="4" data-status="active" data-asin="B0KK4CLTCH4" data-sku="KK-CLT-SAND">
+        <div class="flex gap-3">
+          <div class="w-14 h-14 rounded-lg bg-kkpeach/60 border border-gray-200 flex-shrink-0" aria-hidden="true"></div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-start justify-between gap-2">
+              <h3 class="font-bold text-sm leading-tight">Woven Vegan Leather Clutch</h3>
+              <span class="inline-flex px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-green-100 text-green-800 flex-shrink-0">Active</span>
+            </div>
+            <p class="text-[11px] text-gray-400 mt-0.5">Sand</p>
+            <dl class="grid grid-cols-2 gap-x-3 gap-y-1 mt-3 text-xs">
+              <div><dt class="text-gray-400">ASIN</dt><dd class="font-mono font-medium">B0KK4CLTCH4</dd></div>
+              <div><dt class="text-gray-400">SKU</dt><dd class="font-mono font-medium">KK-CLT-SAND</dd></div>
+              <div><dt class="text-gray-400">Price</dt><dd class="font-bold">$28.99</dd></div>
+              <div><dt class="text-gray-400">Profit</dt><dd class="font-bold text-green-700">$9.87</dd></div>
+              <div><dt class="text-gray-400">Inventory</dt><dd class="font-bold">29 units</dd></div>
+              <div><dt class="text-gray-400">Synced</dt><dd>May 28, 2026</dd></div>
+            </dl>
+          </div>
+        </div>
+        <button type="button" data-action="row-menu" data-listing-id="4" data-status="active" aria-haspopup="menu" aria-expanded="false" aria-label="Actions for Woven Vegan Leather Clutch" title="Open row actions menu" class="mt-3 w-full inline-flex items-center justify-center gap-1 border-2 border-black bg-white py-2.5 text-xs font-black uppercase tracking-[.12em] text-gray-700 hover:bg-gray-50 min-h-[44px]">Actions <span aria-hidden="true">▾</span></button>
+      </article>
+
+      <article class="amazon-mobile-card bg-white rounded-xl border border-gray-200 p-4 shadow-sm active:bg-gray-50" data-listing-id="5" data-status="active" data-asin="B0KK4KEYC5" data-sku="KK-KEY-CHRY">
+        <div class="flex gap-3">
+          <div class="w-14 h-14 rounded-lg bg-kkpeach/60 border border-gray-200 flex-shrink-0" aria-hidden="true"></div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-start justify-between gap-2">
+              <h3 class="font-bold text-sm leading-tight">Cherry Charm Keychain</h3>
+              <span class="inline-flex px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-green-100 text-green-800 flex-shrink-0">Active</span>
+            </div>
+            <p class="text-[11px] text-gray-400 mt-0.5">Red Cherry</p>
+            <dl class="grid grid-cols-2 gap-x-3 gap-y-1 mt-3 text-xs">
+              <div><dt class="text-gray-400">ASIN</dt><dd class="font-mono font-medium">B0KK4KEYC5</dd></div>
+              <div><dt class="text-gray-400">SKU</dt><dd class="font-mono font-medium">KK-KEY-CHRY</dd></div>
+              <div><dt class="text-gray-400">Price</dt><dd class="font-bold">$12.99</dd></div>
+              <div><dt class="text-gray-400">Profit</dt><dd class="font-bold text-green-700">$3.07</dd></div>
+              <div><dt class="text-gray-400">Inventory</dt><dd class="font-bold">215 units</dd></div>
+              <div><dt class="text-gray-400">Synced</dt><dd>May 29, 2026</dd></div>
+            </dl>
+          </div>
+        </div>
+        <button type="button" data-action="row-menu" data-listing-id="5" data-status="active" aria-haspopup="menu" aria-expanded="false" aria-label="Actions for Cherry Charm Keychain" title="Open row actions menu" class="mt-3 w-full inline-flex items-center justify-center gap-1 border-2 border-black bg-white py-2.5 text-xs font-black uppercase tracking-[.12em] text-gray-700 hover:bg-gray-50 min-h-[44px]">Actions <span aria-hidden="true">▾</span></button>
+      </article>
+
+      <article class="amazon-mobile-card bg-white rounded-xl border border-gray-200 p-4 shadow-sm opacity-90 active:bg-gray-50" data-listing-id="6" data-status="out_of_stock" data-asin="B0KK4CAP66" data-sku="KK-CAP-CRME">
+        <div class="flex gap-3">
+          <div class="w-14 h-14 rounded-lg bg-gray-100 border border-gray-200 flex-shrink-0" aria-hidden="true"></div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-start justify-between gap-2">
+              <h3 class="font-bold text-sm leading-tight text-gray-600">Embroidered Baseball Cap</h3>
+              <span class="inline-flex px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-gray-200 text-gray-700 flex-shrink-0">Out of Stock</span>
+            </div>
+            <p class="text-[11px] text-gray-400 mt-0.5">Cream · OSFA</p>
+            <dl class="grid grid-cols-2 gap-x-3 gap-y-1 mt-3 text-xs">
+              <div><dt class="text-gray-400">ASIN</dt><dd class="font-mono font-medium">B0KK4CAP66</dd></div>
+              <div><dt class="text-gray-400">SKU</dt><dd class="font-mono font-medium">KK-CAP-CRME</dd></div>
+              <div><dt class="text-gray-400">Price</dt><dd class="font-bold">$24.99</dd></div>
+              <div><dt class="text-gray-400">Profit</dt><dd class="font-bold text-gray-400">$8.74</dd></div>
+              <div><dt class="text-gray-400">Inventory</dt><dd class="font-bold text-red-500">0 units</dd></div>
+              <div><dt class="text-gray-400">Synced</dt><dd>May 25, 2026</dd></div>
+            </dl>
+          </div>
+        </div>
+        <button type="button" data-action="row-menu" data-listing-id="6" data-status="out_of_stock" aria-haspopup="menu" aria-expanded="false" aria-label="Actions for Embroidered Baseball Cap" title="Open row actions menu" class="mt-3 w-full inline-flex items-center justify-center gap-1 border-2 border-black bg-white py-2.5 text-xs font-black uppercase tracking-[.12em] text-gray-700 hover:bg-gray-50 min-h-[44px]">Actions <span aria-hidden="true">▾</span></button>
+      </article>
+
+      <article class="amazon-mobile-card bg-white rounded-xl border border-dashed border-gray-300 p-4 shadow-sm active:bg-gray-50" data-listing-id="7" data-status="draft" data-asin="" data-sku="KK-BN-CAT">
+        <div class="flex gap-3">
+          <div class="w-14 h-14 rounded-lg bg-kkpeach/40 border border-dashed border-gray-300 flex-shrink-0" aria-hidden="true"></div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-start justify-between gap-2">
+              <h3 class="font-bold text-sm leading-tight">Cat Ear Beanie</h3>
+              <span class="inline-flex px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-blue-50 text-blue-700 flex-shrink-0">Draft</span>
+            </div>
+            <p class="text-[11px] text-gray-400 mt-0.5">Lilac</p>
+            <dl class="grid grid-cols-2 gap-x-3 gap-y-1 mt-3 text-xs">
+              <div><dt class="text-gray-400">ASIN</dt><dd class="text-gray-400">—</dd></div>
+              <div><dt class="text-gray-400">SKU</dt><dd class="font-mono font-medium">KK-BN-CAT</dd></div>
+              <div><dt class="text-gray-400">Price</dt><dd class="text-gray-400">—</dd></div>
+              <div><dt class="text-gray-400">Profit</dt><dd class="text-gray-400">—</dd></div>
+              <div><dt class="text-gray-400">Inventory</dt><dd class="text-gray-400">—</dd></div>
+              <div><dt class="text-gray-400">Synced</dt><dd>Not synced</dd></div>
+            </dl>
+          </div>
+        </div>
+        <button type="button" data-action="row-menu" data-listing-id="7" data-status="draft" aria-haspopup="menu" aria-expanded="false" aria-label="Actions for Cat Ear Beanie" title="Open row actions menu" class="mt-3 w-full inline-flex items-center justify-center gap-1 border-2 border-black bg-white py-2.5 text-xs font-black uppercase tracking-[.12em] text-gray-700 hover:bg-gray-50 min-h-[44px]">Actions <span aria-hidden="true">▾</span></button>
+      </article>
+
+      <article class="amazon-mobile-card bg-white rounded-xl border border-red-200 p-4 shadow-sm active:bg-gray-50" data-listing-id="8" data-status="issue" data-asin="B0KK4CUPC8" data-sku="KK-KEY-CUP">
+        <div class="flex gap-3">
+          <div class="w-14 h-14 rounded-lg bg-kkpeach/60 border border-red-200 flex-shrink-0" aria-hidden="true"></div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-start justify-between gap-2">
+              <h3 class="font-bold text-sm leading-tight">Y2K Cup Charm Keychain</h3>
+              <span class="inline-flex px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-red-100 text-red-800 flex-shrink-0">Issue</span>
+            </div>
+            <p class="text-[11px] text-gray-400 mt-0.5">Pink Glitter</p>
+            <dl class="grid grid-cols-2 gap-x-3 gap-y-1 mt-3 text-xs">
+              <div><dt class="text-gray-400">ASIN</dt><dd class="font-mono font-medium">B0KK4CUPC8</dd></div>
+              <div><dt class="text-gray-400">SKU</dt><dd class="font-mono font-medium">KK-KEY-CUP</dd></div>
+              <div><dt class="text-gray-400">Price</dt><dd class="font-bold">$14.99</dd></div>
+              <div><dt class="text-gray-400">Profit</dt><dd class="font-bold text-amber-600">$2.60</dd></div>
+              <div><dt class="text-gray-400">Inventory</dt><dd class="font-bold">14 units</dd></div>
+              <div><dt class="text-gray-400">Synced</dt><dd>May 26, 2026</dd></div>
+            </dl>
+          </div>
+        </div>
+        <button type="button" data-action="row-menu" data-listing-id="8" data-status="issue" aria-haspopup="menu" aria-expanded="false" aria-label="Actions for Y2K Cup Charm Keychain" title="Open row actions menu" class="mt-3 w-full inline-flex items-center justify-center gap-1 border-2 border-black bg-white py-2.5 text-xs font-black uppercase tracking-[.12em] text-gray-700 hover:bg-gray-50 min-h-[44px]">Actions <span aria-hidden="true">▾</span></button>
+      </article>
+    </section>
+
+    <!-- Pagination -->
+    <footer class="bg-white rounded-2xl shadow-sm border border-gray-200 px-4 sm:px-6 py-4" id="amazonPagination" aria-label="Pagination">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <p id="amazonPaginationSummary" class="text-xs sm:text-sm text-gray-500 min-w-0">
+          Showing <span class="font-bold text-black">1</span> to <span class="font-bold text-black">8</span> of <span class="font-bold text-black">842</span> results
+        </p>
+        <div class="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
+          <label for="amazonRowsPerPage" class="text-[10px] font-black uppercase tracking-[.12em] text-gray-500 shrink-0">Rows</label>
+          <select id="amazonRowsPerPage" class="border-2 border-black px-2 py-1.5 text-xs font-bold bg-white min-h-[44px]">
+            <option value="25" selected>25</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+          <span id="amazonPaginationPageLabel" class="text-[10px] font-bold text-gray-600 shrink-0">Page 1 of 1</span>
+          <div class="flex items-center gap-1 ml-auto sm:ml-0 overflow-x-auto max-w-full pb-0.5">
+            <button type="button" id="listings-prev-page" class="px-3 py-1.5 border-2 border-black text-xs font-bold shrink-0 min-h-[44px] hover:bg-gray-50" aria-label="Previous page">Prev</button>
+            <button type="button" id="listings-next-page" class="px-3 py-1.5 border-2 border-black text-xs font-bold shrink-0 min-h-[44px] hover:bg-gray-50" aria-label="Next page">Next</button>
+          </div>
+        </div>
+      </div>
+    </footer>
+
+    <!-- Action menu preview (static UX reference) -->
+    <aside class="mt-4 sm:mt-6 bg-gray-50 rounded-xl border border-gray-200 p-4" id="amazonActionMenuPreview" aria-label="Action menu preview">
+      <h3 class="text-[10px] font-black uppercase tracking-[.16em] text-gray-500">Action Menu Preview</h3>
+      <p class="text-xs text-gray-500 mt-1">Click Actions ▾ on any synced row to open a floating status-specific menu. Sync SKU, View on Amazon, and View Details are live; edit/update actions are coming soon.</p>
+      <ul class="mt-3 space-y-2 text-xs text-gray-600">
+        <li><span class="font-bold text-gray-800">Active:</span> View Details · Edit Listing · Sync SKU · View on Amazon</li>
+        <li><span class="font-bold text-gray-800">Draft:</span> Continue Draft · Preview Issues · Submit Later · Delete Draft</li>
+        <li><span class="font-bold text-gray-800">Issue:</span> Resolve Issue · View Issue Details · Sync SKU · View on Amazon</li>
+        <li><span class="font-bold text-gray-800">Out of Stock:</span> Update Inventory · Sync SKU · View Details · View on Amazon</li>
+      </ul>
+    </aside>
+
+    </div><!-- /#amazonViewSynced -->
+
+    <!-- Amazon view: Ready to Push (hidden) -->
+    <div id="amazonViewReadyToPush" class="hidden" data-amazon-view-panel="ready-to-push" role="tabpanel" aria-labelledby="amazonTabReadyToPush">
+      <header class="mb-4 sm:mb-6">
+        <h2 class="text-lg sm:text-xl font-black tracking-tight">Ready to Push</h2>
+        <p class="text-xs sm:text-sm text-gray-500 mt-1">Karry Kraze products that can be prepared for Amazon listing.</p>
+      </header>
+
+      <div class="space-y-3" id="amazonReadyToPushList">
+        <div class="bg-white rounded-xl border border-gray-200 p-8 text-center text-sm text-gray-400">
+          Open this tab to load products ready for Amazon prep.
+        </div>
+      </div>
+      <p id="amazonReadyToPushCountLabel" class="text-xs text-gray-400 mt-4">Loading…</p>
+    </div>
+
+    <!-- Amazon view: Needs Mapping (hidden) -->
+    <div id="amazonViewNeedsMapping" class="hidden" data-amazon-view-panel="needs-mapping" role="tabpanel" aria-labelledby="amazonTabNeedsMapping">
+      <header class="mb-4 sm:mb-6">
+        <h2 class="text-lg sm:text-xl font-black tracking-tight">Needs Mapping</h2>
+        <p class="text-xs sm:text-sm text-gray-500 mt-1">Existing Seller Central listings that need to be connected to Karry Kraze products.</p>
+      </header>
+
+      <div class="space-y-3" id="amazonNeedsMappingList">
+        <div class="bg-white rounded-xl border border-gray-200 p-8 text-center text-sm text-gray-400">
+          Open this tab to load unmapped listings.
+        </div>
+      </div>
+      <p id="amazonNeedsMappingCountLabel" class="text-xs text-gray-400 mt-4">Loading…</p>
+    </div>
+
+    <!-- Amazon view: Drafts / Issues (hidden) -->
+    <div id="amazonViewDraftsIssues" class="hidden" data-amazon-view-panel="drafts-issues" role="tabpanel" aria-labelledby="amazonTabDraftsIssues">
+      <header class="mb-4 sm:mb-6">
+        <h2 class="text-lg sm:text-xl font-black tracking-tight">Drafts / Issues</h2>
+        <p class="text-xs sm:text-sm text-gray-500 mt-1">Amazon listings that need review before they can be synced or submitted.</p>
+      </header>
+
+      <div id="amazonDraftsIssuesReminder" class="hidden mb-4 rounded-xl border-2 border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        <p class="font-bold">You have <span data-submitted-count>0</span> submitted draft(s) waiting for Amazon verification.</p>
+        <p class="text-xs mt-1 text-amber-800">Run Verify Listing on each submitted draft after Amazon accepts the listing.</p>
+        <button type="button" data-action="scroll-submitted-drafts" class="mt-2 border-2 border-black bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-wide hover:bg-amber-100">View submitted drafts</button>
+      </div>
+
+      <div id="amazonDraftsMaxAttemptsBanner" class="hidden mb-4 rounded-xl border-2 border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900">
+        <p class="font-bold"><span data-max-attempts-count>0</span> draft(s) stopped auto-verification after max attempts.</p>
+        <p class="text-xs mt-1 text-red-800">Requeue all to restart automatic checks, or use Verify Listing / single requeue on each card.</p>
+        <button type="button" data-action="bulk-requeue-max-attempt-drafts" class="mt-2 border-2 border-black bg-sky-100 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide hover:bg-sky-200 min-h-[44px]">Requeue All Max-Attempt Drafts</button>
+      </div>
+
+      <div class="space-y-3" id="amazonDraftsIssuesList">
+        <div class="bg-white rounded-xl border border-gray-200 p-8 text-center text-sm text-gray-400">
+          Open this tab to load drafts and validation issues.
+        </div>
+      </div>
+      <p id="amazonDraftsIssuesCountLabel" class="text-xs text-gray-400 mt-4">Loading…</p>
+    </div>
+
+    </div><!-- /#amazonListingsContent -->
+
+    <!-- Choose KK product for header Push -->
+    <div id="amazonProductPickerModal" class="hidden fixed inset-0 z-[60]" aria-hidden="true" data-modal="product-picker">
+      <div class="absolute inset-0 bg-black/50" data-modal-backdrop aria-hidden="true"></div>
+      <div class="relative min-h-full flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="amazonProductPickerModalTitle"
+          aria-describedby="amazonProductPickerModalDesc"
+          class="w-full sm:max-w-xl bg-white border-t-4 sm:border-4 border-black sm:rounded-2xl shadow-xl max-h-[95vh] flex flex-col"
+        >
+          <header class="px-4 sm:px-6 py-4 border-b border-gray-200 shrink-0">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <h2 id="amazonProductPickerModalTitle" class="text-lg sm:text-xl font-black tracking-tight">Choose KK Product to Push</h2>
+                <p id="amazonProductPickerModalDesc" class="text-xs sm:text-sm text-gray-500 mt-1">Search Karry Kraze products before opening the Amazon push workflow.</p>
+              </div>
+              <button type="button" data-action="close-product-picker-modal" aria-label="Close product picker" title="Close" class="text-2xl leading-none text-gray-500 hover:text-black px-2 min-h-[44px] min-w-[44px]">×</button>
+            </div>
+          </header>
+
+          <div class="amazon-modal-body px-4 sm:px-6 py-4 space-y-4 overflow-y-auto flex-1">
+            <label for="amazonHeaderProductSearch" class="sr-only">Search KK products</label>
+            <input
+              id="amazonHeaderProductSearch"
+              type="search"
+              placeholder="Search by product name or SKU…"
+              autocomplete="off"
+              class="w-full border-2 border-black rounded-xl px-3 py-2.5 text-sm min-h-[44px]"
+            />
+            <div id="amazonHeaderProductResults" class="space-y-2" aria-live="polite">
+              <p class="text-xs text-gray-500 py-4 text-center">Search by product name or SKU (min 2 characters).</p>
+            </div>
+          </div>
+
+          <footer class="px-4 sm:px-6 py-4 border-t border-gray-200 shrink-0 flex justify-end">
+            <button type="button" data-action="close-product-picker-modal" class="border-2 border-gray-300 px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-gray-700 hover:bg-gray-50 min-h-[44px]">Cancel</button>
+          </footer>
+        </div>
+      </div>
+    </div>
+
+    <!-- Push to Amazon modal placeholder -->
+    <div id="amazonPushModal" class="hidden fixed inset-0 z-[60]" aria-hidden="true" data-modal="push">
+      <div class="absolute inset-0 bg-black/50" data-modal-backdrop aria-hidden="true"></div>
+      <div class="relative min-h-full flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="amazonPushModalTitle"
+          aria-describedby="amazonPushModalDesc"
+          class="w-full sm:max-w-3xl bg-white border-t-4 sm:border-4 border-black sm:rounded-2xl shadow-xl max-h-[95vh] flex flex-col"
+        >
+          <header class="px-4 sm:px-6 py-4 border-b border-gray-200 shrink-0">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <h2 id="amazonPushModalTitle" class="text-lg sm:text-xl font-black tracking-tight">Push Product to Amazon</h2>
+                <p id="amazonPushModalDesc" class="text-xs sm:text-sm text-gray-500 mt-1">Prepare a Karry Kraze product for Amazon. This workflow will be connected to Amazon SP-API in a later phase.</p>
+              </div>
+              <button type="button" data-action="close-push-modal" aria-label="Close push modal" title="Close" class="text-2xl leading-none text-gray-500 hover:text-black px-2 min-h-[44px] min-w-[44px]">×</button>
+            </div>
+          </header>
+
+          <div class="amazon-modal-body px-4 sm:px-6 py-4 space-y-5 overflow-y-auto flex-1">
+            <input type="hidden" id="amazonPushDraftId" value="" />
+            <input type="hidden" id="amazonPushKkProductId" value="" />
+            <input type="hidden" id="amazonPushDraftStatus" value="" />
+            <input type="hidden" id="amazonPushPreviewStatus" value="" />
+            <input type="hidden" id="amazonPushPreviewValidated" value="false" />
+            <input type="hidden" id="amazonPushPtdPreviewAt" value="" />
+            <input type="hidden" id="amazonPushDraftUpdatedAt" value="" />
+            <input type="hidden" id="amazonPushPtdPreviewProductType" value="" />
+            <input type="hidden" id="amazonPushAmazonPreviewAt" value="" />
+
+            <section>
+              <h3 class="text-[10px] font-black uppercase tracking-[.16em] text-gray-500 mb-2">KK Product</h3>
+              <div class="border-2 border-black rounded-xl p-4 bg-kkpeach/20 text-xs space-y-2">
+                <p class="font-bold" id="amazonPushProductTitle">—</p>
+                <dl class="grid grid-cols-2 gap-2">
+                  <div><dt class="text-gray-400">KK SKU</dt><dd class="font-mono font-medium" id="amazonPushKkSku">—</dd></div>
+                  <div><dt class="text-gray-400">Status</dt><dd data-hydrate="push-review-status">Draft — not saved</dd></div>
+                </dl>
+              </div>
+            </section>
+
+            <section>
+              <h3 class="text-[10px] font-black uppercase tracking-[.16em] text-gray-500 mb-2">Amazon Listing Draft</h3>
+              <div class="grid sm:grid-cols-2 gap-3 text-xs">
+                <div class="flex flex-col gap-1">
+                  <label for="amazonPushMarketplaceId" class="text-gray-400 font-bold uppercase tracking-wide text-[10px]">Marketplace ID</label>
+                  <input id="amazonPushMarketplaceId" type="text" value="ATVPDKIKX0DER" class="border-2 border-black px-3 py-2 min-h-[44px]" />
+                </div>
+                <div class="flex flex-col gap-1">
+                  <label for="amazonPushSellerSku" class="text-gray-400 font-bold uppercase tracking-wide text-[10px]">Seller SKU</label>
+                  <input id="amazonPushSellerSku" type="text" class="border-2 border-black px-3 py-2 min-h-[44px]" />
+                </div>
+                <div class="flex flex-col gap-1">
+                  <label for="amazonPushProductType" class="text-gray-400 font-bold uppercase tracking-wide text-[10px]">Product Type</label>
+                  <input id="amazonPushProductType" type="text" placeholder="ACCESSORY" class="border-2 border-black px-3 py-2 min-h-[44px]" />
+                </div>
+                <div class="sm:col-span-2 flex flex-col gap-2">
+                  <button type="button" data-action="recommend-amazon-product-type" class="self-start border-2 border-black bg-sky-50 px-3 py-2 text-[10px] font-black uppercase tracking-wide min-h-[44px] hover:bg-sky-100">Recommend Product Type</button>
+                  <div id="amazonProductTypeRecommendation" class="hidden rounded-lg border-2 border-sky-200 bg-sky-50/60 px-3 py-2 text-xs" aria-live="polite"></div>
+                </div>
+                <div class="sm:col-span-2 flex flex-col gap-2">
+                  <label for="amazonProductTypeSearch" class="text-gray-400 font-bold uppercase tracking-wide text-[10px]">Search Product Types</label>
+                  <div class="flex flex-col sm:flex-row gap-2">
+                    <input id="amazonProductTypeSearch" type="text" placeholder="beanie, handbag, sunglasses…" class="flex-1 border-2 border-black px-3 py-2 min-h-[44px]" />
+                    <button type="button" data-action="search-amazon-product-types" class="border-2 border-black bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wide min-h-[44px] hover:bg-gray-50 shrink-0">Search Product Types</button>
+                  </div>
+                  <div id="amazonProductTypeResults" class="hidden space-y-2" aria-live="polite"></div>
+                </div>
+                <div class="flex flex-col gap-1">
+                  <label for="amazonPushConditionType" class="text-gray-400 font-bold uppercase tracking-wide text-[10px]">Condition</label>
+                  <input id="amazonPushConditionType" type="text" value="new_new" class="border-2 border-black px-3 py-2 min-h-[44px]" />
+                </div>
+                <div class="sm:col-span-2 flex flex-col gap-1">
+                  <label for="amazonPushAmazonTitle" class="text-gray-400 font-bold uppercase tracking-wide text-[10px]">Amazon Title</label>
+                  <input id="amazonPushAmazonTitle" type="text" class="border-2 border-black px-3 py-2 min-h-[44px] w-full" />
+                </div>
+                <div class="flex flex-col gap-1">
+                  <label for="amazonPushBrand" class="text-gray-400 font-bold uppercase tracking-wide text-[10px]">Brand</label>
+                  <input id="amazonPushBrand" type="text" value="Karry Kraze" class="border-2 border-black px-3 py-2 min-h-[44px]" />
+                </div>
+                <div class="flex flex-col gap-1">
+                  <label for="amazonPushFulfillmentChannel" class="text-gray-400 font-bold uppercase tracking-wide text-[10px]">Fulfillment</label>
+                  <input id="amazonPushFulfillmentChannel" type="text" value="DEFAULT" class="border-2 border-black px-3 py-2 min-h-[44px]" />
+                </div>
+                <div class="flex flex-col gap-1">
+                  <label for="amazonPushPrice" class="text-gray-400 font-bold uppercase tracking-wide text-[10px]">Price</label>
+                  <input id="amazonPushPrice" type="text" inputmode="decimal" class="border-2 border-black px-3 py-2 min-h-[44px]" />
+                </div>
+                <div class="flex flex-col gap-1">
+                  <label for="amazonPushQuantity" class="text-gray-400 font-bold uppercase tracking-wide text-[10px]">Quantity</label>
+                  <input id="amazonPushQuantity" type="number" min="0" class="border-2 border-black px-3 py-2 min-h-[44px]" />
+                </div>
+                <div class="sm:col-span-2 flex flex-col gap-1">
+                  <label for="amazonPushBulletPoints" class="text-gray-400 font-bold uppercase tracking-wide text-[10px]">Bullet Points (one per line)</label>
+                  <textarea id="amazonPushBulletPoints" rows="3" class="border-2 border-black px-3 py-2 w-full resize-none"></textarea>
+                </div>
+                <div class="sm:col-span-2 flex flex-col gap-1">
+                  <label for="amazonPushDescription" class="text-gray-400 font-bold uppercase tracking-wide text-[10px]">Description</label>
+                  <textarea id="amazonPushDescription" rows="3" class="border-2 border-black px-3 py-2 w-full resize-none"></textarea>
+                </div>
+              </div>
+            </section>
+
+            <section id="amazonPushEligibilityPanel" class="hidden rounded-xl border-2 border-amber-300 bg-amber-50/40 px-4 py-3" aria-live="polite"></section>
+
+            <section class="space-y-3">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <h3 class="text-[10px] font-black uppercase tracking-[.16em] text-gray-500">Product Type Requirements</h3>
+                <div class="flex flex-wrap gap-2">
+                  <button type="button" data-action="load-amazon-product-type" class="border-2 border-black bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wide min-h-[44px] hover:bg-gray-50">Load Requirements</button>
+                  <button type="button" data-action="refresh-amazon-product-type" class="border-2 border-gray-300 bg-white px-3 py-2 text-[10px] font-bold uppercase tracking-wide min-h-[44px] hover:bg-gray-50">Refresh Schema</button>
+                </div>
+              </div>
+              <div class="grid gap-3 sm:grid-cols-2 text-xs">
+                <div class="border-2 border-black rounded-xl p-3 bg-gray-50">
+                  <p class="text-[10px] font-black uppercase tracking-wide text-gray-500 mb-1">Required Attributes</p>
+                  <ul id="amazonPushRequiredAttributes" class="space-y-1 font-mono text-[11px] text-gray-800">
+                    <li class="text-gray-400">Load product type requirements to preview Amazon fields.</li>
+                  </ul>
+                </div>
+                <div class="border-2 border-amber-300 rounded-xl p-3 bg-amber-50/40">
+                  <p class="text-[10px] font-black uppercase tracking-wide text-amber-800 mb-1">Missing Attributes</p>
+                  <ul id="amazonPushMissingAttributes" class="space-y-1 font-mono text-[11px] text-amber-900">
+                    <li class="text-gray-400">Preview Amazon requirements to see gaps.</li>
+                  </ul>
+                </div>
+              </div>
+            </section>
+
+            <section id="amazonPushValidationPanel" class="hidden space-y-2" aria-live="polite"></section>
+
+            <section id="amazonPushSubmitReadiness" class="rounded-xl border-2 border-gray-200 bg-white px-4 py-3" aria-live="polite">
+              <h3 class="text-[10px] font-black uppercase tracking-[.16em] text-gray-500 mb-2">Live Submit Readiness</h3>
+              <ul class="space-y-1.5 text-xs">
+                <li data-readiness-item="product-type" class="flex items-start gap-2 text-gray-500"><span aria-hidden="true">○</span><span>Product type selected</span></li>
+                <li data-readiness-item="ptd-loaded" class="flex items-start gap-2 text-gray-500"><span aria-hidden="true">○</span><span>Amazon requirements loaded</span></li>
+                <li data-readiness-item="ptd-preview" class="flex items-start gap-2 text-gray-500"><span aria-hidden="true">○</span><span>Local / PTD preview complete</span></li>
+                <li data-readiness-item="amazon-preview" class="flex items-start gap-2 text-gray-500"><span aria-hidden="true">○</span><span>Amazon submit preview valid</span></li>
+                <li data-readiness-item="ready-status" class="flex items-start gap-2 text-gray-500"><span aria-hidden="true">○</span><span>Ready for live submit</span></li>
+              </ul>
+            </section>
+
+            <section>
+              <h3 class="text-[10px] font-black uppercase tracking-[.16em] text-gray-500 mb-2">Review</h3>
+              <div class="border-2 border-black rounded-xl p-4 bg-gray-50 text-xs space-y-1">
+                <p><span class="text-gray-400">Product:</span> <span class="font-bold" data-hydrate="push-review-product">—</span></p>
+                <p><span class="text-gray-400">Price / Qty:</span> <span data-hydrate="push-review-price-qty">—</span></p>
+                <p class="text-[11px] text-gray-500 mt-2">Run validation preview before live submit. Published status requires a follow-up sync.</p>
+              </div>
+            </section>
+          </div>
+
+          <footer class="px-4 sm:px-6 py-4 border-t border-gray-200 flex flex-wrap gap-2 shrink-0 bg-white">
+            <button type="button" data-action="save-amazon-draft" class="border-4 border-black bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wide min-h-[44px] hover:bg-gray-50">Save Draft</button>
+            <button type="button" data-action="preview-amazon-issues" class="border-4 border-black bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wide min-h-[44px] hover:bg-gray-50">Preview Issues</button>
+            <button type="button" data-action="preview-amazon-draft" class="border-4 border-black bg-amber-100 px-3 py-2 text-[10px] font-black uppercase tracking-wide min-h-[44px] hover:bg-amber-200">Preview Amazon Requirements</button>
+            <button type="button" data-action="preview-amazon-submit" class="border-4 border-black bg-sky-100 px-3 py-2 text-[10px] font-black uppercase tracking-wide min-h-[44px] hover:bg-sky-200">Preview Amazon Submit</button>
+            <button type="button" disabled hidden data-action="verify-submitted-draft" aria-disabled="true" title="Run verification sync after live submit" class="border-4 border-black bg-emerald-100 px-3 py-2 text-[10px] font-black uppercase tracking-wide opacity-50 cursor-not-allowed min-h-[44px] hover:bg-emerald-200">Verify Now</button>
+            <button type="button" disabled data-action="submit-amazon-listing" aria-disabled="true" title="Save draft, run Amazon validation preview, and reach ready_to_submit first" class="border-4 border-black bg-black text-white px-3 py-2 text-[10px] font-black uppercase tracking-wide opacity-50 cursor-not-allowed min-h-[44px]">Submit to Amazon</button>
+            <button type="button" data-action="close-push-modal" class="ml-auto border-2 border-gray-300 px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-gray-700 hover:bg-gray-50 min-h-[44px]">Cancel</button>
+          </footer>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live submit confirmation modal -->
+    <div id="amazonLiveSubmitModal" class="hidden fixed inset-0 z-[70]" aria-hidden="true" data-modal="live-submit">
+      <div class="absolute inset-0 bg-black/60" data-modal-backdrop aria-hidden="true"></div>
+      <div class="relative min-h-full flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="amazonLiveSubmitModalTitle"
+          class="w-full sm:max-w-lg bg-white border-t-4 sm:border-4 border-red-600 sm:rounded-2xl shadow-xl"
+        >
+          <header class="px-4 sm:px-6 py-4 border-b border-gray-200">
+            <h2 id="amazonLiveSubmitModalTitle" class="text-lg font-black tracking-tight text-red-700">Submit to Amazon</h2>
+            <p class="text-xs sm:text-sm text-gray-600 mt-2">This will submit the listing to Amazon Seller Central. It may create or update a live Amazon offer. Type <span class="font-mono font-bold">PUBLISH_TO_AMAZON</span> to continue.</p>
+          </header>
+          <div class="px-4 sm:px-6 py-4">
+            <label for="amazonLiveSubmitConfirmPhrase" class="text-[10px] font-black uppercase tracking-wide text-gray-500">Confirmation phrase</label>
+            <input id="amazonLiveSubmitConfirmPhrase" type="text" autocomplete="off" placeholder="PUBLISH_TO_AMAZON" class="mt-2 w-full border-2 border-black px-3 py-2 min-h-[44px] font-mono text-sm" />
+          </div>
+          <footer class="px-4 sm:px-6 py-4 border-t border-gray-200 flex flex-wrap gap-2">
+            <button type="button" data-action="confirm-amazon-live-submit" class="border-4 border-red-700 bg-red-700 text-white px-3 py-2 text-[10px] font-black uppercase tracking-wide min-h-[44px] hover:bg-red-800">Submit to Amazon</button>
+            <button type="button" data-action="cancel-amazon-live-submit" class="ml-auto border-2 border-gray-300 px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-gray-700 hover:bg-gray-50 min-h-[44px]">Cancel</button>
+          </footer>
+        </div>
+      </div>
+    </div>
+
+    <!-- Map existing listing modal placeholder -->
+    <div id="amazonMappingModal" class="hidden fixed inset-0 z-[60]" aria-hidden="true" data-modal="mapping">
+      <div class="absolute inset-0 bg-black/50" data-modal-backdrop aria-hidden="true"></div>
+      <div class="relative min-h-full flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="amazonMappingModalTitle"
+          aria-describedby="amazonMappingModalDesc"
+          class="w-full sm:max-w-2xl bg-white border-t-4 sm:border-4 border-black sm:rounded-2xl shadow-xl max-h-[95vh] flex flex-col"
+        >
+          <header class="px-4 sm:px-6 py-4 border-b border-gray-200 shrink-0">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <h2 id="amazonMappingModalTitle" class="text-lg sm:text-xl font-black tracking-tight">Map Existing Amazon Listing</h2>
+                <p id="amazonMappingModalDesc" class="text-xs sm:text-sm text-gray-500 mt-1">Connect a Seller Central listing to a Karry Kraze product so future syncs can track it.</p>
+              </div>
+              <button type="button" data-action="close-mapping-modal" aria-label="Close mapping modal" title="Close" class="text-2xl leading-none text-gray-500 hover:text-black px-2 min-h-[44px] min-w-[44px]">×</button>
+            </div>
+          </header>
+
+          <div class="amazon-modal-body px-4 sm:px-6 py-4 space-y-5 overflow-y-auto flex-1">
+            <section>
+              <h3 class="text-[10px] font-black uppercase tracking-[.16em] text-gray-500 mb-2">Amazon Listing</h3>
+              <div class="border-2 border-black rounded-xl p-4 text-xs space-y-2">
+                <p><span class="text-gray-400">Title:</span> <span class="font-bold" data-hydrate="mapping-listing-title">—</span></p>
+                <p><span class="text-gray-400">ASIN:</span> <span class="font-mono font-medium" data-hydrate="mapping-asin">—</span></p>
+                <p><span class="text-gray-400">Seller SKU:</span> <span class="font-mono font-medium" data-hydrate="mapping-amazon-sku">—</span></p>
+                <p><span class="text-gray-400">Marketplace:</span> <span class="font-medium" data-hydrate="mapping-marketplace">—</span></p>
+                <p><span class="text-gray-400">Price:</span> <span class="font-bold" data-hydrate="mapping-price">—</span></p>
+                <p><span class="text-gray-400">Inventory:</span> <span class="font-bold" data-hydrate="mapping-inventory">—</span></p>
+                <p><span class="text-gray-400">Status:</span> <span class="inline-flex px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-gray-100 text-gray-700" data-hydrate="mapping-status">—</span></p>
+              </div>
+            </section>
+
+            <section>
+              <h3 class="text-[10px] font-black uppercase tracking-[.16em] text-gray-500 mb-2">Search KK Products</h3>
+              <label for="amazonMappingProductSearch" class="sr-only">Search KK products</label>
+              <input
+                id="amazonMappingProductSearch"
+                type="search"
+                placeholder="Search KK products…"
+                autocomplete="off"
+                class="w-full border-2 border-black rounded-xl px-3 py-2.5 text-sm min-h-[44px]"
+              />
+              <div id="amazonMappingSelectedProduct" class="hidden mt-3" aria-live="polite"></div>
+              <div id="amazonMappingProductResults" class="mt-3 space-y-2 max-h-56 overflow-y-auto"></div>
+            </section>
+          </div>
+
+          <footer class="px-4 sm:px-6 py-4 border-t border-gray-200 flex flex-wrap gap-2 shrink-0 bg-white">
+            <button type="button" data-action="save-amazon-mapping" class="border-4 border-black bg-black text-white px-3 py-2 text-[10px] font-black uppercase tracking-wide min-h-[44px] hover:opacity-90">Save Mapping</button>
+            <button type="button" data-action="mark-amazon-legacy" class="border-4 border-black bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wide min-h-[44px] hover:bg-gray-50">Mark Legacy</button>
+            <button type="button" data-action="ignore-amazon-listing" class="border-2 border-black bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wide text-gray-700 min-h-[44px] hover:bg-gray-50">Ignore Listing</button>
+            <button type="button" data-action="close-mapping-modal" class="ml-auto border-2 border-gray-300 px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-gray-700 hover:bg-gray-50 min-h-[44px]">Cancel</button>
+          </footer>
+        </div>
+      </div>
+    </div>
+
+    <!-- Table settings modal -->
+    <div id="amazonTableSettingsModal" class="hidden fixed inset-0 z-[60]" aria-hidden="true" data-modal="table-settings">
+      <div class="absolute inset-0 bg-black/50" data-modal-backdrop aria-hidden="true"></div>
+      <div class="relative min-h-full flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="amazonTableSettingsModalTitle"
+          aria-describedby="amazonTableSettingsModalDesc"
+          class="w-full sm:max-w-lg bg-white border-t-4 sm:border-4 border-black sm:rounded-2xl shadow-xl max-h-[95vh] flex flex-col"
+        >
+          <header class="px-4 sm:px-6 py-4 border-b border-gray-200 shrink-0">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <h2 id="amazonTableSettingsModalTitle" class="text-lg sm:text-xl font-black tracking-tight" tabindex="-1">Table Settings</h2>
+                <p id="amazonTableSettingsModalDesc" class="text-xs sm:text-sm text-gray-500 mt-1">Adjust row density and choose which columns appear in the synced listings table. Preferences save in this browser.</p>
+              </div>
+              <button type="button" data-action="close-table-settings-modal" aria-label="Close table settings" title="Close" class="text-2xl leading-none text-gray-500 hover:text-black px-2 min-h-[44px] min-w-[44px]">×</button>
+            </div>
+          </header>
+
+          <div class="amazon-modal-body px-4 sm:px-6 py-4 space-y-5 overflow-y-auto flex-1">
+            <fieldset class="space-y-2">
+              <legend class="text-[10px] font-black uppercase tracking-[.14em] text-gray-500">Row density</legend>
+              <label class="flex items-center gap-2 py-1 cursor-pointer">
+                <input type="radio" name="amazonTableDensity" id="amazonTableDensityComfortable" value="comfortable" class="w-4 h-4 border-2 border-black" checked />
+                <span class="text-xs font-medium">Comfortable — default padding and thumbnails</span>
+              </label>
+              <label class="flex items-center gap-2 py-1 cursor-pointer">
+                <input type="radio" name="amazonTableDensity" id="amazonTableDensityCompact" value="compact" class="w-4 h-4 border-2 border-black" />
+                <span class="text-xs font-medium">Compact — tighter rows for more listings on screen</span>
+              </label>
+            </fieldset>
+
+            <fieldset class="space-y-2">
+              <legend class="text-[10px] font-black uppercase tracking-[.14em] text-gray-500">Columns</legend>
+              <p class="text-[11px] text-gray-500">Product, select, and actions always stay visible.</p>
+              <div id="amazonTableColumnList" class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 border border-gray-200 rounded-xl p-3 max-h-56 overflow-y-auto"></div>
+            </fieldset>
+          </div>
+
+          <footer class="px-4 sm:px-6 py-4 border-t border-gray-200 shrink-0 bg-white flex flex-col sm:flex-row gap-2">
+            <button type="button" data-action="reset-table-settings" class="border-2 border-gray-300 bg-white px-3 py-2.5 text-[10px] font-black uppercase tracking-wide text-gray-700 min-h-[44px] hover:bg-gray-50">Reset Defaults</button>
+            <div class="flex flex-col sm:flex-row gap-2 sm:ml-auto sm:w-auto w-full">
+              <button type="button" data-action="close-table-settings-modal" class="border-2 border-gray-300 bg-white px-3 py-2.5 text-[10px] font-bold uppercase tracking-wide text-gray-700 min-h-[44px] hover:bg-gray-50">Cancel</button>
+              <button type="button" data-action="apply-table-settings" class="border-4 border-black bg-black text-white px-3 py-2.5 text-[10px] font-black uppercase tracking-wide min-h-[44px] hover:opacity-90">Apply</button>
+            </div>
+          </footer>
+        </div>
+      </div>
+    </div>
+
+    <!-- Listing details modal -->
+    <div id="amazonListingDetailsModal" class="hidden fixed inset-0 z-[60]" aria-hidden="true" data-modal="listing-details">
+      <div class="absolute inset-0 bg-black/50" data-modal-backdrop aria-hidden="true"></div>
+      <div class="relative min-h-full flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="amazonListingDetailsModalTitle"
+          aria-describedby="amazonListingDetailsModalDesc"
+          class="w-full sm:max-w-xl bg-white border-t-4 sm:border-4 border-black sm:rounded-2xl shadow-xl max-h-[95vh] flex flex-col"
+        >
+          <header class="px-4 sm:px-6 py-4 border-b border-gray-200 shrink-0">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <h2 id="amazonListingDetailsModalTitle" class="text-lg sm:text-xl font-black tracking-tight" tabindex="-1">Listing Details</h2>
+                <p id="amazonListingDetailsModalDesc" class="text-xs sm:text-sm text-gray-500 mt-1">Read-only health and sync summary for this Amazon listing.</p>
+              </div>
+              <button type="button" data-action="close-listing-details-modal" aria-label="Close listing details" title="Close" class="text-2xl leading-none text-gray-500 hover:text-black px-2 min-h-[44px] min-w-[44px]">×</button>
+            </div>
+          </header>
+
+          <div class="amazon-modal-body px-4 sm:px-6 py-4 space-y-4 overflow-y-auto flex-1">
+            <div class="border-2 border-black rounded-xl p-4 text-xs space-y-2">
+              <p><span class="text-gray-400">Title:</span> <span class="font-bold" id="amazonDetailsTitle">—</span></p>
+              <p><span class="text-gray-400">ASIN:</span> <span class="font-mono" id="amazonDetailsAsin">—</span></p>
+              <p><span class="text-gray-400">SKU:</span> <span class="font-mono" id="amazonDetailsSku">—</span></p>
+              <p><span class="text-gray-400">Listing status:</span> <span class="font-bold" id="amazonDetailsStatus">—</span></p>
+              <p><span class="text-gray-400">Health:</span> <span id="amazonDetailsHealthBadge" class="inline-flex px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide bg-gray-100 text-gray-700">—</span></p>
+              <div id="amazonDetailsReasons" class="flex flex-wrap gap-1 pt-1"></div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 text-xs">
+              <div class="border border-gray-200 rounded-xl p-3"><p class="text-gray-400">Price</p><p class="font-bold" id="amazonDetailsPrice">—</p></div>
+              <div class="border border-gray-200 rounded-xl p-3"><p class="text-gray-400">Fulfillment</p><p class="font-bold" id="amazonDetailsFulfillment">—</p></div>
+              <div class="border border-gray-200 rounded-xl p-3"><p class="text-gray-400">Amazon qty</p><p class="font-bold" id="amazonDetailsInventory">—</p></div>
+              <div class="border border-gray-200 rounded-xl p-3"><p class="text-gray-400">KK stock</p><p class="font-bold" id="amazonDetailsKkStock">—</p></div>
+              <div class="border border-gray-200 rounded-xl p-3"><p class="text-gray-400">FBA fulfillable</p><p class="font-bold" id="amazonDetailsFbaFulfillable">—</p></div>
+              <div class="border border-gray-200 rounded-xl p-3"><p class="text-gray-400">FBA reserved</p><p class="font-bold" id="amazonDetailsFbaReserved">—</p></div>
+              <div class="border border-gray-200 rounded-xl p-3"><p class="text-gray-400">FBA inbound</p><p class="font-bold" id="amazonDetailsFbaInbound">—</p></div>
+              <div class="border border-gray-200 rounded-xl p-3"><p class="text-gray-400">Last synced</p><p class="font-bold" id="amazonDetailsSynced">—</p></div>
+            </div>
+
+            <div class="border border-gray-200 rounded-xl p-4 space-y-2">
+              <h3 class="text-[10px] font-black uppercase tracking-[.14em] text-gray-500">Issue summary</h3>
+              <p class="text-xs"><span class="text-gray-400">Open issues:</span> <span class="font-bold" id="amazonDetailsIssueCount">—</span></p>
+              <p class="text-xs text-gray-700" id="amazonDetailsLatestIssue">—</p>
+              <p class="text-[11px] text-gray-400" id="amazonDetailsLatestIssueMeta">—</p>
+            </div>
+
+            <div class="border border-gray-200 rounded-xl p-4 space-y-2">
+              <h3 class="text-[10px] font-black uppercase tracking-[.14em] text-gray-500">Recent sync errors</h3>
+              <p class="text-xs text-gray-700" id="amazonDetailsSyncError">—</p>
+              <p class="text-[11px] text-gray-400" id="amazonDetailsSyncErrorMeta">—</p>
+            </div>
+
+            <p class="text-[11px] text-gray-500" id="amazonDetailsSummary">—</p>
+          </div>
+
+          <footer class="px-4 sm:px-6 py-4 border-t border-gray-200 shrink-0 bg-white">
+            <button type="button" data-action="close-listing-details-modal" class="w-full border-2 border-black bg-black text-white px-3 py-2.5 text-[10px] font-black uppercase tracking-wide min-h-[44px] hover:opacity-90">Close</button>
+          </footer>
+        </div>
+      </div>
+    </div>
+
+    <!-- Patch listing modal -->
+    <div id="amazonPatchModal" class="hidden fixed inset-0 z-[60]" aria-hidden="true" data-modal="patch">
+      <div class="absolute inset-0 bg-black/50" data-modal-backdrop aria-hidden="true"></div>
+      <div class="relative min-h-full flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="amazonPatchModalTitle"
+          aria-describedby="amazonPatchModalDesc"
+          class="w-full sm:max-w-lg bg-white border-t-4 sm:border-4 border-black sm:rounded-2xl shadow-xl max-h-[95vh] flex flex-col"
+        >
+          <header class="px-4 sm:px-6 py-4 border-b border-gray-200 shrink-0">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <h2 id="amazonPatchModalTitle" class="text-lg sm:text-xl font-black tracking-tight">Edit Amazon Listing</h2>
+                <p id="amazonPatchModalDesc" class="text-xs sm:text-sm text-gray-500 mt-1">Update price and/or FBM inventory via Amazon patchListingsItem (edge function only).</p>
+              </div>
+              <button type="button" data-action="close-patch-modal" aria-label="Close patch modal" title="Close" class="text-2xl leading-none text-gray-500 hover:text-black px-2 min-h-[44px] min-w-[44px]">×</button>
+            </div>
+          </header>
+
+          <div class="amazon-modal-body px-4 sm:px-6 py-4 space-y-4 overflow-y-auto flex-1">
+            <div class="border-2 border-black rounded-xl p-4 text-xs space-y-1">
+              <p><span class="text-gray-400">Title:</span> <span class="font-bold" data-hydrate="patch-listing-title">—</span></p>
+              <p><span class="text-gray-400">ASIN:</span> <span class="font-mono" data-hydrate="patch-asin">—</span></p>
+              <p><span class="text-gray-400">Seller SKU:</span> <span class="font-mono" data-hydrate="patch-seller-sku">—</span></p>
+              <p><span class="text-gray-400">Current price:</span> <span class="font-bold" data-hydrate="patch-current-price">—</span></p>
+              <p><span class="text-gray-400">Current inventory:</span> <span class="font-bold" data-hydrate="patch-current-qty">—</span></p>
+            </div>
+
+            <div id="amazonPatchPriceSection" class="space-y-1">
+              <label for="amazonPatchPrice" class="text-[10px] font-black uppercase tracking-[.14em] text-gray-500">New price (USD)</label>
+              <input id="amazonPatchPrice" type="number" min="0" step="0.01" class="w-full border-2 border-black rounded-xl px-3 py-2.5 text-sm min-h-[44px]" />
+            </div>
+
+            <div class="space-y-1">
+              <label for="amazonPatchQuantity" class="text-[10px] font-black uppercase tracking-[.14em] text-gray-500">New FBM quantity</label>
+              <input id="amazonPatchQuantity" type="number" min="0" step="1" class="w-full border-2 border-black rounded-xl px-3 py-2.5 text-sm min-h-[44px]" />
+              <p class="text-[11px] text-gray-400">FBA-managed listings can update price only.</p>
+            </div>
+
+            <div id="amazonPatchIssues" class="hidden rounded-xl border border-amber-200 bg-amber-50 p-3" aria-live="polite"></div>
+          </div>
+
+          <footer class="px-4 sm:px-6 py-4 border-t border-gray-200 flex flex-wrap gap-2 shrink-0 bg-white">
+            <button type="button" data-action="preview-amazon-patch" class="border-2 border-black bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wide min-h-[44px] hover:bg-gray-50">Preview</button>
+            <button type="button" data-action="apply-amazon-patch" class="border-4 border-black bg-black text-white px-3 py-2 text-[10px] font-black uppercase tracking-wide min-h-[44px] hover:opacity-90">Apply Update</button>
+            <button type="button" data-action="close-patch-modal" class="ml-auto border-2 border-gray-300 px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-gray-700 hover:bg-gray-50 min-h-[44px]">Cancel</button>
+          </footer>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bulk patch modal -->
+    <div id="amazonBulkPatchModal" class="hidden fixed inset-0 z-[60]" aria-hidden="true" data-modal="bulk-patch">
+      <div class="absolute inset-0 bg-black/50" data-modal-backdrop aria-hidden="true"></div>
+      <div class="relative min-h-full flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="amazonBulkPatchModalTitle"
+          aria-describedby="amazonBulkPatchModalDesc"
+          class="w-full sm:max-w-lg bg-white border-t-4 sm:border-4 border-black sm:rounded-2xl shadow-xl max-h-[95vh] flex flex-col"
+        >
+          <header class="px-4 sm:px-6 py-4 border-b border-gray-200 shrink-0">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <h2 id="amazonBulkPatchModalTitle" class="text-lg sm:text-xl font-black tracking-tight">Bulk Update Listings</h2>
+                <p id="amazonBulkPatchModalDesc" class="text-xs sm:text-sm text-gray-500 mt-1">
+                  <span id="amazonBulkPatchSelectedCount">0</span> selected · sequential patchListingsItem (max 50 per request)
+                </p>
+              </div>
+              <button type="button" data-action="close-bulk-patch-modal" aria-label="Close bulk update modal" title="Close" class="text-2xl leading-none text-gray-500 hover:text-black px-2 min-h-[44px] min-w-[44px]">×</button>
+            </div>
+          </header>
+
+          <div class="amazon-modal-body px-4 sm:px-6 py-4 space-y-4 overflow-y-auto flex-1">
+            <div class="space-y-1">
+              <label for="amazonBulkPatchOperation" class="text-[10px] font-black uppercase tracking-[.14em] text-gray-500">Operation</label>
+              <select id="amazonBulkPatchOperation" class="w-full border-2 border-black rounded-xl px-3 py-2.5 text-sm min-h-[44px] bg-white">
+                <option value="match_kk_price">Match KK website price</option>
+                <option value="match_kk_stock">Match KK website stock (FBM)</option>
+                <option value="match_kk_price_and_stock">Match KK price &amp; stock</option>
+                <option value="set_price">Set price to amount</option>
+                <option value="adjust_price_percent">Adjust price by %</option>
+                <option value="adjust_price_amount">Adjust price by $</option>
+                <option value="set_quantity">Set FBM quantity</option>
+              </select>
+            </div>
+
+            <div id="amazonBulkPatchValueSection" class="space-y-1 hidden">
+              <label for="amazonBulkPatchValue" id="amazonBulkPatchValueLabel" class="text-[10px] font-black uppercase tracking-[.14em] text-gray-500">Value</label>
+              <input id="amazonBulkPatchValue" type="number" step="any" class="w-full border-2 border-black rounded-xl px-3 py-2.5 text-sm min-h-[44px]" />
+            </div>
+
+            <p class="text-[11px] text-gray-500">FBA quantity updates are skipped. Listing status changes are not supported in this phase.</p>
+
+            <div id="amazonBulkPatchResults" class="hidden rounded-xl border border-gray-200 bg-gray-50 p-3" aria-live="polite"></div>
+          </div>
+
+          <footer class="px-4 sm:px-6 py-4 border-t border-gray-200 flex flex-wrap gap-2 shrink-0 bg-white">
+            <button type="button" data-action="preview-bulk-patch" class="border-4 border-black bg-amber-100 px-3 py-2 text-[10px] font-black uppercase tracking-wide min-h-[44px] hover:bg-amber-200">Preview</button>
+            <button type="button" data-action="apply-bulk-patch" class="border-4 border-black bg-black text-white px-3 py-2 text-[10px] font-black uppercase tracking-wide min-h-[44px] hover:opacity-90">Apply Bulk Update</button>
+            <button type="button" data-action="close-bulk-patch-modal" class="ml-auto border-2 border-gray-300 px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-gray-700 hover:bg-gray-50 min-h-[44px]">Cancel</button>
+          </footer>
+        </div>
+      </div>
+    </div>
+
+    <!-- Amazon row action menu template (hidden — cloned by rowActions.js) -->
+    <template id="amazonRowActionMenuTemplate">
+      <div data-menu-status="active" role="menu" class="border-2 border-black bg-white rounded-lg overflow-hidden shadow-lg min-w-[11rem]">
+        <button type="button" disabled data-action="view-details">View Details</button>
+        <button type="button" disabled data-action="edit-listing">Edit Listing</button>
+        <button type="button" disabled data-action="sync-sku">Sync SKU</button>
+        <button type="button" disabled data-action="view-on-amazon">View on Amazon</button>
+      </div>
+      <div data-menu-status="low_stock" role="menu" class="border-2 border-black bg-white rounded-lg overflow-hidden shadow-lg min-w-[11rem]">
+        <button type="button" disabled data-action="view-details">View Details</button>
+        <button type="button" disabled data-action="edit-listing">Edit Listing</button>
+        <button type="button" disabled data-action="sync-sku">Sync SKU</button>
+        <button type="button" disabled data-action="view-on-amazon">View on Amazon</button>
+      </div>
+      <div data-menu-status="out_of_stock" role="menu" class="border-2 border-black bg-white rounded-lg overflow-hidden shadow-lg min-w-[11rem]">
+        <button type="button" disabled data-action="update-inventory">Update Inventory</button>
+        <button type="button" disabled data-action="sync-sku">Sync SKU</button>
+        <button type="button" disabled data-action="view-details">View Details</button>
+        <button type="button" disabled data-action="view-on-amazon">View on Amazon</button>
+      </div>
+      <div data-menu-status="draft" role="menu" class="border-2 border-black bg-white rounded-lg overflow-hidden shadow-lg min-w-[11rem]">
+        <button type="button" disabled data-action="continue-draft">Continue Draft</button>
+        <button type="button" disabled data-action="preview-amazon-issues">Preview Issues</button>
+        <button type="button" disabled data-action="submit-later">Submit Later</button>
+        <button type="button" disabled data-action="delete-draft">Delete Draft</button>
+      </div>
+      <div data-menu-status="issue" role="menu" class="border-2 border-black bg-white rounded-lg overflow-hidden shadow-lg min-w-[11rem]">
+        <button type="button" disabled data-action="resolve-issue">Resolve Issue</button>
+        <button type="button" disabled data-action="view-issue-details">View Issue Details</button>
+        <button type="button" disabled data-action="sync-sku">Sync SKU</button>
+        <button type="button" disabled data-action="view-on-amazon">View on Amazon</button>
+      </div>
+    </template>
+
+    <!-- Placeholder states (hidden — wire in future phase) -->
+    <div id="amazonStateLoading" class="hidden bg-white rounded-2xl border border-gray-200 p-12 text-center mb-4" data-state="loading" aria-hidden="true" role="status" aria-live="polite">
+      <div class="inline-block w-8 h-8 border-4 border-black border-t-kkpink rounded-full animate-spin mb-4" aria-hidden="true"></div>
+      <h2 class="font-black uppercase tracking-[.12em] text-sm">Loading listings…</h2>
+      <p class="text-xs text-gray-400 mt-2">Fetching from Amazon Seller Central</p>
+    </div>
+
+    <div id="amazonStateEmpty" class="hidden bg-white rounded-2xl border border-gray-200 p-12 text-center mb-4" data-state="empty" aria-hidden="true" role="status">
+      <p class="text-3xl mb-3" aria-hidden="true">📦</p>
+      <h2 class="font-black uppercase tracking-[.12em] text-sm">No Amazon listings yet</h2>
+      <p class="text-xs text-gray-400 mt-2 max-w-sm mx-auto">Connect your Amazon account and sync to populate this dashboard.</p>
+      <button type="button" data-action="sync-amazon" aria-disabled="true" disabled title="Connect Amazon before syncing" class="mt-4 border-4 border-black bg-black text-white px-4 py-2 text-xs font-black uppercase tracking-[.12em] opacity-60 cursor-not-allowed">Sync Amazon</button>
+    </div>
+
+    <div id="amazonStateError" class="hidden bg-white rounded-2xl border border-red-200 p-12 text-center mb-4" data-state="error" aria-hidden="true" role="alert">
+      <h2 class="font-black uppercase tracking-[.12em] text-sm text-red-700">Something went wrong</h2>
+      <p class="text-xs text-gray-500 mt-2">Could not load listings. Try again or check sync logs.</p>
+      <button type="button" disabled data-action="retry-load" aria-disabled="true" title="Coming soon" class="mt-4 border-4 border-black bg-white px-4 py-2 text-xs font-black uppercase tracking-[.12em] opacity-50 cursor-not-allowed">Retry</button>
+    </div>
+
+    <div id="amazonStateNoResults" class="hidden bg-white rounded-2xl border border-gray-200 p-12 text-center mb-4" data-state="no-results" aria-hidden="true" role="status">
+      <h2 class="font-black uppercase tracking-[.12em] text-sm">No matching listings</h2>
+      <p class="text-xs text-gray-400 mt-2">Adjust your search or filters and try again.</p>
+    </div>
+
+    <div id="amazonStateDisconnected" class="hidden bg-white rounded-2xl border border-amber-200 p-12 text-center mb-4" data-state="api-disconnected" aria-hidden="true" role="status">
+      <h2 class="font-black uppercase tracking-[.12em] text-sm text-amber-800">Amazon API disconnected</h2>
+      <p class="text-xs text-gray-500 mt-2">Reconnect your Seller Central credentials to resume sync.</p>
+      <button type="button" data-action="connect-amazon" class="mt-4 border-4 border-black bg-black text-white px-4 py-2 text-xs font-black uppercase tracking-[.12em] hover:bg-gray-900 min-h-[44px]">Connect Amazon</button>
+    </div>
+
+    <div id="amazonStateSyncing" class="hidden bg-kkpeach/30 rounded-2xl border border-kkpink/40 p-4 text-center mb-4" data-state="syncing" aria-hidden="true" role="status" aria-live="polite">
+      <h2 class="text-xs font-black uppercase tracking-[.14em]">Sync in progress…</h2>
+      <p class="text-[11px] text-gray-500 mt-1">Updating inventory and pricing from Amazon</p>
+    </div>
+
+  </main>
+
+  <script>
+    (function () {
+      function revealDisconnectedPanel(message) {
+        var panel = document.getElementById("amazonAuthPanel");
+        if (!panel || panel.dataset.authState !== "loading") return;
+        panel.dataset.authState = "disconnected";
+        var loading = document.getElementById("amazonAuthPanelLoading");
+        var disconnected = document.getElementById("amazonAuthPanelDisconnected");
+        if (loading) loading.classList.add("hidden");
+        if (disconnected) disconnected.classList.remove("hidden");
+        var detail = document.getElementById("amazonAuthDisconnectedDetail");
+        if (detail && message) detail.textContent = message;
+      }
+      setTimeout(function () {
+        revealDisconnectedPanel(
+          "Scripts are still loading or failed to load. Hard refresh (Ctrl+Shift+R), or restart Live Server if this persists. Connect Amazon works once scripts finish loading.",
+        );
+      }, 8000);
+    })();
+  </script>
+  <script type="module" src="/js/admin/amazon/authBoot.js"></script>
+  <script type="module" src="/js/admin/amazon/index.js"></script>
+  <script type="module" src="/js/shared/pwa.js"></script>
+</body>
+</html>

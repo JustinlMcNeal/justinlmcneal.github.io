@@ -1,0 +1,142 @@
+/* Amazon Listings — scrollbar polish only (layout/hover via Tailwind) */
+
+.amazon-table-scroll::-webkit-scrollbar {
+  height: 8px;
+}
+.amazon-table-scroll::-webkit-scrollbar-track {
+  background: #f3f4f6;
+}
+.amazon-table-scroll::-webkit-scrollbar-thumb {
+  background: #000;
+  border-radius: 9999px;
+}
+.amazon-table-scroll::-webkit-scrollbar-thumb:hover {
+  background: #374151;
+}
+
+.amazon-modal-body {
+  max-height: min(70vh, 640px);
+}
+
+.amazon-row-popover {
+  position: fixed;
+  z-index: 50;
+  max-width: calc(100vw - 1rem);
+}
+
+.amazon-row-popover__menu {
+  min-width: 11rem;
+}
+
+.amazon-fee-tooltip {
+  position: fixed;
+  z-index: 55;
+  max-width: min(20rem, calc(100vw - 1rem));
+}
+
+.amazon-fee-tooltip__inner {
+  position: relative;
+  background: #fff;
+  border: 2px solid #000;
+  border-radius: 0.75rem;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  padding: 0.875rem 1rem;
+}
+
+.amazon-fee-tooltip__close {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.35rem;
+  font-size: 1.25rem;
+  line-height: 1;
+  color: #6b7280;
+  padding: 0.25rem 0.5rem;
+}
+
+.amazon-fee-tooltip__close:hover {
+  color: #000;
+}
+
+.amazon-row-price-mismatch {
+  box-shadow: inset 3px 0 0 #f59e0b;
+}
+
+.amazon-row-price-amazon-higher {
+  background-color: rgb(255 251 235 / 0.35);
+}
+
+.amazon-row-price-amazon-lower {
+  box-shadow: inset 3px 0 0 #0ea5e9;
+  background-color: rgb(240 249 255 / 0.35);
+}
+
+.amazon-row-price-mismatch:hover {
+  background-color: rgb(254 243 199 / 0.45);
+}
+
+.amazon-row-price-amazon-lower:hover {
+  background-color: rgb(224 242 254 / 0.55);
+}
+
+.amazon-row-inventory-mismatch {
+  box-shadow: inset 3px 0 0 #8b5cf6;
+}
+
+.amazon-row-inventory-amazon-higher {
+  background-color: rgb(255 251 235 / 0.25);
+}
+
+.amazon-row-inventory-amazon-lower {
+  box-shadow: inset 3px 0 0 #7c3aed;
+  background-color: rgb(245 243 255 / 0.35);
+}
+
+.amazon-row-inventory-mismatch:hover {
+  background-color: rgb(237 233 254 / 0.45);
+}
+
+.amazon-row-inventory-amazon-lower:hover {
+  background-color: rgb(221 214 254 / 0.5);
+}
+
+.amazon-row-health-error {
+  box-shadow: inset 3px 0 0 #ef4444;
+  background-color: rgb(254 242 242 / 0.35);
+}
+
+.amazon-row-health-warning {
+  box-shadow: inset 3px 0 0 #f59e0b;
+  background-color: rgb(255 251 235 / 0.25);
+}
+
+.amazon-row-health-unknown {
+  box-shadow: inset 3px 0 0 #9ca3af;
+  background-color: rgb(249 250 251 / 0.45);
+}
+
+.amazon-row-health-error:hover {
+  background-color: rgb(254 226 226 / 0.45);
+}
+
+.amazon-row-health-warning:hover {
+  background-color: rgb(254 243 199 / 0.35);
+}
+
+#amazonListingsTable.amazon-table-density-compact th,
+#amazonListingsTable.amazon-table-density-compact td {
+  padding-top: 0.375rem;
+  padding-bottom: 0.375rem;
+}
+
+#amazonListingsTable.amazon-table-density-compact .amazon-listing-product-thumb {
+  width: 2rem;
+  height: 2rem;
+}
+
+#amazonListingsTable [data-amazon-col].amazon-col-hidden {
+  display: none !important;
+}
+
+#amazonListingsTable [data-amazon-col].amazon-col-force-show {
+  display: table-cell !important;
+}
