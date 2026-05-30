@@ -262,6 +262,18 @@ export async function startAmazonAuth(options = {}) {
   });
 }
 
+export async function importAmazonSelfAuthToken(payload = {}) {
+  return callEdgeFunction("amazon-auth-import-self", {
+    method: "POST",
+    body: {
+      sellerId: payload.sellerId,
+      refreshToken: payload.refreshToken,
+      region: payload.region,
+      marketplaceIds: payload.marketplaceIds,
+    },
+  });
+}
+
 export async function disconnectAmazon(sellerAccountId) {
   return callEdgeFunction("amazon-auth-disconnect", {
     method: "POST",

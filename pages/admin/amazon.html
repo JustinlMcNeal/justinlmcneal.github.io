@@ -140,12 +140,29 @@
       </div>
 
       <div id="amazonAuthPanelDisconnected" class="hidden">
-        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <p class="text-xs font-black uppercase tracking-[.14em] text-gray-700">Amazon is not connected</p>
-            <p id="amazonAuthDisconnectedDetail" class="text-sm text-gray-500 mt-1">Connect Seller Central to sync listings. Search, filters, table settings, and export still work on cached listing data.</p>
+        <div class="flex flex-col gap-4">
+          <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+            <div>
+              <p class="text-xs font-black uppercase tracking-[.14em] text-gray-700">Amazon is not connected</p>
+              <p id="amazonAuthDisconnectedDetail" class="text-sm text-gray-500 mt-1">Connect Seller Central to sync listings. Search, filters, table settings, and export still work on cached listing data.</p>
+            </div>
+            <button type="button" data-action="connect-amazon" class="inline-flex items-center justify-center border-4 border-black bg-black text-white px-4 py-2.5 text-[10px] font-black uppercase tracking-[.12em] min-h-[44px] hover:bg-gray-900 shrink-0">Connect Amazon</button>
           </div>
-          <button type="button" data-action="connect-amazon" class="inline-flex items-center justify-center border-4 border-black bg-black text-white px-4 py-2.5 text-[10px] font-black uppercase tracking-[.12em] min-h-[44px] hover:bg-gray-900">Connect Amazon</button>
+          <details id="amazonAuthSelfImport" class="rounded-xl border border-gray-200 bg-gray-50 p-4">
+            <summary class="text-xs font-black uppercase tracking-[.12em] text-gray-700 cursor-pointer">Private app: import SPP refresh token</summary>
+            <p class="text-xs text-gray-500 mt-2">Private seller apps in Solution Provider Portal do not support website OAuth (Connect Amazon may show MD1000). Use SPP → Karry Kraze → Authorize, then paste your seller ID and refresh token here.</p>
+            <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label class="block text-xs font-medium text-gray-600">
+                Seller ID
+                <input type="text" id="amazonSelfAuthSellerId" autocomplete="off" placeholder="A1XXXXXXXXXXXXX" class="mt-1 w-full border-2 border-gray-200 rounded-lg px-3 py-2 text-sm font-mono">
+              </label>
+              <label class="block text-xs font-medium text-gray-600 sm:col-span-2">
+                Refresh token (from SPP Authorize)
+                <input type="password" id="amazonSelfAuthRefreshToken" autocomplete="off" placeholder="Atzr|…" class="mt-1 w-full border-2 border-gray-200 rounded-lg px-3 py-2 text-sm font-mono">
+              </label>
+            </div>
+            <button type="button" data-action="import-self-auth" class="mt-3 inline-flex items-center justify-center border-2 border-black bg-white text-black px-4 py-2 text-[10px] font-black uppercase tracking-[.12em] min-h-[40px] hover:bg-gray-100">Save token</button>
+          </details>
         </div>
       </div>
 

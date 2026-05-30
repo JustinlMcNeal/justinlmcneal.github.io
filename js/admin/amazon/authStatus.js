@@ -2,6 +2,7 @@ import { qs, qsa, show, hide } from "./dom.js";
 import {
   disconnectAmazon,
   getAmazonAuthStatus,
+  importAmazonSelfAuthToken,
   startAmazonAuth,
 } from "./api.js";
 import { hideAmazonNotification, showAmazonNotification } from "./notifications.js";
@@ -97,7 +98,7 @@ function renderDisconnected(detail) {
   const detailEl = qs("#amazonAuthDisconnectedDetail");
   if (detailEl) {
     detailEl.textContent = detail ||
-      "Connect Seller Central to sync listings. Search, filters, table settings, and export still work on cached listing data.";
+      "Private SPP apps use self-authorization (expand below). Connect Amazon is for public apps only and may return MD1000 for private seller apps.";
   }
 }
 
@@ -228,6 +229,40 @@ async function handleConnectClick(button) {
   }
 }
 
+async function handleImportSelfAuthClick(button) {
+  if (button.disabled) return;
+
+  const sellerIdEl = qs("#amazonSelfAuthSellerId");
+  const tokenEl = qs("#amazonSelfAuthRefreshToken");
+  const sellerId = sellerIdEl instanceof HTMLInputElement ? sellerIdEl.value.trim() : "";
+  const refreshToken = tokenEl instanceof HTMLInputElement ? tokenEl.value.trim() : "";
+
+  if (!sellerId || !refreshToken) {
+    showAmazonNotification("Enter seller ID and refresh token from SPP Authorize.", { tone: "error" });
+    return;
+  }
+
+  button.disabled = true;
+  try {
+    await importAmazonSelfAuthToken({ sellerId, refreshToken });
+    if (tokenEl instanceof HTMLInputElement) tokenEl.value = "";
+    showAmazonNotification("Amazon connected via SPP self-authorization.", { tone: "success" });
+    await refreshAmazonAuthStatus();
+  } catch (err) {
+    const code = err?.code || "request_failed";
+    showAmazonNotification(
+      code === "invalid_refresh_token"
+        ? "Refresh token rejected by Amazon. Generate a new one in SPP → Authorize."
+        : code === "unauthorized"
+          ? "Please sign in as an admin."
+          : "Could not save Amazon token.",
+      { tone: "error" },
+    );
+  } finally {
+    button.disabled = false;
+  }
+}
+
 async function handleDisconnectClick(button) {
   if (button.disabled) return;
   if (!window.confirm("Disconnect Amazon? Listing history will remain in Karry Kraze.")) {
@@ -269,6 +304,13 @@ function bindAuthActions() {
     if (disconnectBtn instanceof HTMLButtonElement) {
       event.preventDefault();
       handleDisconnectClick(disconnectBtn);
+      return;
+    }
+
+    const importBtn = target.closest('[data-action="import-self-auth"]');
+    if (importBtn instanceof HTMLButtonElement) {
+      event.preventDefault();
+      handleImportSelfAuthClick(importBtn);
     }
   });
 }
