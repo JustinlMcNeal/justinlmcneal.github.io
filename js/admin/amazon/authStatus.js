@@ -91,14 +91,39 @@ function renderConnected(status) {
   }
 }
 
+const SELF_IMPORT_HTML = `
+  <div id="amazonAuthSelfImport" class="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
+    <p class="text-xs font-black uppercase tracking-[.12em] text-gray-700">Private app: import SPP refresh token</p>
+    <p class="text-xs text-gray-500 mt-2">SPP → Karry Kraze → Authorize → copy seller ID and refresh token, then paste below.</p>
+    <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <label class="block text-xs font-medium text-gray-600">
+        Seller ID
+        <input type="text" id="amazonSelfAuthSellerId" autocomplete="off" placeholder="A1XXXXXXXXXXXXX" class="mt-1 w-full border-2 border-gray-200 rounded-lg px-3 py-2 text-sm font-mono">
+      </label>
+      <label class="block text-xs font-medium text-gray-600 sm:col-span-2">
+        Refresh token (from SPP Authorize)
+        <input type="password" id="amazonSelfAuthRefreshToken" autocomplete="off" placeholder="Atzr|…" class="mt-1 w-full border-2 border-gray-200 rounded-lg px-3 py-2 text-sm font-mono">
+      </label>
+    </div>
+    <button type="button" data-action="import-self-auth" class="mt-3 inline-flex items-center justify-center border-2 border-black bg-white text-black px-4 py-2 text-[10px] font-black uppercase tracking-[.12em] min-h-[40px] hover:bg-gray-100">Save token</button>
+  </div>`;
+
+function ensureSelfImportUi() {
+  if (qs("#amazonAuthSelfImport")) return;
+  const panel = qs("#amazonAuthPanelDisconnected");
+  if (!panel) return;
+  panel.insertAdjacentHTML("beforeend", SELF_IMPORT_HTML);
+}
+
 function renderDisconnected(detail) {
   setPanelState("disconnected");
   setSyncButtonsEnabled(false);
+  ensureSelfImportUi();
 
   const detailEl = qs("#amazonAuthDisconnectedDetail");
   if (detailEl) {
     detailEl.textContent = detail ||
-      "Private SPP apps use self-authorization (expand below). Connect Amazon is for public apps only and may return MD1000 for private seller apps.";
+      "Use the SPP refresh token form below (private apps). Connect Amazon is for public apps and may return MD1000.";
   }
 }
 
