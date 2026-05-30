@@ -14,6 +14,7 @@ import {
   getAwsRegionForSpApiRegion,
   refreshAmazonAccessToken,
 } from "./amazonSpApiUtils.ts";
+import { assumeSpApiRole } from "./amazonStsUtils.ts";
 
 export type ServiceClient = ReturnType<typeof createClient>;
 
@@ -119,6 +120,45 @@ export function buildAwsConfig(
     secretAccessKey: env.awsSecretAccessKey.trim(),
     sessionToken: env.awsSessionToken,
     region: getAwsRegionForSpApiRegion(accountRegion, env.awsRegionOverride),
+  };
+}
+
+export async function resolveAwsSigningConfig(
+  accountRegion: string,
+  env: SyncEnvConfig,
+): Promise<AwsSigningConfig | undefined> {
+  if (!env.awsAccessKeyId?.trim() || !env.awsSecretAccessKey?.trim()) {
+    return undefined;
+  }
+
+  const region = getAwsRegionForSpApiRegion(accountRegion, env.awsRegionOverride);
+  const accessKeyId = env.awsAccessKeyId.trim();
+  const secretAccessKey = env.awsSecretAccessKey.trim();
+  const roleArn = env.awsRoleArn?.trim();
+
+  if (roleArn) {
+    const assumed = await assumeSpApiRole({
+      roleArn,
+      accessKeyId,
+      secretAccessKey,
+      region,
+    });
+    if (!assumed.ok) {
+      throw new Error(assumed.error);
+    }
+    return {
+      accessKeyId: assumed.accessKeyId,
+      secretAccessKey: assumed.secretAccessKey,
+      sessionToken: assumed.sessionToken,
+      region,
+    };
+  }
+
+  return {
+    accessKeyId,
+    secretAccessKey,
+    sessionToken: env.awsSessionToken,
+    region,
   };
 }
 
@@ -250,7 +290,7 @@ export async function runSellerAccountSync(
 
   const enabledIds = await resolveEnabledMarketplaceIds(client, account, marketplaceIds);
   const endpoint = getAmazonEndpoint(account.region, env.spApiEndpointOverride);
-  const awsConfig = buildAwsConfig(account.region, env);
+  const awsConfig = await resolveAwsSigningConfig(account.region, env);
 
   const runs: SyncRunSummary[] = [];
   for (const marketplaceId of enabledIds) {

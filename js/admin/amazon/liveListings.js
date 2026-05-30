@@ -50,6 +50,16 @@ export function initAmazonLiveListings(deps = {}) {
   /** @type {ReturnType<typeof defaultListingsQuery>} */
   let queryState = defaultListingsQuery();
 
+  // Drop Phase 1 mock markup immediately (before async Supabase fetch).
+  renderLiveListings([], { afterRender: deps.afterRender });
+  updateListingsCounts({
+    total: 0,
+    page: paginateListings([], 1, queryState.pageSize),
+  });
+  updateStatsCards({ total: 0, active: 0, lowStock: 0, issues: 0 });
+  setListingsVisible(false);
+  showListingState("#amazonStateLoading");
+
   function getFilteredRows() {
     return sortListings(filterListings(allRows, queryState), queryState.sort);
   }

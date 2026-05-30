@@ -311,7 +311,10 @@ export function updateListingsCounts(arg) {
   }
 
   const tabCount = qs("#amazonTabSynced [data-count]");
-  if (tabCount) tabCount.textContent = String(total);
+  if (tabCount) {
+    tabCount.textContent = String(total);
+    tabCount.setAttribute("data-count", String(total));
+  }
 
   const pagination = qs("#amazonPaginationSummary");
   if (pagination) {

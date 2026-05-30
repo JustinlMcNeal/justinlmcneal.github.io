@@ -65,6 +65,7 @@ export function initAmazonSyncActions(deps) {
       });
 
       const failed = Number(result.recordsFailed || 0);
+      const created = Number(result.recordsCreated || 0);
       const updated = Number(result.recordsUpdated || 0);
       const status = String(result.status || "success");
 
@@ -78,8 +79,12 @@ export function initAmazonSyncActions(deps) {
           { tone: "warning" },
         );
       } else {
+        const parts = [];
+        if (created > 0) parts.push(`${created} new`);
+        if (updated > 0) parts.push(`${updated} updated`);
+        const summary = parts.length > 0 ? parts.join(", ") : "0 changed";
         showAmazonNotification(
-          `Sync complete — ${updated} listing${updated === 1 ? "" : "s"} updated.`,
+          `Sync complete — ${summary}. Map new listings under Needs Mapping.`,
           { tone: "success" },
         );
       }
@@ -91,7 +96,8 @@ export function initAmazonSyncActions(deps) {
       const messages = {
         amazon_not_connected: "Amazon is not connected.",
         token_refresh_failed: "Amazon token refresh failed. Try reconnecting.",
-        sp_api_request_failed: "Amazon sync request failed.",
+        sp_api_request_failed: "Amazon sync request failed (SP-API rejected the call).",
+        aws_assume_role_failed: "AWS role assumption failed. Check AMAZON_IAM_ROLE_ARN and STS policy.",
         server_misconfigured: "Amazon sync is not configured on the server.",
         unauthorized: "Please sign in as an admin to sync Amazon.",
       };
