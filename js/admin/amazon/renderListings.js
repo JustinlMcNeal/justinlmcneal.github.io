@@ -1,3 +1,4 @@
+import { qs } from "./dom.js";
 import { applyAmazonTableSettings } from "./tableSettings.js";
 import {
   feeColumnMarkup,
