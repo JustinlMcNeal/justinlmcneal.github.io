@@ -275,9 +275,10 @@ async function handleImportSelfAuthClick(button) {
     await refreshAmazonAuthStatus();
   } catch (err) {
     const code = err?.code || "request_failed";
+    const hint = err?.hint || "";
     showAmazonNotification(
       code === "invalid_refresh_token"
-        ? "Refresh token rejected by Amazon. Generate a new one in SPP → Authorize."
+        ? (hint || "Refresh token rejected by Amazon. Check LWA client ID/secret in Supabase match SPP → View LWA credentials.")
         : code === "unauthorized"
           ? "Please sign in as an admin."
           : "Could not save Amazon token.",

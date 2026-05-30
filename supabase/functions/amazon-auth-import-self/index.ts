@@ -28,11 +28,19 @@ function normalizeMarketplaceIds(raw: unknown, fallback: string): string[] {
   return [fallback];
 }
 
+type LwaVerifyResult =
+  | { ok: true }
+  | { ok: false; lwaError?: string; lwaErrorDescription?: string };
+
+function normalizeRefreshToken(raw: string): string {
+  return raw.trim().replace(/^["']+|["']+$/g, "").replace(/\s+/g, "");
+}
+
 async function verifyRefreshToken(
   refreshToken: string,
   clientId: string,
   clientSecret: string,
-): Promise<boolean> {
+): Promise<LwaVerifyResult> {
   const resp = await fetch(LWA_TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -44,13 +52,29 @@ async function verifyRefreshToken(
     }),
   });
 
-  if (!resp.ok) return false;
+  let data: { access_token?: string; error?: string; error_description?: string } = {};
   try {
-    const data = await resp.json() as { access_token?: string; error?: string };
-    return Boolean(data.access_token && !data.error);
+    data = await resp.json() as typeof data;
   } catch {
-    return false;
+    return { ok: false, lwaError: "invalid_response" };
   }
+
+  if (resp.ok && data.access_token && !data.error) {
+    return { ok: true };
+  }
+
+  console.log(`${LOG_PREFIX} lwa_error ${data.error || resp.status}`);
+  return {
+    ok: false,
+    lwaError: data.error || "token_exchange_failed",
+    lwaErrorDescription: data.error_description,
+  };
+}
+
+function clientIdHint(clientId: string): string {
+  const trimmed = clientId.trim();
+  if (trimmed.length <= 12) return trimmed;
+  return `${trimmed.slice(0, 28)}…${trimmed.slice(-6)}`;
 }
 
 Deno.serve(async (req) => {
@@ -99,7 +123,9 @@ Deno.serve(async (req) => {
   }
 
   const sellerId = typeof body.sellerId === "string" ? body.sellerId.trim() : "";
-  const refreshToken = typeof body.refreshToken === "string" ? body.refreshToken.trim() : "";
+  const refreshToken = typeof body.refreshToken === "string"
+    ? normalizeRefreshToken(body.refreshToken)
+    : "";
 
   if (!sellerId || sellerId.length < 3 || sellerId.length > 64) {
     return json({ ok: false, error: "invalid_request" }, 400);
@@ -107,6 +133,14 @@ Deno.serve(async (req) => {
 
   if (!refreshToken || refreshToken.length < 20) {
     return json({ ok: false, error: "invalid_request" }, 400);
+  }
+
+  if (!refreshToken.startsWith("Atzr|")) {
+    return json({
+      ok: false,
+      error: "invalid_refresh_token",
+      hint: "Token should start with Atzr|. Copy the full refresh token from SPP Authorize, not an auth code.",
+    }, 400);
   }
 
   const region = typeof body.region === "string" && body.region.trim()
@@ -132,10 +166,20 @@ Deno.serve(async (req) => {
     return json({ ok: false, error: "invalid_request" }, 400);
   }
 
-  const tokenOk = await verifyRefreshToken(refreshToken, clientId, clientSecret);
-  if (!tokenOk) {
+  const tokenResult = await verifyRefreshToken(refreshToken, clientId, clientSecret);
+  if (!tokenResult.ok) {
     console.log(`${LOG_PREFIX} invalid_refresh_token`);
-    return json({ ok: false, error: "invalid_refresh_token" }, 400);
+    const hint = tokenResult.lwaError === "invalid_client"
+      ? `LWA client ID/secret in Supabase do not match SPP. Expected client ID like ${clientIdHint(clientId)}. Update AMAZON_LWA_CLIENT_ID and AMAZON_LWA_CLIENT_SECRET from Login with Amazon → Karry Kraze SP-API → Show Secret.`
+      : tokenResult.lwaError === "invalid_grant"
+        ? "Amazon rejected this refresh token for the configured LWA client. Re-authorize in SPP and paste the new token immediately, or fix AMAZON_LWA_CLIENT_ID/SECRET mismatch."
+        : "Could not exchange refresh token with Amazon LWA.";
+    return json({
+      ok: false,
+      error: "invalid_refresh_token",
+      lwaError: tokenResult.lwaError,
+      hint,
+    }, 400);
   }
 
   const now = new Date().toISOString();
