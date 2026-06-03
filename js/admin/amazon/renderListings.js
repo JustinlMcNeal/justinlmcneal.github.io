@@ -52,6 +52,18 @@ function rowSku(row) {
   return String(row.kk_sku || row.seller_sku || "—");
 }
 
+/**
+ * @param {Record<string, unknown>} row
+ * @param {string} [sizeClass]
+ */
+function productThumbMarkup(row, sizeClass = "w-11 h-11") {
+  const imageUrl = row.image_url ? String(row.image_url) : "";
+  if (imageUrl) {
+    return `<img src="${escapeHtml(imageUrl)}" alt="" class="${sizeClass} rounded-lg object-cover border border-gray-200 flex-shrink-0 amazon-listing-product-thumb" loading="lazy" />`;
+  }
+  return `<div class="${sizeClass} rounded-lg bg-kkpeach/60 border border-gray-200 flex-shrink-0 amazon-listing-product-thumb" aria-hidden="true"></div>`;
+}
+
 /** @param {Record<string, unknown>} row */
 function rowInventory(row) {
   const kkStock = Number(row.kk_stock);
@@ -125,6 +137,28 @@ function staleBadgeMarkup(row) {
   return '<span class="inline-flex px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-orange-100 text-orange-800 ml-1" title="Last synced more than 24 hours ago">Stale</span>';
 }
 
+/** @param {Record<string, unknown>} row */
+function productMetaLine(row) {
+  const variant = String(row.kk_variant_label || "").trim();
+  const subtitle = String(row.product_type || row.fulfillment_channel || "Amazon listing").trim();
+  const parts = [];
+  if (variant) parts.push(variant);
+  if (subtitle) parts.push(subtitle);
+  return parts.join(" · ");
+}
+
+/**
+ * @param {Record<string, unknown>} row
+ * @param {string} title
+ */
+function rowMenuButtonMarkup(row, title) {
+  const id = String(row.amazon_listing_id || "");
+  const status = String(row.listing_status || "unknown");
+  return `
+    <button type="button" data-action="row-menu" data-listing-id="${escapeHtml(id)}" data-status="${escapeHtml(status)}" data-asin="${escapeHtml(String(row.asin || ""))}" data-seller-sku="${escapeHtml(String(row.seller_sku || row.kk_sku || ""))}" data-marketplace-id="${escapeHtml(String(row.marketplace_id || ""))}" aria-haspopup="menu" aria-expanded="false" aria-label="Actions for ${title}" title="Row actions" class="amazon-listing-row-menu shrink-0 inline-flex items-center justify-center w-8 h-8 rounded border-2 border-black bg-white text-base font-bold text-gray-700 hover:bg-gray-50 leading-none">⋮</button>
+  `;
+}
+
 /**
  * @param {Record<string, unknown>} row
  */
@@ -133,48 +167,48 @@ export function buildListingTableRow(row) {
   const status = String(row.listing_status || "unknown");
   const badge = statusBadge(status);
   const title = escapeHtml(rowTitle(row));
-  const subtitle = escapeHtml(row.product_type || row.fulfillment_channel || "Amazon listing");
+  const titleRaw = rowTitle(row);
+  const meta = escapeHtml(productMetaLine(row));
   const asin = escapeHtml(row.asin || "—");
   const sku = escapeHtml(rowSku(row));
-  const price = priceColumnMarkup(row, escapeHtml);
+  const idsLine = `${sku} · ${asin}`;
+  const price = priceColumnMarkup(row, escapeHtml, { compact: true });
   const fulfillment = fulfillmentMarkup(row);
   const synced = escapeHtml(formatSyncedDate(row.last_synced_at));
   const rowHighlight = listingRowHighlightClass(row);
   const health = healthMarkup(row);
+  const tableCompact = { compact: true };
 
   return `
     <tr class="amazon-listing-row border-b border-gray-100 hover:bg-gray-50 transition-colors ${rowHighlight}" data-listing-id="${escapeHtml(id)}" data-status="${escapeHtml(status)}" data-asin="${asin}" data-sku="${sku}" data-price-mismatch="${row.has_price_mismatch === true ? "true" : "false"}" data-inventory-mismatch="${row.has_inventory_mismatch === true ? "true" : "false"}" data-health-status="${escapeHtml(String(row.listing_health_status || "unknown"))}">
-      <td class="px-2 py-2.5 w-10" data-amazon-col="select">
+      <td class="px-2 py-2 w-10" data-amazon-col="select">
         <input type="checkbox" data-action="select-listing" data-listing-id="${escapeHtml(id)}" aria-label="Select ${title}" class="w-4 h-4 border-2 border-black rounded-sm" />
       </td>
-      <td class="px-4 py-2.5" data-amazon-col="product">
-        <div class="flex items-center gap-3">
-          <div class="amazon-listing-product-thumb w-11 h-11 rounded-lg bg-kkpeach/60 border border-gray-200 flex-shrink-0" aria-hidden="true"></div>
-          <div>
-            <p class="font-bold text-sm leading-tight">${title}</p>
-            <p class="text-[11px] text-gray-400 mt-0.5">${subtitle}</p>
+      <td class="px-3 py-2" data-amazon-col="product">
+        <div class="flex items-center gap-2 min-w-0">
+          ${productThumbMarkup(row, "w-9 h-9")}
+          <div class="min-w-0 flex-1">
+            <p class="font-bold text-sm leading-tight truncate" title="${title}">${title}</p>
+            ${meta ? `<p class="text-[10px] text-gray-400 truncate" title="${meta}">${meta}</p>` : ""}
+            <p class="text-[10px] font-mono text-gray-500 truncate" title="${escapeHtml(idsLine)}">${sku} · ${asin}</p>
           </div>
+          ${rowMenuButtonMarkup(row, titleRaw)}
         </div>
       </td>
-      <td class="px-4 py-2.5 font-mono text-xs text-gray-600" data-amazon-col="asin">${asin}</td>
-      <td class="px-4 py-2.5 font-mono text-xs text-gray-600" data-amazon-col="sku">${sku}</td>
-      <td class="px-4 py-2.5 text-right" data-amazon-col="price">${price}</td>
-      <td class="px-4 py-2.5 text-right hidden xl:table-cell" data-amazon-col="amazonFee">${feeColumnMarkup(row)}</td>
-      <td class="px-4 py-2.5 text-right" data-amazon-col="profit">${profitColumnMarkup(row)}</td>
-      <td class="px-4 py-2.5 text-center hidden xl:table-cell" data-amazon-col="fulfillment">${fulfillment}</td>
-      <td class="px-4 py-2.5 text-center" data-amazon-col="inventory">${inventoryMarkup(row)}</td>
-      <td class="px-4 py-2.5 text-center hidden 2xl:table-cell" data-amazon-col="fbaReserved">${fbaReservedColumnMarkup(row, escapeHtml)}</td>
-      <td class="px-4 py-2.5 text-center hidden 2xl:table-cell" data-amazon-col="fbaInbound">${fbaInboundColumnMarkup(row, escapeHtml)}</td>
-      <td class="px-4 py-2.5 text-center" data-amazon-col="status">
-        <div class="flex flex-col items-center gap-1">
-          <span class="inline-flex px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide ${badge.className}">${escapeHtml(badge.label)}</span>
+      <td class="px-2 py-2 text-right" data-amazon-col="price">${price}</td>
+      <td class="px-2 py-2 text-right hidden xl:table-cell" data-amazon-col="amazonFee">${feeColumnMarkup(row, tableCompact)}</td>
+      <td class="px-2 py-2 text-right" data-amazon-col="profit">${profitColumnMarkup(row, tableCompact)}</td>
+      <td class="px-2 py-2 text-center hidden xl:table-cell" data-amazon-col="fulfillment">${fulfillment}</td>
+      <td class="px-2 py-2 text-center" data-amazon-col="inventory">${inventoryMarkup(row)}</td>
+      <td class="px-2 py-2 text-center hidden 2xl:table-cell" data-amazon-col="fbaReserved">${fbaReservedColumnMarkup(row, escapeHtml)}</td>
+      <td class="px-2 py-2 text-center hidden 2xl:table-cell" data-amazon-col="fbaInbound">${fbaInboundColumnMarkup(row, escapeHtml)}</td>
+      <td class="px-2 py-2 text-center" data-amazon-col="status">
+        <div class="flex flex-col items-center gap-0.5">
+          <span class="inline-flex px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wide ${badge.className}">${escapeHtml(badge.label)}</span>
           ${health}
         </div>
       </td>
-      <td class="px-4 py-2.5 text-xs text-gray-500 hidden xl:table-cell" data-amazon-col="lastSynced">${synced}${staleBadgeMarkup(row)}</td>
-      <td class="px-4 py-2.5 text-right" data-amazon-col="actions">
-        <button type="button" data-action="row-menu" data-listing-id="${escapeHtml(id)}" data-status="${escapeHtml(status)}" data-asin="${escapeHtml(String(row.asin || ""))}" data-seller-sku="${escapeHtml(String(row.seller_sku || row.kk_sku || ""))}" data-marketplace-id="${escapeHtml(String(row.marketplace_id || ""))}" aria-haspopup="menu" aria-expanded="false" aria-label="Actions for ${title}" title="Open row actions menu" class="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded border-2 border-black bg-white text-[10px] font-black uppercase tracking-wide text-gray-700 hover:bg-gray-50 min-h-[36px] whitespace-nowrap">Actions <span aria-hidden="true">▾</span></button>
-      </td>
+      <td class="px-2 py-2 text-[10px] text-gray-500 hidden xl:table-cell whitespace-nowrap" data-amazon-col="lastSynced">${synced}${staleBadgeMarkup(row)}</td>
     </tr>
   `;
 }
@@ -190,6 +224,7 @@ export function buildListingMobileCard(row) {
   const subtitle = escapeHtml(row.product_type || row.fulfillment_channel || "Amazon listing");
   const asin = escapeHtml(row.asin || "—");
   const sku = escapeHtml(rowSku(row));
+  const variant = escapeHtml(row.kk_variant_label || "—");
   const price = priceColumnMarkup(row, escapeHtml);
   const fulfillment = fulfillmentMarkup(row);
   const synced = escapeHtml(formatSyncedDate(row.last_synced_at));
@@ -204,7 +239,7 @@ export function buildListingMobileCard(row) {
         <span class="text-[10px] font-black uppercase tracking-wide text-gray-500">Select for bulk update</span>
       </div>
       <div class="flex gap-3">
-        <div class="w-14 h-14 rounded-lg bg-kkpeach/60 border border-gray-200 flex-shrink-0" aria-hidden="true"></div>
+        ${productThumbMarkup(row, "w-14 h-14")}
         <div class="flex-1 min-w-0">
           <div class="flex items-start justify-between gap-2">
             <h3 class="font-bold text-sm leading-tight">${title}</h3>
@@ -214,6 +249,7 @@ export function buildListingMobileCard(row) {
           <dl class="grid grid-cols-2 gap-x-3 gap-y-1 mt-3 text-xs">
             <div data-amazon-mobile-col="asin"><dt class="text-gray-400">ASIN</dt><dd class="font-mono font-medium">${asin}</dd></div>
             <div data-amazon-mobile-col="sku"><dt class="text-gray-400">SKU</dt><dd class="font-mono font-medium">${sku}</dd></div>
+            <div data-amazon-mobile-col="variant"><dt class="text-gray-400">Variant</dt><dd>${variant}</dd></div>
             <div data-amazon-mobile-col="price"><dt class="text-gray-400">Price</dt><dd>${price}</dd></div>
             <div data-amazon-mobile-col="fulfillment"><dt class="text-gray-400">Fulfillment</dt><dd>${fulfillment}</dd></div>
             <div data-amazon-mobile-col="inventory"><dt class="text-gray-400">Inventory</dt><dd>${inventory}</dd></div>

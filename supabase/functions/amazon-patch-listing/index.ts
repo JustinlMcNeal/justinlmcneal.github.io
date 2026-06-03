@@ -3,19 +3,25 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeadersJson, json, requireAdminJson, UUID_RE } from "../_shared/amazonAuthUtils.ts";
 import {
   applyLocalListingPatchUpdate,
+  buildListingCopyPatchOperations,
+  buildListingImagePatchOperations,
   buildListingPatchOperations,
+  buildOfferRestorePutBody,
+  countAmazonListingSecondaryImages,
   isFbaManagedListing,
+  listingNeedsOfferPut,
   mapPatchIssues,
   patchListingsItemLiveUpdate,
   patchListingsItemValidationPreview,
   patchSubmissionAccepted,
   validateListingPatchInput,
 } from "../_shared/amazonListingPatchUtils.ts";
-import { resolveAmazonCredentials } from "../_shared/amazonPtdAuthUtils.ts";
 import {
-  readSyncEnvConfig,
-  runSellerAccountSync,
-} from "../_shared/amazonSyncAccountUtils.ts";
+  putListingsItemLiveSubmit,
+  putListingsItemValidationPreview,
+} from "../_shared/amazonListingPayloadUtils.ts";
+import { resolveAmazonCredentials } from "../_shared/amazonPtdAuthUtils.ts";
+import { readSyncEnvConfig } from "../_shared/amazonSyncAccountUtils.ts";
 
 const LOG_PREFIX = "[amazon-patch-listing]";
 
@@ -23,8 +29,44 @@ type PatchPayload = {
   amazonListingId?: unknown;
   price?: unknown;
   quantity?: unknown;
+  imageUrls?: unknown;
+  title?: unknown;
+  description?: unknown;
+  bulletPoints?: unknown;
   preview?: unknown;
 };
+
+function parseBulletPoints(value: unknown): string[] | undefined {
+  if (value === undefined) return undefined;
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => String(entry || "").trim())
+      .filter(Boolean)
+      .slice(0, 10);
+  }
+  if (typeof value === "string") {
+    return value
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .slice(0, 10);
+  }
+  return undefined;
+}
+
+function parseOptionalText(value: unknown, maxLen = 5000): string | undefined {
+  if (value === undefined) return undefined;
+  return String(value).trim().slice(0, maxLen);
+}
+
+function parseImageUrls(value: unknown): string[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) return undefined;
+  return value
+    .map((entry) => String(entry || "").trim())
+    .filter((entry) => entry.startsWith("http"))
+    .slice(0, 9);
+}
 
 function parseUuid(value: unknown): string | null {
   if (typeof value !== "string" || !UUID_RE.test(value.trim())) return null;
@@ -95,6 +137,10 @@ Deno.serve(async (req) => {
   const parsedPatch = validateListingPatchInput({
     price: parseOptionalNumber(body.price),
     quantity: parseOptionalNumber(body.quantity),
+    imageUrls: parseImageUrls(body.imageUrls),
+    title: parseOptionalText(body.title, 500),
+    description: parseOptionalText(body.description, 8000),
+    bulletPoints: parseBulletPoints(body.bulletPoints),
   });
 
   if (!parsedPatch.ok) {
@@ -118,6 +164,11 @@ Deno.serve(async (req) => {
         "fulfillment_channel",
         "fba_fulfillable_quantity",
         "fbm_quantity",
+        "price",
+        "asin",
+        "listing_status",
+        "listing_status_buyable",
+        "raw_listing",
       ].join(","))
       .eq("id", listingId)
       .maybeSingle();
@@ -148,12 +199,50 @@ Deno.serve(async (req) => {
       return json({ ok: false, error: credsResult.error }, 400);
     }
 
-    const patches = buildListingPatchOperations(
-      marketplaceId,
-      String(row.currency || "USD"),
-      parsedPatch,
-      String(row.fulfillment_channel || "DEFAULT") || "DEFAULT",
-    );
+    const copyPatch = {
+      title: parsedPatch.title,
+      description: parsedPatch.description,
+      bulletPoints: parsedPatch.bulletPoints,
+    };
+
+    const patches = [
+      ...buildListingPatchOperations(
+        marketplaceId,
+        String(row.currency || "USD"),
+        parsedPatch,
+        String(row.fulfillment_channel || "DEFAULT") || "DEFAULT",
+      ),
+      ...buildListingCopyPatchOperations(marketplaceId, copyPatch),
+      ...(parsedPatch.imageUrls?.length
+        ? buildListingImagePatchOperations(
+          marketplaceId,
+          parsedPatch.imageUrls,
+          countAmazonListingSecondaryImages(row.raw_listing, marketplaceId),
+        )
+        : []),
+    ];
+
+    if (!patches.length) {
+      return json({ ok: false, error: "invalid_request" }, 400);
+    }
+
+    // Offer PUT is for price/qty activation only — copy/image updates always use PATCH.
+    const offerPatch = {
+      price: parsedPatch.price,
+      quantity: parsedPatch.quantity,
+    };
+    const useOfferRestore = !parsedPatch.imageUrls?.length
+      && !parsedPatch.title
+      && !parsedPatch.description
+      && !parsedPatch.bulletPoints?.length
+      && listingNeedsOfferPut(row, offerPatch);
+    const offerRestoreBody = useOfferRestore
+      ? buildOfferRestorePutBody(row, offerPatch)
+      : null;
+
+    if (useOfferRestore && offerRestoreBody && !offerRestoreBody.ok) {
+      return json({ ok: false, error: offerRestoreBody.error }, 400);
+    }
 
     const patchParams = {
       creds: credsResult.creds,
@@ -164,9 +253,25 @@ Deno.serve(async (req) => {
       patches,
     };
 
-    const patchResult = wantsPreview
-      ? await patchListingsItemValidationPreview(patchParams)
-      : await patchListingsItemLiveUpdate(patchParams);
+    const patchResult = useOfferRestore && offerRestoreBody?.ok
+      ? (wantsPreview
+        ? await putListingsItemValidationPreview({
+          creds: credsResult.creds,
+          sellerId: credsResult.creds.account.seller_id,
+          sellerSku,
+          marketplaceId,
+          body: offerRestoreBody.body,
+        })
+        : await putListingsItemLiveSubmit({
+          creds: credsResult.creds,
+          sellerId: credsResult.creds.account.seller_id,
+          sellerSku,
+          marketplaceId,
+          body: offerRestoreBody.body,
+        }))
+      : (wantsPreview
+        ? await patchListingsItemValidationPreview(patchParams)
+        : await patchListingsItemLiveUpdate(patchParams));
 
     if (!patchResult.ok) {
       console.log(`${LOG_PREFIX} patch_failed error=${patchResult.error}`);
@@ -204,21 +309,8 @@ Deno.serve(async (req) => {
 
     await applyLocalListingPatchUpdate(serviceClient, listingId, parsedPatch, now);
 
-    try {
-      await runSellerAccountSync({
-        client: serviceClient,
-        account: credsResult.creds.account,
-        syncType: "single_sku",
-        maxPages: 1,
-        triggeredBy: admin.userId,
-        sellerSku,
-        marketplaceIds: [marketplaceId],
-        env: syncEnv,
-        now,
-      });
-    } catch {
-      console.log(`${LOG_PREFIX} post_patch_sync_failed sku=${sellerSku}`);
-    }
+    // Do not run immediate single-SKU sync: Amazon patchListingsItem is async and
+    // searchListingsItems often still returns the old qty, overwriting manual values.
 
     console.log(`${LOG_PREFIX} success listingId=${listingId}`);
     return json({
@@ -229,6 +321,7 @@ Deno.serve(async (req) => {
       issues: amazonIssues,
       patch: parsedPatch,
       amazonListingId: listingId,
+      offerRestore: useOfferRestore,
     });
   } catch (err: unknown) {
     if (err instanceof Error && err.message === "database_error") {

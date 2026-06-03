@@ -178,7 +178,7 @@ Deno.serve(async (req) => {
 
       // ── STEP 1: 30min reminder (no discount) ──────────────
       if (cart.abandoned_step === 0 && sinceUpdate >= 30 * 60 * 1000) {
-        const smsBody = `Karry Kraze: You left ${cartItems} in your cart ($${cartValue}). Complete your order: ${trackingUrl}\nReply STOP to opt out`;
+        const smsBody = `Karry Kraze: Still thinking about ${cartItems}? Your cart ($${cartValue}) is saved — finish checkout: ${trackingUrl}\nReply STOP to opt out`;
 
         const result = await sendViaSendSms({
           to:                  cart.phone,
@@ -213,7 +213,7 @@ Deno.serve(async (req) => {
         // Duplicate send guard: skip if already sent
         if (cart.step_2_sent_at) { results.skipped++; continue; }
 
-        const smsBody = `Karry Kraze: Almost gone \ud83d\udc40 ${cartItems} been selling fast. Don't miss out: ${trackingUrl}\nReply STOP to opt out`;
+        const smsBody = `Karry Kraze: Quick reminder — ${cartItems} ($${cartValue}) is still in your cart if you want to finish checkout: ${trackingUrl}\nReply STOP to opt out`;
 
         const result = await sendViaSendSms({
           to:                  cart.phone,
@@ -318,7 +318,7 @@ Deno.serve(async (req) => {
         const offerText = isHighValue
           ? `Use ${couponCode} for $5 off your order`
           : `Use ${couponCode} for 15% off orders $40+`;
-        const smsBody = `Karry Kraze: We saved your cart! ${offerText}. Expires in 48hrs: ${trackingUrl}\nReply STOP to opt out`;
+        const smsBody = `Karry Kraze: Still want ${cartItems}? ${offerText} — expires in 48hrs: ${trackingUrl}\nReply STOP to opt out`;
 
         const result = await sendViaSendSms({
           to:                  cart.phone,

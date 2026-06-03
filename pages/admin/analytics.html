@@ -128,7 +128,7 @@
         <div>
           <div class="text-xs font-black uppercase tracking-[0.18em] text-orange-600">Universal Dashboard</div>
           <h1 class="text-2xl sm:text-3xl font-black tracking-tight text-gray-900">Analytics</h1>
-          <p class="text-sm text-gray-600 mt-1">Cross-channel KPIs with website funnel and reconciliation checks.</p>
+          <p class="text-sm text-gray-600 mt-1">Cross-channel KPIs with website funnel and reconciliation checks. eBay and Amazon revenue use Finances API earnings when synced.</p>
         </div>
 
         <div class="flex flex-wrap gap-2 items-center">
@@ -141,6 +141,7 @@
             <option value="90">90 days</option>
           </select>
           <button id="btnLoad" class="btn">Load</button>
+          <button id="btnSyncAmazonFinances" class="btn">Sync Amazon Finances</button>
           <button id="btnRefresh" class="btn btn-accent">Refresh Aggregate</button>
         </div>
       </div>
@@ -159,7 +160,7 @@
       <section class="panel p-4">
         <div class="flex items-center justify-between mb-3">
           <h2 class="text-xs uppercase tracking-[0.14em] font-black text-blue-700">Revenue by Channel</h2>
-          <span class="text-xs text-gray-500">Source: channel_day grain</span>
+          <span class="text-xs text-gray-500">Source: channel_day grain · eBay/Amazon use Finances API earnings when available</span>
         </div>
         <div class="h-[320px]"><canvas id="revenueChart"></canvas></div>
       </section>

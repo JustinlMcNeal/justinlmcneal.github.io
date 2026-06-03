@@ -8,13 +8,17 @@ import {
 } from "../_shared/amazonDraftValidationUtils.ts";
 import {
   buildListingsItemRequestBody,
+  enrichDraftPayloadFromRow,
   mapAmazonListingIssues,
+  normalizeSubmissionStatus,
   putListingsItemValidationPreview,
   resolveDraftStatusAfterAmazonPreview,
+  resolveListingsItemBuildContext,
   syncPushIssues,
 } from "../_shared/amazonListingPayloadUtils.ts";
 import { resolveAmazonCredentials } from "../_shared/amazonPtdAuthUtils.ts";
-import { getOrFetchPtdSummary } from "../_shared/amazonPtdUtils.ts";
+import { getOrFetchPtdSummary, extractRequiredAttributes } from "../_shared/amazonPtdUtils.ts";
+import { readSyncEnvConfig } from "../_shared/amazonSyncAccountUtils.ts";
 
 const LOG_PREFIX = "[amazon-submit-draft-preview]";
 
@@ -67,16 +71,9 @@ Deno.serve(async (req) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  const lwaClientId = Deno.env.get("AMAZON_LWA_CLIENT_ID");
-  const lwaClientSecret = Deno.env.get("AMAZON_LWA_CLIENT_SECRET");
-  const spApiEndpointOverride = Deno.env.get("AMAZON_SP_API_ENDPOINT") || null;
-  const awsAccessKeyId = Deno.env.get("AWS_ACCESS_KEY_ID");
-  const awsSecretAccessKey = Deno.env.get("AWS_SECRET_ACCESS_KEY");
-  const awsSessionToken = Deno.env.get("AWS_SESSION_TOKEN") || null;
-  const awsRegionOverride = Deno.env.get("AWS_REGION") || null;
-  const allowUnsignedSpApi = Deno.env.get("AMAZON_ALLOW_UNSIGNED_SP_API") === "true";
+  const syncEnv = readSyncEnvConfig();
 
-  if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey || !lwaClientId || !lwaClientSecret) {
+  if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey || !syncEnv.lwaClientId || !syncEnv.lwaClientSecret) {
     return json({ ok: false, error: "server_misconfigured" }, 500);
   }
 
@@ -133,34 +130,96 @@ Deno.serve(async (req) => {
     const productType = String(draft.product_type || "").trim();
     const requirements = String(draft.requirements || "LISTING");
     const requirementsEnforced = String(draft.requirements_enforced || "ENFORCED");
-    const draftPayload = asDraftPayload(draft.draft_payload);
+    const draftPayload = enrichDraftPayloadFromRow({
+      seller_sku: draft.seller_sku,
+      marketplace_id: draft.marketplace_id,
+      product_type: draft.product_type,
+      requirements: draft.requirements,
+      matched_asin: draft.matched_asin,
+      asin: draft.asin,
+      draft_payload: asDraftPayload(draft.draft_payload),
+      variation_role: typeof draft.variation_role === "string" ? draft.variation_role : null,
+      parent_seller_sku: typeof draft.parent_seller_sku === "string" ? draft.parent_seller_sku : null,
+      variation_theme: typeof draft.variation_theme === "string" ? draft.variation_theme : null,
+      parentage_level: typeof draft.parentage_level === "string" ? draft.parentage_level : null,
+    });
     const sellerAccountId = typeof draft.seller_account_id === "string"
       ? draft.seller_account_id
       : null;
+
+    const buildContext = resolveListingsItemBuildContext({
+      seller_sku: draft.seller_sku,
+      marketplace_id: draft.marketplace_id,
+      product_type: draft.product_type,
+      requirements: draft.requirements,
+      matched_asin: draft.matched_asin,
+      asin: draft.asin,
+      draft_payload: draftPayload,
+      variation_role: typeof draft.variation_role === "string" ? draft.variation_role : null,
+      parent_seller_sku: typeof draft.parent_seller_sku === "string" ? draft.parent_seller_sku : null,
+      variation_theme: typeof draft.variation_theme === "string" ? draft.variation_theme : null,
+      parentage_level: typeof draft.parentage_level === "string" ? draft.parentage_level : null,
+    });
+    if (!buildContext.ok) {
+      return json({ ok: false, error: buildContext.error }, 400);
+    }
 
     if (!sellerSku || !marketplaceId || !productType) {
       return json({ ok: false, error: "draft_not_ready" }, 400);
     }
 
-    let localIssues = validateLocalDraft(sellerSku, draftPayload, productType);
+    const ptdProductType = buildContext.context.mode === "offer_only"
+      ? buildContext.context.productType
+      : productType;
+    const ptdRequirements = buildContext.context.requirements;
+
+    const variationRole = typeof draft.variation_role === "string" ? draft.variation_role : null;
+    const validationOptions = { variationRole };
+
+    let localIssues = validateLocalDraft(
+      sellerSku,
+      draftPayload,
+      productType,
+      validationOptions,
+    );
+
+    if (variationRole === "child") {
+      const parentSku = typeof draft.parent_seller_sku === "string"
+        ? draft.parent_seller_sku.trim()
+        : "";
+      if (parentSku) {
+        const { data: parentDraft } = await serviceClient
+          .from("amazon_listing_drafts")
+          .select("product_type")
+          .eq("seller_sku", parentSku)
+          .eq("variation_role", "parent")
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        const parentType = typeof parentDraft?.product_type === "string"
+          ? parentDraft.product_type.trim()
+          : "";
+        if (parentType && productType && parentType.toUpperCase() !== productType.toUpperCase()) {
+          localIssues.push({
+            field: "productType",
+            severity: "error",
+            message: `Child product type must match parent (${parentType}). Change ACCESSORY or other types to ${parentType}.`,
+          });
+        }
+      }
+    }
+
     let ptdIssues: ValidationIssue[] = [];
 
-    if (forceLocalPreview) {
-      const credResult = await resolveAmazonCredentials(serviceClient, sellerAccountId, {
-        lwaClientId,
-        lwaClientSecret,
-        spApiEndpointOverride,
-        awsAccessKeyId,
-        awsSecretAccessKey,
-        awsSessionToken,
-        awsRegionOverride,
-        allowUnsignedSpApi,
-      });
+    if (forceLocalPreview && buildContext.context.mode !== "offer_only") {
+      const credResult = await resolveAmazonCredentials(serviceClient, sellerAccountId, syncEnv);
 
       if (!credResult.ok) {
-        const status = credResult.error === "server_misconfigured" ? 500 : 400;
-        const code = credResult.error === "token_refresh_failed" ? 502 : credResult.error;
-        return json({ ok: false, error: code }, status);
+        const status = credResult.error === "server_misconfigured" ? 500
+          : credResult.error === "token_refresh_failed" ? 502
+          : credResult.error === "aws_assume_role_failed" ? 502
+          : 400;
+        return json({ ok: false, error: credResult.error }, status);
       }
 
       const ptdResult = await getOrFetchPtdSummary(
@@ -170,8 +229,8 @@ Deno.serve(async (req) => {
           sellerAccountId: credResult.creds.account.id,
           sellerId: credResult.creds.account.seller_id,
           marketplaceId,
-          productType,
-          requirements,
+          productType: ptdProductType,
+          requirements: ptdRequirements,
           requirementsEnforced,
           locale: "en_US",
         },
@@ -187,6 +246,19 @@ Deno.serve(async (req) => {
         draftPayload,
         ptdResult.summary.requiredAttributes,
         ptdResult.summary.recommendedAttributes,
+        validationOptions,
+      );
+    } else if (forceLocalPreview && buildContext.context.mode === "offer_only") {
+      ptdIssues = validateDraftAgainstPtd(
+        {
+          ...draftPayload,
+          merchant_suggested_asin: draftPayload.merchant_suggested_asin ||
+            draft.matched_asin ||
+            draft.asin,
+        },
+        extractRequiredAttributes({}, "LISTING_OFFER_ONLY"),
+        [],
+        validationOptions,
       );
     } else {
       ptdIssues = asValidationIssues(draft.validation_errors).filter((issue) =>
@@ -208,27 +280,24 @@ Deno.serve(async (req) => {
       matched_asin: draft.matched_asin,
       asin: draft.asin,
       draft_payload: draftPayload,
+      variation_role: typeof draft.variation_role === "string" ? draft.variation_role : null,
+      parent_seller_sku: typeof draft.parent_seller_sku === "string" ? draft.parent_seller_sku : null,
+      variation_theme: typeof draft.variation_theme === "string" ? draft.variation_theme : null,
+      parentage_level: typeof draft.parentage_level === "string" ? draft.parentage_level : null,
     });
 
     if (!payloadResult.ok) {
       return json({ ok: false, error: payloadResult.error }, 400);
     }
 
-    const credResult = await resolveAmazonCredentials(serviceClient, sellerAccountId, {
-      lwaClientId,
-      lwaClientSecret,
-      spApiEndpointOverride,
-      awsAccessKeyId,
-      awsSecretAccessKey,
-      awsSessionToken,
-      awsRegionOverride,
-      allowUnsignedSpApi,
-    });
+    const credResult = await resolveAmazonCredentials(serviceClient, sellerAccountId, syncEnv);
 
     if (!credResult.ok) {
-      const status = credResult.error === "server_misconfigured" ? 500 : 400;
-      const code = credResult.error === "token_refresh_failed" ? 502 : credResult.error;
-      return json({ ok: false, error: code }, status);
+      const status = credResult.error === "server_misconfigured" ? 500
+        : credResult.error === "token_refresh_failed" ? 502
+        : credResult.error === "aws_assume_role_failed" ? 502
+        : 400;
+      return json({ ok: false, error: credResult.error }, status);
     }
 
     const sellerId = String(draft.seller_id || credResult.creds.account.seller_id || "").trim();
@@ -246,8 +315,15 @@ Deno.serve(async (req) => {
 
     if (!previewResult.ok) {
       const status = previewResult.error === "server_misconfigured" ? 500 : 502;
-      return json({ ok: false, error: previewResult.error }, status);
+      return json({
+        ok: false,
+        error: previewResult.error,
+        hint: previewResult.hint ?? null,
+        httpStatus: previewResult.httpStatus ?? null,
+      }, status);
     }
+
+    const normalizedSubmissionStatus = normalizeSubmissionStatus(previewResult.submissionStatus);
 
     const amazonIssues = mapAmazonListingIssues(previewResult.issues);
     const validationErrors = [...preflightIssues, ...amazonIssues];
@@ -263,8 +339,9 @@ Deno.serve(async (req) => {
         : {}),
       previewedAt: now,
       amazonPreviewAt: now,
+      productType,
       submissionId: previewResult.submissionId,
-      submissionStatus: previewResult.submissionStatus,
+      submissionStatus: normalizedSubmissionStatus,
       amazonIssues,
       validationErrors,
     };
@@ -273,13 +350,15 @@ Deno.serve(async (req) => {
       mode: "VALIDATION_PREVIEW",
       httpStatus: previewResult.httpStatus,
       submissionId: previewResult.submissionId,
-      status: previewResult.submissionStatus,
+      status: normalizedSubmissionStatus,
+      rawStatus: previewResult.submissionStatus,
       issueCount: previewResult.issues.length,
       requestBody: payloadResult.body,
       response: {
         status: previewResult.rawResponse.status ?? null,
         submissionId: previewResult.submissionId,
         issueCount: previewResult.issues.length,
+        issues: previewResult.issues,
       },
     };
 
@@ -287,7 +366,7 @@ Deno.serve(async (req) => {
       .from("amazon_listing_drafts")
       .update({
         submission_id: previewResult.submissionId,
-        submission_status: previewResult.submissionStatus,
+        submission_status: normalizedSubmissionStatus,
         last_submission_response: lastSubmissionResponse,
         last_validation_result: lastValidationResult,
         validation_errors: validationErrors,
@@ -298,16 +377,23 @@ Deno.serve(async (req) => {
       .eq("id", draftId);
 
     if (updateErr) {
-      return json({ ok: false, error: "database_error" }, 500);
+      console.log(`${LOG_PREFIX} draft_update_failed`, updateErr.message);
+      return json({ ok: false, error: "database_error", hint: updateErr.message.slice(0, 240) }, 500);
     }
 
-    await syncPushIssues(
-      serviceClient,
-      draftId,
-      amazonIssues,
-      previewResult.submissionId,
-      now,
-    );
+    try {
+      await syncPushIssues(
+        serviceClient,
+        draftId,
+        amazonIssues,
+        previewResult.submissionId,
+        now,
+      );
+    } catch (syncErr: unknown) {
+      const message = syncErr instanceof Error ? syncErr.message : "sync_push_issues_failed";
+      console.log(`${LOG_PREFIX} sync_push_issues_failed`, message);
+      return json({ ok: false, error: "sync_push_issues_failed", hint: message }, 500);
+    }
 
     console.log(
       `${LOG_PREFIX} success draftId=${draftId} status=${previewResult.submissionStatus} draftStatus=${draftStatus}`,
@@ -317,16 +403,14 @@ Deno.serve(async (req) => {
       ok: true,
       draftId,
       submissionId: previewResult.submissionId,
-      submissionStatus: previewResult.submissionStatus,
+      submissionStatus: normalizedSubmissionStatus,
       draftStatus,
       amazonIssues,
       validationErrors,
     });
   } catch (err: unknown) {
-    if (err instanceof Error && err.message === "database_error") {
-      return json({ ok: false, error: "database_error" }, 500);
-    }
-    console.log(`${LOG_PREFIX} database_error`);
-    return json({ ok: false, error: "database_error" }, 500);
+    const message = err instanceof Error ? err.message : String(err);
+    console.log(`${LOG_PREFIX} unhandled`, message);
+    return json({ ok: false, error: "unexpected_error", hint: message.slice(0, 240) }, 500);
   }
 });

@@ -1,5 +1,7 @@
 /** KK vs Amazon price comparison helpers (Phase 5C). */
 
+import { kkCompareScopeLabel } from "./listingVariantCompare.js";
+
 const DEFAULT_CURRENCY = "USD";
 
 /** @param {unknown} value */
@@ -50,8 +52,13 @@ export function priceRowHighlightClass(row) {
   return "";
 }
 
-/** @param {Record<string, unknown>} row @param {typeof import("./renderListings.js").escapeHtml} escapeHtml */
-export function priceColumnMarkup(row, escapeHtml) {
+/**
+ * @param {Record<string, unknown>} row
+ * @param {typeof import("./renderListings.js").escapeHtml} escapeHtml
+ * @param {{ compact?: boolean }} [options]
+ */
+export function priceColumnMarkup(row, escapeHtml, options = {}) {
+  const compact = options.compact === true;
   const amazon = formatCompareMoney(row.price, row.currency);
   const kk = asNumber(row.kk_price);
   const status = priceCompareStatus(row);
@@ -61,16 +68,17 @@ export function priceColumnMarkup(row, escapeHtml) {
   }
 
   if (status === "missing_kk_price" || status === "unmapped" || kk === null || kk <= 0) {
-    return `<span class="font-bold">${escapeHtml(amazon)}</span><span class="text-[10px] text-gray-400 block">KK price N/A</span>`;
+    return `<span class="font-bold">${escapeHtml(amazon)}</span><span class="text-[10px] text-gray-400 block">${escapeHtml(kkCompareScopeLabel(row))} price N/A</span>`;
   }
 
   if (status === "match") {
-    return `<span class="font-bold">${escapeHtml(amazon)}</span><span class="text-[10px] text-green-600 block">Matches KK</span>`;
+    return `<span class="font-bold">${escapeHtml(amazon)}</span><span class="text-[10px] text-green-600 block">Matches ${escapeHtml(kkCompareScopeLabel(row))}</span>`;
   }
 
   const delta = asNumber(row.price_delta);
   const deltaPct = asNumber(row.price_delta_pct);
   const kkText = formatCompareMoney(kk, row.currency);
+  const kkScope = kkCompareScopeLabel(row);
   const deltaText = delta === null
     ? ""
     : `${delta > 0 ? "+" : ""}${formatCompareMoney(delta, row.currency)}`;
@@ -80,10 +88,21 @@ export function priceColumnMarkup(row, escapeHtml) {
     ? "text-amber-700"
     : "text-sky-700";
   const label = status === "amazon_higher" ? "Amazon higher" : "Amazon lower";
+  const detailTitle = `${kkScope} ${kkText} · ${label}${deltaText}${pctText}`;
+
+  if (compact) {
+    const arrow = status === "amazon_higher" ? "↑" : "↓";
+    const shortDelta = deltaText ? ` ${deltaText}` : "";
+    const shortPct = deltaPct === null ? "" : ` ${deltaPct > 0 ? "+" : ""}${deltaPct}%`;
+    return `
+      <span class="font-bold ${tone}">${escapeHtml(amazon)}</span>
+      <span class="text-[9px] ${tone} block truncate max-w-[6.5rem] mx-auto sm:mx-0 sm:ml-auto" title="${escapeHtml(detailTitle)}">${arrow}${escapeHtml(shortDelta)}${escapeHtml(shortPct)}</span>
+    `;
+  }
 
   return `
     <span class="font-bold ${tone}">${escapeHtml(amazon)}</span>
-    <span class="text-[10px] text-gray-500 block">KK ${escapeHtml(kkText)}</span>
+    <span class="text-[10px] text-gray-500 block">${escapeHtml(kkScope)} ${escapeHtml(kkText)}</span>
     <span class="inline-flex mt-0.5 px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${status === "amazon_higher" ? "bg-amber-100 text-amber-800" : "bg-sky-100 text-sky-800"}">${label}${escapeHtml(deltaText)}${escapeHtml(pctText)}</span>
   `;
 }

@@ -9,6 +9,8 @@ import { fetchOrderSummaryPage, fetchOrderSummaryAllForExport, fetchOrderKpis } 
 import { renderOrdersRows } from "./renderTable.js";
 import { downloadShipReadyCSV } from "./shipReadyCsv.js";
 import { wireAmazonImport } from "./amazonImport.js";
+import { wireAmazonOrderSync, wireAmazonFinanceSync } from "./amazonOrderSync.js";
+import { wireEbayOrderSync } from "./ebayOrderSync.js";
 import { initWorkspace, openWorkspace } from "./workspace.js";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -166,6 +168,49 @@ function wireAmazonModal() {
       }, 15000);
 
       // refresh the orders table
+      await reload({ hard: true });
+    },
+  });
+
+  wireAmazonOrderSync({
+    buttonEl: document.getElementById("btnSyncAmazonOrders"),
+    setStatus,
+    onSynced: async () => {
+      els.exportDropdownPanel?.classList.add("hidden");
+      await reload({ hard: true });
+    },
+  });
+
+  wireAmazonOrderSync({
+    buttonEl: document.getElementById("btnSyncAmazonOrdersToolbar"),
+    setStatus,
+    onSynced: async () => {
+      await reload({ hard: true });
+    },
+  });
+
+  wireEbayOrderSync({
+    buttonEl: document.getElementById("btnSyncEbayOrders"),
+    setStatus,
+    onSynced: async () => {
+      els.exportDropdownPanel?.classList.add("hidden");
+      await reload({ hard: true });
+    },
+  });
+
+  wireEbayOrderSync({
+    buttonEl: document.getElementById("btnSyncEbayOrdersToolbar"),
+    setStatus,
+    onSynced: async () => {
+      await reload({ hard: true });
+    },
+  });
+
+  wireAmazonFinanceSync({
+    buttonEl: document.getElementById("btnSyncAmazonFinances"),
+    setStatus,
+    onSynced: async () => {
+      els.exportDropdownPanel?.classList.add("hidden");
       await reload({ hard: true });
     },
   });

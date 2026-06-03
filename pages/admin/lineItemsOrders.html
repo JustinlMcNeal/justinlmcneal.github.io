@@ -211,6 +211,31 @@
           </button>
         </div>
 
+        <!-- Marketplace order sync (manual — cron unchanged) -->
+        <div class="hidden sm:flex flex-col gap-1">
+          <span class="text-[9px] font-bold uppercase tracking-wide text-gray-400 leading-none">Pull orders now</span>
+          <div class="flex gap-2">
+            <button
+              id="btnSyncEbayOrdersToolbar"
+              type="button"
+              title="Manual eBay order sync (cron every 2 hours)"
+              class="border-4 border-black bg-white text-black px-3 py-2 font-black uppercase tracking-[.12em] text-xs
+                     hover:bg-[#e53238] hover:text-white transition-all whitespace-nowrap"
+            >
+              eBay Sync
+            </button>
+            <button
+              id="btnSyncAmazonOrdersToolbar"
+              type="button"
+              title="Manual Amazon order sync (cron every 4 hours)"
+              class="border-4 border-black bg-white text-black px-3 py-2 font-black uppercase tracking-[.12em] text-xs
+                     hover:bg-[#ff9900] hover:text-black transition-all whitespace-nowrap"
+            >
+              Amazon Sync
+            </button>
+          </div>
+        </div>
+
         <!-- Mobile: Filters toggle -->
         <button id="btnFilterToggle" type="button"
           class="sm:hidden border-4 border-black bg-white text-black px-3 py-2 font-black uppercase tracking-[.12em] text-[10px]
@@ -242,6 +267,24 @@
               class="w-full text-left px-4 py-3 font-black uppercase tracking-[.12em] text-[10px]
                      hover:bg-black hover:text-white transition-all block">
               📦 Import Amazon…
+            </button>
+            <div class="border-t border-gray-200"></div>
+            <button id="btnSyncEbayOrders" type="button"
+              class="w-full text-left px-4 py-3 font-black uppercase tracking-[.12em] text-[10px]
+                     hover:bg-black hover:text-white transition-all block">
+              🔄 Sync eBay Orders
+            </button>
+            <div class="border-t border-gray-200"></div>
+            <button id="btnSyncAmazonOrders" type="button"
+              class="w-full text-left px-4 py-3 font-black uppercase tracking-[.12em] text-[10px]
+                     hover:bg-black hover:text-white transition-all block">
+              🔄 Sync Amazon Orders
+            </button>
+            <div class="border-t border-gray-200"></div>
+            <button id="btnSyncAmazonFinances" type="button"
+              class="w-full text-left px-4 py-3 font-black uppercase tracking-[.12em] text-[10px]
+                     hover:bg-black hover:text-white transition-all block">
+              💰 Sync Amazon Finances
             </button>
           </div>
         </div>

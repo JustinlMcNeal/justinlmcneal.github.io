@@ -31,12 +31,21 @@ import { initAmazonMapping } from "./mapping.js";
 import { initAmazonDraftsIssues } from "./draftsIssues.js";
 
 import { initAmazonReadyToPush } from "./readyToPush.js";
+import {
+  listingRowAsPushTrigger,
+  readyRowAsTrigger,
+  startPushQueue,
+} from "./readyToPushQueue.js";
 
 import { initAmazonPushDraft } from "./pushDraft.js";
 
 import { initAmazonProductPicker } from "./productPicker.js";
 
 import { initAmazonListingPatch } from "./listingPatch.js";
+
+import { initAmazonListingImagePatch } from "./listingImagePatch.js";
+
+import { initAmazonListingInactiveFix } from "./listingInactiveFix.js";
 
 import { initAmazonDeleteDraft } from "./deleteDraft.js";
 
@@ -165,6 +174,7 @@ async function boot() {
   const modalApi = {
     closeAmazonModals: () => {},
     openPatch: (_row, _mode) => {},
+    openImagePatch: (_row) => {},
   };
 
   const listingPatch = initAmazonListingPatch({
@@ -173,6 +183,25 @@ async function boot() {
       await liveListings.refresh();
       await syncFreshness.refresh();
       await syncRunHistory.refresh();
+    },
+  });
+
+  const listingImagePatch = initAmazonListingImagePatch({
+    closeModal: () => modalApi.closeAmazonModals(),
+    onPatched: async () => {
+      await liveListings.refresh();
+      await syncFreshness.refresh();
+      await syncRunHistory.refresh();
+    },
+  });
+
+  const inactiveFix = initAmazonListingInactiveFix({
+    closeModal: () => modalApi.closeAmazonModals(),
+    getAuthState: authStatus.getState,
+    onFixed: async () => {
+      await liveListings.refresh();
+      await mapping.refreshUnmapped();
+      await syncFreshness.refresh();
     },
   });
 
@@ -213,10 +242,35 @@ async function boot() {
       hydratePushModal: pushDraft.hydratePushModal,
 
       hydrateMappingModal: mapping.hydrateMappingModal,
+      hydrateMappingFromListingRow: mapping.hydrateMappingFromListingRow,
 
       hydratePatchModal: listingPatch.hydrateAmazonPatchModal,
 
+      hydrateImagePatchModal: listingImagePatch.hydrateAmazonImagePatchModal,
+
+      hydrateInactiveFixModal: inactiveFix.hydrateAmazonInactiveFixModal,
+
       openProductPicker: (trigger) => pickerBridge.open?.(trigger),
+
+      startPushRemaining: (productId) => {
+        const rows = readyToPush.getRowsForProduct(productId).filter(
+          (row) => String(row.ready_row_kind || "variant") !== "parent_shell",
+        );
+        const queue = startPushQueue(rows);
+        if (!queue.length) {
+          showAmazonNotification("No pushable variants remaining for this product.", { tone: "warning" });
+          return;
+        }
+        modals.openPush(readyRowAsTrigger(queue[0]), { draftMode: true, fromQueue: true }).catch(() => {});
+      },
+
+      openPushForListing: (row) => {
+        modals.openPush(listingRowAsPushTrigger(row, { linkToFamily: true }), {
+          draftMode: true,
+          linkToFamily: true,
+          listingRow: row,
+        }).catch(() => {});
+      },
 
     },
 
@@ -230,6 +284,8 @@ async function boot() {
 
   modalApi.closeAmazonModals = modals.closeAmazonModals;
   modalApi.openPatch = modals.openPatch;
+
+  inactiveFix.attachOpener((row) => modals.openInactiveFix(row));
 
   initAmazonBulkPatch({
     getSelectedIds: () => listingsSelection.getSelectedIds(),
@@ -303,6 +359,22 @@ async function boot() {
 
     openPatchModal: (row, mode) => modals.openPatch(row, mode),
 
+    openImagePatchModal: (row) => modals.openImagePatch(row),
+
+    openInactiveFixModal: (row) => modals.openInactiveFix(row),
+
+    openPushForListing: (row) => {
+      modals.openPush(listingRowAsPushTrigger(row, { linkToFamily: true }), {
+        draftMode: true,
+        linkToFamily: true,
+        listingRow: row,
+      }).catch(() => {});
+    },
+
+    openMappingForListing: (row) => {
+      modals.openMappingFromListingRow(row).catch(() => {});
+    },
+
     openListingDetails: listingDetails.openAmazonListingDetailsModal,
 
     deleteDraft: (draftId, context) =>
@@ -311,6 +383,10 @@ async function boot() {
     onSyncComplete: async () => {
 
       await liveListings.refresh();
+
+      await mapping.refreshUnmapped();
+
+      await readyToPush.refreshReadyToPush();
 
       await syncFreshness.refresh();
 
@@ -324,6 +400,12 @@ async function boot() {
 
   initAmazonTabs();
 
+  // Prefetch work-area counts and panel data on load (not only after first tab click).
+  void Promise.allSettled([
+    readyToPush.refreshReadyToPush(),
+    mapping.refreshUnmapped(),
+    draftsIssues.refreshDraftsIssues(),
+  ]);
 }
 
 

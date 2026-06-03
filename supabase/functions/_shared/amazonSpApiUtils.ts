@@ -47,6 +47,7 @@ export type NormalizedListingRow = {
   quantity_last_source: string;
   quantity_synced_at: string;
   price_synced_at: string | null;
+  price_last_source: string;
   last_synced_at: string;
   relationships: Record<string, unknown>;
   enforcements: Record<string, unknown>;
@@ -154,6 +155,42 @@ function statusFlags(summary: Record<string, unknown> | null): {
   };
 }
 
+/** Read BUYABLE / DISCOVERABLE from a stored raw_listings item payload. */
+export function readListingSpApiStatusFlags(
+  rawListing: unknown,
+  marketplaceId: string,
+): { buyable: boolean; discoverable: boolean } {
+  const item = asRecord(rawListing) ?? {};
+  return statusFlags(pickSummary(item, marketplaceId));
+}
+
+/**
+ * Re-derive buyable/discoverable/listing_status from raw_listing after manual price/qty preservation.
+ * Prevents stale buyable=false while Amazon summary already includes BUYABLE.
+ */
+export function reconcileNormalizedListingStatus(
+  normalized: NormalizedListingRow | null,
+): NormalizedListingRow | null {
+  if (!normalized) return normalized;
+  const item = asRecord(normalized.raw_listing);
+  if (!item) return normalized;
+
+  const summary = pickSummary(item, normalized.marketplace_id);
+  const issues = asArray(item.issues);
+  const flags = readListingSpApiStatusFlags(item, normalized.marketplace_id);
+  normalized.listing_status_buyable = flags.buyable;
+  normalized.listing_status_discoverable = flags.discoverable;
+
+  const status = normalizeListingStatus(
+    summary,
+    issues,
+    normalized.fbm_quantity,
+    normalized.price,
+  );
+  normalized.listing_status = status.listing_status;
+  return normalized;
+}
+
 function fulfillmentQuantity(item: Record<string, unknown>): {
   channel: string | null;
   quantity: number | null;
@@ -172,17 +209,34 @@ function fulfillmentQuantity(item: Record<string, unknown>): {
   return { channel: null, quantity: null };
 }
 
-function extractPrice(item: Record<string, unknown>): { price: number | null; currency: string } {
-  const offers = asArray(item.offers);
-  for (const offer of offers) {
+/** Customer-facing offer price from SP-API `offers` (Manage Inventory / product page). */
+export function extractLiveOfferPrice(
+  rawListing: unknown,
+  marketplaceId: string,
+): number | null {
+  const item = asRecord(rawListing) ?? {};
+  for (const offer of asArray(item.offers)) {
     const rec = asRecord(offer);
-    const priceRec = asRecord(rec?.price) ?? asRecord(rec?.listingPrice);
-    if (priceRec) {
-      const amount = priceRec.amount ?? priceRec.value;
-      const currency = typeof priceRec.currencyCode === "string" ? priceRec.currencyCode : "USD";
-      const num = typeof amount === "number" ? amount : Number(amount);
-      if (Number.isFinite(num)) return { price: num, currency };
-    }
+    if (!rec) continue;
+    if (typeof rec.marketplaceId === "string" && rec.marketplaceId !== marketplaceId) continue;
+    const priceRec = asRecord(rec.price) ?? asRecord(rec.listingPrice);
+    if (!priceRec) continue;
+    const amount = priceRec.amount ?? priceRec.value;
+    const num = typeof amount === "number" ? amount : Number(amount);
+    if (Number.isFinite(num)) return num;
+  }
+  return null;
+}
+
+function extractPrice(item: Record<string, unknown>): { price: number | null; currency: string } {
+  const marketplaceId = typeof item.marketplaceId === "string"
+    ? item.marketplaceId
+    : (asRecord(asArray(item.summaries)[0])?.marketplaceId as string | undefined) ?? "";
+  const livePrice = marketplaceId
+    ? extractLiveOfferPrice(item, marketplaceId)
+    : extractLiveOfferPrice(item, "ATVPDKIKX0DER");
+  if (livePrice !== null) {
+    return { price: livePrice, currency: "USD" };
   }
 
   const attrs = asRecord(item.attributes);
@@ -209,10 +263,25 @@ function extractPrice(item: Record<string, unknown>): { price: number | null; cu
   return { price: null, currency: "USD" };
 }
 
+function hasMissingOfferIssue(issues: unknown[]): boolean {
+  return issues.some((issue) => {
+    const rec = asRecord(issue);
+    if (!rec) return false;
+    const msg = String(rec.message || "").toLowerCase();
+    const code = String(rec.code || "").toLowerCase();
+    const attrs = asArray(rec.attributeNames).map((name) => String(name).toLowerCase());
+    return msg.includes("missing offer")
+      || msg.includes("purchasable_offer")
+      || code.includes("missing_offer")
+      || attrs.some((name) => name.includes("purchasable_offer") || name.includes("offer"));
+  });
+}
+
 export function normalizeListingStatus(
   summary: Record<string, unknown> | null,
   issues: unknown[],
   fulfillmentQty: number | null,
+  price: number | null,
 ): {
   listing_status: string;
   listing_status_buyable: boolean;
@@ -228,21 +297,33 @@ export function normalizeListingStatus(
     return { listing_status: "issue", ...flags };
   }
 
+  const missingPrice = price === null || price <= 0;
+  const missingOffer = missingPrice || hasMissingOfferIssue(issues);
+
+  if (missingOffer) {
+    if (fulfillmentQty === 0) {
+      return { listing_status: "out_of_stock", ...flags };
+    }
+    return { listing_status: "inactive", ...flags };
+  }
+
   if (fulfillmentQty === 0) {
     return { listing_status: "out_of_stock", ...flags };
   }
 
+  if (!flags.buyable) {
+    const statuses = asArray(summary?.status).map((s) => String(s).toUpperCase());
+    if (statuses.some((s) => s.includes("SUPPRESSED"))) {
+      return { listing_status: "suppressed", ...flags };
+    }
+    if (statuses.length > 0) {
+      return { listing_status: "inactive", ...flags };
+    }
+    return { listing_status: "unknown", ...flags };
+  }
+
   if (flags.buyable) {
     return { listing_status: "active", ...flags };
-  }
-
-  const statuses = asArray(summary?.status).map((s) => String(s).toUpperCase());
-  if (statuses.some((s) => s.includes("SUPPRESSED"))) {
-    return { listing_status: "suppressed", ...flags };
-  }
-
-  if (statuses.length > 0) {
-    return { listing_status: "inactive", ...flags };
   }
 
   return { listing_status: "unknown", ...flags };
@@ -263,8 +344,8 @@ export function normalizeListingItem(
   const summary = pickSummary(item, ctx.marketplaceId);
   const issues = asArray(item.issues);
   const fulfillment = fulfillmentQuantity(item);
-  const status = normalizeListingStatus(summary, issues, fulfillment.quantity);
   const { price, currency } = extractPrice(item);
+  const status = normalizeListingStatus(summary, issues, fulfillment.quantity, price);
 
   const relationshipsRaw = asRecord(item.relationships) ?? {};
   const enforcementsFromIssues = issues.reduce<Record<string, unknown>>((acc, issue) => {
@@ -297,6 +378,7 @@ export function normalizeListingItem(
     quantity_last_source: "listings",
     quantity_synced_at: ctx.now,
     price_synced_at: price !== null ? ctx.now : null,
+    price_last_source: price !== null ? "listings" : "unknown",
     last_synced_at: ctx.now,
     relationships: relationshipsRaw,
     enforcements: enforcementsFromIssues,

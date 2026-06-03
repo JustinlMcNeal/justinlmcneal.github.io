@@ -71,14 +71,21 @@ function statusBadge(status) {
 export function buildDraftIssueCard(row) {
   const draftId = String(row.draft_id || "");
   const status = String(row.draft_status || "draft");
+  const draftVariationRole = String(row.draft_variation_role || row.variation_role || "standalone");
   const badge = statusBadge(status);
   const title = escapeHtml(row.kk_product_title || row.kk_sku || "Untitled draft");
   const sku = escapeHtml(row.kk_sku || row.seller_sku || "—");
+  const sellerSku = escapeHtml(row.seller_sku || "—");
   const marketplace = escapeHtml(row.marketplace_id || "—");
   const productType = escapeHtml(row.product_type || "—");
   const issueCount = Number(row.issue_count || 0);
   const updated = escapeHtml(formatDate(row.updated_at));
   const verifyStatus = String(row.verify_status || "");
+  const roleBadge = draftVariationRole === "parent"
+    ? { label: "Parent", className: "bg-purple-100 text-purple-800" }
+    : draftVariationRole === "child"
+      ? { label: "Child", className: "bg-sky-100 text-sky-800" }
+      : { label: "Standalone", className: "bg-gray-100 text-gray-700" };
   const verifyBtn = status === "submitted"
     ? `<button type="button" data-action="verify-submitted-draft" data-draft-id="${escapeHtml(draftId)}" class="flex-1 sm:flex-none border-4 border-black bg-emerald-100 px-3 py-2 text-[10px] font-black uppercase tracking-wide min-h-[44px] hover:bg-emerald-200">Verify Listing</button>`
     : "";
@@ -127,6 +134,7 @@ export function buildDraftIssueCard(row) {
           <div class="flex flex-wrap items-center gap-2">
             <h3 class="font-bold text-sm">${title}</h3>
             <span class="inline-flex px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${badge.className}">${escapeHtml(badge.label)}</span>
+            <span class="inline-flex px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${roleBadge.className}">${escapeHtml(roleBadge.label)}</span>
           </div>
           <p class="text-[11px] font-mono text-gray-500 mt-0.5">${sku}</p>
           ${statusHelper}
@@ -138,12 +146,13 @@ export function buildDraftIssueCard(row) {
             <div><dt class="text-gray-400">Marketplace</dt><dd>${marketplace}</dd></div>
             <div><dt class="text-gray-400">Issues</dt><dd class="font-bold">${issueCount}</dd></div>
             <div><dt class="text-gray-400">Updated</dt><dd class="text-gray-600">${updated}</dd></div>
+            <div><dt class="text-gray-400">Seller SKU</dt><dd class="font-mono">${sellerSku}</dd></div>
           </dl>
         </div>
         <div class="flex flex-wrap gap-2 shrink-0 w-full sm:w-auto">
           ${verifyBtn}
           ${requeueBtn}
-          <button type="button" data-action="continue-amazon-draft" data-draft-id="${escapeHtml(draftId)}" class="flex-1 sm:flex-none border-4 border-black bg-black text-white px-3 py-2 text-[10px] font-black uppercase tracking-wide min-h-[44px] hover:opacity-90">Continue Draft</button>
+          <button type="button" data-action="continue-amazon-draft" data-draft-id="${escapeHtml(draftId)}" class="flex-1 sm:flex-none border-4 border-black bg-black text-white px-3 py-2 text-[10px] font-black uppercase tracking-wide min-h-[44px] hover:opacity-90">${draftVariationRole === "parent" ? "Continue Parent Draft" : "Continue Draft"}</button>
           <button type="button" data-action="view-amazon-details" data-draft-id="${escapeHtml(draftId)}" class="flex-1 sm:flex-none border-2 border-black bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wide text-gray-700 min-h-[44px] hover:bg-gray-50">View Details</button>
           <button type="button" data-action="delete-amazon-draft" data-draft-id="${escapeHtml(draftId)}" data-draft-status="${escapeHtml(status)}" data-sku="${sku}" class="flex-1 sm:flex-none border-2 border-red-600 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wide text-red-700 min-h-[44px] hover:bg-red-50">Delete Draft</button>
         </div>

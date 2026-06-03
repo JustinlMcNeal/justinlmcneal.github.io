@@ -930,10 +930,10 @@
 
       <!-- Analytics View -->
       <div id="tab-analytics" class="tab-panel hidden">
-        <div class="grid gap-6">
+        <div class="grid gap-4">
           
           <!-- Analytics Header -->
-          <div class="bg-gradient-to-r from-blue-600 to-cyan-500 rounded-xl p-6 text-white">
+          <div class="bg-gradient-to-r from-blue-600 to-cyan-500 rounded-xl p-4 sm:p-5 text-white">
             <div class="flex items-center gap-4">
               <div class="p-3 bg-white/20 rounded-xl">
                 <svg class="w-8 h-8" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -948,14 +948,14 @@
           </div>
 
           <!-- 1. Performance Overview -->
-          <div class="space-y-6">
-            <div class="border-b border-gray-200 pb-2">
+          <section class="space-y-4">
+            <div class="border-b border-gray-200 pb-2 mb-1">
               <h2 class="text-lg font-black text-gray-900">1. Performance Overview</h2>
               <p class="text-sm text-gray-600 mt-1">High-level posting and engagement health. Sync Insights refreshes Instagram metrics.</p>
             </div>
 
           <!-- Key Metrics Row -->
-          <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             <div class="bg-white rounded-xl shadow-sm border p-4">
               <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Total Posts</div>
               <div id="analyticsTotalPosts" class="text-3xl font-black">0</div>
@@ -978,165 +978,146 @@
             </div>
           </div>
 
-          <!-- Instagram Engagement Metrics -->
-          <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
-            <div class="p-4 border-b flex items-center justify-between">
-              <div class="flex items-center gap-3">
-                <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 via-pink-500 to-orange-400 flex items-center justify-center">
-                  <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+            <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+              <div class="p-3 sm:p-4 border-b flex items-center justify-between gap-2">
+                <div class="flex items-center gap-3">
+                  <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 via-pink-500 to-orange-400 flex items-center justify-center flex-shrink-0">
+                    <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+                    </svg>
+                  </div>
+                  <h2 class="font-bold text-sm sm:text-base">Instagram Engagement</h2>
+                </div>
+                <button id="btnSyncInstagramInsights" type="button" title="Refreshes Instagram metrics like likes, saves, reach, and engagement." class="px-3 py-1.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs font-bold rounded-lg hover:opacity-90 transition-opacity flex items-center gap-1 flex-shrink-0">
+                  <svg id="syncInsightsSpinner" class="w-3 h-3 animate-spin hidden" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                   </svg>
-                </div>
-                <h2 class="font-bold">Instagram Engagement</h2>
+                  Sync Insights
+                </button>
               </div>
-              <button id="btnSyncInstagramInsights" type="button" title="Refreshes Instagram metrics like likes, saves, reach, and engagement." class="px-3 py-1.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs font-bold rounded-lg hover:opacity-90 transition-opacity flex items-center gap-1">
-                <svg id="syncInsightsSpinner" class="w-3 h-3 animate-spin hidden" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                </svg>
-                Sync Insights
-              </button>
+              <div class="p-4 sm:p-5">
+                <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 text-center">
+                  <div class="p-2 sm:p-3 bg-pink-50 rounded-xl">
+                    <div class="text-xl sm:text-2xl mb-0.5">❤️</div>
+                    <div id="analyticsLikes" class="text-xl sm:text-2xl font-black text-pink-600">0</div>
+                    <div class="text-xs text-gray-500">Likes</div>
+                  </div>
+                  <div class="p-2 sm:p-3 bg-blue-50 rounded-xl">
+                    <div class="text-xl sm:text-2xl mb-0.5">💬</div>
+                    <div id="analyticsComments" class="text-xl sm:text-2xl font-black text-blue-600">0</div>
+                    <div class="text-xs text-gray-500">Comments</div>
+                  </div>
+                  <div class="p-2 sm:p-3 bg-yellow-50 rounded-xl">
+                    <div class="text-xl sm:text-2xl mb-0.5">🔖</div>
+                    <div id="analyticsSaves" class="text-xl sm:text-2xl font-black text-yellow-600">0</div>
+                    <div class="text-xs text-gray-500">Saves</div>
+                  </div>
+                  <div class="p-2 sm:p-3 bg-green-50 rounded-xl">
+                    <div class="text-xl sm:text-2xl mb-0.5">👁️</div>
+                    <div id="analyticsImpressions" class="text-xl sm:text-2xl font-black text-green-600">0</div>
+                    <div class="text-xs text-gray-500">Impressions</div>
+                  </div>
+                  <div class="p-2 sm:p-3 bg-purple-50 rounded-xl">
+                    <div class="text-xl sm:text-2xl mb-0.5">👥</div>
+                    <div id="analyticsReach" class="text-xl sm:text-2xl font-black text-purple-600">0</div>
+                    <div class="text-xs text-gray-500">Reach</div>
+                  </div>
+                  <div class="p-2 sm:p-3 bg-orange-50 rounded-xl">
+                    <div class="text-xl sm:text-2xl mb-0.5">📊</div>
+                    <div id="analyticsEngagementRate" class="text-xl sm:text-2xl font-black text-orange-600">0%</div>
+                    <div class="text-xs text-gray-500">Eng. Rate</div>
+                  </div>
+                </div>
+                <p class="text-xs text-gray-500 mt-3 text-center">Sync Insights refreshes live Instagram metrics.</p>
+                <p id="analyticsLastSync" class="text-xs text-gray-400 mt-1 text-center">Sync insights to see engagement data</p>
+              </div>
             </div>
-            <div class="p-6">
-              <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 text-center">
-                <div class="p-3 bg-pink-50 rounded-xl">
-                  <div class="text-2xl mb-1">❤️</div>
-                  <div id="analyticsLikes" class="text-2xl font-black text-pink-600">0</div>
-                  <div class="text-xs text-gray-500">Likes</div>
-                </div>
-                <div class="p-3 bg-blue-50 rounded-xl">
-                  <div class="text-2xl mb-1">💬</div>
-                  <div id="analyticsComments" class="text-2xl font-black text-blue-600">0</div>
-                  <div class="text-xs text-gray-500">Comments</div>
-                </div>
-                <div class="p-3 bg-yellow-50 rounded-xl">
-                  <div class="text-2xl mb-1">🔖</div>
-                  <div id="analyticsSaves" class="text-2xl font-black text-yellow-600">0</div>
-                  <div class="text-xs text-gray-500">Saves</div>
-                </div>
-                <div class="p-3 bg-green-50 rounded-xl">
-                  <div class="text-2xl mb-1">👁️</div>
-                  <div id="analyticsImpressions" class="text-2xl font-black text-green-600">0</div>
-                  <div class="text-xs text-gray-500">Impressions</div>
-                </div>
-                <div class="p-3 bg-purple-50 rounded-xl">
-                  <div class="text-2xl mb-1">👥</div>
-                  <div id="analyticsReach" class="text-2xl font-black text-purple-600">0</div>
-                  <div class="text-xs text-gray-500">Reach</div>
-                </div>
-                <div class="p-3 bg-orange-50 rounded-xl">
-                  <div class="text-2xl mb-1">📊</div>
-                  <div id="analyticsEngagementRate" class="text-2xl font-black text-orange-600">0%</div>
-                  <div class="text-xs text-gray-500">Eng. Rate</div>
-                </div>
+
+            <!-- When We Posted -->
+            <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+              <div class="p-3 sm:p-4 border-b">
+                <h2 class="font-bold text-sm sm:text-base">When We Posted</h2>
+                <p class="text-xs text-gray-500 mt-1">Posting volume by scheduled time — not proof of best times.</p>
               </div>
-              <p class="text-xs text-gray-500 mt-3 text-center">Sync Insights: refreshes Instagram metrics like likes, saves, reach, and engagement.</p>
-              <p id="analyticsLastSync" class="text-xs text-gray-400 mt-1 text-center">Sync insights to see engagement data</p>
+              <div class="p-4 sm:p-5">
+                <div id="analyticsTimeChart" class="space-y-2"></div>
+                <p id="analyticsTimeChartNote" class="text-xs text-gray-400 mt-3 text-center">Loading posting volume…</p>
+              </div>
             </div>
           </div>
 
-          <!-- When We Posted (scheduling volume — not best times) -->
-          <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
-            <div class="p-4 border-b">
-              <h2 class="font-bold">When We Posted</h2>
-              <p class="text-xs text-gray-500 mt-1">Posting volume by time of day from scheduled times. This shows when posts were scheduled/posted — it does not prove these are the best times.</p>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+            <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+              <div class="p-3 sm:p-4 border-b">
+                <h2 class="font-bold text-sm sm:text-base">Recent Activity</h2>
+              </div>
+              <div id="analyticsRecentActivity" class="divide-y max-h-64 lg:max-h-72 overflow-y-auto">
+                <div class="p-4 text-center text-gray-400 text-sm">Loading...</div>
+              </div>
             </div>
-            <div class="p-6">
-              <div id="analyticsTimeChart" class="space-y-3"></div>
-              <p id="analyticsTimeChartNote" class="text-xs text-gray-400 mt-4 text-center">Loading posting volume…</p>
-            </div>
-          <!-- Recent Activity -->
-          <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
-            <div class="p-4 border-b">
-              <h2 class="font-bold">Recent Activity</h2>
-            </div>
-            <div id="analyticsRecentActivity" class="divide-y max-h-80 overflow-y-auto">
-              <div class="p-4 text-center text-gray-400 text-sm">Loading...</div>
-            </div>
-          </div>
 
-          <!-- Status Breakdown -->
-          <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
-            <div class="p-4 border-b flex items-center justify-between">
-              <h2 class="font-bold">Post Status Overview</h2>
-              <button id="btnRefreshAnalytics" class="text-xs text-blue-600 hover:underline">Refresh</button>
-            </div>
-            <div class="p-6">
-              <div class="grid grid-cols-2 sm:grid-cols-5 gap-4 text-center">
-                <div>
-                  <div id="analyticsStatusQueued" class="text-2xl font-black text-blue-600">0</div>
-                  <div class="text-xs text-gray-500">Queued</div>
-                </div>
-                <div>
-                  <div id="analyticsStatusPublished" class="text-2xl font-black text-green-600">0</div>
-                  <div class="text-xs text-gray-500">Published</div>
-                </div>
-                <div>
-                  <div id="analyticsStatusFailed" class="text-2xl font-black text-red-600">0</div>
-                  <div class="text-xs text-gray-500">Failed</div>
-                </div>
-                <div>
-                  <div id="analyticsStatusDraft" class="text-2xl font-black text-gray-400">0</div>
-                  <div class="text-xs text-gray-500">Draft</div>
-                </div>
-                <div>
-                  <div id="analyticsStatusCancelled" class="text-2xl font-black text-gray-300">0</div>
-                  <div class="text-xs text-gray-500">Cancelled</div>
+            <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+              <div class="p-3 sm:p-4 border-b flex items-center justify-between gap-2">
+                <h2 class="font-bold text-sm sm:text-base">Post Status Overview</h2>
+                <button id="btnRefreshAnalytics" class="text-xs text-blue-600 hover:underline flex-shrink-0">Refresh</button>
+              </div>
+              <div class="p-4 sm:p-5">
+                <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 text-center">
+                  <div>
+                    <div id="analyticsStatusQueued" class="text-xl sm:text-2xl font-black text-blue-600">0</div>
+                    <div class="text-xs text-gray-500">Queued</div>
+                  </div>
+                  <div>
+                    <div id="analyticsStatusPublished" class="text-xl sm:text-2xl font-black text-green-600">0</div>
+                    <div class="text-xs text-gray-500">Published</div>
+                  </div>
+                  <div>
+                    <div id="analyticsStatusFailed" class="text-xl sm:text-2xl font-black text-red-600">0</div>
+                    <div class="text-xs text-gray-500">Failed</div>
+                  </div>
+                  <div>
+                    <div id="analyticsStatusDraft" class="text-xl sm:text-2xl font-black text-gray-400">0</div>
+                    <div class="text-xs text-gray-500">Draft</div>
+                  </div>
+                  <div>
+                    <div id="analyticsStatusCancelled" class="text-xl sm:text-2xl font-black text-gray-300">0</div>
+                    <div class="text-xs text-gray-500">Cancelled</div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
-          </div><!-- /Performance Overview -->
+          </section><!-- /Performance Overview -->
 
           <!-- 2. What's Working -->
-          <div class="space-y-6">
-            <div class="border-b border-gray-200 pb-2">
+          <section class="space-y-4">
+            <div class="border-b border-gray-200 pb-2 mb-1">
               <h2 class="text-lg font-black text-gray-900">2. What’s Working</h2>
               <p class="text-sm text-gray-600 mt-1">Posts, scores, hashtags, platforms, and tones that perform best on your account.</p>
             </div>
 
-          <!-- Scoring performance (auto-queue quartiles) -->
-          <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
-            <div class="p-4 border-b flex flex-wrap items-center justify-between gap-2">
-              <h2 class="font-bold">📊 Scoring performance</h2>
-              <span class="text-xs text-gray-400">Posted rows by priority score quartile</span>
-            </div>
-            <div class="p-4">
-              <div id="scoringPerformanceAlert" class="hidden text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg p-3 mb-3"></div>
-              <div id="scoringPerformanceTable" class="text-sm text-gray-500">
-                <p class="text-center py-3 text-gray-400">Open Analytics or refresh to load</p>
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+            <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+              <div class="p-3 sm:p-4 border-b flex flex-wrap items-center justify-between gap-2">
+                <h2 class="font-bold text-sm sm:text-base">📊 Scoring performance</h2>
+                <span class="text-xs text-gray-400">Posted rows by priority score quartile</span>
+              </div>
+              <div class="p-3 sm:p-4">
+                <div id="scoringPerformanceAlert" class="hidden text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg p-3 mb-3"></div>
+                <div id="scoringPerformanceTable" class="text-sm text-gray-500">
+                  <p class="text-center py-3 text-gray-400">Open Analytics or refresh to load</p>
+                </div>
               </div>
             </div>
-          </div>
 
-          <!-- Top Performing Posts -->
-          <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
-            <div class="p-4 border-b flex items-center justify-between">
-              <h2 class="font-bold">🏆 Top Performing Posts</h2>
-              <span class="text-xs text-gray-400">Click to analyze</span>
+            <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+            <div class="p-3 sm:p-4 border-b">
+              <h2 class="font-bold text-sm sm:text-base">Platform Performance</h2>
             </div>
-            <div id="analyticsTopPosts" class="divide-y max-h-80 overflow-y-auto">
-              <div class="p-4 text-center text-gray-400 text-sm">Sync insights to see top posts</div>
-            </div>
-          </div>
-
-          <!-- Hashtag Performance -->
-          <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
-            <div class="p-4 border-b">
-              <h2 class="font-bold">#️⃣ Hashtag Performance</h2>
-            </div>
-            <div id="analyticsHashtags" class="p-6">
-              <div class="text-center text-gray-400 text-sm">Sync insights to see hashtag analytics</div>
-            </div>
-          </div>
-
-          <!-- Platform Breakdown -->
-          <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
-            <div class="p-4 border-b">
-              <h2 class="font-bold">Platform Performance</h2>
-            </div>
-            <div class="p-6">
-              <div class="grid md:grid-cols-3 gap-6">
+            <div class="p-4 sm:p-5">
+              <div class="grid grid-cols-3 gap-3 sm:gap-4">
                 <!-- Instagram -->
                 <div class="text-center">
                   <div class="w-16 h-16 mx-auto rounded-full bg-gradient-to-tr from-purple-500 via-pink-500 to-orange-400 flex items-center justify-center mb-3">
@@ -1183,55 +1164,75 @@
                 </div>
               </div>
             </div>
+            </div>
           </div>
 
-          <!-- Caption Tone Performance -->
           <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
-            <div class="p-4 border-b">
-              <h2 class="font-bold">Caption Tone Usage</h2>
+            <div class="p-3 sm:p-4 border-b flex items-center justify-between gap-2">
+              <h2 class="font-bold text-sm sm:text-base">🏆 Top Performing Posts</h2>
+              <span class="text-xs text-gray-400">Click to analyze</span>
             </div>
-            <div class="p-6">
-              <div id="analyticsToneChart" class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <!-- Tone stats will be populated by JS -->
+            <div id="analyticsTopPosts" class="divide-y max-h-64 lg:max-h-72 overflow-y-auto">
+              <div class="p-4 text-center text-gray-400 text-sm">Sync insights to see top posts</div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+            <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+              <div class="p-3 sm:p-4 border-b">
+                <h2 class="font-bold text-sm sm:text-base">#️⃣ Hashtag Performance</h2>
+              </div>
+              <div id="analyticsHashtags" class="p-4 sm:p-5 max-h-80 overflow-y-auto">
+                <div class="text-center text-gray-400 text-sm">Sync insights to see hashtag analytics</div>
+              </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+              <div class="p-3 sm:p-4 border-b">
+                <h2 class="font-bold text-sm sm:text-base">Caption Tone Usage</h2>
+              </div>
+              <div class="p-4 sm:p-5">
+                <div id="analyticsToneChart" class="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+                  <!-- Tone stats will be populated by JS -->
+                </div>
               </div>
             </div>
           </div>
 
-          </div><!-- /What's Working -->
+          </section><!-- /What's Working -->
 
           <!-- 3. Post Library & Deep Analysis -->
-          <div class="space-y-6">
-            <div class="border-b border-gray-200 pb-2">
+          <section class="space-y-4">
+            <div class="border-b border-gray-200 pb-2 mb-1">
               <h2 class="text-lg font-black text-gray-900">3. Post Library &amp; Deep Analysis</h2>
               <p class="text-sm text-gray-600 mt-1">Browse posts and open one for details. <strong>Run Deep Analysis</strong> uses AI on that post and saves post-level learnings (cached ~7 days).</p>
             </div>
 
           <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
-            <div class="p-4 border-b flex items-center justify-between">
-              <h2 class="font-bold">📋 Browse All Posts</h2>
-              <select id="analyticsPostFilter" class="text-xs border rounded-lg px-2 py-1">
+            <div class="p-3 sm:p-4 border-b flex items-center justify-between gap-2">
+              <h2 class="font-bold text-sm sm:text-base">📋 Browse All Posts</h2>
+              <select id="analyticsPostFilter" class="text-xs border rounded-lg px-2 py-1 flex-shrink-0">
                 <option value="all">All Time</option>
                 <option value="week">This Week</option>
                 <option value="month" selected>This Month</option>
                 <option value="3months">Last 3 Months</option>
               </select>
             </div>
-            <div id="analyticsAllPosts" class="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-1 p-2 max-h-64 overflow-y-auto">
+            <div id="analyticsAllPosts" class="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 xl:grid-cols-12 gap-1 p-2 max-h-56 sm:max-h-64 overflow-y-auto">
               <div class="col-span-full p-4 text-center text-gray-400 text-sm">Sync insights to browse posts</div>
             </div>
           </div>
 
-          </div><!-- /Post Library -->
+          </section><!-- /Post Library -->
 
           <!-- 4. Learning Engine -->
-          <div class="space-y-6">
-            <div class="border-b border-gray-200 pb-2">
+          <section class="space-y-4">
+            <div class="border-b border-gray-200 pb-2 mb-1">
               <h2 class="text-lg font-black text-gray-900">4. Learning Engine</h2>
               <p class="text-sm text-gray-600 mt-1">What Karry Kraze data taught the system — tables Autopilot can use after <strong>Update Learnings</strong>.</p>
             </div>
           
-          <!-- Learning Header -->
-          <div class="bg-gradient-to-r from-emerald-600 to-teal-500 rounded-xl p-4 sm:p-6 text-white">
+          <div class="bg-gradient-to-r from-emerald-600 to-teal-500 rounded-xl p-4 sm:p-5 text-white">
             <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
               <div class="hidden sm:block p-3 bg-white/20 rounded-xl flex-shrink-0">
                 <svg class="w-8 h-8" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -1251,25 +1252,24 @@
             </div>
           </div>
 
-          <!-- Account Learning Summary -->
-          <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
-            <div class="p-4 border-b">
-              <h2 class="font-bold">Account Learning Summary</h2>
-              <p class="text-xs text-gray-500 mt-1">Data-backed findings from your account only. Missing values mean not enough synced posts yet.</p>
-              <p id="accountLearningLastUpdate" class="text-xs text-gray-400 mt-2"></p>
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+            <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+              <div class="p-3 sm:p-4 border-b">
+                <h2 class="font-bold text-sm sm:text-base">Account Learning Summary</h2>
+                <p class="text-xs text-gray-500 mt-1">Data-backed findings from your account only. Missing values mean not enough synced posts yet.</p>
+                <p id="accountLearningLastUpdate" class="text-xs text-gray-400 mt-2"></p>
+              </div>
+              <div id="accountLearningSummaryBody" class="p-3 sm:p-4 max-h-96 overflow-y-auto">
+                <p class="text-sm text-gray-500">Loading account summary…</p>
+              </div>
             </div>
-            <div id="accountLearningSummaryBody" class="p-4">
-              <p class="text-sm text-gray-500">Loading account summary…</p>
-            </div>
-          </div>
 
-          <!-- Smart Recommendations -->
-          <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+            <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
             <div class="p-3 sm:p-4 border-b flex items-center justify-between">
               <h2 class="font-bold text-sm sm:text-base">🎯 Smart Recommendations</h2>
               <span class="text-[10px] sm:text-xs text-gray-400">Based on post history</span>
             </div>
-            <div id="learningRecommendations" class="divide-y">
+            <div id="learningRecommendations" class="divide-y max-h-96 overflow-y-auto">
               <div class="p-4 sm:p-6 text-center text-gray-400 text-sm">
                 <div class="w-10 sm:w-12 h-10 sm:h-12 mx-auto mb-2 sm:mb-3 rounded-full bg-gray-100 flex items-center justify-center">
                   <svg class="w-5 sm:w-6 h-5 sm:h-6 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -1280,10 +1280,10 @@
                 <p class="text-[10px] sm:text-xs">Post more content to generate personalized recommendations</p>
               </div>
             </div>
+            </div>
           </div>
 
-          <!-- Best Practices Grid -->
-          <div class="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
             <!-- Best Posting Time -->
             <div class="bg-white rounded-xl shadow-sm border p-3 sm:p-4">
               <div class="flex items-center gap-1.5 sm:gap-2 mb-2 sm:mb-3">
@@ -1325,25 +1325,25 @@
             </div>
           </div>
 
-          <!-- Top Performing Hashtags (Learned) -->
-          <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
-            <div class="p-3 sm:p-4 border-b flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
-              <h2 class="font-bold text-sm sm:text-base">🏆 Your Top Hashtags</h2>
-              <span class="text-[10px] sm:text-xs text-gray-400">Based on engagement</span>
-            </div>
-            <div id="learningTopHashtags" class="p-3 sm:p-4">
-              <div class="text-center text-gray-400 text-xs sm:text-sm py-3 sm:py-4">
-                Sync insights and update learnings to see your top hashtags
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+            <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+              <div class="p-3 sm:p-4 border-b flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                <h2 class="font-bold text-sm sm:text-base">🏆 Your Top Hashtags</h2>
+                <span class="text-[10px] sm:text-xs text-gray-400">Based on engagement</span>
+              </div>
+              <div id="learningTopHashtags" class="p-3 sm:p-4 max-h-80 overflow-y-auto">
+                <div class="text-center text-gray-400 text-xs sm:text-sm py-3 sm:py-4">
+                  Sync insights and update learnings to see your top hashtags
+                </div>
               </div>
             </div>
-          </div>
 
-          <!-- Best Posting Times Heatmap -->
-          <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
-            <div class="p-3 sm:p-4 border-b">
-              <h2 class="font-bold text-sm sm:text-base">📊 Optimal Posting Times</h2>
-            </div>
-            <div class="p-2 sm:p-4">
+            <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+              <div class="p-3 sm:p-4 border-b">
+                <h2 class="font-bold text-sm sm:text-base">When Posts Performed Best</h2>
+                <p class="text-xs text-gray-500 mt-0.5">Engagement heatmap by day and hour</p>
+              </div>
+              <div class="p-2 sm:p-4">
               <div id="learningTimesHeatmap" class="overflow-x-auto -mx-2 sm:mx-0">
                 <table class="w-full text-[10px] sm:text-xs min-w-[400px]">
                   <thead>
@@ -1367,17 +1367,17 @@
                 </table>
               </div>
               <p class="text-xs text-gray-400 mt-3 text-center">🟢 Higher engagement • Amber ring = directional (n&lt;3) • “-” = no posts in slot yet</p>
+              </div>
             </div>
           </div>
 
-          <!-- Caption Best Practices -->
           <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
-            <div class="p-4 border-b">
-              <h2 class="font-bold">✍️ Caption Best Practices</h2>
+            <div class="p-3 sm:p-4 border-b">
+              <h2 class="font-bold text-sm sm:text-base">✍️ Caption Best Practices</h2>
               <p class="text-xs text-gray-500 mt-1">From your post history when enough data exists; otherwise shows “not enough data yet.”</p>
             </div>
-            <div class="p-4">
-              <div class="grid md:grid-cols-2 gap-4">
+            <div class="p-3 sm:p-4">
+              <div class="grid md:grid-cols-2 gap-3 sm:gap-4">
                 <div class="bg-green-50 rounded-xl p-4">
                   <h3 class="font-bold text-green-800 mb-2 flex items-center gap-2">
                     <span>✅</span> What Works
@@ -1436,7 +1436,6 @@
             </div>
           </details>
 
-          <!-- 🧠 AI Learning Dashboard - What AI Learned -->
           <div class="bg-gradient-to-br from-violet-50 via-purple-50 to-fuchsia-50 rounded-xl shadow-sm border border-purple-200 overflow-hidden">
             <div class="p-4 border-b border-purple-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <div class="flex items-center gap-2">
@@ -1488,7 +1487,7 @@
             </details>
           </div>
 
-          </div><!-- /Learning Engine -->
+          </section><!-- /Learning Engine -->
 
         </div>
       </div>

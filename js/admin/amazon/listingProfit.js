@@ -87,8 +87,12 @@ function profitHint(row) {
   return "";
 }
 
-/** @param {Record<string, unknown>} row */
-export function feeColumnMarkup(row) {
+/**
+ * @param {Record<string, unknown>} row
+ * @param {{ compact?: boolean }} [options]
+ */
+export function feeColumnMarkup(row, options = {}) {
+  const compact = options.compact === true;
   if (!isProfitComplete(row)) {
     return `<span class="text-gray-400">—</span>${profitHint(row)}`;
   }
@@ -104,6 +108,15 @@ export function feeColumnMarkup(row) {
     ? `<span class="text-[10px] font-black uppercase tracking-wide text-sky-700 mt-0.5 block">Tap for breakdown</span>`
     : `<span class="text-[10px] text-gray-400 block">Loading SP-API…</span>`;
 
+  if (compact) {
+    const hint = fees.source === "api" ? "SP-API fee · tap for breakdown" : "15% referral estimate";
+    return `
+      <button type="button" data-action="show-fee-breakdown" data-listing-id="${listingId}" class="text-right w-full hover:bg-gray-100 rounded px-0.5 min-h-[36px]" title="${hint}">
+        <span class="font-medium text-gray-700 text-xs">${feeText}</span>
+      </button>
+    `;
+  }
+
   return `
     <button type="button" data-action="show-fee-breakdown" data-listing-id="${listingId}" class="text-right w-full hover:bg-gray-100 rounded px-1 -mx-1 min-h-[44px]" title="Amazon fee estimate">
       <span class="font-medium text-gray-700">${feeText}</span>
@@ -113,8 +126,12 @@ export function feeColumnMarkup(row) {
   `;
 }
 
-/** @param {Record<string, unknown>} row */
-export function profitColumnMarkup(row) {
+/**
+ * @param {Record<string, unknown>} row
+ * @param {{ compact?: boolean }} [options]
+ */
+export function profitColumnMarkup(row, options = {}) {
+  const compact = options.compact === true;
   if (!isProfitComplete(row)) {
     return `<span class="text-gray-400">—</span>${profitHint(row)}`;
   }
@@ -128,6 +145,10 @@ export function profitColumnMarkup(row) {
   const cogs = formatListingMoney(row.kk_cogs, row.currency);
   const fees = resolvedFees(row);
   const feeLabel = fees.source === "api" ? "SP-API fees" : "Est. fees";
+
+  if (compact) {
+    return `<span class="${className} text-sm" title="COGS ${cogs} · ${feeLabel}">${text}</span>`;
+  }
 
   return `<span class="${className}">${text}</span><span class="text-[10px] text-gray-400 block">COGS ${cogs} · ${feeLabel}</span>`;
 }

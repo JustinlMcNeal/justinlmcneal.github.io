@@ -2,9 +2,9 @@
 
 import {
   getAmazonEndpoint,
-  getAwsRegionForSpApiRegion,
   refreshAmazonAccessToken,
 } from "./amazonSpApiUtils.ts";
+import { resolveAwsSigningConfig, type SyncEnvConfig } from "./amazonSyncAccountUtils.ts";
 
 export type SellerAccountRow = {
   id: string;
@@ -62,16 +62,7 @@ export async function resolveAmazonCredentials(
   // deno-lint-ignore no-explicit-any
   serviceClient: any,
   sellerAccountId: string | null,
-  env: {
-    lwaClientId: string;
-    lwaClientSecret: string;
-    spApiEndpointOverride?: string | null;
-    awsAccessKeyId?: string | null;
-    awsSecretAccessKey?: string | null;
-    awsSessionToken?: string | null;
-    awsRegionOverride?: string | null;
-    allowUnsignedSpApi?: boolean;
-  },
+  env: SyncEnvConfig,
 ): Promise<{ ok: true; creds: AmazonCredentials } | { ok: false; error: string }> {
   const account = await resolveConnectedAccount(serviceClient, sellerAccountId);
   if (!account?.is_active || account.token_status !== "active") {
@@ -113,18 +104,21 @@ export async function resolveAmazonCredentials(
   }
 
   const endpoint = getAmazonEndpoint(account.region, env.spApiEndpointOverride);
-  const awsSigningRegion = getAwsRegionForSpApiRegion(account.region, env.awsRegionOverride);
-  const aws = env.awsAccessKeyId?.trim() && env.awsSecretAccessKey?.trim()
-    ? {
-      accessKeyId: env.awsAccessKeyId.trim(),
-      secretAccessKey: env.awsSecretAccessKey.trim(),
-      sessionToken: env.awsSessionToken,
-      region: awsSigningRegion,
-    }
-    : undefined;
 
-  if (!env.allowUnsignedSpApi && !aws) {
-    return { ok: false, error: "server_misconfigured" };
+  let aws: AwsSigningConfig | undefined;
+  if (!env.allowUnsignedSpApi) {
+    try {
+      aws = await resolveAwsSigningConfig(account.region, env);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "aws_signing_failed";
+      if (message === "sts_assume_role_failed" || message === "sts_parse_failed") {
+        return { ok: false, error: "aws_assume_role_failed" };
+      }
+      return { ok: false, error: "server_misconfigured" };
+    }
+    if (!aws) {
+      return { ok: false, error: "server_misconfigured" };
+    }
   }
 
   return {

@@ -1,6 +1,11 @@
 import { qs } from "./dom.js";
 import { submitAmazonDraftLive } from "./api.js";
 import { showAmazonNotification } from "./notifications.js";
+import {
+  getPushComplianceWarnings,
+  renderPushCompliancePanel,
+} from "./pushDraftCompliance.js";
+import { readExtraAttributesFromForm } from "./pushDraftAttributes.js";
 
 export const LIVE_CONFIRM_PHRASE = "PUBLISH_TO_AMAZON";
 
@@ -39,6 +44,12 @@ function parseIsoMs(value) {
 }
 
 function isPtdPreviewCurrent() {
+  const previewValidated = readInput("#amazonPushPreviewValidated") === "true";
+  const previewStatus = readInput("#amazonPushPreviewStatus");
+  if (previewValidated && isPreviewAccepted(previewStatus)) {
+    return true;
+  }
+
   const previewedAt = readInput("#amazonPushPtdPreviewAt");
   const draftUpdatedAt = readInput("#amazonPushDraftUpdatedAt");
   const amazonPreviewAt = readInput("#amazonPushAmazonPreviewAt");
@@ -159,6 +170,18 @@ function openLiveSubmitModal() {
   modal.classList.remove("hidden");
   modal.setAttribute("aria-hidden", "false");
   setInput("#amazonLiveSubmitConfirmPhrase", "");
+
+  const productTypeEl = qs("#amazonPushProductType");
+  const productType = productTypeEl instanceof HTMLInputElement ? productTypeEl.value.trim() : "";
+  let extraAttributes = {};
+  try {
+    extraAttributes = readExtraAttributesFromForm();
+  } catch {
+    extraAttributes = {};
+  }
+  const warnings = getPushComplianceWarnings(productType, extraAttributes);
+  renderPushCompliancePanel(warnings, "#amazonLiveSubmitCompliancePanel");
+
   qs("#amazonLiveSubmitConfirmPhrase")?.focus?.();
 }
 
@@ -243,8 +266,12 @@ export function initPushDraftLive(deps) {
       const messages = {
         draft_not_found: "Draft not found.",
         draft_not_ready: formatDraftNotReadyMessage(err?.reasons),
+        parent_draft_not_found:
+          "Parent draft record missing (e.g. you deleted the parent draft). Sync Amazon listings so KK-XXXX-PARENT is on file, or recreate the parent draft — the parent must still exist on Amazon.",
+        parent_draft_not_ready:
+          "Parent listing must be submitted to Amazon with ACCEPTED status before child SKUs can go live.",
         confirmation_required: `Type ${LIVE_CONFIRM_PHRASE} to confirm.`,
-        live_submit_disabled: "Live submit is disabled on the server.",
+        live_submit_disabled: "Live submit is disabled on the server. Set AMAZON_ENABLE_LIVE_SUBMIT=true in Supabase secrets, then try again.",
         amazon_not_connected: "Connect Amazon before submitting.",
         token_missing: "Amazon token missing. Reconnect Seller Central.",
         token_refresh_failed: "Could not refresh Amazon token.",
@@ -265,7 +292,11 @@ export function initPushDraftLive(deps) {
         deps.renderValidationPanel(err.amazonIssues);
       }
 
-      showAmazonNotification(messages[err?.code] || "Could not submit to Amazon.", { tone: "error" });
+      const summary = formatDraftNotReadyMessage(err?.reasons);
+      showAmazonNotification(
+        messages[err?.code] || summary || err?.hint || "Could not submit to Amazon.",
+        { tone: "error" },
+      );
     } finally {
       deps.setSaving(false);
     }

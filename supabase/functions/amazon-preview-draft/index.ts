@@ -10,6 +10,7 @@ import {
 } from "../_shared/amazonDraftValidationUtils.ts";
 import { resolveAmazonCredentials } from "../_shared/amazonPtdAuthUtils.ts";
 import { getOrFetchPtdSummary } from "../_shared/amazonPtdUtils.ts";
+import { readSyncEnvConfig } from "../_shared/amazonSyncAccountUtils.ts";
 
 const LOG_PREFIX = "[amazon-preview-draft]";
 
@@ -58,16 +59,9 @@ Deno.serve(async (req) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  const lwaClientId = Deno.env.get("AMAZON_LWA_CLIENT_ID");
-  const lwaClientSecret = Deno.env.get("AMAZON_LWA_CLIENT_SECRET");
-  const spApiEndpointOverride = Deno.env.get("AMAZON_SP_API_ENDPOINT") || null;
-  const awsAccessKeyId = Deno.env.get("AWS_ACCESS_KEY_ID");
-  const awsSecretAccessKey = Deno.env.get("AWS_SECRET_ACCESS_KEY");
-  const awsSessionToken = Deno.env.get("AWS_SESSION_TOKEN") || null;
-  const awsRegionOverride = Deno.env.get("AWS_REGION") || null;
-  const allowUnsignedSpApi = Deno.env.get("AMAZON_ALLOW_UNSIGNED_SP_API") === "true";
+  const syncEnv = readSyncEnvConfig();
 
-  if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey || !lwaClientId || !lwaClientSecret) {
+  if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey || !syncEnv.lwaClientId || !syncEnv.lwaClientSecret) {
     return json({ ok: false, error: "server_misconfigured" }, 500);
   }
 
@@ -106,6 +100,9 @@ Deno.serve(async (req) => {
   let sellerAccountId: string | null = null;
   let draftPayload: Record<string, unknown> = {};
   let persistDraftId: string | null = draftId;
+  let matchedAsin: string | null = null;
+  let draftAsin: string | null = null;
+  let variationRole: string | null = null;
 
   try {
     if (draftId) {
@@ -129,11 +126,17 @@ Deno.serve(async (req) => {
       requirementsEnforced = String(draft.requirements_enforced || "ENFORCED");
       sellerAccountId = typeof draft.seller_account_id === "string" ? draft.seller_account_id : null;
       draftPayload = asDraftPayload(draft.draft_payload);
+      variationRole = typeof draft.variation_role === "string" ? draft.variation_role : null;
+      matchedAsin = typeof draft.matched_asin === "string" ? draft.matched_asin : null;
+      draftAsin = typeof draft.asin === "string" ? draft.asin : null;
     } else {
       marketplaceId = parseText(body.marketplaceId, 32) || "";
       productType = parseText(body.productType, 120) || "";
       sellerSku = parseText(body.sellerSku, 120) || "";
       draftPayload = asDraftPayload(body.draftPayload);
+      variationRole = typeof body.variationRole === "string"
+        ? body.variationRole
+        : (typeof draftPayload.variation_role === "string" ? draftPayload.variation_role : null);
       sellerAccountId = body.sellerAccountId ? parseUuid(body.sellerAccountId) : null;
       requirements = typeof body.requirements === "string" ? body.requirements : "LISTING";
       requirementsEnforced = parseText(body.requirementsEnforced, 32) || "ENFORCED";
@@ -148,24 +151,18 @@ Deno.serve(async (req) => {
       return json({ ok: false, error: "invalid_request" }, 400);
     }
 
-    const credResult = await resolveAmazonCredentials(serviceClient, sellerAccountId, {
-      lwaClientId,
-      lwaClientSecret,
-      spApiEndpointOverride,
-      awsAccessKeyId,
-      awsSecretAccessKey,
-      awsSessionToken,
-      awsRegionOverride,
-      allowUnsignedSpApi,
-    });
+    const credResult = await resolveAmazonCredentials(serviceClient, sellerAccountId, syncEnv);
 
     if (!credResult.ok) {
-      const status = credResult.error === "server_misconfigured" ? 500 : 400;
-      const code = credResult.error === "token_refresh_failed" ? 502 : credResult.error;
-      return json({ ok: false, error: code }, status);
+      const status = credResult.error === "server_misconfigured" ? 500
+        : credResult.error === "token_refresh_failed" ? 502
+        : credResult.error === "aws_assume_role_failed" ? 502
+        : 400;
+      return json({ ok: false, error: credResult.error }, status);
     }
 
     const { creds } = credResult;
+    const ptdProductType = requirements === "LISTING_OFFER_ONLY" ? "PRODUCT" : productType;
     const ptdResult = await getOrFetchPtdSummary(
       serviceClient,
       creds,
@@ -173,7 +170,7 @@ Deno.serve(async (req) => {
         sellerAccountId: creds.account.id,
         sellerId: creds.account.seller_id,
         marketplaceId,
-        productType,
+        productType: ptdProductType,
         requirements,
         requirementsEnforced,
         locale,
@@ -182,23 +179,40 @@ Deno.serve(async (req) => {
     );
 
     if (!ptdResult.ok) {
-      const status = ptdResult.error === "database_error" ? 500 : 502;
-      return json({ ok: false, error: ptdResult.error }, status);
+      const status = ptdResult.error === "database_error" ? 500
+        : ptdResult.error === "invalid_product_type" ? 400
+        : ptdResult.error === "invalid_request" ? 400
+        : 502;
+      return json({
+        ok: false,
+        error: ptdResult.error,
+        hint: ptdResult.hint ?? null,
+        httpStatus: ptdResult.httpStatus ?? null,
+      }, status);
     }
 
     const { summary } = ptdResult;
-    const localIssues = validateLocalDraft(sellerSku, draftPayload, productType);
+    const offerDraftPayload = requirements === "LISTING_OFFER_ONLY"
+      ? {
+        ...draftPayload,
+        merchant_suggested_asin: draftPayload.merchant_suggested_asin || matchedAsin || draftAsin,
+      }
+      : draftPayload;
+    const validationOptions = { variationRole };
+    const localIssues = validateLocalDraft(sellerSku, offerDraftPayload, productType, validationOptions);
     const ptdIssues = validateDraftAgainstPtd(
-      draftPayload,
+      offerDraftPayload,
       summary.requiredAttributes,
       summary.recommendedAttributes,
+      validationOptions,
     );
 
     const validationErrors = [...localIssues, ...ptdIssues];
     const draftStatus = resolveDraftStatus(validationErrors);
     const missingRequiredAttributes = computeMissingRequiredAttributes(
-      draftPayload,
+      offerDraftPayload,
       summary.requiredAttributes,
+      validationOptions,
     );
 
     const lastValidationResult = {
@@ -239,6 +253,7 @@ Deno.serve(async (req) => {
       draftStatus,
       validationErrors,
       requiredAttributes: summary.requiredAttributes,
+      recommendedAttributes: summary.recommendedAttributes,
       missingRequiredAttributes,
       productTypeVersion: summary.productTypeVersion,
       schemaSource: ptdResult.source,

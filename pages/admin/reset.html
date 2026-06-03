@@ -9,24 +9,24 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/imgs/icons/favicon-32x32.png" />
   <title>Admin · Reset Password</title>
 
+  <!-- Tailwind powers the injected shared navbar classes. -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
   <!-- Global site theme -->
   <link rel="stylesheet" href="/css/theme/base.css">
   <link rel="stylesheet" href="/css/theme/components.css">
 
-  <!-- New navbar + drawers -->
-  <link rel="stylesheet" href="/css/components/navbar.css">
-
-  <!-- Admin page styles -->
-  <link rel="stylesheet" href="/css/pages/admin.css">
+  <!-- Reset page styles -->
+  <link rel="stylesheet" href="/css/pages/admin/reset.css">
 </head>
 
-<body class="kk-page kk-admin">
+<body class="kk-page kk-admin-reset">
 
   <!-- ✅ NAVBAR INSERT MOUNT -->
   <div id="kkNavbarMount"></div>
 
   <main class="kk-container">
-    <div class="kk-card kk-card-pad maxw-sm">
+    <div class="kk-card kk-card-pad max-w-sm mx-auto">
       <div class="kk-kicker">Admin</div>
       <h1 class="kk-h1">Reset Password</h1>
       <p id="status" class="kk-sub">Loading…</p>
@@ -36,20 +36,20 @@
         <pre id="debug" class="kk-debug"></pre>
       </div>
 
-      <form id="form" class="hidden gap-24">
+      <form id="form" class="hidden">
         <label class="kk-label" for="pw1">New password</label>
         <input id="pw1" class="kk-input" type="password" autocomplete="new-password" />
 
-        <div class="gap-16"></div>
+        <div class="h-4"></div>
 
         <label class="kk-label" for="pw2">Confirm password</label>
         <input id="pw2" class="kk-input" type="password" autocomplete="new-password" />
 
-        <div class="gap-24"></div>
+        <div class="h-6"></div>
 
         <button class="kk-btn" type="submit">Update password</button>
 
-        <div class="gap-16"></div>
+        <div class="h-4"></div>
 
         <a class="kk-link" href="/pages/admin/auth-callback.html">Back to auth</a>
       </form>

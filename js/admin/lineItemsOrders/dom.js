@@ -188,7 +188,8 @@ export function centsToDollars(cents) {
 export function getOrderSource(row) {
   if (row?.source === "amazon") return "amazon";
   const sid = row?.stripe_checkout_session_id || "";
-  if (sid.startsWith("ebay_api_")) return "ebay";
+  if (sid.startsWith("amazon_")) return "amazon";
+  if (sid.startsWith("ebay_api_") || sid.startsWith("ebay_")) return "ebay";
   if (sid.startsWith("cs_live_") || sid.startsWith("cs_test_")) return "kk";
   return "unknown";
 }

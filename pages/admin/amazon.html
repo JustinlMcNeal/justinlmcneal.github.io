@@ -35,7 +35,7 @@
 
   <div id="kkAdminNavMount"></div>
 
-  <main class="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8 overflow-x-hidden" id="amazonListingsPage" data-page="amazon-listings">
+  <main class="max-w-[88rem] mx-auto px-3 sm:px-6 py-4 sm:py-8 overflow-x-hidden" id="amazonListingsPage" data-page="amazon-listings">
 
     <p id="amazonPreviewNote" class="sr-only">Amazon Listings admin. Sync, search, filters, export, and row actions use Supabase edge functions and client-side listing data.</p>
 
@@ -58,13 +58,13 @@
               disabled
               data-action="sync-amazon"
               aria-disabled="true"
-              title="Connect Amazon before syncing"
+              title="Full catalog sync from Amazon. When every page finishes, listings deleted on Seller Central are hidden from Needs Mapping and Synced."
               class="inline-flex items-center justify-center gap-2 border-4 border-black bg-black text-white px-3 sm:px-4 py-2.5 font-black uppercase tracking-[.12em] text-[10px] sm:text-xs opacity-60 cursor-not-allowed flex-1 sm:flex-none min-h-[44px]"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
               </svg>
-              Sync Amazon
+              Sync catalog
             </button>
             <button
               type="button"
@@ -353,6 +353,9 @@
               <option value="out_of_stock">Out of Stock</option>
               <option value="draft">Draft</option>
               <option value="issue">Issue</option>
+              <option value="inactive">Inactive</option>
+              <option value="unknown">Unknown</option>
+              <option value="suppressed">Suppressed</option>
             </select>
           </div>
 
@@ -546,26 +549,23 @@
         </div>
       </div>
 
-      <div class="overflow-x-auto amazon-table-scroll max-h-[70vh]">
-        <table class="w-full border-collapse text-sm amazon-table-density-comfortable" id="amazonListingsTable">
+      <div class="overflow-x-hidden amazon-table-scroll max-h-[70vh]">
+        <table class="w-full border-collapse text-sm amazon-table-density-comfortable amazon-listings-table-fixed" id="amazonListingsTable">
           <thead class="bg-black text-white sticky top-0 z-10">
             <tr class="text-left uppercase tracking-[.1em] text-[10px] font-black">
               <th scope="col" class="px-2 py-2.5 w-10" data-amazon-col="select">
                 <input type="checkbox" id="amazonSelectAllPage" aria-label="Select all listings on this page" class="w-4 h-4 border-2 border-white rounded-sm" />
               </th>
-              <th scope="col" class="px-4 py-2.5 min-w-[220px]" data-amazon-col="product">Product</th>
-              <th scope="col" class="px-4 py-2.5" data-amazon-col="asin">ASIN</th>
-              <th scope="col" class="px-4 py-2.5" data-amazon-col="sku">SKU</th>
-              <th scope="col" class="px-4 py-2.5 text-right" data-amazon-col="price">Price</th>
-              <th scope="col" class="px-4 py-2.5 text-right hidden xl:table-cell" data-amazon-col="amazonFee" title="Product Fees API estimate when loaded; 15% referral fallback otherwise. Click cell for breakdown.">Amazon Fee</th>
-              <th scope="col" class="px-4 py-2.5 text-right" data-amazon-col="profit" title="Amazon price minus KK COGS and estimated referral fee">Est. Profit</th>
-              <th scope="col" class="px-4 py-2.5 text-center hidden xl:table-cell" data-amazon-col="fulfillment" title="FBA vs FBM fulfillment channel">Fulfillment</th>
-              <th scope="col" class="px-4 py-2.5 text-center" data-amazon-col="inventory">Inventory</th>
-              <th scope="col" class="px-4 py-2.5 text-center hidden 2xl:table-cell" data-amazon-col="fbaReserved" title="FBA reserved quantity">FBA Reserved</th>
-              <th scope="col" class="px-4 py-2.5 text-center hidden 2xl:table-cell" data-amazon-col="fbaInbound" title="FBA inbound shipment quantity">FBA Inbound</th>
-              <th scope="col" class="px-4 py-2.5 text-center" data-amazon-col="status">Status</th>
-              <th scope="col" class="px-4 py-2.5 hidden xl:table-cell" data-amazon-col="lastSynced">Last Synced</th>
-              <th scope="col" class="px-4 py-2.5 text-right" data-amazon-col="actions"><span class="sr-only">Actions</span></th>
+              <th scope="col" class="px-3 py-2.5" data-amazon-col="product" title="Title, variant, SKU, and ASIN. Use ⋮ for row actions.">Product</th>
+              <th scope="col" class="px-2 py-2.5 text-right" data-amazon-col="price">Price</th>
+              <th scope="col" class="px-2 py-2.5 text-right hidden xl:table-cell" data-amazon-col="amazonFee" title="Product Fees API estimate when loaded; 15% referral fallback otherwise. Click cell for breakdown.">Fee</th>
+              <th scope="col" class="px-2 py-2.5 text-right" data-amazon-col="profit" title="Amazon price minus KK COGS and estimated referral fee">Profit</th>
+              <th scope="col" class="px-2 py-2.5 text-center hidden xl:table-cell" data-amazon-col="fulfillment" title="FBA vs FBM fulfillment channel">Ship</th>
+              <th scope="col" class="px-2 py-2.5 text-center" data-amazon-col="inventory">Stock</th>
+              <th scope="col" class="px-2 py-2.5 text-center hidden 2xl:table-cell" data-amazon-col="fbaReserved" title="FBA reserved quantity">Reserved</th>
+              <th scope="col" class="px-2 py-2.5 text-center hidden 2xl:table-cell" data-amazon-col="fbaInbound" title="FBA inbound shipment quantity">Inbound</th>
+              <th scope="col" class="px-2 py-2.5 text-center" data-amazon-col="status">Status</th>
+              <th scope="col" class="px-2 py-2.5 hidden xl:table-cell" data-amazon-col="lastSynced">Synced</th>
             </tr>
           </thead>
           <tbody id="amazonListingsBody"></tbody>
@@ -590,6 +590,7 @@
             <option value="25" selected>25</option>
             <option value="50">50</option>
             <option value="100">100</option>
+            <option value="all">All</option>
           </select>
           <span id="amazonPaginationPageLabel" class="text-[10px] font-bold text-gray-600 shrink-0">Page 1 of 1</span>
           <div class="flex items-center gap-1 ml-auto sm:ml-0 overflow-x-auto max-w-full pb-0.5">
@@ -621,11 +622,43 @@
         <p class="text-xs sm:text-sm text-gray-500 mt-1">Karry Kraze products that can be prepared for Amazon listing.</p>
       </header>
 
+      <div class="mb-4">
+        <label for="amazonReadyToPushSearch" class="block text-[10px] font-black uppercase tracking-[.14em] mb-1 text-gray-500">
+          Search products
+        </label>
+        <input
+          id="amazonReadyToPushSearch"
+          type="search"
+          placeholder="Title, SKU, variant label…"
+          autocomplete="off"
+          class="w-full sm:max-w-md border-2 border-black px-3 py-2 text-sm outline-none bg-white min-h-[44px]"
+        />
+      </div>
+
       <div class="space-y-3" id="amazonReadyToPushList">
         <div class="bg-white rounded-xl border border-gray-200 p-8 text-center text-sm text-gray-400">
           Open this tab to load products ready for Amazon prep.
         </div>
       </div>
+      <footer class="bg-white rounded-2xl shadow-sm border border-gray-200 px-4 sm:px-6 py-4 mt-4" aria-label="Ready to Push pagination">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <p id="amazonReadyToPushPaginationSummary" class="text-xs sm:text-sm text-gray-500 min-w-0">Showing 0 results</p>
+          <div class="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
+            <label for="amazonReadyToPushRowsPerPage" class="text-[10px] font-black uppercase tracking-[.12em] text-gray-500 shrink-0">Rows</label>
+            <select id="amazonReadyToPushRowsPerPage" class="border-2 border-black px-2 py-1.5 text-xs font-bold bg-white min-h-[44px]">
+              <option value="25" selected>25</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+              <option value="all">All</option>
+            </select>
+            <span id="amazonReadyToPushPaginationPageLabel" class="text-[10px] font-bold text-gray-600 shrink-0">Page 1 of 1</span>
+            <div class="flex items-center gap-1 ml-auto sm:ml-0">
+              <button type="button" id="amazonReadyToPushPrevPage" class="px-3 py-1.5 border-2 border-black text-xs font-bold shrink-0 min-h-[44px] hover:bg-gray-50" aria-label="Previous page">Prev</button>
+              <button type="button" id="amazonReadyToPushNextPage" class="px-3 py-1.5 border-2 border-black text-xs font-bold shrink-0 min-h-[44px] hover:bg-gray-50" aria-label="Next page">Next</button>
+            </div>
+          </div>
+        </div>
+      </footer>
       <p id="amazonReadyToPushCountLabel" class="text-xs text-gray-400 mt-4">Loading…</p>
     </div>
 
@@ -641,6 +674,25 @@
           Open this tab to load unmapped listings.
         </div>
       </div>
+      <footer class="bg-white rounded-2xl shadow-sm border border-gray-200 px-4 sm:px-6 py-4 mt-4" aria-label="Needs Mapping pagination">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <p id="amazonNeedsMappingPaginationSummary" class="text-xs sm:text-sm text-gray-500 min-w-0">Showing 0 results</p>
+          <div class="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
+            <label for="amazonNeedsMappingRowsPerPage" class="text-[10px] font-black uppercase tracking-[.12em] text-gray-500 shrink-0">Rows</label>
+            <select id="amazonNeedsMappingRowsPerPage" class="border-2 border-black px-2 py-1.5 text-xs font-bold bg-white min-h-[44px]">
+              <option value="25" selected>25</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+              <option value="all">All</option>
+            </select>
+            <span id="amazonNeedsMappingPaginationPageLabel" class="text-[10px] font-bold text-gray-600 shrink-0">Page 1 of 1</span>
+            <div class="flex items-center gap-1 ml-auto sm:ml-0">
+              <button type="button" id="amazonNeedsMappingPrevPage" class="px-3 py-1.5 border-2 border-black text-xs font-bold shrink-0 min-h-[44px] hover:bg-gray-50" aria-label="Previous page">Prev</button>
+              <button type="button" id="amazonNeedsMappingNextPage" class="px-3 py-1.5 border-2 border-black text-xs font-bold shrink-0 min-h-[44px] hover:bg-gray-50" aria-label="Next page">Next</button>
+            </div>
+          </div>
+        </div>
+      </footer>
       <p id="amazonNeedsMappingCountLabel" class="text-xs text-gray-400 mt-4">Loading…</p>
     </div>
 
@@ -739,6 +791,7 @@
           <div class="amazon-modal-body px-4 sm:px-6 py-4 space-y-5 overflow-y-auto flex-1">
             <input type="hidden" id="amazonPushDraftId" value="" />
             <input type="hidden" id="amazonPushKkProductId" value="" />
+            <input type="hidden" id="amazonPushKkVariantId" value="" />
             <input type="hidden" id="amazonPushDraftStatus" value="" />
             <input type="hidden" id="amazonPushPreviewStatus" value="" />
             <input type="hidden" id="amazonPushPreviewValidated" value="false" />
@@ -755,6 +808,35 @@
                   <div><dt class="text-gray-400">KK SKU</dt><dd class="font-mono font-medium" id="amazonPushKkSku">—</dd></div>
                   <div><dt class="text-gray-400">Status</dt><dd data-hydrate="push-review-status">Draft — not saved</dd></div>
                 </dl>
+              </div>
+            </section>
+
+            <section id="amazonPushVariantSection" class="hidden space-y-2">
+              <div class="flex items-center justify-between gap-2">
+                <h3 class="text-[10px] font-black uppercase tracking-[.16em] text-gray-500">KK Variant</h3>
+                <span id="amazonPushVariantCount" class="text-[10px] text-gray-400"></span>
+              </div>
+              <div id="amazonPushVariantList" class="space-y-2 max-h-48 overflow-y-auto"></div>
+            </section>
+
+            <section id="amazonPushVariationSection" class="hidden space-y-2">
+              <div class="flex items-center justify-between gap-2 flex-wrap">
+                <h3 class="text-[10px] font-black uppercase tracking-[.16em] text-gray-500">Amazon Variation Family</h3>
+                <button type="button" data-action="copy-parent-draft-fields" class="hidden border-2 border-violet-700 bg-violet-50 px-2 py-1 text-[9px] font-black uppercase tracking-wide min-h-[32px] hover:bg-violet-100">Copy shared fields from parent</button>
+              </div>
+              <input type="hidden" id="amazonPushVariationRole" value="standalone" />
+              <input type="hidden" id="amazonPushParentDraftId" value="" />
+              <div id="amazonPushVariationRoleList" class="space-y-2"></div>
+              <p id="amazonPushVariationRoleNote" class="hidden text-[10px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2"></p>
+              <div id="amazonPushVariationFamilyFields" class="hidden grid sm:grid-cols-2 gap-3 text-xs">
+                <div class="flex flex-col gap-1 sm:col-span-2">
+                  <label for="amazonPushParentSellerSku" class="text-gray-400 font-bold uppercase tracking-wide text-[10px]">Parent Seller SKU</label>
+                  <input id="amazonPushParentSellerSku" type="text" class="border-2 border-black px-3 py-2 min-h-[44px] font-mono" />
+                </div>
+                <div class="flex flex-col gap-1 sm:col-span-2">
+                  <label for="amazonPushVariationTheme" class="text-gray-400 font-bold uppercase tracking-wide text-[10px]">Variation Theme</label>
+                  <select id="amazonPushVariationTheme" class="border-2 border-black px-3 py-2 min-h-[44px] bg-white"></select>
+                </div>
               </div>
             </section>
 
@@ -793,9 +875,13 @@
                   <label for="amazonPushAmazonTitle" class="text-gray-400 font-bold uppercase tracking-wide text-[10px]">Amazon Title</label>
                   <input id="amazonPushAmazonTitle" type="text" class="border-2 border-black px-3 py-2 min-h-[44px] w-full" />
                 </div>
+                <div class="sm:col-span-2 flex flex-col gap-2">
+                  <button type="button" data-action="amazon-ai-autofill" class="self-start border-2 border-purple-600 bg-purple-50 px-3 py-2 text-[10px] font-black uppercase tracking-wide min-h-[44px] hover:bg-purple-100">✨ AI Auto-Fill</button>
+                  <div id="amazonAiFillStatus" class="hidden text-[10px] text-gray-500" aria-live="polite"></div>
+                </div>
                 <div class="flex flex-col gap-1">
                   <label for="amazonPushBrand" class="text-gray-400 font-bold uppercase tracking-wide text-[10px]">Brand</label>
-                  <input id="amazonPushBrand" type="text" value="Karry Kraze" class="border-2 border-black px-3 py-2 min-h-[44px]" />
+                  <input id="amazonPushBrand" type="text" value="Generic" class="border-2 border-black px-3 py-2 min-h-[44px]" />
                 </div>
                 <div class="flex flex-col gap-1">
                   <label for="amazonPushFulfillmentChannel" class="text-gray-400 font-bold uppercase tracking-wide text-[10px]">Fulfillment</label>
@@ -809,6 +895,16 @@
                   <label for="amazonPushQuantity" class="text-gray-400 font-bold uppercase tracking-wide text-[10px]">Quantity</label>
                   <input id="amazonPushQuantity" type="number" min="0" class="border-2 border-black px-3 py-2 min-h-[44px]" />
                 </div>
+                <div class="sm:col-span-2 flex flex-col gap-1" id="amazonPushImagesSection">
+                  <label class="text-gray-400 font-bold uppercase tracking-wide text-[10px]">Product Images</label>
+                  <p class="text-[10px] text-gray-500">Drag to reorder. First image = main Amazon photo. Up to 9 images (full catalog push only).</p>
+                  <div id="amazonPushImageStrip" class="img-strip"></div>
+                  <div class="flex items-center gap-2 mt-1">
+                    <button type="button" data-action="amazon-push-add-image" class="text-[10px] font-bold text-blue-600 hover:text-kkpink">+ Add from Gallery</button>
+                    <span id="amazonPushImageCount" class="text-[10px] text-gray-400">0 / 9</span>
+                  </div>
+                  <div id="amazonPushImagePicker" class="img-strip mt-1 hidden"></div>
+                </div>
                 <div class="sm:col-span-2 flex flex-col gap-1">
                   <label for="amazonPushBulletPoints" class="text-gray-400 font-bold uppercase tracking-wide text-[10px]">Bullet Points (one per line)</label>
                   <textarea id="amazonPushBulletPoints" rows="3" class="border-2 border-black px-3 py-2 w-full resize-none"></textarea>
@@ -820,7 +916,14 @@
               </div>
             </section>
 
+            <section id="amazonPushExtraAttributesSection" class="hidden space-y-2">
+              <h3 class="text-[10px] font-black uppercase tracking-[.16em] text-gray-500">Additional Amazon Attributes</h3>
+              <p class="text-[10px] text-gray-500">Required by Amazon for this product type but not covered by the main fields above.</p>
+              <div id="amazonPushExtraAttributes" class="grid sm:grid-cols-2 gap-3 text-xs"></div>
+            </section>
+
             <section id="amazonPushEligibilityPanel" class="hidden rounded-xl border-2 border-amber-300 bg-amber-50/40 px-4 py-3" aria-live="polite"></section>
+            <section id="amazonPushCompliancePanel" class="hidden rounded-xl border-2 border-red-400 bg-red-50/50 px-4 py-3" aria-live="polite"></section>
 
             <section class="space-y-3">
               <div class="flex flex-wrap items-center justify-between gap-2">
@@ -896,7 +999,8 @@
             <h2 id="amazonLiveSubmitModalTitle" class="text-lg font-black tracking-tight text-red-700">Submit to Amazon</h2>
             <p class="text-xs sm:text-sm text-gray-600 mt-2">This will submit the listing to Amazon Seller Central. It may create or update a live Amazon offer. Type <span class="font-mono font-bold">PUBLISH_TO_AMAZON</span> to continue.</p>
           </header>
-          <div class="px-4 sm:px-6 py-4">
+            <div class="px-4 sm:px-6 py-4">
+            <div id="amazonLiveSubmitCompliancePanel" class="hidden mb-4 rounded-xl border-2 border-red-400 bg-red-50/50 px-4 py-3 text-xs text-red-900" aria-live="polite"></div>
             <label for="amazonLiveSubmitConfirmPhrase" class="text-[10px] font-black uppercase tracking-wide text-gray-500">Confirmation phrase</label>
             <input id="amazonLiveSubmitConfirmPhrase" type="text" autocomplete="off" placeholder="PUBLISH_TO_AMAZON" class="mt-2 w-full border-2 border-black px-3 py-2 min-h-[44px] font-mono text-sm" />
           </div>
@@ -954,6 +1058,11 @@
                 class="w-full border-2 border-black rounded-xl px-3 py-2.5 text-sm min-h-[44px]"
               />
               <div id="amazonMappingSelectedProduct" class="hidden mt-3" aria-live="polite"></div>
+              <div id="amazonMappingVariantSection" class="hidden mt-3" aria-live="polite">
+                <h4 class="text-[10px] font-black uppercase tracking-[.14em] text-gray-500 mb-2">KK Variant</h4>
+                <p id="amazonMappingVariantHint" class="text-[11px] text-gray-500 mb-2">Multi-variant products require picking which color/size this Amazon SKU represents.</p>
+                <div id="amazonMappingVariantList" class="space-y-2 max-h-40 overflow-y-auto"></div>
+              </div>
               <div id="amazonMappingProductResults" class="mt-3 space-y-2 max-h-56 overflow-y-auto"></div>
             </section>
           </div>
@@ -1062,8 +1171,8 @@
               <div class="border border-gray-200 rounded-xl p-3"><p class="text-gray-400">Last synced</p><p class="font-bold" id="amazonDetailsSynced">—</p></div>
             </div>
 
-            <div class="border border-gray-200 rounded-xl p-4 space-y-2">
-              <h3 class="text-[10px] font-black uppercase tracking-[.14em] text-gray-500">Issue summary</h3>
+            <div id="amazonDetailsIssueSection" class="border border-gray-200 rounded-xl p-4 space-y-2">
+              <h3 id="amazonDetailsIssueHeading" tabindex="-1" class="text-[10px] font-black uppercase tracking-[.14em] text-gray-500">Issue summary</h3>
               <p class="text-xs"><span class="text-gray-400">Open issues:</span> <span class="font-bold" id="amazonDetailsIssueCount">—</span></p>
               <p class="text-xs text-gray-700" id="amazonDetailsLatestIssue">—</p>
               <p class="text-[11px] text-gray-400" id="amazonDetailsLatestIssueMeta">—</p>
@@ -1094,13 +1203,13 @@
           aria-modal="true"
           aria-labelledby="amazonPatchModalTitle"
           aria-describedby="amazonPatchModalDesc"
-          class="w-full sm:max-w-lg bg-white border-t-4 sm:border-4 border-black sm:rounded-2xl shadow-xl max-h-[95vh] flex flex-col"
+          class="w-full sm:max-w-2xl bg-white border-t-4 sm:border-4 border-black sm:rounded-2xl shadow-xl max-h-[95vh] flex flex-col"
         >
           <header class="px-4 sm:px-6 py-4 border-b border-gray-200 shrink-0">
             <div class="flex items-start justify-between gap-3">
               <div>
                 <h2 id="amazonPatchModalTitle" class="text-lg sm:text-xl font-black tracking-tight">Edit Amazon Listing</h2>
-                <p id="amazonPatchModalDesc" class="text-xs sm:text-sm text-gray-500 mt-1">Update price and/or FBM inventory via Amazon patchListingsItem (edge function only).</p>
+                <p id="amazonPatchModalDesc" class="text-xs sm:text-sm text-gray-500 mt-1">Update price, inventory, title, description, and bullet points on a live listing via Amazon patchListingsItem.</p>
               </div>
               <button type="button" data-action="close-patch-modal" aria-label="Close patch modal" title="Close" class="text-2xl leading-none text-gray-500 hover:text-black px-2 min-h-[44px] min-w-[44px]">×</button>
             </div>
@@ -1112,7 +1221,9 @@
               <p><span class="text-gray-400">ASIN:</span> <span class="font-mono" data-hydrate="patch-asin">—</span></p>
               <p><span class="text-gray-400">Seller SKU:</span> <span class="font-mono" data-hydrate="patch-seller-sku">—</span></p>
               <p><span class="text-gray-400">Current price:</span> <span class="font-bold" data-hydrate="patch-current-price">—</span></p>
-              <p><span class="text-gray-400">Current inventory:</span> <span class="font-bold" data-hydrate="patch-current-qty">—</span></p>
+              <div id="amazonPatchPriceHint" class="hidden rounded-xl border border-amber-200 bg-amber-50 p-3" aria-live="polite"></div>
+              <p><span class="text-gray-400">Current Amazon inventory:</span> <span class="font-bold" data-hydrate="patch-current-qty">—</span></p>
+              <p><span class="text-gray-400">KK website stock:</span> <span class="font-bold" data-hydrate="patch-kk-stock">—</span></p>
             </div>
 
             <div id="amazonPatchPriceSection" class="space-y-1">
@@ -1126,6 +1237,36 @@
               <p class="text-[11px] text-gray-400">FBA-managed listings can update price only.</p>
             </div>
 
+            <div id="amazonPatchCopySection" class="space-y-3 border-t border-gray-200 pt-4">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <p class="text-[10px] font-black uppercase tracking-[.14em] text-gray-500">Listing copy (Amazon live)</p>
+                <button type="button" data-action="amazon-patch-ai" data-ai-field="all" class="border-2 border-purple-600 bg-purple-50 px-2 py-1 text-[9px] font-black uppercase tracking-wide min-h-[36px] hover:bg-purple-100 shrink-0">✨ AI all copy</button>
+              </div>
+              <p id="amazonPatchAiStatus" class="hidden text-[10px] text-gray-500" aria-live="polite"></p>
+              <div class="space-y-1">
+                <div class="flex items-center justify-between gap-2">
+                  <label for="amazonPatchAmazonTitle" class="text-[10px] font-black uppercase tracking-[.14em] text-gray-500">Amazon title</label>
+                  <button type="button" data-action="amazon-patch-ai" data-ai-field="title" class="border-2 border-purple-600 bg-purple-50 px-2 py-1 text-[9px] font-black uppercase tracking-wide min-h-[32px] hover:bg-purple-100 shrink-0">✨ AI</button>
+                </div>
+                <input id="amazonPatchAmazonTitle" type="text" maxlength="500" class="w-full border-2 border-black rounded-xl px-3 py-2.5 text-sm min-h-[44px]" />
+              </div>
+              <div class="space-y-1">
+                <div class="flex items-center justify-between gap-2">
+                  <label for="amazonPatchDescription" class="text-[10px] font-black uppercase tracking-[.14em] text-gray-500">Description</label>
+                  <button type="button" data-action="amazon-patch-ai" data-ai-field="description" class="border-2 border-purple-600 bg-purple-50 px-2 py-1 text-[9px] font-black uppercase tracking-wide min-h-[32px] hover:bg-purple-100 shrink-0">✨ AI</button>
+                </div>
+                <textarea id="amazonPatchDescription" rows="4" class="w-full border-2 border-black rounded-xl px-3 py-2.5 text-sm min-h-[88px]"></textarea>
+              </div>
+              <div class="space-y-1">
+                <div class="flex items-center justify-between gap-2">
+                  <label for="amazonPatchBulletPoints" class="text-[10px] font-black uppercase tracking-[.14em] text-gray-500">Bullet points (one per line)</label>
+                  <button type="button" data-action="amazon-patch-ai" data-ai-field="bullets" class="border-2 border-purple-600 bg-purple-50 px-2 py-1 text-[9px] font-black uppercase tracking-wide min-h-[32px] hover:bg-purple-100 shrink-0">✨ AI</button>
+                </div>
+                <textarea id="amazonPatchBulletPoints" rows="5" class="w-full border-2 border-black rounded-xl px-3 py-2.5 text-sm min-h-[100px] font-mono text-xs"></textarea>
+              </div>
+              <p class="text-[11px] text-gray-400">Only changed copy fields are sent. Review AI copy before Apply Update. Shipping template must still be edited in Seller Central.</p>
+            </div>
+
             <div id="amazonPatchIssues" class="hidden rounded-xl border border-amber-200 bg-amber-50 p-3" aria-live="polite"></div>
           </div>
 
@@ -1133,6 +1274,126 @@
             <button type="button" data-action="preview-amazon-patch" class="border-2 border-black bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wide min-h-[44px] hover:bg-gray-50">Preview</button>
             <button type="button" data-action="apply-amazon-patch" class="border-4 border-black bg-black text-white px-3 py-2 text-[10px] font-black uppercase tracking-wide min-h-[44px] hover:opacity-90">Apply Update</button>
             <button type="button" data-action="close-patch-modal" class="ml-auto border-2 border-gray-300 px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-gray-700 hover:bg-gray-50 min-h-[44px]">Cancel</button>
+          </footer>
+        </div>
+      </div>
+    </div>
+
+    <!-- Edit listing images modal -->
+    <div id="amazonImagePatchModal" class="hidden fixed inset-0 z-[60]" aria-hidden="true" data-modal="image-patch">
+      <div class="absolute inset-0 bg-black/50" data-modal-backdrop aria-hidden="true"></div>
+      <div class="relative min-h-full flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="amazonImagePatchModalTitle"
+          aria-describedby="amazonImagePatchModalDesc"
+          class="w-full sm:max-w-lg bg-white border-t-4 sm:border-4 border-black sm:rounded-2xl shadow-xl max-h-[95vh] flex flex-col"
+        >
+          <header class="px-4 sm:px-6 py-4 border-b border-gray-200 shrink-0">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <h2 id="amazonImagePatchModalTitle" class="text-lg sm:text-xl font-black tracking-tight">Edit Amazon Images</h2>
+                <p id="amazonImagePatchModalDesc" class="text-xs sm:text-sm text-gray-500 mt-1">Update main and gallery images on a live listing via Amazon patchListingsItem.</p>
+              </div>
+              <button type="button" data-action="close-image-patch-modal" aria-label="Close image edit modal" title="Close" class="text-2xl leading-none text-gray-500 hover:text-black px-2 min-h-[44px] min-w-[44px]">×</button>
+            </div>
+          </header>
+
+          <div class="amazon-modal-body px-4 sm:px-6 py-4 space-y-4 overflow-y-auto flex-1">
+            <div class="border-2 border-black rounded-xl p-4 text-xs space-y-1">
+              <p><span class="text-gray-400">Title:</span> <span class="font-bold" data-hydrate="image-patch-listing-title">—</span></p>
+              <p><span class="text-gray-400">ASIN:</span> <span class="font-mono" data-hydrate="image-patch-asin">—</span></p>
+              <p><span class="text-gray-400">Seller SKU:</span> <span class="font-mono" data-hydrate="image-patch-seller-sku">—</span></p>
+            </div>
+
+            <div class="space-y-2">
+              <p class="text-[10px] font-black uppercase tracking-[.14em] text-gray-500">Listing Images</p>
+              <p class="text-[10px] text-gray-500">Drag to reorder. First image = main photo. Up to 9 images.</p>
+              <div id="amazonListingImageStrip" class="img-strip"></div>
+              <div class="flex items-center gap-2 mt-1">
+                <button type="button" data-action="amazon-listing-add-image" class="text-[10px] font-bold text-blue-600 hover:text-kkpink">+ Add from Gallery</button>
+                <span id="amazonListingImageCount" class="text-[10px] text-gray-400">0 / 9</span>
+              </div>
+              <div id="amazonListingImagePicker" class="img-strip mt-1 hidden"></div>
+            </div>
+
+            <div id="amazonListingImageIssues" class="hidden rounded-xl border border-amber-200 bg-amber-50 p-3" aria-live="polite"></div>
+          </div>
+
+          <footer class="px-4 sm:px-6 py-4 border-t border-gray-200 flex flex-wrap gap-2 shrink-0 bg-white">
+            <button type="button" data-action="preview-amazon-image-patch" class="border-2 border-black bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wide min-h-[44px] hover:bg-gray-50">Preview</button>
+            <button type="button" data-action="apply-amazon-image-patch" class="border-4 border-black bg-black text-white px-3 py-2 text-[10px] font-black uppercase tracking-wide min-h-[44px] hover:opacity-90">Apply Update</button>
+            <button type="button" data-action="close-image-patch-modal" class="ml-auto border-2 border-gray-300 px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-gray-700 hover:bg-gray-50 min-h-[44px]">Cancel</button>
+          </footer>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fix inactive listing modal -->
+    <div id="amazonInactiveFixModal" class="hidden fixed inset-0 z-[60]" aria-hidden="true" data-modal="inactive-fix">
+      <div class="absolute inset-0 bg-black/50" data-modal-backdrop aria-hidden="true"></div>
+      <div class="relative min-h-full flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="amazonInactiveFixModalTitle"
+          aria-describedby="amazonInactiveFixModalDesc"
+          class="w-full sm:max-w-lg bg-white border-t-4 sm:border-4 border-black sm:rounded-2xl shadow-xl max-h-[95vh] flex flex-col"
+        >
+          <header class="px-4 sm:px-6 py-4 border-b border-gray-200 shrink-0">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <h2 id="amazonInactiveFixModalTitle" class="text-lg sm:text-xl font-black tracking-tight">Fix Inactive Listing</h2>
+                <p id="amazonInactiveFixModalDesc" class="text-xs sm:text-sm text-gray-500 mt-1">Diagnose blockers and restore price and/or FBM quantity.</p>
+              </div>
+              <button type="button" data-action="close-inactive-fix-modal" aria-label="Close fix inactive modal" title="Close" class="text-2xl leading-none text-gray-500 hover:text-black px-2 min-h-[44px] min-w-[44px]">×</button>
+            </div>
+          </header>
+
+          <div class="amazon-modal-body px-4 sm:px-6 py-4 space-y-4 overflow-y-auto flex-1">
+            <div class="flex gap-3 items-start border-2 border-black rounded-xl p-4">
+              <div id="amazonInactiveFixThumb" class="shrink-0" aria-hidden="true"></div>
+              <div class="text-xs space-y-1 min-w-0 flex-1">
+                <p class="font-bold truncate" data-inactive-hydrate="inactive-title">—</p>
+                <p><span class="text-gray-400">ASIN:</span> <span class="font-mono" data-inactive-hydrate="inactive-asin">—</span></p>
+                <p><span class="text-gray-400">Seller SKU:</span> <span class="font-mono" data-inactive-hydrate="inactive-sku">—</span></p>
+                <p><span class="text-gray-400">Status:</span> <span class="font-bold capitalize" data-inactive-hydrate="inactive-status">—</span></p>
+                <p><span class="text-gray-400">Amazon price:</span> <span class="font-bold" data-inactive-hydrate="inactive-price">—</span></p>
+                <p><span class="text-gray-400">Amazon qty:</span> <span class="font-bold" data-inactive-hydrate="inactive-qty">—</span></p>
+                <p><span class="text-gray-400">KK price:</span> <span class="font-bold" data-inactive-hydrate="inactive-kk-price">—</span></p>
+                <p><span class="text-gray-400">KK stock:</span> <span class="font-bold" data-inactive-hydrate="inactive-kk-stock">—</span></p>
+              </div>
+            </div>
+
+            <div class="rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">
+              <p class="text-[10px] font-black uppercase tracking-[.14em] text-amber-800">Diagnosis</p>
+              <div id="amazonInactiveFixProblems"></div>
+              <div id="amazonInactiveFixSuggestions"></div>
+            </div>
+
+            <div id="amazonInactiveFixIssues" class="hidden rounded-xl border border-red-200 bg-red-50 p-3" aria-live="polite"></div>
+
+            <p id="amazonInactiveFixNote" class="text-[11px] text-gray-500"></p>
+
+            <div class="space-y-1">
+              <label for="amazonInactiveFixPrice" class="text-[10px] font-black uppercase tracking-[.14em] text-gray-500">Price (USD)</label>
+              <input id="amazonInactiveFixPrice" type="number" min="0" step="0.01" class="w-full border-2 border-black rounded-xl px-3 py-2.5 text-sm min-h-[44px]" />
+            </div>
+
+            <div id="amazonInactiveFixQtySection" class="space-y-1">
+              <label for="amazonInactiveFixQuantity" class="text-[10px] font-black uppercase tracking-[.14em] text-gray-500">FBM quantity</label>
+              <input id="amazonInactiveFixQuantity" type="number" min="0" step="1" class="w-full border-2 border-black rounded-xl px-3 py-2.5 text-sm min-h-[44px]" />
+              <p class="text-[11px] text-gray-400">FBA-managed listings can update price only.</p>
+            </div>
+
+            <div id="amazonInactiveFixPatchResult" class="hidden rounded-xl border border-amber-200 bg-amber-50 p-3" aria-live="polite"></div>
+          </div>
+
+          <footer class="px-4 sm:px-6 py-4 border-t border-gray-200 flex flex-wrap gap-2 shrink-0 bg-white">
+            <button type="button" data-action="preview-inactive-fix" class="border-2 border-black bg-white px-3 py-2 text-[10px] font-black uppercase tracking-wide min-h-[44px] hover:bg-gray-50">Preview</button>
+            <button type="button" data-action="apply-inactive-fix" class="border-4 border-black bg-black text-white px-3 py-2 text-[10px] font-black uppercase tracking-wide min-h-[44px] hover:opacity-90">Apply Fix</button>
+            <button type="button" data-action="close-inactive-fix-modal" class="ml-auto border-2 border-gray-300 px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-gray-700 hover:bg-gray-50 min-h-[44px]">Cancel</button>
           </footer>
         </div>
       </div>
@@ -1199,12 +1460,21 @@
       <div data-menu-status="active" role="menu" class="border-2 border-black bg-white rounded-lg overflow-hidden shadow-lg min-w-[11rem]">
         <button type="button" disabled data-action="view-details">View Details</button>
         <button type="button" disabled data-action="edit-listing">Edit Listing</button>
+        <button type="button" disabled data-action="edit-listing-images">Edit Images</button>
+        <button type="button" disabled data-action="assign-variant-mapping">Assign Variant</button>
+        <button type="button" disabled data-action="change-kk-mapping">Change KK Mapping</button>
+        <button type="button" disabled data-action="link-variation-family">Link to Variation Family</button>
         <button type="button" disabled data-action="sync-sku">Sync SKU</button>
         <button type="button" disabled data-action="view-on-amazon">View on Amazon</button>
+        <button type="button" disabled data-action="dismiss-amazon-listing">Hide from Dashboard</button>
       </div>
       <div data-menu-status="low_stock" role="menu" class="border-2 border-black bg-white rounded-lg overflow-hidden shadow-lg min-w-[11rem]">
         <button type="button" disabled data-action="view-details">View Details</button>
         <button type="button" disabled data-action="edit-listing">Edit Listing</button>
+        <button type="button" disabled data-action="edit-listing-images">Edit Images</button>
+        <button type="button" disabled data-action="assign-variant-mapping">Assign Variant</button>
+        <button type="button" disabled data-action="change-kk-mapping">Change KK Mapping</button>
+        <button type="button" disabled data-action="link-variation-family">Link to Variation Family</button>
         <button type="button" disabled data-action="sync-sku">Sync SKU</button>
         <button type="button" disabled data-action="view-on-amazon">View on Amazon</button>
       </div>
@@ -1221,9 +1491,50 @@
         <button type="button" disabled data-action="delete-draft">Delete Draft</button>
       </div>
       <div data-menu-status="issue" role="menu" class="border-2 border-black bg-white rounded-lg overflow-hidden shadow-lg min-w-[11rem]">
-        <button type="button" disabled data-action="resolve-issue">Resolve Issue</button>
         <button type="button" disabled data-action="view-issue-details">View Issue Details</button>
+        <button type="button" disabled data-action="view-details">View Details</button>
+        <button type="button" disabled data-action="edit-listing">Edit Listing</button>
+        <button type="button" disabled data-action="edit-listing-images">Edit Images</button>
+        <button type="button" disabled data-action="assign-variant-mapping">Assign Variant</button>
+        <button type="button" disabled data-action="change-kk-mapping">Change KK Mapping</button>
+        <button type="button" disabled data-action="link-variation-family">Link to Variation Family</button>
+        <button type="button" disabled data-action="resolve-issue">Resolve Issue</button>
         <button type="button" disabled data-action="sync-sku">Sync SKU</button>
+        <button type="button" disabled data-action="view-on-amazon">View on Amazon</button>
+        <button type="button" disabled data-action="dismiss-amazon-listing">Hide from Dashboard</button>
+      </div>
+      <div data-menu-status="inactive" role="menu" class="border-2 border-black bg-white rounded-lg overflow-hidden shadow-lg min-w-[11rem]">
+        <button type="button" disabled data-action="fix-inactive-listing">Fix Inactive</button>
+        <button type="button" disabled data-action="edit-listing">Edit Listing</button>
+        <button type="button" disabled data-action="edit-listing-images">Edit Images</button>
+        <button type="button" disabled data-action="assign-variant-mapping">Assign Variant</button>
+        <button type="button" disabled data-action="change-kk-mapping">Change KK Mapping</button>
+        <button type="button" disabled data-action="link-variation-family">Link to Variation Family</button>
+        <button type="button" disabled data-action="sync-sku">Sync SKU</button>
+        <button type="button" disabled data-action="view-details">View Details</button>
+        <button type="button" disabled data-action="view-on-amazon">View on Amazon</button>
+        <button type="button" disabled data-action="dismiss-amazon-listing">Hide from Dashboard</button>
+      </div>
+      <div data-menu-status="unknown" role="menu" class="border-2 border-black bg-white rounded-lg overflow-hidden shadow-lg min-w-[11rem]">
+        <button type="button" disabled data-action="fix-inactive-listing">Fix Inactive</button>
+        <button type="button" disabled data-action="edit-listing">Edit Listing</button>
+        <button type="button" disabled data-action="edit-listing-images">Edit Images</button>
+        <button type="button" disabled data-action="assign-variant-mapping">Assign Variant</button>
+        <button type="button" disabled data-action="change-kk-mapping">Change KK Mapping</button>
+        <button type="button" disabled data-action="link-variation-family">Link to Variation Family</button>
+        <button type="button" disabled data-action="sync-sku">Sync SKU</button>
+        <button type="button" disabled data-action="view-details">View Details</button>
+        <button type="button" disabled data-action="view-on-amazon">View on Amazon</button>
+      </div>
+      <div data-menu-status="suppressed" role="menu" class="border-2 border-black bg-white rounded-lg overflow-hidden shadow-lg min-w-[11rem]">
+        <button type="button" disabled data-action="fix-inactive-listing">Fix Inactive</button>
+        <button type="button" disabled data-action="edit-listing">Edit Listing</button>
+        <button type="button" disabled data-action="edit-listing-images">Edit Images</button>
+        <button type="button" disabled data-action="assign-variant-mapping">Assign Variant</button>
+        <button type="button" disabled data-action="change-kk-mapping">Change KK Mapping</button>
+        <button type="button" disabled data-action="link-variation-family">Link to Variation Family</button>
+        <button type="button" disabled data-action="sync-sku">Sync SKU</button>
+        <button type="button" disabled data-action="view-details">View Details</button>
         <button type="button" disabled data-action="view-on-amazon">View on Amazon</button>
       </div>
     </template>
@@ -1239,7 +1550,7 @@
       <p class="text-3xl mb-3" aria-hidden="true">📦</p>
       <h2 class="font-black uppercase tracking-[.12em] text-sm">No Amazon listings yet</h2>
       <p class="text-xs text-gray-400 mt-2 max-w-sm mx-auto">Connect your Amazon account and sync to populate this dashboard.</p>
-      <button type="button" data-action="sync-amazon" aria-disabled="true" disabled title="Connect Amazon before syncing" class="mt-4 border-4 border-black bg-black text-white px-4 py-2 text-xs font-black uppercase tracking-[.12em] opacity-60 cursor-not-allowed">Sync Amazon</button>
+      <button type="button" data-action="sync-amazon" aria-disabled="true" disabled title="Connect Amazon before syncing" class="mt-4 border-4 border-black bg-black text-white px-4 py-2 text-xs font-black uppercase tracking-[.12em] opacity-60 cursor-not-allowed">Sync catalog</button>
     </div>
 
     <div id="amazonStateError" class="hidden bg-white rounded-2xl border border-red-200 p-12 text-center mb-4" data-state="error" aria-hidden="true" role="alert">

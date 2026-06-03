@@ -11,8 +11,9 @@ import { esc, buildImageUrls } from "./utils.js";
  * @param {string[]} urls       - Ordered list of image URLs to display
  * @param {string[]} stateArr   - The live mutable array that backs `urls`
  *                                (same reference — mutations reflect immediately)
+ * @param {number} [maxImages]  - Max images allowed in strip (default 24)
  */
-export function renderImageStrip(containerId, urls, stateArr) {
+export function renderImageStrip(containerId, urls, stateArr, maxImages = 24) {
   const container = document.getElementById(containerId);
   container.innerHTML = "";
 
@@ -25,7 +26,7 @@ export function renderImageStrip(containerId, urls, stateArr) {
 
     thumb.querySelector(".img-remove").addEventListener("click", () => {
       stateArr.splice(i, 1);
-      renderImageStrip(containerId, stateArr, stateArr);
+      renderImageStrip(containerId, stateArr, stateArr, maxImages);
     });
 
     thumb.addEventListener("dragstart", (e) => {
@@ -39,7 +40,7 @@ export function renderImageStrip(containerId, urls, stateArr) {
       if (from === to) return;
       const [moved] = stateArr.splice(from, 1);
       stateArr.splice(to, 0, moved);
-      renderImageStrip(containerId, stateArr, stateArr);
+      renderImageStrip(containerId, stateArr, stateArr, maxImages);
     });
 
     container.appendChild(thumb);
@@ -54,8 +55,9 @@ export function renderImageStrip(containerId, urls, stateArr) {
  * @param {string}   stripId   - ID of the image strip container element
  * @param {string[]} stateArr  - Live mutable image URL array
  * @param {object}   product   - Product row (used by buildImageUrls)
+ * @param {number}   [maxImages] - Max images allowed (default 24)
  */
-export function showGalleryPicker(pickerId, stripId, stateArr, product) {
+export function showGalleryPicker(pickerId, stripId, stateArr, product, maxImages = 24) {
   const picker       = document.getElementById(pickerId);
   const allAvailable = buildImageUrls(product);
   const unused       = allAvailable.filter(url => !stateArr.includes(url));
@@ -72,10 +74,10 @@ export function showGalleryPicker(pickerId, stripId, stateArr, product) {
     thumb.className = "img-thumb picker";
     thumb.innerHTML = `<img src="${esc(url)}" alt="add" />`;
     thumb.addEventListener("click", () => {
-      if (stateArr.length >= 24) return;
+      if (stateArr.length >= maxImages) return;
       stateArr.push(url);
-      renderImageStrip(stripId, stateArr, stateArr);
-      showGalleryPicker(pickerId, stripId, stateArr, product);
+      renderImageStrip(stripId, stateArr, stateArr, maxImages);
+      showGalleryPicker(pickerId, stripId, stateArr, product, maxImages);
     });
     picker.appendChild(thumb);
   });

@@ -260,7 +260,7 @@
                 <span class="faq-icon w-6 h-6 flex-shrink-0 bg-black text-white rounded-full flex items-center justify-center text-lg font-bold transition-transform">+</span>
               </summary>
               <div class="faq-answer px-5 pb-5 text-gray-600 text-sm leading-relaxed">
-                <p>We try to restock popular items, but some styles are limited edition! Follow us on <a href="https://instagram.com/karrykraze" target="_blank" class="text-kkpink hover:underline">Instagram</a> to be the first to know about restocks and new arrivals.</p>
+                <p>We try to restock popular items, but some styles are limited edition! Follow us on <a href="https://instagram.com/karrykraze" data-kk-social="instagram" target="_blank" rel="noopener noreferrer" class="text-kkpink hover:underline">Instagram</a> to be the first to know about restocks and new arrivals.</p>
               </div>
             </details>
           </div>
@@ -311,7 +311,7 @@
                 <span class="faq-icon w-6 h-6 flex-shrink-0 bg-black text-white rounded-full flex items-center justify-center text-lg font-bold transition-transform">+</span>
               </summary>
               <div class="faq-answer px-5 pb-5 text-gray-600 text-sm leading-relaxed">
-                <p>Follow us on social media! We announce all our sales, new arrivals, and exclusive discounts on <a href="https://instagram.com/karrykraze" target="_blank" class="text-kkpink hover:underline">Instagram</a>, <a href="https://tiktok.com/@karrykraze" target="_blank" class="text-kkpink hover:underline">TikTok</a>, and <a href="https://pinterest.com/karrykraze" target="_blank" class="text-kkpink hover:underline">Pinterest</a>.</p>
+                <p>Follow us on social media! We announce all our sales, new arrivals, and exclusive discounts on <a href="https://instagram.com/karrykraze" data-kk-social="instagram" target="_blank" rel="noopener noreferrer" class="text-kkpink hover:underline">Instagram</a>, <a href="https://tiktok.com/@karrykraze" data-kk-social="tiktok" target="_blank" rel="noopener noreferrer" class="text-kkpink hover:underline">TikTok</a>, and <a href="https://pinterest.com/karrykraze" data-kk-social="pinterest" target="_blank" rel="noopener noreferrer" class="text-kkpink hover:underline">Pinterest</a>.</p>
               </div>
             </details>
           </div>
@@ -345,8 +345,10 @@
   <script type="module">
     import { initNavbar } from '/js/shared/navbar.js';
     import { initFooter } from '/js/shared/footer.js';
+    import { applyPublicSocialLinks } from '/js/shared/socialLinks.js';
     
     document.addEventListener('DOMContentLoaded', async () => {
+      applyPublicSocialLinks(document);
       await initNavbar();
       await initFooter();
     });

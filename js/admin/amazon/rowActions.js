@@ -1,6 +1,6 @@
 import { qs, qsa, setExpanded } from "./dom.js";
 import { closeAmazonModals, isAmazonModalOpen } from "./modals.js";
-import { syncAmazonListingSku } from "./api.js";
+import { syncAmazonListingSku, dismissAmazonListing, fetchAmazonReadyToPushBlockers } from "./api.js";
 import { amazonProductUrl } from "./listingsExport.js";
 import { showAmazonNotification } from "./notifications.js";
 
@@ -22,7 +22,6 @@ const COMING_SOON_ACTIONS = new Set([
   "preview-amazon-issues",
   "submit-later",
   "resolve-issue",
-  "view-issue-details",
 ]);
 
 function closePopover() {
@@ -83,6 +82,15 @@ async function handleRowAction(action, trigger, options) {
     return;
   }
 
+  if (action === "view-issue-details") {
+    if (row) {
+      options.openListingDetails?.(row, { focus: "issues" });
+    } else {
+      showAmazonNotification("Listing details unavailable.", { tone: "warning" });
+    }
+    return;
+  }
+
   if (action === "view-on-amazon") {
     const url = amazonProductUrl(
       row?.marketplace_id || trigger.dataset.marketplaceId,
@@ -93,6 +101,98 @@ async function handleRowAction(action, trigger, options) {
     } else {
       showAmazonNotification("No ASIN available for this listing.", { tone: "warning" });
     }
+    return;
+  }
+
+  if (action === "link-variation-family") {
+    if (!row?.kk_product_id || !row?.kk_variant_id) {
+      showAmazonNotification("Map this listing to a KK variant before linking to a family.", { tone: "warning" });
+      return;
+    }
+    options.openPushForListing?.(row);
+    return;
+  }
+
+  if (action === "assign-variant-mapping" || action === "change-kk-mapping") {
+    if (!row?.kk_product_id && action === "assign-variant-mapping") {
+      showAmazonNotification("Map this listing to a KK product before assigning a variant.", { tone: "warning" });
+      return;
+    }
+    if (!row?.amazon_listing_id && !row?.id) {
+      showAmazonNotification("Listing unavailable.", { tone: "warning" });
+      return;
+    }
+    if (action === "assign-variant-mapping" && row?.kk_variant_id) {
+      showAmazonNotification("This listing already has a variant mapping. Use Change KK Mapping to update it.", { tone: "info" });
+      return;
+    }
+    if (action === "change-kk-mapping" && !row?.kk_product_id) {
+      showAmazonNotification("Map this listing from Needs Mapping first.", { tone: "warning" });
+      return;
+    }
+    options.openMappingForListing?.(row);
+    return;
+  }
+
+  if (action === "dismiss-amazon-listing") {
+    const listingId = String(row?.amazon_listing_id || trigger.dataset.listingId || "").trim();
+    if (!listingId) {
+      showAmazonNotification("Listing unavailable.", { tone: "warning" });
+      return;
+    }
+    const label = String(row?.kk_product_title || row?.amazon_title || row?.seller_sku || trigger.dataset.sku || "this listing");
+    if (!window.confirm(
+      `Hide "${label}" from the dashboard and unmap it so you can push again?\n\nThis does not delete anything on Amazon.`,
+    )) {
+      return;
+    }
+    try {
+      await dismissAmazonListing(listingId, {
+        kkProductId: row?.kk_product_id || null,
+      });
+
+      const blockers = row?.kk_product_id
+        ? await fetchAmazonReadyToPushBlockers(
+          String(row.kk_product_id),
+          row.kk_variant_id ? String(row.kk_variant_id) : null,
+        )
+        : [];
+
+      if (blockers.includes("submitted_draft")) {
+        showAmazonNotification(
+          "Listing hidden. Check Drafts / Issues — a submitted draft is still blocking Ready to Push.",
+          { tone: "warning" },
+        );
+      } else if (blockers.includes("still_mapped")) {
+        showAmazonNotification(
+          "Listing hidden, but the product is still mapped. Try again or check mappings.",
+          { tone: "warning" },
+        );
+      } else {
+        showAmazonNotification(
+          "Listing hidden and unmapped. Check Ready to Push to publish again.",
+          { tone: "success" },
+        );
+      }
+
+      await options.onSyncComplete?.();
+    } catch {
+      showAmazonNotification("Could not hide listing.", { tone: "error" });
+    }
+    return;
+  }
+
+  if (action === "fix-inactive-listing") {
+    const auth = options.getAuthState?.();
+    if (!auth?.connected || auth?.tokenStatus !== "active") {
+      showAmazonNotification("Connect Amazon before fixing listings.", { tone: "warning" });
+      return;
+    }
+    if (!row) {
+      showAmazonNotification("Listing unavailable.", { tone: "warning" });
+      return;
+    }
+    options.openInactiveFixModal?.(row);
     return;
   }
 
@@ -107,6 +207,24 @@ async function handleRowAction(action, trigger, options) {
       return;
     }
     options.openPatchModal?.(row, action === "update-inventory" ? "inventory" : "edit");
+    return;
+  }
+
+  if (action === "edit-listing-images") {
+    const auth = options.getAuthState?.();
+    if (!auth?.connected || auth?.tokenStatus !== "active") {
+      showAmazonNotification("Connect Amazon before editing listing images.", { tone: "warning" });
+      return;
+    }
+    if (!row) {
+      showAmazonNotification("Listing unavailable.", { tone: "warning" });
+      return;
+    }
+    if (!row.kk_product_id) {
+      showAmazonNotification("Map this listing to a KK product before editing images.", { tone: "warning" });
+      return;
+    }
+    options.openImagePatchModal?.(row);
     return;
   }
 
@@ -216,6 +334,29 @@ function openPopover(trigger, options = {}) {
     btn.setAttribute("tabindex", "-1");
   });
 
+  const listingId = trigger.dataset.listingId || "";
+  const row = options.getRowById?.(listingId);
+  const linkFamilyBtn = menu.querySelector('[data-action="link-variation-family"]');
+  if (linkFamilyBtn instanceof HTMLButtonElement) {
+    const showLink = Boolean(row?.kk_product_id && row?.kk_variant_id);
+    linkFamilyBtn.hidden = !showLink;
+    linkFamilyBtn.style.display = showLink ? "" : "none";
+  }
+
+  const assignVariantBtn = menu.querySelector('[data-action="assign-variant-mapping"]');
+  if (assignVariantBtn instanceof HTMLButtonElement) {
+    const showAssign = Boolean(row?.kk_product_id && !row?.kk_variant_id);
+    assignVariantBtn.hidden = !showAssign;
+    assignVariantBtn.style.display = showAssign ? "" : "none";
+  }
+
+  const changeMappingBtn = menu.querySelector('[data-action="change-kk-mapping"]');
+  if (changeMappingBtn instanceof HTMLButtonElement) {
+    const showChange = Boolean(row?.kk_product_id);
+    changeMappingBtn.hidden = !showChange;
+    changeMappingBtn.style.display = showChange ? "" : "none";
+  }
+
   popoverEl = document.createElement("div");
   popoverEl.id = "amazonRowActionPopover";
   popoverEl.className = "amazon-row-popover";
@@ -247,7 +388,10 @@ function openPopover(trigger, options = {}) {
  *   getAuthState?: () => Record<string, unknown> | null,
  *   onSyncComplete?: () => Promise<void> | void,
  *   openPatchModal?: (row: Record<string, unknown>, mode: "edit" | "inventory") => void,
- *   openListingDetails?: (row: Record<string, unknown>) => void,
+ *   openPushForListing?: (row: Record<string, unknown>) => void,
+ *   openMappingForListing?: (row: Record<string, unknown>) => void | Promise<void>,
+ *   openInactiveFixModal?: (row: Record<string, unknown>) => void | Promise<void>,
+ *   openListingDetails?: (row: Record<string, unknown>, options?: { focus?: string }) => void,
  *   deleteDraft?: (draftId: string, context?: { draftStatus?: string, title?: string }) => void | Promise<void>,
  * }} [options]
  * @returns {() => void}

@@ -17,7 +17,7 @@ export function getCtaEligibility(row) {
       eligible: false,
       source,
       labelType,
-      message: "CTA labels are available for KK website and eBay orders.",
+      message: "CTA labels are available for KK website, eBay, and Amazon orders.",
     };
   }
 

@@ -4,6 +4,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   normalizeListingIssues,
   normalizeListingItem,
+  reconcileNormalizedListingStatus,
   searchListingsItemsPage,
 } from "./amazonSpApiUtils.ts";
 
@@ -29,6 +30,7 @@ export type SyncRunSummary = {
   recordsCreated: number;
   recordsUpdated: number;
   recordsFailed: number;
+  recordsMarkedAbsent: number;
   pagesFetched: number;
   warnings: string[];
 };
@@ -176,6 +178,239 @@ async function loadExistingSkus(
   return new Set(data.map((row) => String(row.seller_sku)));
 }
 
+type ExistingListingQtyRow = {
+  seller_sku: string;
+  fbm_quantity: number | null;
+  quantity_last_source: string | null;
+  quantity_synced_at: string | null;
+  price: number | null;
+  price_last_source: string | null;
+  price_synced_at: string | null;
+};
+
+const MANUAL_PATCH_GRACE_MS = 30 * 60 * 1000;
+
+async function loadExistingListingOverrides(
+  client: ServiceClient,
+  sellerAccountId: string,
+  marketplaceId: string,
+  skus: string[],
+): Promise<Map<string, ExistingListingQtyRow>> {
+  if (skus.length === 0) return new Map();
+
+  const { data, error } = await client
+    .from("amazon_listings")
+    .select([
+      "seller_sku",
+      "fbm_quantity",
+      "quantity_last_source",
+      "quantity_synced_at",
+      "price",
+      "price_last_source",
+      "price_synced_at",
+    ].join(","))
+    .eq("seller_account_id", sellerAccountId)
+    .eq("marketplace_id", marketplaceId)
+    .in("seller_sku", skus);
+
+  if (error || !data) return new Map();
+
+  return new Map(
+    data.map((row) => [
+      String(row.seller_sku),
+      {
+        seller_sku: String(row.seller_sku),
+        fbm_quantity: typeof row.fbm_quantity === "number" ? row.fbm_quantity : null,
+        quantity_last_source: typeof row.quantity_last_source === "string"
+          ? row.quantity_last_source
+          : null,
+        quantity_synced_at: typeof row.quantity_synced_at === "string"
+          ? row.quantity_synced_at
+          : null,
+        price: typeof row.price === "number" ? row.price : Number(row.price) || null,
+        price_last_source: typeof row.price_last_source === "string"
+          ? row.price_last_source
+          : null,
+        price_synced_at: typeof row.price_synced_at === "string"
+          ? row.price_synced_at
+          : null,
+      },
+    ]),
+  );
+}
+
+function withinManualPatchGrace(syncedAt: string | null | undefined): boolean {
+  if (!syncedAt) return false;
+  return Date.now() - new Date(syncedAt).getTime() <= MANUAL_PATCH_GRACE_MS;
+}
+
+function preserveManualQuantity(
+  normalized: ReturnType<typeof normalizeListingItem>,
+  existing: ExistingListingQtyRow | undefined,
+): ReturnType<typeof normalizeListingItem> {
+  if (!normalized || !existing || existing.quantity_last_source !== "manual") {
+    return normalized;
+  }
+
+  if (!withinManualPatchGrace(existing.quantity_synced_at)) return normalized;
+
+  if (normalized.fbm_quantity === existing.fbm_quantity) {
+    normalized.quantity_last_source = "listings";
+    return normalized;
+  }
+
+  normalized.fbm_quantity = existing.fbm_quantity;
+  normalized.quantity_last_source = "manual";
+  normalized.quantity_synced_at = existing.quantity_synced_at;
+  return normalized;
+}
+
+function preserveManualPrice(
+  normalized: ReturnType<typeof normalizeListingItem>,
+  _existing: ExistingListingQtyRow | undefined,
+): ReturnType<typeof normalizeListingItem> {
+  // Always keep sync-derived live offer price in `price`; manual patches only set metadata.
+  return normalized;
+}
+
+async function unmapProductsForListing(
+  client: ServiceClient,
+  amazonListingId: string,
+  now: string,
+) {
+  const { data: mappedRows } = await client
+    .from("amazon_listing_mappings")
+    .select("kk_product_id")
+    .eq("amazon_listing_id", amazonListingId)
+    .eq("mapping_status", "mapped");
+
+  const productIds = new Set(
+    (mappedRows || [])
+      .map((row) => row?.kk_product_id)
+      .filter(Boolean)
+      .map(String),
+  );
+
+  await client
+    .from("amazon_listing_mappings")
+    .update({ mapping_status: "legacy", updated_at: now })
+    .eq("amazon_listing_id", amazonListingId)
+    .eq("mapping_status", "mapped");
+
+  for (const productId of productIds) {
+    await client
+      .from("amazon_listing_mappings")
+      .update({ mapping_status: "legacy", updated_at: now })
+      .eq("kk_product_id", productId)
+      .eq("mapping_status", "mapped");
+  }
+
+  return [...productIds];
+}
+
+async function markSkuAbsent(
+  client: ServiceClient,
+  sellerAccountId: string,
+  marketplaceId: string,
+  sellerSku: string,
+  now: string,
+) {
+  const { data: listing } = await client
+    .from("amazon_listings")
+    .select("id")
+    .eq("seller_account_id", sellerAccountId)
+    .eq("marketplace_id", marketplaceId)
+    .eq("seller_sku", sellerSku)
+    .maybeSingle();
+
+  if (listing?.id) {
+    await unmapProductsForListing(client, String(listing.id), now);
+  }
+
+  await client
+    .from("amazon_listings")
+    .update({
+      amazon_sku_absent_at: now,
+      updated_at: now,
+    })
+    .eq("seller_account_id", sellerAccountId)
+    .eq("marketplace_id", marketplaceId)
+    .eq("seller_sku", sellerSku);
+}
+
+async function clearSkuAbsent(
+  client: ServiceClient,
+  listingId: string,
+  now: string,
+) {
+  await client
+    .from("amazon_listings")
+    .update({
+      amazon_sku_absent_at: null,
+      updated_at: now,
+    })
+    .eq("id", listingId)
+    .not("amazon_sku_absent_at", "is", null);
+}
+
+/** SKUs accumulated across resumed full-sync pages (partial_success cursor). */
+async function loadFullSyncSeenSkus(
+  client: ServiceClient,
+  sellerAccountId: string,
+  marketplaceId: string,
+): Promise<Set<string>> {
+  const seen = new Set<string>();
+  const { data } = await client
+    .from("amazon_sync_runs")
+    .select("sync_cursor")
+    .eq("seller_account_id", sellerAccountId)
+    .eq("marketplace_id", marketplaceId)
+    .eq("sync_type", "full")
+    .eq("status", "partial_success")
+    .order("finished_at", { ascending: false, nullsFirst: false })
+    .limit(1)
+    .maybeSingle();
+
+  const cursor = data?.sync_cursor as Record<string, unknown> | null;
+  const stored = cursor?.seenSellerSkus;
+  if (!Array.isArray(stored)) return seen;
+
+  for (const entry of stored) {
+    const sku = typeof entry === "string" ? entry.trim() : "";
+    if (sku) seen.add(sku);
+  }
+  return seen;
+}
+
+/**
+ * After a complete full catalog sync, hide local rows whose SKU was not returned by Amazon.
+ */
+async function reconcileAbsentAfterFullSync(
+  client: ServiceClient,
+  sellerAccountId: string,
+  marketplaceId: string,
+  seenSkus: Set<string>,
+  now: string,
+): Promise<number> {
+  const { data: localRows, error } = await client
+    .from("amazon_listings")
+    .select("id, seller_sku")
+    .eq("seller_account_id", sellerAccountId)
+    .eq("marketplace_id", marketplaceId)
+    .is("amazon_sku_absent_at", null);
+
+  if (error || !localRows?.length) return 0;
+
+  let marked = 0;
+  for (const row of localRows) {
+    const sku = String(row.seller_sku || "").trim();
+    if (!sku || seenSkus.has(sku)) continue;
+    await markSkuAbsent(client, sellerAccountId, marketplaceId, sku, now);
+    marked += 1;
+  }
+  return marked;
+}
+
 async function fetchListingsPageWithRetry(
   params: Parameters<typeof searchListingsItemsPage>[0],
 ) {
@@ -231,10 +466,10 @@ export async function runMarketplaceSync(
   } = params;
 
   const warnings: string[] = [];
-  warnings.push("staleHandling:not_implemented_no_purge");
 
   let lastUpdatedAfter: string | null = null;
   let initialPageToken: string | null = null;
+  const seenSellerSkus = new Set<string>();
 
   if (syncType === "incremental") {
     lastUpdatedAfter = await deriveIncrementalCursor(client, account.id, marketplaceId);
@@ -247,6 +482,8 @@ export async function runMarketplaceSync(
     initialPageToken = await deriveFullSyncPageToken(client, account.id, marketplaceId);
     if (initialPageToken) {
       warnings.push("full_sync_resumed_from_stored_page_token");
+      const priorSeen = await loadFullSyncSeenSkus(client, account.id, marketplaceId);
+      for (const sku of priorSeen) seenSellerSkus.add(sku);
     }
   }
 
@@ -283,7 +520,9 @@ export async function runMarketplaceSync(
         syncType,
         sigv4: Boolean(aws),
         awsSigningRegion: aws?.region ?? null,
-        staleHandling: "not_implemented_no_purge",
+        staleHandling: syncType === "full"
+          ? "catalog_reconcile:pending"
+          : "not_applicable",
       },
     })
     .select("id")
@@ -295,6 +534,7 @@ export async function runMarketplaceSync(
 
   const syncRunId = syncRun.id as string;
   let pageToken: string | null = initialPageToken;
+  let recordsMarkedAbsent = 0;
   let pagesFetched = 0;
   let recordsSeen = 0;
   let recordsCreated = 0;
@@ -340,6 +580,13 @@ export async function runMarketplaceSync(
 
     recordsSeen += pageResult.items.length;
 
+    if (syncType === "full") {
+      for (const item of pageResult.items) {
+        const sku = typeof item.sku === "string" ? item.sku.trim() : "";
+        if (sku) seenSellerSkus.add(sku);
+      }
+    }
+
     const pageSkus = pageResult.items
       .map((item) => (typeof item.sku === "string" ? item.sku.trim() : ""))
       .filter(Boolean);
@@ -349,10 +596,16 @@ export async function runMarketplaceSync(
       marketplaceId,
       pageSkus,
     );
+    const existingQtyBySku = await loadExistingListingOverrides(
+      client,
+      account.id,
+      marketplaceId,
+      pageSkus,
+    );
 
     for (const item of pageResult.items) {
       try {
-        const normalized = normalizeListingItem(item, {
+        let normalized = normalizeListingItem(item, {
           sellerAccountId: account.id,
           sellerId: account.seller_id,
           marketplaceId,
@@ -370,6 +623,16 @@ export async function runMarketplaceSync(
           );
           continue;
         }
+
+        normalized = preserveManualQuantity(
+          normalized,
+          existingQtyBySku.get(normalized.seller_sku),
+        );
+        normalized = preserveManualPrice(
+          normalized,
+          existingQtyBySku.get(normalized.seller_sku),
+        );
+        normalized = reconcileNormalizedListingStatus(normalized);
 
         const isCreate = !existingSkus.has(normalized.seller_sku);
 
@@ -401,6 +664,8 @@ export async function runMarketplaceSync(
         }
 
         const listingId = upserted.id as string;
+
+        await clearSkuAbsent(client, listingId, now);
 
         await client
           .from("amazon_listing_issues")
@@ -438,6 +703,17 @@ export async function runMarketplaceSync(
     if (!pageToken || pagesFetched >= maxPages) break;
   }
 
+  if (
+    syncType === "single_sku" &&
+    sellerSku?.trim() &&
+    recordsSeen === 0 &&
+    !spApiFailed &&
+    !rateLimited
+  ) {
+    await markSkuAbsent(client, account.id, marketplaceId, sellerSku.trim(), now);
+    warnings.push("single_sku_not_found_marked_absent");
+  }
+
   const finishedAt = new Date().toISOString();
   const hasMore = Boolean(pageToken);
   let finalStatus = "success";
@@ -456,6 +732,37 @@ export async function runMarketplaceSync(
     warnings.push("pagination_incomplete_more_pages_available");
   }
 
+  const canReconcileCatalog = syncType === "full"
+    && !hasMore
+    && !spApiFailed
+    && !rateLimited
+    && finalStatus === "success";
+
+  if (canReconcileCatalog) {
+    recordsMarkedAbsent = await reconcileAbsentAfterFullSync(
+      client,
+      account.id,
+      marketplaceId,
+      seenSellerSkus,
+      now,
+    );
+    if (recordsMarkedAbsent > 0) {
+      warnings.push(`catalog_reconcile:marked_${recordsMarkedAbsent}_absent`);
+    } else {
+      warnings.push("catalog_reconcile:no_stale_rows");
+    }
+  } else if (syncType === "full" && hasMore) {
+    warnings.push("catalog_reconcile:skipped_pagination_incomplete");
+  } else if (syncType === "full" && finalStatus !== "success") {
+    warnings.push("catalog_reconcile:skipped_run_not_success");
+  }
+
+  const staleHandling = canReconcileCatalog
+    ? `catalog_reconcile:marked_${recordsMarkedAbsent}_absent`
+    : syncType === "full"
+    ? "catalog_reconcile:deferred"
+    : "not_applicable";
+
   await finalizeSyncRun(client, syncRunId, {
     status: finalStatus,
     finished_at: finishedAt,
@@ -467,6 +774,9 @@ export async function runMarketplaceSync(
       lastUpdatedAfter: searchParams.lastUpdatedAfter ?? null,
       nextToken: pageToken,
       completedAt: finishedAt,
+      seenSellerSkus: syncType === "full" && hasMore
+        ? [...seenSellerSkus]
+        : null,
     },
     summary: {
       marketplaceId,
@@ -480,7 +790,9 @@ export async function runMarketplaceSync(
       awsSigningRegion: aws?.region ?? null,
       includedData:
         "summaries,attributes,issues,offers,fulfillmentAvailability,relationships,productTypes",
-      staleHandling: "not_implemented_no_purge",
+      staleHandling,
+      recordsMarkedAbsent,
+      seenSellerSkuCount: syncType === "full" ? seenSellerSkus.size : null,
       warnings,
     },
   });
@@ -493,6 +805,7 @@ export async function runMarketplaceSync(
     recordsCreated,
     recordsUpdated,
     recordsFailed,
+    recordsMarkedAbsent,
     pagesFetched,
     warnings,
   };
@@ -505,6 +818,7 @@ export function buildAggregateSyncResponse(runs: SyncRunSummary[]) {
       acc.recordsCreated += run.recordsCreated;
       acc.recordsUpdated += run.recordsUpdated;
       acc.recordsFailed += run.recordsFailed;
+      acc.recordsMarkedAbsent += run.recordsMarkedAbsent;
       acc.pagesFetched += run.pagesFetched;
       for (const warning of run.warnings) {
         if (!acc.warnings.includes(warning)) acc.warnings.push(warning);
@@ -516,6 +830,7 @@ export function buildAggregateSyncResponse(runs: SyncRunSummary[]) {
       recordsCreated: 0,
       recordsUpdated: 0,
       recordsFailed: 0,
+      recordsMarkedAbsent: 0,
       pagesFetched: 0,
       warnings: [] as string[],
     },
@@ -532,6 +847,7 @@ export function buildAggregateSyncResponse(runs: SyncRunSummary[]) {
     recordsCreated: totals.recordsCreated,
     recordsUpdated: totals.recordsUpdated,
     recordsFailed: totals.recordsFailed,
+    recordsMarkedAbsent: totals.recordsMarkedAbsent,
     pagesFetched: totals.pagesFetched,
     runs: runs.map((run) => ({
       syncRunId: run.syncRunId,
@@ -541,6 +857,7 @@ export function buildAggregateSyncResponse(runs: SyncRunSummary[]) {
       recordsCreated: run.recordsCreated,
       recordsUpdated: run.recordsUpdated,
       recordsFailed: run.recordsFailed,
+      recordsMarkedAbsent: run.recordsMarkedAbsent,
       pagesFetched: run.pagesFetched,
     })),
     marketplacesSynced: runs.length,

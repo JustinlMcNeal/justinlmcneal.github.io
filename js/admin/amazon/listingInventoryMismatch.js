@@ -1,6 +1,7 @@
 /** KK warehouse vs Amazon fulfillable qty helpers (Phase 5D). FBM comparable rows only. */
 
 import { fbaInventoryColumnMarkup } from "./listingFulfillment.js";
+import { kkCompareScopeLabel } from "./listingVariantCompare.js";
 
 /** @param {unknown} value */
 function asInt(value) {
@@ -63,9 +64,10 @@ export function inventoryColumnMarkup(row, escapeHtml) {
 
   if (status === "match") {
     const qtyClass = low ? "font-bold text-amber-600" : "font-bold";
-    const hint = low ? "low · matches KK" : "matches KK";
+    const scope = kkCompareScopeLabel(row);
+    const hint = low ? `low · matches ${scope}` : `matches ${scope}`;
     const hintClass = low ? "text-[10px] text-amber-500 block" : "text-[10px] text-green-600 block";
-    return `<span class="${qtyClass}">${escapeHtml(amazonQty)}</span><span class="${hintClass}">${hint}</span>`;
+    return `<span class="${qtyClass}">${escapeHtml(amazonQty)}</span><span class="${hintClass}">${escapeHtml(hint)}</span>`;
   }
 
   const delta = asInt(row.inventory_delta);
@@ -75,10 +77,11 @@ export function inventoryColumnMarkup(row, escapeHtml) {
   const badgeClass = status === "amazon_higher"
     ? "bg-amber-100 text-amber-800"
     : "bg-violet-100 text-violet-800";
+  const kkScope = kkCompareScopeLabel(row);
 
   return `
     <span class="font-bold ${tone}">${escapeHtml(amazonQty)}</span>
-    <span class="text-[10px] text-gray-500 block">KK ${escapeHtml(kkStock ?? 0)}</span>
+    <span class="text-[10px] text-gray-500 block">${escapeHtml(kkScope)} ${escapeHtml(kkStock ?? 0)}</span>
     <span class="inline-flex mt-0.5 px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${badgeClass}">${label}${escapeHtml(deltaText)}</span>
   `;
 }

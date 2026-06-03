@@ -48,6 +48,11 @@ interface SendRequest {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
+  const authHeader = req.headers.get("authorization") || "";
+  if (authHeader !== `Bearer ${serviceKey}`) {
+    return json({ error: "Unauthorized" }, 401);
+  }
+
   try {
     const payload = await req.json() as SendRequest;
     const { to, body, message_type, campaign, contact_id } = payload;

@@ -19,6 +19,18 @@ This file tracks every change made to the SMS system and what happened afterward
 
 ---
 
+## 2026-05-25 — Abandoned cart personalization experiment (copy only)
+
+**What changed:** `supabase/functions/sms-abandoned-cart/index.ts` — updated Step 1/2/3 `smsBody` templates per `025_abandonedCartPersonalizationExperimentPlan.md` (more natural item framing, helpful Step 2 tone, Step 3 ties offer to cart items). Deployed `sms-abandoned-cart` only.
+
+**Why:** OpenClaw experiment backlog Experiment 2; approved low-risk copy test with 53.3% lifetime recovery baseline and Step 3–heavy conversions.
+
+**Result:** Monitoring — 21-day observation window through ~2026-06-15. Compare `sms_v_abandoned_cart` recovery rate, step conversions, clicks, and STOP rate vs pre-change baseline in plan §2.
+
+**Status:** monitoring
+
+---
+
 ## 2026-05-08 — Fixed GAP-02: sms-redirect now writes last_clicked_at instead of last_sms_sent_at
 
 **What changed:** Added `last_clicked_at TIMESTAMPTZ` column to `customer_contacts` via migration `20260508_add_last_clicked_at_to_contacts.sql`. Updated `supabase/functions/sms-redirect/index.ts` to write `last_clicked_at` on click and stop writing `last_sms_sent_at` entirely. Also redeployed with `--no-verify-jwt` because the prior deployment without that flag was returning `UNAUTHORIZED_NO_AUTH_HEADER` to unauthenticated SMS recipients.

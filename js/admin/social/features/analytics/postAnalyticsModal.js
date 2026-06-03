@@ -1,8 +1,15 @@
 // Post analytics modal
 
 import { analyzePost } from "../../postLearning.js";
+import { getPublicUrl } from "../../api.js";
 import { getAnalyticsContext } from "./analyticsContext.js";
 import { syncInstagramInsights } from "./instagramInsights.js";
+
+function resolvePostImageUrl(imageUrl) {
+  if (!imageUrl) return "";
+  if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) return imageUrl;
+  return getPublicUrl(imageUrl);
+}
 
 /** Reuse cached post_performance_analysis younger than this (ms). */
 const DEEP_ANALYSIS_STALE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -44,7 +51,7 @@ export async function openPostAnalytics(postId) {
     if (error || !post) { console.error("Failed to load post:", error); return; }
     
     const img = modal.querySelector("#postAnalyticsImage img");
-    if (img) img.src = post.image_url || "";
+    if (img) img.src = resolvePostImageUrl(post.image_url);
     
     const platform = document.getElementById("postAnalyticsPlatform");
     if (platform) {

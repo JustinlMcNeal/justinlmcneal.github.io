@@ -1,6 +1,12 @@
 // amazon-submit-draft — Admin-only live Amazon Listings Items PUT submit.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { corsHeadersJson, json, requireAdminJson, UUID_RE } from "../_shared/amazonAuthUtils.ts";
+import {
+  corsHeadersJson,
+  isParentVariationDraftRow,
+  json,
+  requireAdminJson,
+  UUID_RE,
+} from "../_shared/amazonAuthUtils.ts";
 import {
   buildListingsItemRequestBody,
   evaluateDraftLiveSubmitReadiness,
@@ -47,6 +53,133 @@ async function loadOpenErrorIssues(
     source: String(row.source || ""),
     severity: String(row.severity || ""),
   }));
+}
+
+const PARENT_DRAFT_SELECT =
+  "id, kk_product_id, draft_status, submission_status, published_amazon_listing_id, variation_role, seller_sku";
+
+function isParentSubmissionReady(parentDraft: Record<string, unknown>): boolean {
+  const status = String(parentDraft.draft_status || "");
+  const submissionStatus = String(parentDraft.submission_status || "").toUpperCase();
+  if (status === "published" || parentDraft.published_amazon_listing_id) return true;
+  if (status === "submitted") {
+    return submissionStatus === "ACCEPTED"
+      || submissionStatus === "VALID"
+      || submissionStatus === "";
+  }
+  if (!["submitted", "published"].includes(status)) return false;
+  return submissionStatus === "ACCEPTED" || submissionStatus === "VALID";
+}
+
+async function fetchParentDraftForChild(
+  // deno-lint-ignore no-explicit-any
+  client: any,
+  draft: Record<string, unknown>,
+): Promise<Record<string, unknown> | null> {
+  const parentDraftId = typeof draft.parent_draft_id === "string" ? draft.parent_draft_id : null;
+  const parentSellerSku = typeof draft.parent_seller_sku === "string"
+    ? draft.parent_seller_sku.trim()
+    : "";
+  const kkProductId = String(draft.kk_product_id || "");
+
+  if (parentDraftId) {
+    const { data, error } = await client
+      .from("amazon_listing_drafts")
+      .select(PARENT_DRAFT_SELECT)
+      .eq("id", parentDraftId)
+      .maybeSingle();
+    if (error) throw new Error("database_error");
+    if (
+      data
+      && String(data.kk_product_id) === kkProductId
+      && isParentVariationDraftRow(data)
+    ) {
+      return data as Record<string, unknown>;
+    }
+  }
+
+  if (!parentSellerSku || !kkProductId) return null;
+
+  const { data, error } = await client
+    .from("amazon_listing_drafts")
+    .select(PARENT_DRAFT_SELECT)
+    .eq("kk_product_id", kkProductId)
+    .eq("seller_sku", parentSellerSku)
+    .neq("draft_status", "archived")
+    .order("updated_at", { ascending: false })
+    .limit(10);
+
+  if (error) throw new Error("database_error");
+
+  for (const row of data || []) {
+    if (isParentVariationDraftRow(row)) {
+      return row as Record<string, unknown>;
+    }
+  }
+
+  return await fetchParentShellFromSyncedListing(client, draft, parentSellerSku);
+}
+
+/** Parent draft deleted locally but KK-XXXX-PARENT still on Amazon after sync. */
+async function fetchParentShellFromSyncedListing(
+  // deno-lint-ignore no-explicit-any
+  client: any,
+  draft: Record<string, unknown>,
+  parentSellerSku: string,
+): Promise<Record<string, unknown> | null> {
+  const marketplaceId = String(draft.marketplace_id || "").trim();
+  const sku = String(parentSellerSku || "").trim().toUpperCase();
+  if (!marketplaceId || !sku.endsWith("-PARENT")) return null;
+
+  const { data: listing, error } = await client
+    .from("amazon_listings")
+    .select("id, seller_sku, asin, marketplace_id, listing_status")
+    .eq("seller_sku", parentSellerSku)
+    .eq("marketplace_id", marketplaceId)
+    .maybeSingle();
+
+  if (error || !listing) return null;
+
+  const asin = String(listing.asin || "").trim();
+  if (!asin) return null;
+
+  console.log(
+    `${LOG_PREFIX} parent_shell_from_listing sku=${parentSellerSku} asin=${asin}`,
+  );
+
+  return {
+    id: null,
+    kk_product_id: draft.kk_product_id,
+    draft_status: "submitted",
+    submission_status: "ACCEPTED",
+    published_amazon_listing_id: listing.id,
+    variation_role: "parent",
+    seller_sku: parentSellerSku,
+  };
+}
+
+async function assertChildVariationParentReady(
+  // deno-lint-ignore no-explicit-any
+  client: any,
+  draft: Record<string, unknown>,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const role = String(draft.variation_role || "").trim().toLowerCase();
+  const payload = draft.draft_payload && typeof draft.draft_payload === "object"
+    ? draft.draft_payload as Record<string, unknown>
+    : {};
+  const parentage = String(payload.parentage_level || "").trim().toLowerCase();
+  const isChild = role === "child" || parentage === "child";
+  if (!isChild) return { ok: true };
+
+  const parentDraft = await fetchParentDraftForChild(client, draft);
+  if (!parentDraft) {
+    return { ok: false, error: "parent_draft_not_found" };
+  }
+  if (!isParentSubmissionReady(parentDraft)) {
+    return { ok: false, error: "parent_draft_not_ready" };
+  }
+
+  return { ok: true };
 }
 
 Deno.serve(async (req) => {
@@ -131,6 +264,14 @@ Deno.serve(async (req) => {
 
     if (draft.draft_status === "published" || draft.draft_status === "archived") {
       return json({ ok: false, error: "invalid_request" }, 400);
+    }
+
+    const parentReady = await assertChildVariationParentReady(
+      serviceClient,
+      draft as Record<string, unknown>,
+    );
+    if (!parentReady.ok) {
+      return json({ ok: false, error: parentReady.error }, 400);
     }
 
     const openIssues = await loadOpenErrorIssues(serviceClient, draftId);

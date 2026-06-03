@@ -166,8 +166,21 @@ export function sortListings(rows, sortKey) {
  * @param {number} pageSize
  */
 export function paginateListings(rows, page, pageSize) {
-  const size = Math.max(1, Number(pageSize) || 25);
   const total = rows.length;
+  const rawSize = Number(pageSize);
+  if (!Number.isFinite(rawSize) || rawSize <= 0) {
+    return {
+      rows: rows.slice(),
+      total,
+      totalPages: 1,
+      page: 1,
+      pageSize: total || 1,
+      startIndex: total === 0 ? 0 : 1,
+      endIndex: total,
+    };
+  }
+
+  const size = Math.max(1, rawSize);
   const totalPages = Math.max(1, Math.ceil(total / size));
   const currentPage = Math.min(Math.max(1, Number(page) || 1), totalPages);
   const start = (currentPage - 1) * size;

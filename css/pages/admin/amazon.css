@@ -18,6 +18,38 @@
   max-height: min(70vh, 640px);
 }
 
+.img-strip { display: flex; gap: 6px; overflow-x: auto; padding: 4px 0; }
+
+.img-strip .img-thumb {
+  position: relative;
+  flex: 0 0 64px;
+  width: 64px;
+  height: 64px;
+  border: 2px solid #d1d5db;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.img-strip .img-thumb.main { border-color: #ff69b4; }
+.img-strip .img-thumb img { width: 100%; height: 100%; object-fit: cover; }
+
+.img-strip .img-thumb .img-remove {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 18px;
+  height: 18px;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  font-size: 12px;
+  line-height: 18px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.img-strip .img-thumb.picker { border-style: dashed; cursor: pointer; opacity: 0.6; }
+.img-strip .img-thumb.picker:hover { opacity: 1; border-color: #ff69b4; }
+
 .amazon-row-popover {
   position: fixed;
   z-index: 50;
@@ -139,4 +171,53 @@
 
 #amazonListingsTable [data-amazon-col].amazon-col-force-show {
   display: table-cell !important;
+}
+
+#amazonListingsTable.amazon-listings-table-fixed {
+  table-layout: fixed;
+}
+
+#amazonListingsTable.amazon-listings-table-fixed [data-amazon-col="select"] {
+  width: 2.25rem;
+}
+
+#amazonListingsTable.amazon-listings-table-fixed [data-amazon-col="product"] {
+  width: 34%;
+}
+
+#amazonListingsTable.amazon-listings-table-fixed [data-amazon-col="price"] {
+  width: 9%;
+}
+
+#amazonListingsTable.amazon-listings-table-fixed [data-amazon-col="amazonFee"] {
+  width: 7%;
+}
+
+#amazonListingsTable.amazon-listings-table-fixed [data-amazon-col="profit"] {
+  width: 7%;
+}
+
+#amazonListingsTable.amazon-listings-table-fixed [data-amazon-col="fulfillment"] {
+  width: 6%;
+}
+
+#amazonListingsTable.amazon-listings-table-fixed [data-amazon-col="inventory"] {
+  width: 11%;
+}
+
+#amazonListingsTable.amazon-listings-table-fixed [data-amazon-col="fbaReserved"],
+#amazonListingsTable.amazon-listings-table-fixed [data-amazon-col="fbaInbound"] {
+  width: 6%;
+}
+
+#amazonListingsTable.amazon-listings-table-fixed [data-amazon-col="status"] {
+  width: 10%;
+}
+
+#amazonListingsTable.amazon-listings-table-fixed [data-amazon-col="lastSynced"] {
+  width: 8%;
+}
+
+.amazon-listing-row-menu {
+  flex-shrink: 0;
 }

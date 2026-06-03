@@ -13,6 +13,7 @@ import {
   getOpenIssueCount,
 } from "./listingHealth.js";
 import { escapeHtml } from "./renderListings.js";
+import { listingDisplayPrice } from "./listingOfferPrice.js";
 
 /** @param {unknown} value */
 function formatSyncedDate(value) {
@@ -59,7 +60,7 @@ export function hydrateAmazonListingDetailsModal(row) {
   setDetail("amazonDetailsAsin", String(row.asin || "—"));
   setDetail("amazonDetailsSku", String(row.kk_sku || row.seller_sku || "—"));
   setDetail("amazonDetailsStatus", String(row.listing_status || "—"));
-  setDetail("amazonDetailsPrice", formatListingMoney(row.price, row.currency));
+  setDetail("amazonDetailsPrice", formatListingMoney(listingDisplayPrice(row), row.currency));
   setDetail("amazonDetailsInventory", String(row.amazon_fulfillable_qty ?? row.fbm_quantity ?? "—"));
   setDetail("amazonDetailsFulfillment", `${fulfillmentBadge.label} · ${getFulfillmentChannelLabel(row)}`);
   setDetail("amazonDetailsFbaFulfillable", isFbaListing(row)
@@ -73,7 +74,16 @@ export function hydrateAmazonListingDetailsModal(row) {
     : "n/a");
   setDetail("amazonDetailsKkStock", String(row.kk_stock ?? "—"));
   setDetail("amazonDetailsSynced", formatSyncedDate(row.last_synced_at));
-  setDetail("amazonDetailsIssueCount", openIssues > 0 ? `${openIssues} open` : "None");
+  const errorCount = Number(row.error_issue_count || 0);
+  const warningCount = Number(row.warning_issue_count || 0);
+  let issueCountText = openIssues > 0 ? `${openIssues} open` : "None";
+  if (openIssues > 0 && (errorCount > 0 || warningCount > 0)) {
+    const parts = [];
+    if (errorCount > 0) parts.push(`${errorCount} error`);
+    if (warningCount > 0) parts.push(`${warningCount} warning`);
+    issueCountText = `${openIssues} open (${parts.join(", ")})`;
+  }
+  setDetail("amazonDetailsIssueCount", issueCountText);
   setDetail("amazonDetailsLatestIssue", row.latest_issue_message
     ? String(row.latest_issue_message)
     : "—");
@@ -106,19 +116,44 @@ export function hydrateAmazonListingDetailsModal(row) {
   }
 }
 
-/** @param {Record<string, unknown>} row */
-export function openAmazonListingDetailsModal(row) {
+/**
+ * @param {Record<string, unknown>} row
+ * @param {{ focus?: "issues" }} [options]
+ */
+export function openAmazonListingDetailsModal(row, options = {}) {
   const modal = qs("#amazonListingDetailsModal");
   if (!modal) return;
 
   closeAmazonModals();
   hydrateAmazonListingDetailsModal(row);
+
+  const focusIssues = options.focus === "issues";
+  const titleEl = qs("#amazonListingDetailsModalTitle");
+  const descEl = qs("#amazonListingDetailsModalDesc");
+  const issueSection = qs("#amazonDetailsIssueSection");
+  const issueHeading = qs("#amazonDetailsIssueHeading");
+
+  if (titleEl) {
+    titleEl.textContent = focusIssues ? "Issue Details" : "Listing Details";
+  }
+  if (descEl) {
+    descEl.textContent = focusIssues
+      ? "Open Amazon issues reported during the latest sync for this listing."
+      : "Read-only health and sync summary for this Amazon listing.";
+  }
+  issueSection?.classList.toggle("border-red-300", focusIssues);
+  issueSection?.classList.toggle("bg-red-50/40", focusIssues);
+
   show(modal);
   modal.setAttribute("aria-hidden", "false");
   document.body.style.overflow = "hidden";
 
-  const title = qs("#amazonListingDetailsModalTitle");
-  title?.focus?.({ preventScroll: true });
+  if (focusIssues) {
+    issueSection?.scrollIntoView({ block: "nearest" });
+    issueHeading?.focus?.({ preventScroll: true });
+  } else {
+    titleEl?.focus?.({ preventScroll: true });
+  }
 }
 
 export function initAmazonListingDetails() {

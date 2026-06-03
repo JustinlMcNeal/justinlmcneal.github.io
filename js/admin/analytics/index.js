@@ -3,6 +3,7 @@ import { initAdminNav } from "/js/shared/adminNav.js";
 import { initFooter } from "/js/shared/footer.js";
 import { requireAdmin } from "/js/shared/guard.js";
 import { getSupabaseClient } from "/js/shared/supabaseClient.js";
+import { syncAmazonFinances } from "/js/admin/lineItemsOrders/amazonOrderSync.js";
 
 const sb = getSupabaseClient();
 const $ = (id) => document.getElementById(id);
@@ -28,6 +29,34 @@ function deltaClass(v) {
   const n = Number(v || 0);
   if (n === 0) return "text-gray-500";
   return n > 0 ? "text-red-600" : "text-emerald-600";
+}
+
+function esc(s) {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function productCell(row) {
+  const code = row.product_code && row.product_code !== "__unmatched__"
+    ? row.product_code
+    : "";
+  const name = row.product_name || code || "Unmatched item";
+  const img = row.image_url || "";
+
+  const thumb = img
+    ? `<img src="${esc(img)}" alt="" loading="lazy" class="w-10 h-10 rounded-md object-cover border border-gray-200 bg-white shrink-0">`
+    : `<div class="w-10 h-10 rounded-md border border-gray-200 bg-gray-100 shrink-0 flex items-center justify-center text-[9px] font-black uppercase text-gray-400">—</div>`;
+
+  return `<div class="flex items-center gap-2.5 min-w-[180px]">
+    ${thumb}
+    <div class="min-w-0">
+      <div class="font-semibold leading-snug truncate" title="${esc(name)}">${esc(name)}</div>
+      ${code ? `<div class="text-[10px] text-gray-500 font-mono truncate" title="${esc(code)}">${esc(code)}</div>` : ""}
+    </div>
+  </div>`;
 }
 
 async function fetchAnalytics({ days = 30, refresh = false }) {
@@ -143,7 +172,7 @@ function renderProducts(payload) {
 
   tbody.innerHTML = rows
     .map((r) => `<tr>
-      <td class="font-semibold">${r.product_code || "__unmatched__"}</td>
+      <td>${productCell(r)}</td>
       <td>${number(r.orders)}</td>
       <td>${number(r.units)}</td>
       <td>${money(r.revenue_cents)}</td>
@@ -263,6 +292,27 @@ async function init() {
       $("dashboard").classList.add("hidden");
     } finally {
       $("btnRefresh").disabled = false;
+    }
+  });
+
+  $("btnSyncAmazonFinances").addEventListener("click", async () => {
+    const btn = $("btnSyncAmazonFinances");
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Syncing…";
+    try {
+      const result = await syncAmazonFinances({ daysBack: 90 });
+      await loadDashboard(true);
+      $("metaUpdated").textContent =
+        `Updated: ${new Date().toLocaleString()} · Amazon finances synced (${result.upserted}/${result.fetched})`;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      $("loading").innerHTML = `<div class="text-red-500 font-bold">${msg}</div>`;
+      $("loading").classList.remove("hidden");
+      $("dashboard").classList.add("hidden");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = original;
     }
   });
 

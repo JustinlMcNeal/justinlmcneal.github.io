@@ -1,6 +1,6 @@
 // Product Type Definitions fetch, cache, and schema parsing.
 
-import { signSpApiRequest } from "./amazonSigV4Utils.ts";
+import { signSpApiRequest, spApiHintForHttpStatus } from "./amazonSigV4Utils.ts";
 import type { AmazonCredentials } from "./amazonPtdAuthUtils.ts";
 
 export type PtdRequestParams = {
@@ -24,6 +24,7 @@ export type PtdSchemaSummary = {
   requiredAttributes: string[];
   recommendedAttributes: string[];
   attributeCount: number;
+  attributeEnums: Record<string, string[]>;
   schemaSnapshot: Record<string, unknown>;
 };
 
@@ -152,11 +153,30 @@ export async function searchDefinitionsProductTypes(
   };
 }
 
+type SpApiGetResult =
+  | { ok: true; data: Record<string, unknown> }
+  | { ok: false; error: string; httpStatus?: number; hint?: string };
+
+function isPresignedSchemaUrl(url: string): boolean {
+  const lower = url.toLowerCase();
+  if (lower.includes("x-amz-algorithm=") || lower.includes("x-amz-signature=")) return true;
+  if (lower.includes(".amazonaws.com/") && !lower.includes("sellingpartnerapi")) return true;
+  return lower.includes("cloudfront.net/");
+}
+
+function ptdErrorForHttpStatus(httpStatus: number): string {
+  if (httpStatus === 404) return "invalid_product_type";
+  if (httpStatus === 429) return "rate_limited";
+  if (httpStatus >= 500) return "sp_api_unavailable";
+  return "ptd_request_failed";
+}
+
 async function spApiGet(
   url: string,
   accessToken: string,
   aws?: AmazonCredentials["aws"],
-): Promise<{ ok: true; data: Record<string, unknown> } | { ok: false; error: string }> {
+): Promise<SpApiGetResult> {
+  const signed = Boolean(aws);
   const baseHeaders: Record<string, string> = {
     "x-amz-access-token": accessToken,
     "content-type": "application/json",
@@ -178,45 +198,167 @@ async function spApiGet(
   }
 
   const resp = await fetch(url, { method: "GET", headers });
-  let data: Record<string, unknown>;
+  let data: Record<string, unknown> = {};
   try {
     data = await resp.json() as Record<string, unknown>;
   } catch {
-    return { ok: false, error: "ptd_request_failed" };
+    if (!resp.ok) {
+      console.log("[amazonPtdUtils] spApiGet_non_json", resp.status, url.slice(0, 120));
+      return {
+        ok: false,
+        error: ptdErrorForHttpStatus(resp.status),
+        httpStatus: resp.status,
+        hint: spApiHintForHttpStatus(resp.status, signed),
+      };
+    }
+    return { ok: true, data: {} };
   }
 
-  if (!resp.ok) return { ok: false, error: "ptd_request_failed" };
+  if (!resp.ok) {
+    const errors = asArray(data.errors)
+      .map((entry) => asRecord(entry))
+      .filter((entry): entry is Record<string, unknown> => entry !== null);
+    const amazonMessage = errors
+      .map((entry) => {
+        const code = typeof entry.code === "string" ? entry.code : "";
+        const message = typeof entry.message === "string" ? entry.message : "";
+        return [code, message].filter(Boolean).join(": ");
+      })
+      .filter(Boolean)
+      .join("; ");
+    if (amazonMessage) {
+      console.log("[amazonPtdUtils] spApiGet_failed", resp.status, amazonMessage.slice(0, 300));
+    } else {
+      console.log("[amazonPtdUtils] spApiGet_failed", resp.status, url.slice(0, 120));
+    }
+    return {
+      ok: false,
+      error: ptdErrorForHttpStatus(resp.status),
+      httpStatus: resp.status,
+      hint: spApiHintForHttpStatus(resp.status, signed) || amazonMessage.slice(0, 200) || undefined,
+    };
+  }
   return { ok: true, data };
 }
 
-export function extractRequiredAttributes(schema: Record<string, unknown>): string[] {
+async function fetchSchemaDocument(url: string): Promise<SpApiGetResult> {
+  const resp = await fetch(url, {
+    method: "GET",
+    headers: { "user-agent": "KarryKraze-AmazonPTD/1.0" },
+  });
+  let data: Record<string, unknown> = {};
+  try {
+    data = await resp.json() as Record<string, unknown>;
+  } catch {
+    console.log("[amazonPtdUtils] schema_fetch_non_json", resp.status, url.slice(0, 120));
+    return {
+      ok: false,
+      error: "schema_fetch_failed",
+      httpStatus: resp.status,
+    };
+  }
+  if (!resp.ok) {
+    console.log("[amazonPtdUtils] schema_fetch_failed", resp.status, url.slice(0, 120));
+    return {
+      ok: false,
+      error: "schema_fetch_failed",
+      httpStatus: resp.status,
+    };
+  }
+  return { ok: true, data };
+}
+
+const OFFER_ONLY_REQUIRED_ATTRIBUTES = [
+  "merchant_suggested_asin",
+  "condition_type",
+  "purchasable_offer",
+  "fulfillment_availability",
+] as const;
+
+/** Attributes that appear in conditional schema branches but rarely apply to KK catalog items. */
+const PTD_CONDITIONAL_NOISE_ATTRIBUTES = new Set([
+  "battery",
+  "num_batteries",
+  "batteries_included",
+  "lithium_battery",
+  "number_of_lithium_ion_cells",
+  "number_of_lithium_metal_cells",
+  "contains_battery_or_cell",
+  "battery_contains_free_unabsorbed_liquid",
+  "is_battery_non_spillable",
+  "non_lithium_battery_packaging",
+  "has_less_than_30_percent_state_of_charge",
+  "battery_installation_device_type",
+  "has_multiple_battery_powered_components",
+  "has_replaceable_battery",
+  "non_lithium_battery_energy_content",
+  "ghs",
+  "ghs_chemical_h_code",
+  "hazmat",
+  "safety_data_sheet_url",
+  "fcc_radio_frequency_emission_compliance",
+  "pesticide_marking",
+  "regulatory_compliance_certification",
+  "gpsr_safety_attestation",
+  "gpsr_manufacturer_reference",
+  "compliance_media",
+  "dsa_responsible_party_address",
+  "baa_taa_compliance_acknowledgement",
+  "baa_taa_regulation_compliance",
+  "taa_compliant_country",
+  "government_contract_information",
+  "ring",
+  "lens",
+  "flavor",
+  "edition",
+  "orientation",
+  "team_name",
+  "league_name",
+  "scent",
+  "base",
+  "length_range",
+  "width_range",
+  "flower_count",
+  "plant_style",
+  "set_name",
+  "plant_type",
+  "merchant_shipping_group",
+  "item_display_weight",
+  "list_price",
+  "variation_theme",
+  "child_parent_sku_relationship",
+  "externally_assigned_product_identifier",
+  "merchant_suggested_asin",
+]);
+
+export function extractRequiredAttributes(
+  schema: Record<string, unknown>,
+  requirements = "LISTING",
+): string[] {
+  if (requirements === "LISTING_OFFER_ONLY") {
+    return [...OFFER_ONLY_REQUIRED_ATTRIBUTES];
+  }
+
   const required = asArray(schema.required)
     .filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0)
     .map((entry) => entry.trim());
 
-  if (required.length > 0) return [...new Set(required)];
-
-  const propertyGroups = asRecord(schema.propertyGroups);
-  const fromGroups: string[] = [];
-  if (propertyGroups) {
-    for (const group of Object.values(propertyGroups)) {
-      const rec = asRecord(group);
-      for (const name of asArray(rec?.propertyNames)) {
-        if (typeof name === "string" && name.trim()) fromGroups.push(name.trim());
-      }
-    }
-  }
-  return [...new Set(fromGroups)].slice(0, 40);
+  return [...new Set(required)];
 }
 
 export function extractRecommendedAttributes(
   schema: Record<string, unknown>,
   requiredAttributes: string[],
+  requirements = "LISTING",
 ): string[] {
+  if (requirements === "LISTING_OFFER_ONLY") return [];
+
   const requiredSet = new Set(requiredAttributes);
   const properties = asRecord(schema.properties);
   const propertyNames = properties ? Object.keys(properties) : [];
-  return propertyNames.filter((name) => !requiredSet.has(name)).slice(0, 8);
+  return propertyNames
+    .filter((name) => !requiredSet.has(name) && !PTD_CONDITIONAL_NOISE_ATTRIBUTES.has(name))
+    .slice(0, 16);
 }
 
 export function countSchemaAttributes(schema: Record<string, unknown>): number {
@@ -232,6 +374,53 @@ export function countSchemaAttributes(schema: Record<string, unknown>): number {
     }
   }
   return names.size;
+}
+
+function collectStringEnums(value: unknown): string[] {
+  const rec = asRecord(value);
+  if (!rec) return [];
+  if (Array.isArray(rec.enum)) {
+    return rec.enum.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0);
+  }
+  for (const branch of asArray(rec.anyOf)) {
+    const branchRec = asRecord(branch);
+    if (Array.isArray(branchRec?.enum)) {
+      return branchRec.enum.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0);
+    }
+  }
+  return [];
+}
+
+function extractPropertyValueEnums(propertySchema: unknown): string[] {
+  const prop = asRecord(propertySchema);
+  const items = asRecord(prop?.items);
+  if (!items) return [];
+
+  const directValue = collectStringEnums(items.properties?.value);
+  if (directValue.length) return directValue;
+
+  const nestedType = asRecord(asRecord(items.properties)?.type);
+  const nestedItems = asRecord(nestedType?.items);
+  const nestedValue = collectStringEnums(nestedItems?.properties?.value);
+  if (nestedValue.length) return nestedValue;
+
+  return [];
+}
+
+/** Extract Amazon enum options for attribute dropdowns in the push UI. */
+export function extractAttributeEnums(
+  schema: Record<string, unknown>,
+  attributeNames: string[],
+): Record<string, string[]> {
+  const properties = asRecord(schema.properties) ?? {};
+  const out: Record<string, string[]> = {};
+
+  for (const name of attributeNames) {
+    const enums = extractPropertyValueEnums(properties[name]);
+    if (enums.length) out[name] = enums;
+  }
+
+  return out;
 }
 
 async function readPtdCache(
@@ -256,10 +445,24 @@ async function readPtdCache(
 
 function summaryFromCacheRow(row: Record<string, unknown>): PtdSchemaSummary {
   const snapshot = asRecord(row.schema_snapshot) ?? {};
-  const requiredAttributes = asArray(snapshot.requiredAttributes)
-    .filter((v): v is string => typeof v === "string");
-  const recommendedAttributes = asArray(snapshot.recommendedAttributes)
-    .filter((v): v is string => typeof v === "string");
+  const requirements = String(row.requirements || snapshot.requirements || "LISTING");
+  const requiredAttributes = requirements === "LISTING_OFFER_ONLY"
+    ? extractRequiredAttributes({}, requirements)
+    : asArray(snapshot.requiredAttributes)
+      .filter((v): v is string => typeof v === "string");
+  const recommendedAttributes = requirements === "LISTING_OFFER_ONLY"
+    ? []
+    : asArray(snapshot.recommendedAttributes)
+      .filter((v): v is string => typeof v === "string");
+  const attributeEnumsRaw = asRecord(snapshot.attributeEnums);
+  const attributeEnums: Record<string, string[]> = {};
+  if (attributeEnumsRaw) {
+    for (const [key, value] of Object.entries(attributeEnumsRaw)) {
+      if (!Array.isArray(value)) continue;
+      const enums = value.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0);
+      if (enums.length) attributeEnums[key] = enums;
+    }
+  }
 
   return {
     productType: String(row.product_type || snapshot.productType || ""),
@@ -274,6 +477,7 @@ function summaryFromCacheRow(row: Record<string, unknown>): PtdSchemaSummary {
     attributeCount: typeof snapshot.attributeCount === "number"
       ? snapshot.attributeCount
       : requiredAttributes.length,
+    attributeEnums,
     schemaSnapshot: snapshot,
   };
 }
@@ -286,7 +490,10 @@ function isCacheValid(row: Record<string, unknown>, nowMs: number): boolean {
 async function fetchAndParsePtd(
   creds: AmazonCredentials,
   params: PtdRequestParams,
-): Promise<{ ok: true; summary: PtdSchemaSummary } | { ok: false; error: string }> {
+): Promise<
+  | { ok: true; summary: PtdSchemaSummary }
+  | { ok: false; error: string; httpStatus?: number; hint?: string }
+> {
   const ptdUrl = buildPtdUrl(creds.endpoint, params.productType, {
     marketplaceId: params.marketplaceId,
     requirements: params.requirements,
@@ -296,7 +503,14 @@ async function fetchAndParsePtd(
   });
 
   const ptdResult = await spApiGet(ptdUrl, creds.accessToken, creds.aws);
-  if (!ptdResult.ok) return { ok: false, error: "ptd_request_failed" };
+  if (!ptdResult.ok) {
+    return {
+      ok: false,
+      error: ptdResult.error,
+      httpStatus: ptdResult.httpStatus,
+      hint: ptdResult.hint,
+    };
+  }
 
   const schemaUrl = parseLinkUrl(ptdResult.data.schema);
   const metaSchemaUrl = parseLinkUrl(ptdResult.data.metaSchema);
@@ -306,8 +520,14 @@ async function fetchAndParsePtd(
 
   let parsedSchema: Record<string, unknown> = {};
   if (schemaUrl) {
-    const schemaResult = await spApiGet(schemaUrl, creds.accessToken, creds.aws);
-    if (schemaResult.ok) parsedSchema = schemaResult.data;
+    const schemaResult = isPresignedSchemaUrl(schemaUrl)
+      ? await fetchSchemaDocument(schemaUrl)
+      : await spApiGet(schemaUrl, creds.accessToken, creds.aws);
+    if (schemaResult.ok) {
+      parsedSchema = schemaResult.data;
+    } else {
+      console.log("[amazonPtdUtils] schema_parse_skipped", schemaResult.error);
+    }
   }
 
   const propertyGroups = asRecord(ptdResult.data.propertyGroups);
@@ -315,9 +535,16 @@ async function fetchAndParsePtd(
     parsedSchema = { ...parsedSchema, propertyGroups };
   }
 
-  const requiredAttributes = extractRequiredAttributes(parsedSchema);
-  const recommendedAttributes = extractRecommendedAttributes(parsedSchema, requiredAttributes);
+  const requiredAttributes = extractRequiredAttributes(parsedSchema, params.requirements);
+  const recommendedAttributes = extractRecommendedAttributes(
+    parsedSchema,
+    requiredAttributes,
+    params.requirements,
+  );
   const attributeCount = countSchemaAttributes(parsedSchema) || requiredAttributes.length;
+  const schemaProperties = asRecord(parsedSchema.properties) ?? {};
+  const enumAttributeNames = Object.keys(schemaProperties);
+  const attributeEnums = extractAttributeEnums(parsedSchema, enumAttributeNames);
 
   const summary: PtdSchemaSummary = {
     productType: params.productType,
@@ -332,6 +559,7 @@ async function fetchAndParsePtd(
     requiredAttributes,
     recommendedAttributes,
     attributeCount,
+    attributeEnums,
     schemaSnapshot: {
       productType: params.productType,
       requirements: params.requirements,
@@ -340,6 +568,7 @@ async function fetchAndParsePtd(
       requiredAttributes,
       recommendedAttributes,
       attributeCount,
+      attributeEnums,
       fetchedAt: new Date().toISOString(),
     },
   };
@@ -353,7 +582,7 @@ async function writePtdCache(
   params: PtdRequestParams,
   summary: PtdSchemaSummary,
   now: string,
-) {
+): Promise<void> {
   const expiresAt = new Date(Date.now() + CACHE_TTL_MS).toISOString();
   const row = {
     seller_account_id: params.sellerAccountId,
@@ -371,10 +600,33 @@ async function writePtdCache(
     updated_at: now,
   };
 
-  const { error } = await client.from("amazon_product_type_cache").upsert(row, {
-    onConflict: "marketplace_id,product_type,requirements,requirements_enforced,locale,seller_account_id",
-  });
-  if (error) throw new Error("database_error");
+  const { data: existing, error: lookupErr } = await client
+    .from("amazon_product_type_cache")
+    .select("id")
+    .eq("seller_account_id", params.sellerAccountId)
+    .eq("marketplace_id", params.marketplaceId)
+    .eq("product_type", params.productType)
+    .eq("requirements", params.requirements)
+    .eq("requirements_enforced", params.requirementsEnforced)
+    .eq("locale", params.locale)
+    .maybeSingle();
+
+  if (lookupErr) {
+    console.log("[amazonPtdUtils] cache_lookup_failed", lookupErr.message);
+    return;
+  }
+
+  if (existing?.id) {
+    const { error } = await client
+      .from("amazon_product_type_cache")
+      .update(row)
+      .eq("id", existing.id);
+    if (error) console.log("[amazonPtdUtils] cache_update_failed", error.message);
+    return;
+  }
+
+  const { error: insertErr } = await client.from("amazon_product_type_cache").insert(row);
+  if (insertErr) console.log("[amazonPtdUtils] cache_insert_failed", insertErr.message);
 }
 
 export async function getOrFetchPtdSummary(
@@ -383,7 +635,10 @@ export async function getOrFetchPtdSummary(
   creds: AmazonCredentials,
   params: PtdRequestParams,
   forceRefresh: boolean,
-): Promise<{ ok: true; summary: PtdSchemaSummary; source: "cache" | "amazon" } | { ok: false; error: string }> {
+): Promise<
+  | { ok: true; summary: PtdSchemaSummary; source: "cache" | "amazon" }
+  | { ok: false; error: string; httpStatus?: number; hint?: string }
+> {
   if (!VALID_REQUIREMENTS.has(params.requirements)) {
     return { ok: false, error: "invalid_request" };
   }
@@ -397,8 +652,9 @@ export async function getOrFetchPtdSummary(
       if (cached && isCacheValid(cached, nowMs)) {
         return { ok: true, summary: summaryFromCacheRow(cached), source: "cache" };
       }
-    } catch {
-      return { ok: false, error: "database_error" };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "cache_read_failed";
+      console.log("[amazonPtdUtils] cache_read_failed", message);
     }
   }
 
@@ -407,8 +663,9 @@ export async function getOrFetchPtdSummary(
 
   try {
     await writePtdCache(serviceClient, params, fetched.summary, now);
-  } catch {
-    return { ok: false, error: "database_error" };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "cache_write_failed";
+    console.log("[amazonPtdUtils] cache_write_failed", message);
   }
 
   return { ok: true, summary: fetched.summary, source: "amazon" };
@@ -426,5 +683,6 @@ export function toPublicPtdResponse(summary: PtdSchemaSummary, source: "cache" |
     requiredAttributes: summary.requiredAttributes,
     recommendedAttributes: summary.recommendedAttributes,
     attributeCount: summary.attributeCount,
+    attributeEnums: summary.attributeEnums,
   };
 }

@@ -194,7 +194,7 @@ export function renderLabels(order, history = {}) {
     <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
       ${summaryCard("Source", sourceLabel(source), "Order channel")}
       ${summaryCard("Label Type", labelTypeLabel(expectedLabelType), eligible ? "Current CTA rule" : "No CTA label")}
-      ${summaryCard("Eligibility", eligible ? "Eligible" : "Not Eligible", eligible ? "Read-only history" : "KK website and eBay only")}
+      ${summaryCard("Eligibility", eligible ? "Eligible" : "Not Eligible", eligible ? "Read-only history" : "KK website, eBay, and Amazon")}
       ${summaryCard("Scan Tracking", trackingActive ? "Active" : "Inactive", `${scans.length} total scan${scans.length === 1 ? "" : "s"}`)}
     </div>
   </section>
@@ -208,7 +208,7 @@ export function renderLabels(order, history = {}) {
         : emptyState(
             eligible
               ? "No CTA labels printed for this order yet. Use Print CTA Label in the Fulfillment tab to create one."
-              : "CTA labels are currently enabled for KK website and eBay orders only."
+              : "CTA labels are currently enabled for KK website, eBay, and Amazon orders only."
           )
     }
   </section>

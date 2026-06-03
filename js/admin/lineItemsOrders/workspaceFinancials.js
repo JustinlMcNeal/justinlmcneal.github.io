@@ -6,7 +6,9 @@ import { moneyFromCents, getOrderSource } from "./dom.js";
 
 export function renderFinancials(order, shipment) {
   const isEbay = getOrderSource(order) === "ebay";
+  const isAmazon = getOrderSource(order) === "amazon";
   const ef = order.ebay_financials;
+  const af = order.amazon_financials;
 
   let html = '<div class="p-3 sm:p-6 space-y-6">';
 
@@ -157,6 +159,87 @@ export function renderFinancials(order, shipment) {
                 )}</strong> (overstated until ad fee synced)
       </div>`
       }
+    </section>`;
+  } else if (isAmazon) {
+    const finStatus = af?.finance_status || "missing";
+    const hasEarnings = af?.amazon_order_earnings_cents != null;
+    const statusBadgeMap = {
+      complete: '<span class="border-[2px] border-emerald-500 text-emerald-600 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider">✓ COMPLETE</span>',
+      partial: '<span class="border-[2px] border-amber-400 text-amber-600 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider">≈ PARTIAL</span>',
+      pending_finances: '<span class="border-[2px] border-blue-300 text-blue-600 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider">🕐 PENDING FINANCES</span>',
+      missing: '<span class="border-[2px] border-gray-300 text-gray-500 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider">? NO DATA</span>',
+    };
+
+    html += `<section>
+      ${sh("Amazon Order Summary")}
+      <div class="mb-3 flex items-center gap-2">${statusBadgeMap[finStatus] || ""}</div>
+      <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="border-4 border-black p-4">
+          <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">Buyer Subtotal</div>
+          <div class="font-black text-lg">${moneyFromCents(order.subtotal_paid_cents)}</div>
+          <div class="text-[9px] text-black/40 mt-1">Item prices only</div>
+        </div>
+        <div class="border-4 border-black p-4">
+          <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">Shipping (Buyer)</div>
+          <div class="font-black text-lg">${moneyFromCents(order.shipping_paid_cents)}</div>
+          <div class="text-[9px] text-black/40 mt-1">Shipping + shipping tax</div>
+        </div>
+        <div class="border-4 border-black p-4">
+          <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">Amazon Tax (Buyer)</div>
+          <div class="font-black text-lg text-gray-500">${moneyFromCents(order.tax_cents)}</div>
+          <div class="text-[9px] text-black/40 mt-1">Amazon collects &amp; remits — not our revenue</div>
+        </div>
+        <div class="border-4 border-black p-4 bg-black text-white">
+          <div class="text-[10px] font-black uppercase tracking-[.18em] text-white/60 mb-1">Buyer Total</div>
+          <div class="font-black text-lg">${moneyFromCents(order.total_paid_cents)}</div>
+          <div class="text-[9px] text-white/50 mt-1">Subtotal + shipping + tax</div>
+        </div>
+      </div>
+      ${
+        hasEarnings
+          ? `<div class="mt-4 grid sm:grid-cols-3 gap-4">
+        <div class="border-4 border-black p-4">
+          <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">Amazon Fees</div>
+          <div class="font-black text-lg text-red-600">${moneyFromCents(af.amazon_total_fee_cents)}</div>
+        </div>
+        <div class="border-4 border-black p-4">
+          <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">Referral / FBA</div>
+          <div class="font-black text-red-600">${moneyFromCents((af.fee_referral_cents || 0) + (af.fee_fba_cents || 0))}</div>
+        </div>
+        <div class="border-4 border-emerald-200 bg-emerald-50 p-4">
+          <div class="text-[10px] font-black uppercase tracking-[.18em] text-emerald-700/70 mb-1">Amazon Earnings</div>
+          <div class="font-black text-lg text-emerald-700">${moneyFromCents(af.amazon_order_earnings_cents)}</div>
+        </div>
+      </div>`
+          : `<div class="mt-3 text-xs text-gray-500">Run <strong>Sync Amazon Finances</strong> from Export menu to pull fee data (may lag up to 48h).</div>`
+      }
+    </section>
+    <div class="border-t-4 border-gray-100"></div>`;
+
+    const profitCents = order.profit_cents;
+    const profitKnown = profitCents != null && finStatus !== "pending_finances";
+    const profitColor = Number(profitCents) > 0 ? "text-emerald-600" : "text-red-600";
+
+    html += `<section>
+      ${sh("Cost & Amazon Net Profit")}
+      <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="border-4 border-black p-4">
+          <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">Product CPI</div>
+          <div class="font-black text-lg text-red-600">${moneyFromCents(order.product_cpi_cents)}</div>
+        </div>
+        <div class="border-4 border-black p-4">
+          <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">USPS Label</div>
+          <div class="font-black text-lg text-red-600">${moneyFromCents(shipment?.label_cost_cents)}</div>
+        </div>
+        <div class="border-4 border-black p-4">
+          <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">Amazon Earnings</div>
+          <div class="font-black text-lg ${hasEarnings ? "text-emerald-700" : "text-gray-400"}">${hasEarnings ? moneyFromCents(af.amazon_order_earnings_cents) : "—"}</div>
+        </div>
+        <div class="border-4 border-black p-4 ${profitKnown ? "bg-emerald-50" : "bg-amber-50 border-amber-300"}">
+          <div class="text-[10px] font-black uppercase tracking-[.18em] ${profitKnown ? "text-emerald-700/60" : "text-amber-700/70"} mb-1">Net Profit</div>
+          <div class="font-black text-lg ${profitKnown ? profitColor : "text-amber-600"}">${profitKnown ? moneyFromCents(profitCents) : "—"}</div>
+        </div>
+      </div>
     </section>`;
   } else {
     // Standard (non-eBay)

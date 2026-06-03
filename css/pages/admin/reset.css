@@ -1,0 +1,9 @@
+/* Reset admin page styles. Keep this file scoped to pages/admin/reset.html. */
+
+.kk-page.kk-admin-reset {
+  min-height: 100vh;
+}
+
+.kk-admin-reset .kk-container {
+  padding-top: 16px;
+}

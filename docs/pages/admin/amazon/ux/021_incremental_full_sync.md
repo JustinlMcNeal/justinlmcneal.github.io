@@ -45,7 +45,7 @@ Admin/UI triggered. No destructive behavior. Respects `maxPages` input (default 
 
 - Higher page cap for reconciliation syncs.
 - If prior `full` run ended `partial_success` with `summary.hasMore` and stored `sync_cursor.nextToken`, resumes from that token.
-- **Does not purge** listings missing from sync results.
+- **Catalog reconcile on complete full sync** — listings missing from the full catalog result set are marked `amazon_sku_absent_at` (see [050_full_sync_catalog_reconcile.md](050_full_sync_catalog_reconcile.md)). Incremental/manual sync does not purge.
 
 ### `single_sku`
 

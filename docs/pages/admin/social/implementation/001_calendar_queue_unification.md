@@ -48,7 +48,7 @@ Aligns with the product direction: optimize auto-posting using data, analytics, 
 ### Queue tab removal
 
 - Queue tab button is **not shown** in main nav.
-- `switchTab("queue")` (e.g. after Auto-Queue generate) opens **Calendar** tab and **Queue List** sub-view.
+- `switchTab("queue")` (e.g. after Auto-Queue generate) opens **Calendar** tab and **List View** sub-view.
 
 ### Calendar hub toggle
 
@@ -57,9 +57,21 @@ Inside **Calendar** tab header:
 | Toggle | Shows |
 |--------|--------|
 | **Calendar** | Month grid (`#calendarHubCalendarView`) + prev/next month |
-| **Queue List** | `#queueList` + `#queueFilter` (same filters as before) |
+| **List View** | `#queueList` + status/platform filters |
 
 Default sub-view: **Calendar**.
+
+### List View (formerly Queue List)
+
+The line-item list inside Calendar is a **Calendar List View**, not queue-only:
+
+- **Default (status = All):** `posted` + `queued` + `scheduled`
+- **Upcoming:** `queued` + `scheduled` only
+- **Posted:** `posted` only
+- **Platform filter:** unchanged (All / Instagram / Pinterest)
+- Sorted by posted/scheduled date, **newest first**
+- Empty state: “No posts found for this filter.”
+- **Posted** rows → Deep Analysis; **queued/scheduled** (and other non-posted) → Post Detail
 
 ### Post click routing
 
@@ -70,13 +82,13 @@ Default sub-view: **Calendar**.
 
 **Uncertainty rule:** Non-posted statuses always use Post Detail so edit / Post Now / Delete remain available. We do not infer analytics from partial metrics on queued rows.
 
-Applies to: calendar pills and queue list rows.
+Applies to: calendar pills and list view rows.
 
 ### Preserved
 
 - Post Detail modal and all edit/post/delete flows.
 - Analytics tab Deep Analysis from top posts / grid (unchanged).
-- `loadQueuePosts()` filters unchanged (platform); list includes `queued` + `scheduled` statuses (excludes posted).
+- `loadQueuePosts()` name unchanged (call sites); fetches by status filter + platform.
 
 ---
 
@@ -84,7 +96,7 @@ Applies to: calendar pills and queue list rows.
 
 | Risk | Mitigation |
 |------|------------|
-| External links/bookmarks to “queue tab” | `switchTab("queue")` redirects to calendar + queue list |
+| External links/bookmarks to “queue tab” | `switchTab("queue")` redirects to calendar + list view |
 | Stale `currentTab === "queue"` in edge code | `refreshSchedulingHub` and autopilot check `calendar` too |
 | Duplicate `#queueFilter` IDs | Old `#tab-queue` panel removed; single filter in calendar hub |
 | Posted post on calendar without metrics yet | Still opens Deep Analysis if `status === posted` |
@@ -96,12 +108,12 @@ Applies to: calendar pills and queue list rows.
 - [ ] Page loads with no module errors
 - [ ] Default tab: **Calendar** (grid visible)
 - [ ] **Queue** tab not in nav
-- [ ] Toggle **Queue List** → list + platform filter work
+- [ ] Toggle **List View** → posted + upcoming posts; status/platform filters work
 - [ ] Toggle back to **Calendar** → grid works; month nav works
 - [ ] Click **queued** post (calendar or list) → Post Detail
 - [ ] Click **posted** post (calendar or list) → Deep Analysis
 - [ ] Analytics top post → Deep Analysis still works
-- [ ] Auto-Queue **Generate** → lands on Calendar + Queue List (not broken)
+- [ ] Auto-Queue **Generate** → lands on Calendar + List View (not broken)
 - [ ] Auto-Queue / Analytics / Image Pool / Carousel tabs still switch
 
 ---

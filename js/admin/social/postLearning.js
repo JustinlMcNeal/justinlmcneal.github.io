@@ -309,6 +309,13 @@ export const BEST_PRACTICES = {
 // Analysis Functions
 // ============================================
 
+/** post_performance_analysis uses DECIMAL(5,2) — cap % deltas vs tiny averages. */
+function clampDecimal52(value, fallback = 0) {
+  const n = typeof value === "number" ? value : parseFloat(String(value ?? ""));
+  if (!Number.isFinite(n)) return fallback;
+  return Math.round(Math.max(-999.99, Math.min(999.99, n)) * 100) / 100;
+}
+
 /**
  * Analyze a single post and generate insights
  */
@@ -450,19 +457,32 @@ export async function analyzePost(postId) {
   
   // Persist analysis to post_performance_analysis table
   try {
-    // Convert JS arrays to Postgres TEXT[] literal format
-    const toPgArray = (arr) => `{${(arr || []).map(s => `"${String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`).join(',')}}`;
+    /** TEXT[] columns: coerce arrays; category_hashtags_used is a grouped object from categorizeHashtags(). */
+    const toTextArrayField = (value) => {
+      if (value == null) return [];
+      if (Array.isArray(value)) {
+        return value.filter((v) => v != null && v !== "").map(String);
+      }
+      if (typeof value === "object") {
+        return Object.values(value)
+          .flat()
+          .filter((v) => v != null && v !== "")
+          .map(String);
+      }
+      if (typeof value === "string" && value.trim()) return [value];
+      return [];
+    };
 
     const { error: insertErr } = await supabase
       .from("post_performance_analysis")
       .upsert([{
         post_id: postId,
-        overall_score: analysis.overall_score,
-        timing_score: analysis.timing_score,
-        caption_score: analysis.caption_score,
-        hashtag_score: analysis.hashtag_score,
-        visual_score: analysis.visual_score,
-        engagement_velocity_score: analysis.engagement_velocity_score,
+        overall_score: clampDecimal52(analysis.overall_score, 0),
+        timing_score: clampDecimal52(analysis.timing_score, 0),
+        caption_score: clampDecimal52(analysis.caption_score, 0),
+        hashtag_score: clampDecimal52(analysis.hashtag_score, 0),
+        visual_score: clampDecimal52(analysis.visual_score, 0),
+        engagement_velocity_score: clampDecimal52(analysis.engagement_velocity_score, 0),
         posted_hour: analysis.posted_hour,
         posted_day_of_week: analysis.posted_day_of_week,
         posted_day_name: analysis.posted_day_name,
@@ -475,14 +495,14 @@ export async function analyzePost(postId) {
         sentiment: analysis.sentiment || null,
         hashtag_count: analysis.hashtag_count,
         branded_hashtag_used: analysis.branded_hashtag_used,
-        category_hashtags_used: toPgArray(analysis.category_hashtags_used),
-        vs_avg_engagement_rate: parseFloat(analysis.vs_avg_engagement_rate) || 0,
-        vs_avg_likes: parseFloat(analysis.vs_avg_likes) || 0,
-        vs_avg_comments: parseFloat(analysis.vs_avg_comments) || 0,
-        vs_avg_saves: parseFloat(analysis.vs_avg_saves) || 0,
-        strengths: toPgArray(analysis.strengths),
-        weaknesses: toPgArray(analysis.weaknesses),
-        recommendations: toPgArray(analysis.recommendations),
+        category_hashtags_used: toTextArrayField(analysis.category_hashtags_used),
+        vs_avg_engagement_rate: clampDecimal52(analysis.vs_avg_engagement_rate, 0),
+        vs_avg_likes: clampDecimal52(analysis.vs_avg_likes, 0),
+        vs_avg_comments: clampDecimal52(analysis.vs_avg_comments, 0),
+        vs_avg_saves: clampDecimal52(analysis.vs_avg_saves, 0),
+        strengths: toTextArrayField(analysis.strengths),
+        weaknesses: toTextArrayField(analysis.weaknesses),
+        recommendations: toTextArrayField(analysis.recommendations),
         updated_at: new Date().toISOString(),
       }], { onConflict: "post_id" });
 

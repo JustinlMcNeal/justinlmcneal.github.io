@@ -1,13 +1,12 @@
 // /js/admin/lineItemsOrders/labelPrint.js
 // Phase 2B: CTA label generation and print window.
-// KK orders  → "review_cta"  : QR → leave-review.html?oid=<kk_order_id>
-// eBay orders → "channel_cta" : QR → karrykraze.com homepage
-// Amazon      → "none"        : deferred — will use channel_cta once Amazon flow is verified
-// Unknown     → "none"        : no button shown
+// KK orders     → "review_cta"  : QR → leave-review.html?oid=<kk_order_id>
+// eBay / Amazon → "channel_cta" : QR → coupon.html?promo=direct15 (source-specific UTM)
+// Unknown       → "none"        : no button shown
 //
 // Discount handling:
 //   KK review CTA: reward is unlocked after review; no code is printed.
-//   eBay channel CTA: QR routes to coupon landing page; no code is printed.
+//   Channel CTA: QR routes to coupon landing page; no code is printed.
 //
 // See: docs/audit/implementation/ctaLabel/001_phase2_implementation_plan.md
 import { getOrderSource, esc } from "./dom.js";
@@ -55,9 +54,7 @@ async function generateQrDataUrl(url) {
  */
 export function determineLabelType(source) {
   if (source === "kk") return "review_cta";
-  if (source === "ebay") return "channel_cta";
-  // Amazon: deferred to Phase 3 — use "channel_cta" once Amazon order flow is finalized
-  // Unknown: no label
+  if (source === "ebay" || source === "amazon") return "channel_cta";
   return "none";
 }
 
@@ -65,7 +62,7 @@ export function determineLabelType(source) {
  * Build the QR target URL for the given label type.
  * KK review CTA: deep-links to leave-review.html with kk_order_id pre-filled.
  *   leave-review.html reads ?oid= to prefill the order ID field (same pattern as my-orders).
- * eBay channel CTA: points to the direct-offer coupon page with UTM attribution.
+ * Channel CTA (eBay / Amazon): direct-offer coupon page with source-specific UTM attribution.
  *
  * @param {object} order  - order row (v_order_summary_plus shape)
  * @param {string} source - "kk" | "ebay" | "amazon" | "unknown"
@@ -81,7 +78,8 @@ export function buildQrTarget(order, source, labelType) {
     return `https://karrykraze.com/pages/leave-review.html?oid=${oid}&utm_source=packing_label&utm_medium=qr&utm_campaign=review_cta`;
   }
   if (labelType === "channel_cta") {
-    return "https://karrykraze.com/pages/coupon.html?promo=direct15&utm_source=packing_label&utm_medium=qr&utm_campaign=ebay_direct_cta";
+    const campaign = source === "amazon" ? "amazon_direct_cta" : "ebay_direct_cta";
+    return `https://karrykraze.com/pages/coupon.html?promo=direct15&utm_source=packing_label&utm_medium=qr&utm_campaign=${campaign}`;
   }
   return "https://karrykraze.com";
 }

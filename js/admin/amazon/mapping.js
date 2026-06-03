@@ -1,6 +1,7 @@
 import { qs, setHydrateText } from "./dom.js";
 import {
   fetchAmazonUnmappedListings,
+  fetchKkProductForPush,
   saveAmazonMapping,
   searchKkProducts,
 } from "./api.js";
@@ -8,10 +9,26 @@ import { closeAmazonModals } from "./modals.js";
 import { showAmazonNotification } from "./notifications.js";
 import {
   clearSelectedProduct,
+  renderMappingVariantPanel,
   renderProductSearchResults,
   renderSelectedProduct,
   renderUnmappedListings,
+  clearMappingVariantPanel,
+  readSelectedMappingVariantId,
+  mappingRequiresVariantSelection,
 } from "./renderMapping.js";
+import { initWorkAreaPagination } from "./workAreaPagination.js";
+
+/** @type {Array<Record<string, unknown>>} */
+let lastUnmappedRows = [];
+
+const needsMappingPagination = initWorkAreaPagination({
+  summaryId: "amazonNeedsMappingPaginationSummary",
+  pageLabelId: "amazonNeedsMappingPaginationPageLabel",
+  prevId: "amazonNeedsMappingPrevPage",
+  nextId: "amazonNeedsMappingNextPage",
+  rowsSelectId: "amazonNeedsMappingRowsPerPage",
+});
 
 const STATUS_BADGES = {
   active: "bg-green-100 text-green-800",
@@ -36,19 +53,87 @@ let searchTimer = null;
 let saving = false;
 
 /**
+ * @param {Record<string, unknown>} listing
+ */
+function applyListingToModal(listing) {
+  const modal = qs("#amazonMappingModal");
+  if (!modal || !listing?.amazon_listing_id) return;
+
+  const status = String(listing.listing_status || "unknown");
+  const statusClass = STATUS_BADGES[status] || STATUS_BADGES.unknown;
+
+  setHydrateText(modal, "mapping-listing-title", listing.amazon_title || "Untitled");
+  setHydrateText(modal, "mapping-asin", listing.asin || "—");
+  setHydrateText(modal, "mapping-amazon-sku", listing.seller_sku || "—");
+  setHydrateText(modal, "mapping-marketplace", listing.marketplace_id || "—");
+  setHydrateText(modal, "mapping-price", listing.price ?? "—");
+  setHydrateText(modal, "mapping-inventory", listing.fbm_quantity ?? "—");
+
+  const statusEl = modal.querySelector('[data-hydrate="mapping-status"]');
+  if (statusEl) {
+    statusEl.textContent = status.replace(/_/g, " ");
+    statusEl.className =
+      `inline-flex px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${statusClass}`;
+  }
+}
+
+function resetMappingForm() {
+  activeListing = null;
+  selectedProduct = null;
+  clearSelectedProduct();
+
+  const searchInput = qs("#amazonMappingProductSearch");
+  if (searchInput instanceof HTMLInputElement) searchInput.value = "";
+  renderProductSearchResults([]);
+}
+
+/**
+ * @param {string} productId
+ * @param {string | null} [preferredVariantId]
+ */
+async function loadProductVariants(productId, preferredVariantId = null) {
+  clearMappingVariantPanel();
+  if (!productId) return;
+
+  try {
+    const product = await fetchKkProductForPush(productId);
+    if (!product) return;
+    renderMappingVariantPanel(
+      product.product_variants || [],
+      String(product.code || selectedProduct?.code || ""),
+      preferredVariantId,
+    );
+  } catch {
+    clearMappingVariantPanel();
+  }
+}
+
+/**
  * @param {{ onMappingSaved?: () => Promise<void> | void }} [deps]
  */
 export function initAmazonMapping(deps = {}) {
+  function renderUnmappedPage() {
+    needsMappingPagination.apply(lastUnmappedRows, (pageRows, meta) => {
+      renderUnmappedListings(pageRows, { total: meta.total });
+    });
+  }
+
   async function refreshUnmapped() {
     try {
-      const rows = await fetchAmazonUnmappedListings({ limit: 50 });
-      renderUnmappedListings(rows);
+      const rows = await fetchAmazonUnmappedListings({ limit: 500 });
+      lastUnmappedRows = rows;
+      needsMappingPagination.resetPage();
+      renderUnmappedPage();
       return rows;
     } catch {
       showAmazonNotification("Could not load unmapped Amazon listings.", { tone: "error" });
+      lastUnmappedRows = [];
+      renderUnmappedListings([], { total: 0 });
       return [];
     }
   }
+
+  needsMappingPagination.bindNavigation(renderUnmappedPage);
 
   function readListingFromTrigger(trigger) {
     const card = trigger?.closest?.(".amazon-unmapped-card, article[data-amazon-listing-id]");
@@ -60,10 +145,30 @@ export function initAmazonMapping(deps = {}) {
       seller_sku: card.dataset.sellerSku || "",
       amazon_title: card.dataset.title || card.querySelector("h3")?.textContent?.trim() || "",
       listing_status: card.dataset.status || "unknown",
-      marketplace_id: card.dataset.marketplace || "",
-      price: card.dataset.price || "",
-      fbm_quantity: card.dataset.inventory || "",
+      marketplace_id: card.dataset.marketplace || card.dataset.marketplaceId || "",
+      price: card.dataset.priceRaw || card.dataset.price || "",
+      fbm_quantity: card.dataset.inventoryRaw || card.dataset.inventory || "",
       last_synced_at: card.dataset.lastSynced || "",
+    };
+  }
+
+  /**
+   * @param {Record<string, unknown>} row
+   */
+  function listingFromWorkspaceRow(row) {
+    return {
+      amazon_listing_id: String(row.amazon_listing_id || ""),
+      asin: String(row.asin || ""),
+      seller_sku: String(row.seller_sku || row.kk_sku || ""),
+      amazon_title: String(row.amazon_title || row.kk_product_title || ""),
+      listing_status: String(row.listing_status || "unknown"),
+      marketplace_id: String(row.marketplace_id || ""),
+      price: row.price ?? "",
+      fbm_quantity: row.fbm_quantity ?? "",
+      kk_product_id: row.kk_product_id ? String(row.kk_product_id) : "",
+      kk_sku: row.kk_sku ? String(row.kk_sku) : "",
+      kk_product_title: row.kk_product_title ? String(row.kk_product_title) : "",
+      kk_variant_id: row.kk_variant_id ? String(row.kk_variant_id) : "",
     };
   }
 
@@ -71,13 +176,8 @@ export function initAmazonMapping(deps = {}) {
     const modal = qs("#amazonMappingModal");
     if (!modal) return;
 
+    resetMappingForm();
     activeListing = readListingFromTrigger(trigger);
-    selectedProduct = null;
-    clearSelectedProduct();
-
-    const searchInput = qs("#amazonMappingProductSearch");
-    if (searchInput instanceof HTMLInputElement) searchInput.value = "";
-    renderProductSearchResults([]);
 
     if (!activeListing?.amazon_listing_id) {
       setHydrateText(modal, "mapping-listing-title", "Select a listing from Needs Mapping");
@@ -90,22 +190,38 @@ export function initAmazonMapping(deps = {}) {
       return;
     }
 
-    const status = String(activeListing.listing_status || "unknown");
-    const statusClass = STATUS_BADGES[status] || STATUS_BADGES.unknown;
+    applyListingToModal(activeListing);
+  }
 
-    setHydrateText(modal, "mapping-listing-title", activeListing.amazon_title || "Untitled");
-    setHydrateText(modal, "mapping-asin", activeListing.asin || "—");
-    setHydrateText(modal, "mapping-amazon-sku", activeListing.seller_sku || "—");
-    setHydrateText(modal, "mapping-marketplace", activeListing.marketplace_id || "—");
-    setHydrateText(modal, "mapping-price", activeListing.price || "—");
-    setHydrateText(modal, "mapping-inventory", activeListing.fbm_quantity || "—");
+  /**
+   * @param {Record<string, unknown>} row
+   */
+  async function hydrateMappingFromListingRow(row) {
+    const modal = qs("#amazonMappingModal");
+    if (!modal) return;
 
-    const statusEl = modal.querySelector('[data-hydrate="mapping-status"]');
-    if (statusEl) {
-      statusEl.textContent = status.replace(/_/g, " ");
-      statusEl.className =
-        `inline-flex px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${statusClass}`;
-    }
+    resetMappingForm();
+    activeListing = listingFromWorkspaceRow(row);
+    applyListingToModal(activeListing);
+
+    const productId = activeListing.kk_product_id;
+    if (!productId) return;
+
+    selectedProduct = {
+      id: productId,
+      code: activeListing.kk_sku || "",
+      name: activeListing.kk_product_title || activeListing.kk_sku || "Mapped product",
+    };
+    renderSelectedProduct(selectedProduct);
+    await loadProductVariants(productId, activeListing.kk_variant_id || null);
+
+    const needsVariant = mappingRequiresVariantSelection();
+    showAmazonNotification(
+      needsVariant
+        ? "Pick the KK variant this Amazon SKU represents, then save mapping."
+        : "Confirm the KK product (and stock variant if shown), then save mapping.",
+      { tone: "info" },
+    );
   }
 
   async function runProductSearch(query) {
@@ -137,17 +253,28 @@ export function initAmazonMapping(deps = {}) {
       return;
     }
 
+    const kkVariantId = readSelectedMappingVariantId() || undefined;
+    if (mappingStatus === "mapped" && mappingRequiresVariantSelection() && !kkVariantId) {
+      showAmazonNotification("Select which KK variant this Amazon listing represents.", {
+        tone: "warning",
+      });
+      return;
+    }
+
     saving = true;
     try {
       await saveAmazonMapping({
         amazonListingId: String(activeListing.amazon_listing_id),
         kkProductId: selectedProduct?.id || null,
+        kkVariantId,
         kkSku: selectedProduct?.code || null,
         mappingStatus,
       });
 
       const messages = {
-        mapped: "Amazon listing mapped to KK product.",
+        mapped: kkVariantId
+          ? "Amazon listing mapped to KK product variant."
+          : "Amazon listing mapped to KK product.",
         ignored: "Listing marked as ignored.",
         legacy: "Listing marked as legacy.",
         needs_review: "Listing marked for review.",
@@ -157,8 +284,7 @@ export function initAmazonMapping(deps = {}) {
       });
 
       closeAmazonModals();
-      activeListing = null;
-      selectedProduct = null;
+      resetMappingForm();
       await refreshUnmapped();
       await deps.onMappingSaved?.();
     } catch (err) {
@@ -206,6 +332,7 @@ export function initAmazonMapping(deps = {}) {
         stock: productBtn.dataset.productStock || "",
       };
       renderSelectedProduct(selectedProduct);
+      loadProductVariants(selectedProduct.id).catch(() => {});
       return;
     }
 
@@ -244,5 +371,6 @@ export function initAmazonMapping(deps = {}) {
   return {
     refreshUnmapped,
     hydrateMappingModal,
+    hydrateMappingFromListingRow,
   };
 }

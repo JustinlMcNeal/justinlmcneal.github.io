@@ -125,6 +125,26 @@ export function renderFulfillment(order, shipment) {
         ? `<div class="mt-3 text-xs text-gray-500">Label cost: <strong>$${(shipment.label_cost_cents / 100).toFixed(2)}</strong> · ${esc(shipment.service || "")} · ${esc(shipment.carrier || "")}</div>`
         : ""
     }
+    ${
+      getOrderSource(order) === "amazon" &&
+      shipment?.tracking_number &&
+      !shipment?.tracking_pushed_to_amazon &&
+      labelStatus !== "voided"
+        ? `<div class="mt-4 border-4 border-amber-400 bg-amber-50 p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+        <div class="flex items-start gap-3 flex-1">
+          <span class="text-2xl">⚠️</span>
+          <div>
+            <div class="font-black text-sm text-amber-800 uppercase tracking-wider">Tracking not synced to Amazon</div>
+            <div class="text-xs text-amber-700 mt-1">Buyer may not see shipment status until confirmShipment succeeds.</div>
+          </div>
+        </div>
+        <button data-push-amazon-tracking type="button"
+          class="px-4 py-2 text-xs font-black uppercase tracking-wider border-4 border-orange-600 text-orange-700 hover:bg-orange-600 hover:text-white transition">
+          Push to Amazon
+        </button>
+      </div>`
+        : ""
+    }
   </section>
   <div class="border-t-4 border-gray-100"></div>`;
 

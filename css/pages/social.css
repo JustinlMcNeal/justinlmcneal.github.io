@@ -1,0 +1,32 @@
+/* /css/pages/social.css — public Follow Us page polish */
+
+.kk-social-card--primary {
+  border-color: transparent;
+  background:
+    linear-gradient(#fff, #fff) padding-box,
+    linear-gradient(135deg, #833ab4, #fd1d1d, #fcb045) border-box;
+  border-width: 3px;
+  border-style: solid;
+}
+
+.kk-social-badge {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, #833ab4, #fd1d1d, #fcb045);
+  color: #fff;
+}
+
+.kk-social-card--primary .kk-social-icon {
+  background: linear-gradient(135deg, #833ab4 0%, #fd1d1d 50%, #fcb045 100%);
+  color: #fff;
+  border-color: transparent;
+}
+
+.kk-social-card--primary:hover .kk-social-icon {
+  background: #000;
+  color: #fff;
+}

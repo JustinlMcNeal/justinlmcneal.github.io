@@ -1,6 +1,12 @@
 import { qs } from "./dom.js";
 import { escapeHtml } from "./renderListings.js";
+import { resolveVariantSellerSku } from "./variantPanel.js";
 
+/** @type {string | null} */
+let selectedMappingVariantId = null;
+
+/** @type {Array<Record<string, unknown>>} */
+let mappingVariants = [];
 const STATUS_BADGES = {
   active: { label: "Active", className: "bg-green-100 text-green-800" },
   low_stock: { label: "Low Stock", className: "bg-amber-100 text-amber-800" },
@@ -42,6 +48,18 @@ function formatSyncedDate(value) {
 
 /**
  * @param {Record<string, unknown>} row
+ * @param {string} [sizeClass]
+ */
+function listingThumbMarkup(row, sizeClass = "w-14 h-14") {
+  const imageUrl = row.main_image_url ? String(row.main_image_url) : "";
+  if (imageUrl) {
+    return `<img src="${escapeHtml(imageUrl)}" alt="" class="${sizeClass} rounded-lg object-cover border border-gray-200 flex-shrink-0" loading="lazy" />`;
+  }
+  return `<div class="${sizeClass} rounded-lg bg-kkpeach/60 border border-gray-200 flex-shrink-0" aria-hidden="true"></div>`;
+}
+
+/**
+ * @param {Record<string, unknown>} row
  */
 export function buildUnmappedCard(row) {
   const id = String(row.amazon_listing_id || "");
@@ -56,6 +74,15 @@ export function buildUnmappedCard(row) {
     MARKETPLACE_LABELS[String(row.marketplace_id || "")] || row.marketplace_id || "—",
   );
 
+  const showFixInactive = status === "inactive" || status === "unknown";
+  const imageUrl = row.main_image_url ? String(row.main_image_url) : "";
+  const priceRaw = row.price === null || row.price === undefined ? "" : String(row.price);
+  const inventoryRaw = row.fbm_quantity === null || row.fbm_quantity === undefined
+    ? ""
+    : String(row.fbm_quantity);
+  const marketplaceId = String(row.marketplace_id || "");
+  const buyable = row.listing_status_buyable === true ? "true" : "false";
+
   return `
     <article
       class="amazon-unmapped-card bg-white rounded-xl border border-gray-200 p-4 shadow-sm"
@@ -65,11 +92,17 @@ export function buildUnmappedCard(row) {
       data-title="${title}"
       data-status="${escapeHtml(status)}"
       data-marketplace="${marketplace}"
+      data-marketplace-id="${escapeHtml(marketplaceId)}"
       data-price="${price}"
+      data-price-raw="${escapeHtml(priceRaw)}"
       data-inventory="${escapeHtml(row.fbm_quantity ?? "—")}"
+      data-inventory-raw="${escapeHtml(inventoryRaw)}"
+      data-image-url="${escapeHtml(imageUrl)}"
+      data-buyable="${buyable}"
       data-last-synced="${synced}"
     >
       <div class="flex flex-col lg:flex-row lg:items-center gap-4">
+        ${listingThumbMarkup(row)}
         <div class="flex-1 min-w-0">
           <h3 class="font-bold text-sm">${title}</h3>
           <dl class="grid grid-cols-2 sm:grid-cols-4 gap-x-3 gap-y-1 mt-2 text-xs">
@@ -82,6 +115,15 @@ export function buildUnmappedCard(row) {
           </dl>
         </div>
         <div class="flex flex-wrap gap-2 shrink-0 w-full lg:w-auto">
+          ${showFixInactive ? `
+          <button
+            type="button"
+            data-action="fix-inactive-listing"
+            data-amazon-listing-id="${escapeHtml(id)}"
+            title="Diagnose and restore price/qty"
+            class="flex-1 sm:flex-none border-4 border-amber-500 bg-amber-100 text-amber-950 px-3 py-2 text-[10px] font-black uppercase tracking-wide min-h-[44px] hover:bg-amber-200"
+          >Fix Inactive</button>
+          ` : ""}
           <button
             type="button"
             data-action="map-existing-listing"
@@ -104,13 +146,16 @@ export function buildUnmappedCard(row) {
 
 /**
  * @param {Array<Record<string, unknown>>} rows
+ * @param {{ total?: number }} [meta]
  */
-export function renderUnmappedListings(rows) {
+export function renderUnmappedListings(rows, meta = {}) {
   const container = qs("#amazonNeedsMappingList");
   const countLabel = qs("#amazonNeedsMappingCountLabel");
   if (!container) return;
 
-  if (!rows.length) {
+  const total = Number(meta.total ?? rows.length);
+
+  if (!rows.length && total === 0) {
     container.innerHTML = `
       <div class="bg-white rounded-xl border border-gray-200 p-8 text-center">
         <p class="text-sm font-bold">No unmapped listings</p>
@@ -122,13 +167,13 @@ export function renderUnmappedListings(rows) {
   }
 
   if (countLabel) {
-    countLabel.textContent = rows.length === 0
+    countLabel.textContent = total === 0
       ? "0 unmapped · live"
-      : `${rows.length} unmapped · live`;
+      : `${total} unmapped · live`;
   }
 
   const tabCount = qs("#amazonTabNeedsMapping [data-count]");
-  if (tabCount) tabCount.textContent = String(rows.length);
+  if (tabCount) tabCount.textContent = String(total);
 }
 
 /**
@@ -183,8 +228,76 @@ export function clearSelectedProduct() {
     delete selected.dataset.productId;
     delete selected.dataset.productCode;
   }
+  clearMappingVariantPanel();
 }
 
+export function clearMappingVariantPanel() {
+  mappingVariants = [];
+  selectedMappingVariantId = null;
+  const section = qs("#amazonMappingVariantSection");
+  const list = qs("#amazonMappingVariantList");
+  if (section) section.classList.add("hidden");
+  if (list) list.innerHTML = "";
+}
+
+/** @returns {string | null} */
+export function readSelectedMappingVariantId() {
+  const checked = document.querySelector('input[name="amazonMappingVariant"]:checked');
+  if (checked instanceof HTMLInputElement && checked.value) {
+    selectedMappingVariantId = checked.value;
+  }
+  return selectedMappingVariantId;
+}
+
+/** @returns {boolean} */
+export function mappingRequiresVariantSelection() {
+  return mappingVariants.length > 1;
+}
+
+/**
+ * @param {Array<Record<string, unknown>>} variants
+ * @param {string} productCode
+ * @param {string | null} [preferredVariantId]
+ */
+export function renderMappingVariantPanel(variants, productCode, preferredVariantId = null) {
+  mappingVariants = (variants || []).filter((v) => v?.is_active !== false);
+  selectedMappingVariantId = null;
+
+  const section = qs("#amazonMappingVariantSection");
+  const list = qs("#amazonMappingVariantList");
+  if (!section || !list) return;
+
+  if (mappingVariants.length <= 1) {
+    section.classList.add("hidden");
+    list.innerHTML = "";
+    selectedMappingVariantId = mappingVariants[0]?.id ? String(mappingVariants[0].id) : null;
+    return;
+  }
+
+  section.classList.remove("hidden");
+  const preferred = preferredVariantId && mappingVariants.some((v) => String(v.id) === preferredVariantId)
+    ? preferredVariantId
+    : String(mappingVariants[0]?.id || "");
+
+  list.innerHTML = mappingVariants.map((variant, index) => {
+    const id = String(variant.id || "");
+    const label = String(variant.option_value || variant.title || `Variant ${index + 1}`);
+    const sku = resolveVariantSellerSku(variant, productCode);
+    const qty = Number(variant.stock ?? 0);
+    const checked = id === preferred ? "checked" : "";
+    const oos = qty <= 0 ? '<span class="text-[9px] text-orange-600 font-bold ml-1">OOS</span>' : "";
+    return `
+      <label class="flex items-start gap-2 p-2 rounded-lg border border-gray-200 bg-gray-50 cursor-pointer hover:border-black">
+        <input type="radio" name="amazonMappingVariant" class="mt-1 accent-pink-500" value="${escapeHtml(id)}" ${checked} />
+        <span class="min-w-0 flex-1">
+          <span class="block text-xs font-bold">${escapeHtml(label)}${oos}</span>
+          <span class="block text-[10px] font-mono text-gray-500">${escapeHtml(sku)} · ${qty} in stock</span>
+        </span>
+      </label>`;
+  }).join("");
+
+  selectedMappingVariantId = preferred || null;
+}
 /**
  * @param {{ id: string, code: string, name: string, price?: string, stock?: string }} product
  */

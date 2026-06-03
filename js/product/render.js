@@ -293,14 +293,6 @@ export function renderVariantSwatches(container, variants = [], onSelect) {
 
     btn.style.background = background;
 
-    // Diagonal line for out-of-stock variants (still clickable — back-orderable)
-    if (isOutOfStock) {
-      btn.style.opacity = "0.7";
-      btn.innerHTML = `<span class="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <span class="block w-[140%] h-[2px] bg-red-500 rotate-45 opacity-80"></span>
-      </span>`;
-    }
-    
     // Add a subtle inner border for white/light colors
     if (!isMultiColor && (label.toLowerCase().includes("white") || label.toLowerCase().includes("cream") || label.toLowerCase().includes("ivory"))) {
       btn.classList.add("ring-1", "ring-inset", "ring-black/10");
@@ -340,7 +332,7 @@ export function renderVariantSwatches(container, variants = [], onSelect) {
  * selection is required. The caller is responsible for blocking add-to-cart
  * until onSelect has fired at least once.
  *
- * Out-of-stock sizes are still rendered (back-orderable) but visually dimmed.
+ * Out-of-stock sizes are still rendered and selectable (back-orderable).
  *
  * @param {HTMLElement|null} container
  * @param {Array<object>} variants - active product_variants rows
@@ -374,7 +366,6 @@ export function renderSizeButtons(container, variants = [], onSelect) {
     ].join(" ");
 
     if (isOutOfStock) {
-      btn.style.opacity = "0.6";
       btn.setAttribute(
         "title",
         `${variant.option_value || ""} (2–4 week shipping)`

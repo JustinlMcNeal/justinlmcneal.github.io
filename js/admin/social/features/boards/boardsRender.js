@@ -4,7 +4,6 @@ import { escapeHtml } from "../../utils/html.js";
 import { INTENT_KEYS, CONTENT_TYPES } from "./boardRouting.js";
 import { getBoardsContext } from "./boardsContext.js";
 import {
-  loadBoardStrategyData,
   updateBoardStrategy,
   setBoardAsDefault,
   deleteBoardById,
@@ -52,7 +51,14 @@ function categoryMultiOptions(board, categories) {
 export async function populateBoardDropdown(selectElement) {
   if (!selectElement) return;
   selectElement.innerHTML = '<option value="">Loading boards...</option>';
-  const boards = await loadBoardStrategyData();
+
+  const { state } = getBoardsContext();
+  let boards = state.boards || [];
+  if (!boards.length) {
+    const { refreshBoardsFromDb } = await import("./boardActions.js");
+    boards = await refreshBoardsFromDb({ syncFromApi: false, includeUsage: false });
+  }
+
   const active = boards.filter((b) => b.is_active !== false && b.pinterest_board_id);
 
   if (!active.length) {
@@ -201,7 +207,6 @@ function wireBoardListEvents() {
           category_id: mapped_category_ids[0] || null,
         });
         const { renderBoardList } = await import("./boardsController.js");
-        await loadBoardStrategyData();
         renderBoardList();
       } catch (err) {
         alert("Failed to save board: " + (err.message || err));
@@ -218,7 +223,11 @@ function wireBoardListEvents() {
 
   document.querySelectorAll(".btn-delete-board").forEach((btn) => {
     btn.addEventListener("click", async () => {
-      if (confirm("Delete this board from the strategy registry? (Does not delete on Pinterest.)")) {
+      if (
+        confirm(
+          "Remove this board from the strategy registry?\n\nIt will stay on Pinterest but won't reappear after sync or page refresh."
+        )
+      ) {
         await deleteBoardById(btn.dataset.boardId);
       }
     });

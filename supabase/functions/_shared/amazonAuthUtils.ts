@@ -130,3 +130,13 @@ export async function requireAdminJson(
 
   return { ok: true, userId: userData.user.id };
 }
+
+/** DB row or draft row representing a variation family parent (KK-XXXX-PARENT). */
+export function isParentVariationDraftRow(row: {
+  variation_role?: string | null;
+  seller_sku?: string | null;
+}): boolean {
+  if (String(row.variation_role || "") === "parent") return true;
+  const sku = String(row.seller_sku || "").trim().toUpperCase();
+  return sku.endsWith("-PARENT");
+}

@@ -289,13 +289,69 @@ Deno.serve(async (req) => {
       productMap.set(key, prev);
     }
 
-    const topProducts = [...productMap.values()]
+    const topProductsRaw = [...productMap.values()]
       .map((p) => ({
         ...p,
         aov_cents: p.orders > 0 ? Math.round(p.revenue_cents / p.orders) : 0,
       }))
       .sort((a, b) => b.revenue_cents - a.revenue_cents)
       .slice(0, 20);
+
+    const productIds = [
+      ...new Set(
+        topProductsRaw
+          .map((p) => p.product_bucket)
+          .filter((id) => id && id !== "__unmatched__"),
+      ),
+    ];
+    const productCodes = [
+      ...new Set(
+        topProductsRaw
+          .map((p) => p.product_code)
+          .filter((code) => code && code !== "__unmatched__"),
+      ),
+    ];
+
+    const productById = new Map<string, Record<string, unknown>>();
+    const productByCode = new Map<string, Record<string, unknown>>();
+
+    if (productIds.length) {
+      const { data: productsById, error: productsByIdErr } = await sb
+        .from("products")
+        .select("id,code,name,catalog_image_url,primary_image_url")
+        .in("id", productIds);
+      if (productsByIdErr) return json({ error: productsByIdErr.message }, 500);
+      for (const row of productsById || []) {
+        productById.set(String(row.id), row);
+        if (row.code) productByCode.set(String(row.code), row);
+      }
+    }
+
+    const missingCodes = productCodes.filter((code) => !productByCode.has(code));
+    if (missingCodes.length) {
+      const { data: productsByCode, error: productsByCodeErr } = await sb
+        .from("products")
+        .select("id,code,name,catalog_image_url,primary_image_url")
+        .in("code", missingCodes);
+      if (productsByCodeErr) return json({ error: productsByCodeErr.message }, 500);
+      for (const row of productsByCode || []) {
+        productById.set(String(row.id), row);
+        if (row.code) productByCode.set(String(row.code), row);
+      }
+    }
+
+    const topProducts = topProductsRaw.map((p) => {
+      const product = productById.get(p.product_bucket) || productByCode.get(p.product_code) || null;
+      const imageUrl = product?.catalog_image_url || product?.primary_image_url || null;
+      const productName = product?.name
+        || (p.product_code === "__unmatched__" ? "Unmatched item" : p.product_code);
+
+      return {
+        ...p,
+        product_name: String(productName),
+        image_url: imageUrl ? String(imageUrl) : null,
+      };
+    });
 
     const { data: rawOrders, error: rawOrdersErr } = await sb
       .from("orders_raw")
@@ -305,6 +361,57 @@ Deno.serve(async (req) => {
 
     if (rawOrdersErr) {
       return json({ error: rawOrdersErr.message }, 500);
+    }
+
+    const sessionIds = (rawOrders || [])
+      .map((r) => r.stripe_checkout_session_id)
+      .filter(Boolean) as string[];
+
+    const ebayIds = sessionIds.filter((id) => id.startsWith("ebay_"));
+    const amazonIds = sessionIds.filter((id) => id.startsWith("amazon_"));
+
+    const ebayFinanceMap = new Map<string, { earnings: number | null; status: string | null }>();
+    const amazonFinanceMap = new Map<string, { earnings: number | null; status: string | null }>();
+
+    if (ebayIds.length) {
+      const { data: ebayRows, error: ebayErr } = await sb
+        .from("v_ebay_order_profit")
+        .select("stripe_checkout_session_id,ebay_order_earnings_cents,finance_status")
+        .in("stripe_checkout_session_id", ebayIds);
+      if (ebayErr) return json({ error: ebayErr.message }, 500);
+      for (const row of ebayRows || []) {
+        ebayFinanceMap.set(String(row.stripe_checkout_session_id), {
+          earnings: row.ebay_order_earnings_cents == null ? null : Number(row.ebay_order_earnings_cents),
+          status: row.finance_status == null ? null : String(row.finance_status),
+        });
+      }
+    }
+
+    if (amazonIds.length) {
+      const { data: amazonRows, error: amazonErr } = await sb
+        .from("v_amazon_order_profit")
+        .select("stripe_checkout_session_id,amazon_order_earnings_cents,finance_status")
+        .in("stripe_checkout_session_id", amazonIds);
+      if (amazonErr) return json({ error: amazonErr.message }, 500);
+      for (const row of amazonRows || []) {
+        amazonFinanceMap.set(String(row.stripe_checkout_session_id), {
+          earnings: row.amazon_order_earnings_cents == null ? null : Number(row.amazon_order_earnings_cents),
+          status: row.finance_status == null ? null : String(row.finance_status),
+        });
+      }
+    }
+
+    function rawRevenueCents(sessionId: string, totalPaidCents: number | null | undefined): number {
+      const totalPaid = Number(totalPaidCents || 0);
+      if (sessionId.startsWith("ebay_")) {
+        const fin = ebayFinanceMap.get(sessionId);
+        if (fin?.earnings != null && fin.status !== "estimated") return fin.earnings;
+      }
+      if (sessionId.startsWith("amazon_")) {
+        const fin = amazonFinanceMap.get(sessionId);
+        if (fin?.earnings != null) return fin.earnings;
+      }
+      return totalPaid;
     }
 
     const { data: rawLineItems, error: rawLinesErr } = await sb
@@ -323,7 +430,10 @@ Deno.serve(async (req) => {
       const channel = mapChannel(r.stripe_checkout_session_id);
       const prev = rawByChannel.get(channel) || { orders: 0, units: 0, revenue_cents: 0 };
       prev.orders += 1;
-      prev.revenue_cents += Number(r.total_paid_cents || 0);
+      prev.revenue_cents += rawRevenueCents(
+        String(r.stripe_checkout_session_id || ""),
+        r.total_paid_cents,
+      );
       rawByChannel.set(channel, prev);
     }
 

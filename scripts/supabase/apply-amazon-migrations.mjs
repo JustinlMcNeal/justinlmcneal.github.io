@@ -1,23 +1,27 @@
 #!/usr/bin/env node
 /**
- * Apply KK Amazon SQL migrations directly to Supabase Postgres.
+ * Apply KK Amazon SQL migrations to remote Supabase Postgres.
  *
  * Usage (from repo root):
- *   $env:SUPABASE_DB_PASSWORD="your-db-password"
  *   node scripts/supabase/apply-amazon-migrations.mjs
+ *   node scripts/supabase/apply-amazon-migrations.mjs 20260812
  *
- * Password: Supabase Dashboard → Project Settings → Database → Database password
+ * Default: uses `npx supabase db query --linked` (Management API — no DB password needed).
+ * Fallback: set APPLY_MIGRATIONS_VIA=pg and SUPABASE_DB_PASSWORD for pooler connection.
  *
- * Note: This project often applies migrations outside schema_migrations history.
- * Files run in timestamp order; statements are idempotent where possible.
+ * If using pg mode, this project is in West US (Oregon):
+ *   pooler host aws-0-us-west-2.pooler.supabase.com, user postgres.yxdzvzscufkvewecvagq
+ * Direct db.*.supabase.co is IPv6-only and often fails on Windows (ETIMEDOUT).
  */
 
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import pg from "pg";
-
-const PROJECT_REF = "yxdzvzscufkvewecvagq";
+import {
+  connectPgClient,
+  runLinkedSql,
+  runLinkedSqlFile,
+} from "./dbConnect.mjs";
 
 const MIGRATION_FILES = [
   "20260721_amazon_listings_schema.sql",
@@ -38,24 +42,20 @@ const MIGRATION_FILES = [
   "20260805_amazon_listing_health_view.sql",
   "20260806_amazon_fba_fulfillment_view.sql",
   "20260807_amazon_marketplaces_mx_ca.sql",
+  "20260808_amazon_listing_main_image_url.sql",
+  "20260809_amazon_missing_offer_health.sql",
+  "20260810_amazon_manual_price_and_sku_absent.sql",
+  "20260811_amazon_live_offer_price_view.sql",
+  "20260812_amazon_orders_phase_bc.sql",
+  "20260813_amazon_variants_phase1.sql",
+  "20260814_amazon_variants_phase2.sql",
+  "20260816_amazon_drafts_issues_verify_columns.sql",
+  "20260817_amazon_ready_to_push_parent_draft.sql",
 ];
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(__dirname, "..", "..");
 const migrationsDir = join(repoRoot, "supabase", "migrations");
-
-function getConnectionString() {
-  if (process.env.SUPABASE_DB_URL) return process.env.SUPABASE_DB_URL;
-  const password = process.env.SUPABASE_DB_PASSWORD;
-  if (!password) {
-    throw new Error(
-      "Set SUPABASE_DB_PASSWORD (or SUPABASE_DB_URL) before running.\n" +
-        "Dashboard → Project Settings → Database → Database password",
-    );
-  }
-  const encoded = encodeURIComponent(password);
-  return `postgresql://postgres:${encoded}@db.${PROJECT_REF}.supabase.co:5432/postgres`;
-}
 
 function viewsToDropBeforeMigration(sql) {
   const views = [];
@@ -65,23 +65,9 @@ function viewsToDropBeforeMigration(sql) {
   return views;
 }
 
-async function main() {
-  const startAt = process.argv[2] || "";
-  const files = startAt
-    ? MIGRATION_FILES.slice(MIGRATION_FILES.findIndex((file) => file.startsWith(startAt)))
-    : MIGRATION_FILES;
-
-  if (startAt && files.length === MIGRATION_FILES.length) {
-    throw new Error(`Unknown migration prefix: ${startAt}`);
-  }
-
-  const client = new pg.Client({
-    connectionString: getConnectionString(),
-    ssl: { rejectUnauthorized: false },
-  });
-
-  await client.connect();
-  console.log(`Connected to Supabase Postgres (${PROJECT_REF})`);
+async function applyViaPg(files) {
+  const client = await connectPgClient();
+  console.log("Connected via session pooler (aws-0-us-west-2)");
 
   try {
     for (const file of files) {
@@ -96,10 +82,46 @@ async function main() {
       await client.query(sql);
       console.log("ok");
     }
-    console.log("\nAll Amazon migrations applied.");
   } finally {
     await client.end();
   }
+}
+
+async function applyViaLinked(files) {
+  console.log("Using linked Supabase CLI (supabase db query --linked)");
+  for (const file of files) {
+    const path = join(migrationsDir, file);
+    const sql = readFileSync(path, "utf8");
+    process.stdout.write(`Applying ${file} ... `);
+
+    for (const view of viewsToDropBeforeMigration(sql)) {
+      runLinkedSql(`DROP VIEW IF EXISTS ${view} CASCADE`, repoRoot);
+    }
+
+    runLinkedSqlFile(path, repoRoot);
+    console.log("ok");
+  }
+}
+
+async function main() {
+  const startAt = process.argv[2] || "";
+  const files = startAt
+    ? MIGRATION_FILES.slice(MIGRATION_FILES.findIndex((file) => file.startsWith(startAt)))
+    : MIGRATION_FILES;
+
+  if (startAt && files.length === MIGRATION_FILES.length) {
+    throw new Error(`Unknown migration prefix: ${startAt}`);
+  }
+
+  const mode = process.env.APPLY_MIGRATIONS_VIA || "linked";
+
+  if (mode === "pg") {
+    await applyViaPg(files);
+  } else {
+    await applyViaLinked(files);
+  }
+
+  console.log("\nAll Amazon migrations applied.");
 }
 
 main().catch((err) => {

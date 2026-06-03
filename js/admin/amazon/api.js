@@ -7,6 +7,11 @@ const READY_TO_PUSH_VIEW = "v_amazon_ready_to_push_products";
 
 const READY_TO_PUSH_COLUMNS = [
   "kk_product_id",
+  "kk_variant_id",
+  "kk_variant_label",
+  "variants_total",
+  "variants_mapped",
+  "suggested_seller_sku",
   "kk_sku",
   "kk_product_title",
   "kk_price",
@@ -19,6 +24,9 @@ const READY_TO_PUSH_COLUMNS = [
   "draft_status",
   "has_active_draft",
   "last_draft_updated_at",
+  "draft_variation_role",
+  "ready_row_kind",
+  "parent_listing_ready",
   "has_stock",
   "has_image",
   "has_category",
@@ -26,6 +34,12 @@ const READY_TO_PUSH_COLUMNS = [
   "eligibility_status",
   "eligibility_warnings",
 ].join(",");
+
+const READY_TO_PUSH_COLUMNS_LEGACY = READY_TO_PUSH_COLUMNS
+  .split(",")
+  .map((col) => col.trim())
+  .filter((col) => col !== "ready_row_kind" && col !== "parent_listing_ready")
+  .join(",");
 
 const UNMAPPED_COLUMNS = [
   "amazon_listing_id",
@@ -39,8 +53,14 @@ const UNMAPPED_COLUMNS = [
   "price",
   "currency",
   "fbm_quantity",
+  "main_image_url",
   "last_synced_at",
 ].join(",");
+
+const UNMAPPED_COLUMNS_LEGACY = UNMAPPED_COLUMNS
+  .split(",")
+  .filter((col) => col !== "main_image_url")
+  .join(",");
 
 const LISTINGS_COLUMNS = [
   "amazon_listing_id",
@@ -64,6 +84,8 @@ const LISTINGS_COLUMNS = [
   "mapping_status",
   "mapping_confidence",
   "kk_product_id",
+  "kk_variant_id",
+  "kk_variant_label",
   "kk_sku",
   "kk_product_title",
   "kk_price",
@@ -200,6 +222,8 @@ async function callEdgeFunction(name, options = {}) {
     if (Array.isArray(data.reasons)) err.reasons = data.reasons;
     if (Array.isArray(data.issues)) err.issues = data.issues;
     if (data.hint) err.hint = data.hint;
+    if (data.reason) err.reason = data.reason;
+    if (Array.isArray(data.reasons)) err.reasons = data.reasons;
     throw err;
   }
 
@@ -288,7 +312,7 @@ export async function syncAmazonListings(options = {}) {
       sellerAccountId: options.sellerAccountId,
       marketplaceIds: options.marketplaceIds,
       syncType: options.syncType || "manual",
-      maxPages: options.maxPages ?? 1,
+      maxPages: options.maxPages ?? 5,
       sellerSku: options.sellerSku,
     },
   });
@@ -303,7 +327,7 @@ export async function syncAmazonListingSku(sellerSku, options = {}) {
   });
 }
 
-/** @param {{ amazonListingId: string, price?: number, quantity?: number, preview?: boolean }} payload */
+/** @param {{ amazonListingId: string, price?: number, quantity?: number, imageUrls?: string[], preview?: boolean }} payload */
 export async function patchAmazonListing(payload) {
   return callEdgeFunction("amazon-patch-listing", {
     method: "POST",
@@ -311,11 +335,118 @@ export async function patchAmazonListing(payload) {
   });
 }
 
+/** @param {string} amazonListingId */
+export async function fetchAmazonListingRaw(amazonListingId) {
+  const sb = getSupabaseClient();
+  const id = String(amazonListingId || "").trim();
+  if (!id) return null;
+
+  const { data, error } = await sb
+    .from("amazon_listings")
+    .select("id, marketplace_id, raw_listing, product_type")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return data;
+}
+
 /** @param {{ amazonListingIds: string[], operation: string, value?: number, preview?: boolean }} payload */
 export async function bulkPatchAmazonListings(payload) {
   return callEdgeFunction("amazon-bulk-patch-listings", {
     method: "POST",
     body: payload,
+  });
+}
+
+/** @param {string} amazonListingId */
+export async function fetchAmazonListingBasics(amazonListingId) {
+  const sb = getSupabaseClient();
+  const id = String(amazonListingId || "").trim();
+  if (!id) return null;
+
+  const { data, error } = await sb
+    .from("amazon_listings")
+    .select([
+      "id",
+      "asin",
+      "seller_sku",
+      "amazon_title",
+      "listing_status",
+      "listing_status_buyable",
+      "price",
+      "currency",
+      "fbm_quantity",
+      "fba_fulfillable_quantity",
+      "fulfillment_channel",
+      "product_type",
+      "marketplace_id",
+    ].join(","))
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return { ...data, amazon_listing_id: data.id };
+}
+
+/** @param {string} amazonListingId */
+export async function fetchAmazonListingOpenIssues(amazonListingId) {
+  const sb = getSupabaseClient();
+  const id = String(amazonListingId || "").trim();
+  if (!id) return [];
+
+  const { data, error } = await sb
+    .from("amazon_listing_issues")
+    .select("severity, message, issue_code, attribute_names, source, created_at")
+    .eq("amazon_listing_id", id)
+    .eq("status", "open")
+    .order("created_at", { ascending: false })
+    .limit(15);
+
+  if (error) return [];
+  return data || [];
+}
+
+async function enrichAmazonListingImages(rows) {
+  if (!Array.isArray(rows) || !rows.length) return rows;
+
+  const productIds = [...new Set(
+    rows.map((row) => row.kk_product_id).filter(Boolean),
+  )];
+  if (!productIds.length) return rows;
+
+  const sb = getSupabaseClient();
+  const { data: products, error } = await sb
+    .from("products")
+    .select("id, primary_image_url, catalog_image_url, product_variants(id, preview_image_url, is_active)")
+    .in("id", productIds);
+
+  if (error || !products?.length) return rows;
+
+  const productById = new Map(products.map((product) => [product.id, product]));
+
+  return rows.map((row) => {
+    const product = row.kk_product_id ? productById.get(row.kk_product_id) : null;
+    if (!product) return row;
+
+    let imageUrl = null;
+    if (row.kk_variant_id) {
+      const variant = (product.product_variants || []).find(
+        (entry) => String(entry.id) === String(row.kk_variant_id),
+      );
+      const preview = String(variant?.preview_image_url || "").trim();
+      if (preview) imageUrl = preview;
+    }
+
+    if (!imageUrl) {
+      imageUrl = product.primary_image_url || product.catalog_image_url || null;
+    }
+
+    if (!imageUrl) return row;
+    if (row.kk_variant_id || !row.image_url) {
+      return { ...row, image_url: imageUrl };
+    }
+    return row;
   });
 }
 
@@ -334,7 +465,11 @@ export async function fetchAmazonListings(options = {}) {
     query = query.eq("marketplace_id", options.marketplaceId);
   }
 
-  const { data, error } = await query;
+  const [{ data, error }, absentResult] = await Promise.all([
+    query,
+    sb.from("amazon_listings").select("id").not("amazon_sku_absent_at", "is", null),
+  ]);
+
   if (error) {
     const err = new Error("database_error");
     err.code = "database_error";
@@ -342,24 +477,37 @@ export async function fetchAmazonListings(options = {}) {
     throw err;
   }
 
-  return data || [];
+  const absentIds = new Set((absentResult.data || []).map((row) => String(row.id)));
+  const visibleRows = (data || []).filter(
+    (row) => !absentIds.has(String(row.amazon_listing_id || "")),
+  );
+
+  return enrichAmazonListingImages(visibleRows);
 }
 
 export async function fetchAmazonUnmappedListings(options = {}) {
   const sb = getSupabaseClient();
-  const limit = Math.min(50, Math.max(1, Number(options.limit) || 50));
+  const limit = Math.min(500, Math.max(1, Number(options.limit) || 500));
 
-  let query = sb
-    .from(UNMAPPED_VIEW)
-    .select(UNMAPPED_COLUMNS)
-    .order("last_synced_at", { ascending: false, nullsFirst: false })
-    .limit(limit);
+  async function runQuery(columns) {
+    let query = sb
+      .from(UNMAPPED_VIEW)
+      .select(columns)
+      .order("last_synced_at", { ascending: false, nullsFirst: false })
+      .limit(limit);
 
-  if (options.marketplaceId) {
-    query = query.eq("marketplace_id", options.marketplaceId);
+    if (options.marketplaceId) {
+      query = query.eq("marketplace_id", options.marketplaceId);
+    }
+
+    return query;
   }
 
-  const { data, error } = await query;
+  let { data, error } = await runQuery(UNMAPPED_COLUMNS);
+  if (error && /main_image_url/i.test(String(error.message || ""))) {
+    ({ data, error } = await runQuery(UNMAPPED_COLUMNS_LEGACY));
+  }
+
   if (error) {
     const err = new Error("database_error");
     err.code = "database_error";
@@ -370,15 +518,72 @@ export async function fetchAmazonUnmappedListings(options = {}) {
   return data || [];
 }
 
+/** @type {"unknown" | "legacy" | "full"} */
+let readyToPushColumnMode = "unknown";
+
+function resolveReadyToPushSelect() {
+  if (readyToPushColumnMode === "full") return READY_TO_PUSH_COLUMNS;
+  if (readyToPushColumnMode === "legacy") return READY_TO_PUSH_COLUMNS_LEGACY;
+
+  try {
+    const flag = sessionStorage.getItem("kk.amazon.readyToPush.shellColumns");
+    if (flag === "full") {
+      readyToPushColumnMode = "full";
+      return READY_TO_PUSH_COLUMNS;
+    }
+    if (flag === "legacy") {
+      readyToPushColumnMode = "legacy";
+      return READY_TO_PUSH_COLUMNS_LEGACY;
+    }
+  } catch {
+    /* sessionStorage unavailable */
+  }
+
+  readyToPushColumnMode = "legacy";
+  return READY_TO_PUSH_COLUMNS_LEGACY;
+}
+
+function rememberReadyToPushColumnMode(mode) {
+  readyToPushColumnMode = mode;
+  try {
+    sessionStorage.setItem(
+      "kk.amazon.readyToPush.shellColumns",
+      mode === "full" ? "full" : "legacy",
+    );
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Call after migration 20260602 is applied so Ready to Push uses DB parent-shell columns. */
+export function markAmazonReadyToPushShellColumnsAvailable() {
+  rememberReadyToPushColumnMode("full");
+}
+
 export async function fetchAmazonReadyToPushProducts(options = {}) {
   const sb = getSupabaseClient();
-  const limit = Math.min(50, Math.max(1, Number(options.limit) || 50));
+  const limit = Math.min(500, Math.max(1, Number(options.limit) || 500));
+  const orderOpts = { ascending: false, nullsFirst: false };
+  const preferFull = options.preferShellColumns === true;
+  let columns = preferFull ? READY_TO_PUSH_COLUMNS : resolveReadyToPushSelect();
 
-  const { data, error } = await sb
+  let { data, error } = await sb
     .from(READY_TO_PUSH_VIEW)
-    .select(READY_TO_PUSH_COLUMNS)
-    .order("updated_at", { ascending: false, nullsFirst: false })
+    .select(columns)
+    .order("updated_at", orderOpts)
     .limit(limit);
+
+  if (error && columns !== READY_TO_PUSH_COLUMNS_LEGACY) {
+    rememberReadyToPushColumnMode("legacy");
+    columns = READY_TO_PUSH_COLUMNS_LEGACY;
+    ({ data, error } = await sb
+      .from(READY_TO_PUSH_VIEW)
+      .select(columns)
+      .order("updated_at", orderOpts)
+      .limit(limit));
+  } else if (!error && preferFull) {
+    rememberReadyToPushColumnMode("full");
+  }
 
   if (error) {
     const err = new Error("database_error");
@@ -400,7 +605,7 @@ export async function searchKkProducts(query) {
 
   const { data, error } = await sb
     .from("products")
-    .select("id, name, code, price, product_variants(stock, is_active)")
+    .select("id, name, code, price, primary_image_url, catalog_image_url, product_variants(stock, is_active)")
     .eq("is_active", true)
     .or(`name.ilike.%${safe}%,code.ilike.%${safe}%`)
     .order("name")
@@ -426,8 +631,52 @@ export async function searchKkProducts(query) {
       code: row.code,
       price: row.price,
       stock,
+      imageUrl: row.primary_image_url || row.catalog_image_url || null,
     };
   });
+}
+
+/** Full product row for push modal (includes gallery images for image picker). */
+export async function fetchKkProductForPush(kkProductId) {
+  const sb = getSupabaseClient();
+  const id = String(kkProductId || "").trim();
+  if (!id) return null;
+
+  const { data, error } = await sb
+    .from("products")
+    .select([
+      "id",
+      "name",
+      "code",
+      "price",
+      "primary_image_url",
+      "catalog_image_url",
+      "catalog_hover_url",
+      "product_gallery_images(url, position, is_active)",
+      "product_variants(id, option_name, option_value, title, stock, sku, preview_image_url, sort_order, is_active)",
+    ].join(","))
+    .eq("id", id)
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (error || !data) return null;
+
+  const variants = Array.isArray(data.product_variants)
+    ? [...data.product_variants]
+        .filter((v) => v?.is_active !== false)
+        .sort((a, b) => Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0))
+    : [];
+  const stock = variants.reduce((sum, variant) => {
+    const qty = Number(variant.stock);
+    return sum + (Number.isFinite(qty) ? qty : 0);
+  }, 0);
+
+  return {
+    ...data,
+    product_variants: variants,
+    stock,
+    imageUrl: data.primary_image_url || data.catalog_image_url || null,
+  };
 }
 
 export async function saveAmazonMapping(payload) {
@@ -436,6 +685,7 @@ export async function saveAmazonMapping(payload) {
     body: {
       amazonListingId: payload.amazonListingId,
       kkProductId: payload.kkProductId,
+      kkVariantId: payload.kkVariantId || undefined,
       kkSku: payload.kkSku,
       mappingStatus: payload.mappingStatus || "mapped",
       mappingConfidence: payload.mappingConfidence || "manual",
@@ -444,12 +694,166 @@ export async function saveAmazonMapping(payload) {
   });
 }
 
+/** Hide a stale mapped listing from the synced dashboard and unmap for repush. */
+export async function dismissAmazonListing(amazonListingId, options = {}) {
+  const { notes = "Hidden from dashboard for repush" } = options;
+
+  return saveAmazonMapping({
+    amazonListingId,
+    mappingStatus: "ignored",
+    notes,
+  });
+}
+
+/** @param {string} kkProductId @param {string} [kkVariantId] */
+export async function fetchAmazonReadyToPushBlockers(kkProductId, kkVariantId = null) {
+  const sb = getSupabaseClient();
+  const id = String(kkProductId || "").trim();
+  if (!id) return [];
+
+  let mappedQuery = sb.from("amazon_listing_mappings")
+    .select("id")
+    .eq("kk_product_id", id)
+    .eq("mapping_status", "mapped")
+    .limit(1);
+  if (kkVariantId) {
+    mappedQuery = mappedQuery.eq("kk_variant_id", kkVariantId);
+  } else {
+    mappedQuery = mappedQuery.is("kk_variant_id", null);
+  }
+
+  let submittedQuery = sb.from("amazon_listing_drafts")
+    .select("id")
+    .eq("kk_product_id", id)
+    .eq("draft_status", "submitted")
+    .limit(1);
+  if (kkVariantId) {
+    submittedQuery = submittedQuery.eq("kk_variant_id", kkVariantId);
+  } else {
+    submittedQuery = submittedQuery.is("kk_variant_id", null);
+  }
+
+  const [mappedResult, submittedResult] = await Promise.all([
+    mappedQuery,
+    submittedQuery,
+  ]);
+
+  /** @type {string[]} */
+  const blockers = [];
+  if (mappedResult.data?.length) blockers.push("still_mapped");
+  if (submittedResult.data?.length) blockers.push("submitted_draft");
+  return blockers;
+}
+
+/** @param {string} kkProductId @param {string} [marketplaceId] */
+export async function fetchAmazonCatalogHintForProduct(kkProductId, marketplaceId = "ATVPDKIKX0DER") {
+  const sb = getSupabaseClient();
+  const id = String(kkProductId || "").trim();
+  if (!id) return null;
+
+  const { data, error } = await sb
+    .from("amazon_listing_mappings")
+    .select("mapping_status, amazon_listings(asin, product_type, seller_sku, marketplace_id)")
+    .eq("kk_product_id", id)
+    .in("mapping_status", ["mapped", "legacy"]);
+
+  if (error || !Array.isArray(data) || !data.length) return null;
+
+  const sorted = [...data].sort((a, b) => {
+    if (a.mapping_status === "mapped" && b.mapping_status !== "mapped") return -1;
+    if (b.mapping_status === "mapped" && a.mapping_status !== "mapped") return 1;
+    return 0;
+  });
+
+  for (const entry of sorted) {
+    const listing = entry?.amazon_listings;
+    const row = Array.isArray(listing) ? listing[0] : listing;
+    if (!row?.asin) continue;
+    if (row.marketplace_id && row.marketplace_id !== marketplaceId) continue;
+    return {
+      asin: String(row.asin),
+      productType: row.product_type ? String(row.product_type) : "",
+      sellerSku: row.seller_sku ? String(row.seller_sku) : "",
+      mappingStatus: entry.mapping_status ? String(entry.mapping_status) : "",
+    };
+  }
+
+  return null;
+}
+
+function isParentVariationDraftRowClient(row) {
+  if (!row) return false;
+  if (String(row.variation_role || "") === "parent") return true;
+  const sku = String(row.seller_sku || "").trim().toUpperCase();
+  return sku.endsWith("-PARENT");
+}
+
+/** @param {string} kkProductId @param {string} [marketplaceId] */
+export async function fetchAmazonVariationFamilyContext(kkProductId, marketplaceId = "ATVPDKIKX0DER") {
+  const sb = getSupabaseClient();
+  const id = String(kkProductId || "").trim();
+  if (!id) return null;
+
+  const { data: draftRows, error } = await sb
+    .from("amazon_listing_drafts")
+    .select("id, seller_sku, product_type, variation_theme, draft_status, submission_status, variation_role, marketplace_id")
+    .eq("kk_product_id", id)
+    .neq("draft_status", "archived")
+    .order("updated_at", { ascending: false })
+    .limit(20);
+
+  if (!error && Array.isArray(draftRows)) {
+    for (const row of draftRows) {
+      if (!isParentVariationDraftRowClient(row)) continue;
+      if (row.marketplace_id && row.marketplace_id !== marketplaceId) continue;
+      return {
+        parentDraft: row,
+        parentSellerSku: row.seller_sku ? String(row.seller_sku) : null,
+        parentProductType: row.product_type ? String(row.product_type) : null,
+        variationTheme: row.variation_theme ? String(row.variation_theme) : null,
+      };
+    }
+  }
+
+  const { data: product } = await sb
+    .from("products")
+    .select("code")
+    .eq("id", id)
+    .maybeSingle();
+
+  const parentSku = product?.code ? `${String(product.code).trim()}-PARENT` : "";
+  if (!parentSku) return null;
+
+  const { data: listing } = await sb
+    .from("amazon_listings")
+    .select("seller_sku, product_type, asin")
+    .eq("seller_sku", parentSku)
+    .eq("marketplace_id", marketplaceId)
+    .maybeSingle();
+
+  if (!listing?.asin || !listing.seller_sku) return null;
+
+  return {
+    parentDraft: null,
+    parentSellerSku: String(listing.seller_sku),
+    parentProductType: listing.product_type ? String(listing.product_type) : null,
+    variationTheme: null,
+    parentOnAmazonOnly: true,
+  };
+}
+
 const DRAFTS_VIEW = "v_amazon_drafts_issues";
 
 const DRAFTS_COLUMNS = [
   "draft_id",
   "amazon_listing_id",
   "kk_product_id",
+  "kk_variant_id",
+  "kk_variant_label",
+  "variation_role",
+  "parent_draft_id",
+  "parent_seller_sku",
+  "variation_theme",
   "kk_sku",
   "kk_product_title",
   "marketplace_id",
@@ -483,7 +887,7 @@ export async function saveAmazonDraft(payload) {
 
 export async function fetchAmazonDraftsIssues(options = {}) {
   const sb = getSupabaseClient();
-  const limit = Math.min(50, Math.max(1, Number(options.limit) || 50));
+  const limit = Math.min(500, Math.max(1, Number(options.limit) || 500));
 
   const { data, error } = await sb
     .from(DRAFTS_VIEW)
@@ -528,6 +932,23 @@ export async function getAmazonProductTypeDefinition(payload) {
       requirementsEnforced: payload.requirementsEnforced || "ENFORCED",
       locale: payload.locale || "en_US",
       forceRefresh: payload.forceRefresh === true,
+    },
+  });
+}
+
+export async function amazonAiAutofill(payload) {
+  return callEdgeFunction("amazon-ai-autofill", {
+    method: "POST",
+    body: {
+      productName: payload.productName,
+      productCode: payload.productCode,
+      productType: payload.productType,
+      category: payload.category,
+      price: payload.price,
+      imageUrls: payload.imageUrls || [],
+      requiredAttributes: payload.requiredAttributes || [],
+      recommendedAttributes: payload.recommendedAttributes || [],
+      attributeHints: payload.attributeHints || [],
     },
   });
 }

@@ -61,8 +61,16 @@ export async function runSubmittedDraftVerification(draftId, deps = {}) {
       return result;
     }
 
+    const reasonMessages = {
+      listing_not_found_yet: "Amazon has not returned this SKU yet. Auto-verify will retry.",
+      awaiting_buyable: result.offerActivationAttempted
+        ? "Offer submitted to Amazon — waiting for the listing to become buyable. Auto-verify will retry."
+        : "Listing found but not buyable yet. Auto-verify will retry.",
+      offer_activation_failed: "Could not auto-submit the seller offer. Use Fix Inactive on Synced Listings or retry verify.",
+    };
+    const reason = String(result.reason || "listing_not_found_yet");
     showAmazonNotification(
-      "Amazon has not returned this listing yet. Try again in a few minutes.",
+      reasonMessages[reason] || reasonMessages.listing_not_found_yet,
       { tone: "warning" },
     );
     return result;

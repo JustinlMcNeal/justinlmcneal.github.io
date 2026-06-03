@@ -1,7 +1,12 @@
 // Pinterest boards — init, setup, load
 
 import { initBoardsContext, getBoardsContext } from "./boardsContext.js";
-import { loadBoardStrategyData, addBoard, syncPinterestBoards } from "./boardActions.js";
+import {
+  loadBoardStrategyData,
+  refreshBoardsFromDb,
+  addBoard,
+  syncPinterestBoards,
+} from "./boardActions.js";
 import { populateBoardDropdown, renderBoardList } from "./boardsRender.js";
 
 export { populateBoardDropdown, renderBoardList };
@@ -23,7 +28,11 @@ export function setupBoards() {
   });
 }
 
-export async function loadBoards() {
+/**
+ * @param {{ syncFromApi?: boolean }} [options]
+ * syncFromApi: pull board names from Pinterest API into DB (slow; use on init or Sync button).
+ */
+export async function loadBoards({ syncFromApi = false } = {}) {
   const { state, getSupabaseClient } = getBoardsContext();
   const client = getSupabaseClient();
   const { data: pinData } = await client
@@ -37,6 +46,13 @@ export async function loadBoards() {
     return;
   }
 
-  await loadBoardStrategyData();
+  const alreadyLoaded = Array.isArray(state.boards) && state.boards.length > 0;
+  const doApiSync = syncFromApi || !alreadyLoaded;
+
+  if (doApiSync) {
+    await loadBoardStrategyData();
+  } else {
+    await refreshBoardsFromDb({ syncFromApi: false });
+  }
   await populateBoardDropdown(getBoardsContext().els.boardSelect);
 }

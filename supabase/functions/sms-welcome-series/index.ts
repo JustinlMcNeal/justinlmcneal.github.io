@@ -114,6 +114,29 @@ async function hasPurchased(
   return (count ?? 0) > 0;
 }
 
+/** Reuse an unsent Day 5 coupon so failed/skipped sends do not create a new WS code every run. */
+async function getReusableDay5Coupon(
+  sb: ReturnType<typeof createClient>,
+  phone: string
+): Promise<string | null> {
+  const { data: promo } = await sb
+    .from("promotions")
+    .select("code, usage_count, is_active, end_date")
+    .eq("description", `Welcome series Day 5 coupon for ${phone}`)
+    .like("code", "WS-%")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!promo) return null;
+
+  const unused = (promo.usage_count ?? 0) === 0;
+  const valid = promo.is_active === true
+    && (!promo.end_date || new Date(promo.end_date) > new Date());
+
+  return unused && valid ? promo.code : null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
@@ -204,48 +227,52 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Generate unique WS coupon (10% off, no minimum, 48hr, single-use)
-        let couponCode = "";
-        for (let attempt = 0; attempt < 5; attempt++) {
-          const candidate = generateCouponCode("WS");
-          const { data: dup } = await sb
-            .from("promotions")
-            .select("id")
-            .eq("code", candidate)
-            .maybeSingle();
-          if (!dup) { couponCode = candidate; break; }
-        }
+        // Generate or reuse a unique WS coupon (10% off, no minimum, 48hr, single-use).
+        // Reuse prevents hourly orphan coupon creation if send-sms is blocked or fails.
+        let couponCode = await getReusableDay5Coupon(sb, contact.phone);
 
         if (!couponCode) {
-          console.error("[sms-welcome-series] Failed to generate coupon code");
-          results.skipped++;
-          continue;
-        }
+          for (let attempt = 0; attempt < 5; attempt++) {
+            const candidate = generateCouponCode("WS");
+            const { data: dup } = await sb
+              .from("promotions")
+              .select("id")
+              .eq("code", candidate)
+              .maybeSingle();
+            if (!dup) { couponCode = candidate; break; }
+          }
 
-        const expiresAt = new Date(now + 48 * 60 * 60 * 1000).toISOString();
+          if (!couponCode) {
+            console.error("[sms-welcome-series] Failed to generate coupon code");
+            results.skipped++;
+            continue;
+          }
 
-        const { error: promoErr } = await sb.from("promotions").insert({
-          name:             `Welcome Series — ${couponCode}`,
-          code:             couponCode,
-          description:      `Welcome series Day 5 coupon for ${contact.phone}`,
-          type:             "percentage",
-          value:            10,
-          scope_type:       "all",
-          scope_data:       "{}",
-          min_order_amount: 0,
-          usage_limit:      1,
-          usage_count:      0,
-          start_date:       new Date().toISOString(),
-          end_date:         expiresAt,
-          is_active:        true,
-          is_public:        true,
-          requires_code:    true,
-        });
+          const expiresAt = new Date(now + 48 * 60 * 60 * 1000).toISOString();
 
-        if (promoErr) {
-          console.error("[sms-welcome-series] Coupon create error:", promoErr.message);
-          results.skipped++;
-          continue;
+          const { error: promoErr } = await sb.from("promotions").insert({
+            name:             `Welcome Series — ${couponCode}`,
+            code:             couponCode,
+            description:      `Welcome series Day 5 coupon for ${contact.phone}`,
+            type:             "percentage",
+            value:            10,
+            scope_type:       "all",
+            scope_data:       "{}",
+            min_order_amount: 0,
+            usage_limit:      1,
+            usage_count:      0,
+            start_date:       new Date().toISOString(),
+            end_date:         expiresAt,
+            is_active:        true,
+            is_public:        true,
+            requires_code:    true,
+          });
+
+          if (promoErr) {
+            console.error("[sms-welcome-series] Coupon create error:", promoErr.message);
+            results.skipped++;
+            continue;
+          }
         }
 
         const shortCode = generateShortCode();

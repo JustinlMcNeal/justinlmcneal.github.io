@@ -15,9 +15,7 @@ const STORAGE_KEY = "kk-amazon-listings-table-settings-v1";
 /** @type {Array<{ id: string, label: string, locked?: boolean, defaultVisible?: boolean, breakpoint?: "xl" | "2xl" }>} */
 export const AMAZON_LISTING_TABLE_COLUMNS = [
   { id: "select", label: "Select", locked: true },
-  { id: "product", label: "Product", locked: true },
-  { id: "asin", label: "ASIN", defaultVisible: true },
-  { id: "sku", label: "SKU", defaultVisible: true },
+  { id: "product", label: "Product (title, variant, SKU, ASIN, actions)", locked: true },
   { id: "price", label: "Price", defaultVisible: true },
   { id: "amazonFee", label: "Amazon Fee", defaultVisible: true, breakpoint: "xl" },
   { id: "profit", label: "Est. Profit", defaultVisible: true },
@@ -27,7 +25,6 @@ export const AMAZON_LISTING_TABLE_COLUMNS = [
   { id: "fbaInbound", label: "FBA Inbound", defaultVisible: false, breakpoint: "2xl" },
   { id: "status", label: "Status", defaultVisible: true },
   { id: "lastSynced", label: "Last Synced", defaultVisible: true, breakpoint: "xl" },
-  { id: "actions", label: "Actions", locked: true },
 ];
 
 const TOGGLEABLE_COLUMNS = AMAZON_LISTING_TABLE_COLUMNS.filter((col) => !col.locked);

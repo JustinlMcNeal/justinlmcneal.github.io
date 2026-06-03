@@ -1,7 +1,8 @@
 -- Schedule analytics aggregate refresh daily at 08:20 UTC
 -- Dependency order:
 --   06:00 ebay-sync-finances
---   08:00 ebay-sync-orders fallback
+--   07:00 amazon-sync-finances
+--   */4  amazon-sync-orders + ebay-sync-orders
 --   08:20 analytics-aggregate
 
 SELECT cron.schedule(

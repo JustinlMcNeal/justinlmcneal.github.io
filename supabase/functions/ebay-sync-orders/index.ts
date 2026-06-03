@@ -76,6 +76,41 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
+  const authHeader = req.headers.get("authorization");
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return new Response(
+      JSON.stringify({ success: false, error: "server_misconfigured" }),
+      { status: 500, headers: corsHeaders },
+    );
+  }
+
+  if (!authHeader) {
+    return new Response(
+      JSON.stringify({ success: false, error: "unauthorized" }),
+      { status: 401, headers: corsHeaders },
+    );
+  }
+
+  const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
+  const { requireAdminJson } = await import("../_shared/amazonAuthUtils.ts");
+  const admin = await requireAdminJson(
+    createClient,
+    supabaseUrl,
+    supabaseAnonKey,
+    authHeader,
+    "[ebay-sync-orders]",
+  );
+  if (!admin.ok) {
+    const errBody = await admin.response.text();
+    return new Response(errBody, {
+      status: admin.response.status,
+      headers: corsHeaders,
+    });
+  }
+
   try {
     const supabase = createServiceClient();
 

@@ -60,14 +60,19 @@ export function initAmazonSyncActions(deps) {
     setSyncingUi(true);
     try {
       const result = await syncAmazonListings({
-        syncType: "manual",
-        maxPages: 1,
+        syncType: "full",
+        maxPages: 25,
       });
 
       const failed = Number(result.recordsFailed || 0);
       const created = Number(result.recordsCreated || 0);
       const updated = Number(result.recordsUpdated || 0);
+      const seen = Number(result.recordsSeen || 0);
+      const markedAbsent = Number(result.recordsMarkedAbsent || 0);
       const status = String(result.status || "success");
+      const warnings = Array.isArray(result.warnings) ? result.warnings : [];
+      const hasMore = warnings.includes("pagination_incomplete_more_pages_available");
+      const reconcileSkipped = warnings.some((w) => String(w).startsWith("catalog_reconcile:skipped"));
 
       if (status === "failed" || result.ok === false) {
         showAmazonNotification("Amazon sync failed. Check sync logs and try again.", {
@@ -75,7 +80,7 @@ export function initAmazonSyncActions(deps) {
         });
       } else if (failed > 0) {
         showAmazonNotification(
-          `Sync finished with ${updated} updated and ${failed} row errors.`,
+          `Sync finished — ${seen} seen, ${updated} updated, ${failed} errors.${hasMore ? " More catalog pages remain — sync again." : ""}`,
           { tone: "warning" },
         );
       } else {
@@ -83,8 +88,16 @@ export function initAmazonSyncActions(deps) {
         if (created > 0) parts.push(`${created} new`);
         if (updated > 0) parts.push(`${updated} updated`);
         const summary = parts.length > 0 ? parts.join(", ") : "0 changed";
+        const absentNote = markedAbsent > 0
+          ? ` ${markedAbsent} deleted-on-Amazon listing(s) hidden from the dashboard.`
+          : "";
+        const reconcileNote = hasMore
+          ? " Sync again to import remaining pages (catalog cleanup runs after the last page)."
+          : reconcileSkipped
+          ? " Catalog cleanup did not run — sync must finish all pages successfully."
+          : " Check Needs Mapping for unmapped items.";
         showAmazonNotification(
-          `Sync complete — ${summary}. Map new listings under Needs Mapping.`,
+          `Full catalog sync — ${seen} listings from Amazon (${summary}).${absentNote}${reconcileNote}`,
           { tone: "success" },
         );
       }

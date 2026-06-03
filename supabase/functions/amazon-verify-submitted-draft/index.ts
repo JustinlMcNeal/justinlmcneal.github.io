@@ -125,12 +125,13 @@ Deno.serve(async (req) => {
 
     if (result.status === "not_found") {
       await markManualVerifyNotFound(serviceClient, draftId, now);
-      console.log(`${LOG_PREFIX} not_found draftId=${draftId}`);
+      console.log(`${LOG_PREFIX} not_found draftId=${draftId} reason=${result.reason}`);
       return json({
         ok: true,
         verified: false,
         draftStatus: "submitted",
-        reason: "listing_not_found_yet",
+        reason: result.reason,
+        offerActivationAttempted: result.offerActivationAttempted === true,
       });
     }
 
@@ -143,6 +144,7 @@ Deno.serve(async (req) => {
       listingStatus: result.listing.listing_status,
       listingStatusBuyable: result.listing.listing_status_buyable,
       mappingId: result.mappingId,
+      offerActivationAttempted: result.offerActivationAttempted === true,
     });
   } catch (err: unknown) {
     if (err instanceof Error && err.message === "database_error") {

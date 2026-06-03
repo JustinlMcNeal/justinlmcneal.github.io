@@ -2,6 +2,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeadersJson, json, requireAdminJson, UUID_RE } from "../_shared/amazonAuthUtils.ts";
 import { resolveAmazonCredentials } from "../_shared/amazonPtdAuthUtils.ts";
+import { readSyncEnvConfig } from "../_shared/amazonSyncAccountUtils.ts";
 import {
   getOrFetchPtdSummary,
   toPublicPtdResponse,
@@ -47,16 +48,9 @@ Deno.serve(async (req) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  const lwaClientId = Deno.env.get("AMAZON_LWA_CLIENT_ID");
-  const lwaClientSecret = Deno.env.get("AMAZON_LWA_CLIENT_SECRET");
-  const spApiEndpointOverride = Deno.env.get("AMAZON_SP_API_ENDPOINT") || null;
-  const awsAccessKeyId = Deno.env.get("AWS_ACCESS_KEY_ID");
-  const awsSecretAccessKey = Deno.env.get("AWS_SECRET_ACCESS_KEY");
-  const awsSessionToken = Deno.env.get("AWS_SESSION_TOKEN") || null;
-  const awsRegionOverride = Deno.env.get("AWS_REGION") || null;
-  const allowUnsignedSpApi = Deno.env.get("AMAZON_ALLOW_UNSIGNED_SP_API") === "true";
+  const syncEnv = readSyncEnvConfig();
 
-  if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey || !lwaClientId || !lwaClientSecret) {
+  if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey || !syncEnv.lwaClientId || !syncEnv.lwaClientSecret) {
     console.log(`${LOG_PREFIX} server_misconfigured`);
     return json({ ok: false, error: "server_misconfigured" }, 500);
   }
@@ -115,21 +109,14 @@ Deno.serve(async (req) => {
       return json({ ok: false, error: "invalid_request" }, 404);
     }
 
-    const credResult = await resolveAmazonCredentials(serviceClient, sellerAccountId, {
-      lwaClientId,
-      lwaClientSecret,
-      spApiEndpointOverride,
-      awsAccessKeyId,
-      awsSecretAccessKey,
-      awsSessionToken,
-      awsRegionOverride,
-      allowUnsignedSpApi,
-    });
+    const credResult = await resolveAmazonCredentials(serviceClient, sellerAccountId, syncEnv);
 
     if (!credResult.ok) {
-      const status = credResult.error === "server_misconfigured" ? 500 : 400;
-      const code = credResult.error === "token_refresh_failed" ? 502 : credResult.error;
-      return json({ ok: false, error: code }, status);
+      const status = credResult.error === "server_misconfigured" ? 500
+        : credResult.error === "token_refresh_failed" ? 502
+        : credResult.error === "aws_assume_role_failed" ? 502
+        : 400;
+      return json({ ok: false, error: credResult.error }, status);
     }
 
     const { creds } = credResult;
@@ -149,8 +136,16 @@ Deno.serve(async (req) => {
     );
 
     if (!ptdResult.ok) {
-      const status = ptdResult.error === "database_error" ? 500 : 502;
-      return json({ ok: false, error: ptdResult.error }, status);
+      const status = ptdResult.error === "database_error" ? 500
+        : ptdResult.error === "invalid_product_type" ? 400
+        : ptdResult.error === "invalid_request" ? 400
+        : 502;
+      return json({
+        ok: false,
+        error: ptdResult.error,
+        hint: ptdResult.hint ?? null,
+        httpStatus: ptdResult.httpStatus ?? null,
+      }, status);
     }
 
     console.log(`${LOG_PREFIX} success source=${ptdResult.source} productType=${productType}`);
@@ -159,7 +154,8 @@ Deno.serve(async (req) => {
     if (err instanceof Error && err.message === "database_error") {
       return json({ ok: false, error: "database_error" }, 500);
     }
-    console.log(`${LOG_PREFIX} database_error`);
-    return json({ ok: false, error: "database_error" }, 500);
+    const message = err instanceof Error ? err.message : "unexpected_error";
+    console.log(`${LOG_PREFIX} unhandled`, message);
+    return json({ ok: false, error: "unexpected_error", hint: message.slice(0, 200) }, 500);
   }
 });

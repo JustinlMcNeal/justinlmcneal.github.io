@@ -2,8 +2,15 @@
 // Buy a USPS shipping label for one order via Shippo.
 // Idempotent: refuses to purchase if a non-voided label already exists.
 // Phase 1c: After label purchase, auto-pushes tracking to eBay for eBay orders.
+// Phase 7B: After label purchase, auto-pushes tracking to Amazon for Amazon orders.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getAccessToken, EBAY_API } from "../_shared/ebayUtils.ts";
+import {
+  amazonOrderIdFromSession,
+  confirmAmazonShipment,
+} from "../_shared/amazonConfirmShipmentUtils.ts";
+import { resolveAmazonCredentials } from "../_shared/amazonPtdAuthUtils.ts";
+import { readSyncEnvConfig } from "../_shared/amazonSyncAccountUtils.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const serviceKey  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -106,6 +113,47 @@ async function pushTrackingToEbay(
   const fulfillmentId = location.split("/").pop() || "";
 
   return fulfillmentId;
+}
+
+/** Push tracking number to Amazon Orders API for Amazon MFN orders */
+async function pushTrackingToAmazon(
+  sb: ReturnType<typeof createClient>,
+  sessionId: string,
+  trackingNumber: string,
+  carrier: string,
+) {
+  const amazonOrderId = amazonOrderIdFromSession(sessionId);
+  if (!amazonOrderId) throw new Error(`Invalid Amazon session ${sessionId}`);
+
+  const syncEnv = readSyncEnvConfig();
+  if (!syncEnv.lwaClientId || !syncEnv.lwaClientSecret) {
+    throw new Error("Amazon SP-API not configured");
+  }
+
+  const credResult = await resolveAmazonCredentials(sb, null, syncEnv);
+  if (!credResult.ok) throw new Error(`Amazon auth failed: ${credResult.error}`);
+
+  const { data: lineItems } = await sb
+    .from("line_items_raw")
+    .select("stripe_line_item_id, quantity")
+    .eq("stripe_checkout_session_id", sessionId);
+
+  if (!lineItems?.length) {
+    throw new Error(`No line items found for Amazon order ${amazonOrderId}`);
+  }
+
+  const marketplaceId = credResult.creds.account.marketplace_ids?.[0] || "ATVPDKIKX0DER";
+  const confirmResult = await confirmAmazonShipment(credResult.creds, {
+    amazonOrderId,
+    marketplaceId,
+    trackingNumber,
+    carrier,
+    lineItems,
+  });
+
+  if (!confirmResult.ok) {
+    throw new Error(`Amazon confirmShipment failed: ${confirmResult.error}`);
+  }
 }
 
 Deno.serve(async (req) => {
@@ -288,6 +336,7 @@ Deno.serve(async (req) => {
     // ── 10. Push tracking to eBay (if eBay order) ──
     let trackingPushedToEbay = false;
     let ebayFulfillmentId: string | null = null;
+    let trackingPushedToAmazon = false;
     if (stripe_checkout_session_id.startsWith("ebay_api_")) {
       try {
         ebayFulfillmentId = await pushTrackingToEbay(
@@ -312,6 +361,32 @@ Deno.serve(async (req) => {
         .eq("stripe_checkout_session_id", stripe_checkout_session_id);
     }
 
+    if (stripe_checkout_session_id.startsWith("amazon_")) {
+      try {
+        await pushTrackingToAmazon(
+          sb,
+          stripe_checkout_session_id,
+          transaction.tracking_number,
+          cheapest.provider,
+        );
+        trackingPushedToAmazon = true;
+        console.log(`[shippo-create-label] Amazon tracking pushed for ${stripe_checkout_session_id}`);
+      } catch (amazonErr: unknown) {
+        const amazonMsg = amazonErr instanceof Error ? amazonErr.message : String(amazonErr);
+        console.error("[shippo-create-label] Amazon tracking push failed:", amazonMsg);
+      }
+
+      await sb
+        .from("fulfillment_shipments")
+        .update({
+          tracking_pushed_to_amazon: trackingPushedToAmazon,
+          label_status: trackingPushedToAmazon ? "shipped" : "label_purchased",
+          shipped_at: trackingPushedToAmazon ? nowIso : null,
+          updated_at: nowIso,
+        })
+        .eq("stripe_checkout_session_id", stripe_checkout_session_id);
+    }
+
     return json({
       success: true,
       data: {
@@ -326,6 +401,7 @@ Deno.serve(async (req) => {
         estimated_days:   cheapest.estimated_days,
         tracking_pushed_to_ebay: trackingPushedToEbay,
         ebay_fulfillment_id: ebayFulfillmentId,
+        tracking_pushed_to_amazon: trackingPushedToAmazon,
       },
     });
 

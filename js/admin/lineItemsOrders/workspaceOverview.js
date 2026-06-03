@@ -27,7 +27,7 @@ export function renderOverview(order, lineItems) {
       </div>
       <div class="border-4 border-black p-4">
         <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">Phone</div>
-        <div class="font-mono text-sm">${esc(order.phone || "—")}</div>
+        <div class="font-mono text-sm">${esc(order.phone_number || order.phone || "—")}</div>
       </div>
       <div class="border-4 border-black p-4">
         <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">Order Date</div>

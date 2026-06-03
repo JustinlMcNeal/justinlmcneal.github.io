@@ -125,6 +125,44 @@ function resolveEbayProfit(r) {
   return { cents: r.profit_cents, isEstimate: false };
 }
 
+function amazonFinanceBadgeHtml(r) {
+  const af = r.amazon_finance;
+  if (!af) return "";
+  const status = af.finance_status || "missing";
+  if (status === "complete") return "";
+  if (status === "partial") {
+    return `<span class="inline-flex items-center border-[3px] border-amber-400 bg-amber-50 text-amber-700 px-2 py-1 text-[10px] font-black uppercase tracking-[.14em] whitespace-nowrap ml-1" title="Amazon finances synced — Shippo label cost not yet subtracted">≈ PARTIAL</span>`;
+  }
+  if (status === "pending_finances") {
+    return `<span class="inline-flex items-center border-[3px] border-blue-300 bg-blue-50 text-blue-700 px-2 py-1 text-[10px] font-black uppercase tracking-[.14em] whitespace-nowrap ml-1" title="Label purchased — Amazon Finances not synced yet">🕐 PENDING</span>`;
+  }
+  return `<span class="inline-flex items-center border-[3px] border-gray-300 bg-gray-50 text-gray-500 px-2 py-1 text-[10px] font-black uppercase tracking-[.14em] whitespace-nowrap ml-1" title="Amazon finance data not available">? AMZ</span>`;
+}
+
+function resolveAmazonProfit(r) {
+  const af = r.amazon_finance;
+  if (!af) return { cents: r.profit_cents, isEstimate: false };
+  const status = af.finance_status || "missing";
+  if ((status === "complete" || status === "partial") && af.amazon_net_profit_cents != null) {
+    return { cents: af.amazon_net_profit_cents, isEstimate: status === "partial" };
+  }
+  return { cents: r.profit_cents, isEstimate: false };
+}
+
+function resolveChannelProfit(r) {
+  const source = getOrderSource(r);
+  if (source === "ebay") return resolveEbayProfit(r);
+  if (source === "amazon") return resolveAmazonProfit(r);
+  return { cents: r.profit_cents, isEstimate: false };
+}
+
+function channelFinanceBadgeHtml(r) {
+  const source = getOrderSource(r);
+  if (source === "ebay") return ebayFinanceBadgeHtml(r);
+  if (source === "amazon") return amazonFinanceBadgeHtml(r);
+  return "";
+}
+
 function mobileCardStatusAccent(labelStatus, refund) {
   if (refund?.refund_status) return 'border-l-red-500';
   switch (String(labelStatus || 'pending').toLowerCase()) {
@@ -169,16 +207,18 @@ function renderMobileCards(rows = [], getRowExtras = () => ({})) {
       const items = r.total_items ?? r.li_total_items ?? "—";
 
       const paid = moneyFromCents(r.total_paid_cents);
-      const isEbay = getOrderSource(r) === "ebay";
-      const { cents: profitCents } = isEbay ? resolveEbayProfit(r) : { cents: r.profit_cents };
+      const { cents: profitCents } = resolveChannelProfit(r);
       const profit = profitCents != null ? moneyFromCents(profitCents) : "—";
       const profitColor = profitCents == null ? 'text-amber-600' : (Number(profitCents) > 0 ? 'text-emerald-600' : 'text-red-600');
 
       const labelStatus = ship?.label_status || "pending";
       const statusAccent = mobileCardStatusAccent(labelStatus, r.refund);
-      const channelBadge = isEbay
+      const source = getOrderSource(r);
+      const channelBadge = source === "ebay"
         ? `<span class="border-[3px] border-black bg-black text-white px-2 py-0.5 text-[9px] font-black uppercase tracking-[.14em]">eBay</span>`
-        : `<span class="border-[3px] border-kkpink bg-kkpink text-black px-2 py-0.5 text-[9px] font-black uppercase tracking-[.14em]">KK</span>`;
+        : source === "amazon"
+          ? `<span class="border-[3px] border-orange-500 bg-orange-500 text-white px-2 py-0.5 text-[9px] font-black uppercase tracking-[.14em]">Amazon</span>`
+          : `<span class="border-[3px] border-kkpink bg-kkpink text-black px-2 py-0.5 text-[9px] font-black uppercase tracking-[.14em]">KK</span>`;
 
       return `
         <tr>
@@ -236,7 +276,7 @@ function renderMobileCards(rows = [], getRowExtras = () => ({})) {
 
                 <div class="border-[3px] border-black p-3">
                   <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60">Profit</div>
-                  <div class="mt-1 font-black ${profitColor}">${esc(profit)}${isEbay ? ebayFinanceBadgeHtml(r) : ""}</div>
+                  <div class="mt-1 font-black ${profitColor}">${esc(profit)}${channelFinanceBadgeHtml(r)}</div>
                 </div>
 
                 <div class="border-[3px] border-black p-3">
@@ -268,8 +308,7 @@ function renderDesktopRows(rows = [], getRowExtras = () => ({})) {
       const items = r.total_items ?? r.li_total_items ?? "—";
 
       const paid = moneyFromCents(r.total_paid_cents);
-      const isEbay = getOrderSource(r) === "ebay";
-      const { cents: profitCents } = isEbay ? resolveEbayProfit(r) : { cents: r.profit_cents };
+      const { cents: profitCents } = resolveChannelProfit(r);
       const profit = profitCents != null ? moneyFromCents(profitCents) : "—";
       const profitColor = profitCents == null ? 'text-amber-600' : (Number(profitCents) > 0 ? 'text-emerald-600' : 'text-red-600');
 
@@ -305,7 +344,7 @@ function renderDesktopRows(rows = [], getRowExtras = () => ({})) {
           </td>
 
           <td class="px-4 py-3 text-sm whitespace-nowrap font-black text-right ${Number(profitCents) > 0 ? 'text-emerald-600' : 'text-red-600'}">
-            ${esc(profit)}${isEbay ? ebayFinanceBadgeHtml(r) : ""}
+            ${esc(profit)}${channelFinanceBadgeHtml(r)}
           </td>
 
           <td class="px-4 py-3">

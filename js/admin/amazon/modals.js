@@ -1,4 +1,5 @@
 import { qs, qsa, show, hide } from "./dom.js";
+import { showAmazonNotification } from "./notifications.js";
 
 /** @type {HTMLElement | null} */
 let openModalEl = null;
@@ -75,7 +76,7 @@ function openModal(modal, trigger) {
 }
 
 /**
- * @param {{ hydratePushModal?: Function, hydrateMappingModal?: Function, hydratePatchModal?: Function, openProductPicker?: Function }} hydration
+ * @param {{ hydratePushModal?: Function, hydrateMappingModal?: Function, hydrateMappingFromListingRow?: Function, hydratePatchModal?: Function, openProductPicker?: Function, startPushRemaining?: (productId: string, trigger: HTMLElement) => void, openPushForListing?: (row: Record<string, unknown>) => void }} hydration
  * @param {{ beforeOpen?: () => void }} [options]
  * @returns {() => void}
  */
@@ -83,15 +84,25 @@ export function initAmazonModals(hydration = {}, options = {}) {
   const pushModal = qs("#amazonPushModal");
   const mappingModal = qs("#amazonMappingModal");
   const patchModal = qs("#amazonPatchModal");
+  const imagePatchModal = qs("#amazonImagePatchModal");
   const bulkPatchModal = qs("#amazonBulkPatchModal");
+  const inactiveFixModal = qs("#amazonInactiveFixModal");
   const { beforeOpen } = options;
 
   /** @param {HTMLElement | null | undefined} trigger @param {{ draftMode?: boolean }} [opts] */
   async function openPush(trigger, opts = {}) {
     if (!pushModal) return;
     beforeOpen?.();
-    await Promise.resolve(hydration.hydratePushModal?.(trigger, opts));
     openModal(pushModal, trigger);
+    try {
+      await Promise.resolve(hydration.hydratePushModal?.(trigger, opts));
+    } catch (err) {
+      console.error("[amazon] push modal hydrate failed", err);
+      showAmazonNotification(
+        "Push modal opened but setup failed. Try again or use Continue Draft if one exists.",
+        { tone: "error" },
+      );
+    }
   }
 
   /** @param {HTMLElement | null | undefined} trigger */
@@ -102,18 +113,42 @@ export function initAmazonModals(hydration = {}, options = {}) {
     openModal(mappingModal, trigger);
   }
 
+  /** @param {Record<string, unknown>} row */
+  async function openMappingFromListingRow(row) {
+    if (!mappingModal) return;
+    beforeOpen?.();
+    await Promise.resolve(hydration.hydrateMappingFromListingRow?.(row));
+    openModal(mappingModal, null);
+  }
+
   /** @param {Record<string, unknown>} row @param {"edit" | "inventory"} mode */
-  function openPatch(row, mode = "edit") {
+  async function openPatch(row, mode = "edit") {
     if (!patchModal) return;
     beforeOpen?.();
-    hydration.hydratePatchModal?.(row, mode);
+    await Promise.resolve(hydration.hydratePatchModal?.(row, mode));
     openModal(patchModal, null);
+  }
+
+  /** @param {Record<string, unknown>} row */
+  async function openImagePatch(row) {
+    if (!imagePatchModal) return;
+    beforeOpen?.();
+    await Promise.resolve(hydration.hydrateImagePatchModal?.(row));
+    openModal(imagePatchModal, null);
   }
 
   function openBulkPatch() {
     if (!bulkPatchModal) return;
     beforeOpen?.();
     openModal(bulkPatchModal, null);
+  }
+
+  /** @param {Record<string, unknown>} row */
+  async function openInactiveFix(row) {
+    if (!inactiveFixModal) return;
+    beforeOpen?.();
+    await Promise.resolve(hydration.hydrateInactiveFixModal?.(row));
+    openModal(inactiveFixModal, null);
   }
 
   document.addEventListener("click", (event) => {
@@ -136,11 +171,18 @@ export function initAmazonModals(hydration = {}, options = {}) {
         openMapping(actionEl);
         break;
       case "push-product-to-amazon":
+        event.preventDefault();
         openPush(actionEl).catch(() => {});
         break;
       case "create-amazon-draft":
         openPush(actionEl, { draftMode: true }).catch(() => {});
         break;
+      case "push-remaining-variants": {
+        event.preventDefault();
+        const productId = actionEl.dataset.kkProductId || "";
+        hydration.startPushRemaining?.(productId, actionEl);
+        break;
+      }
       case "map-existing-listing":
         openMapping(actionEl);
         break;
@@ -157,8 +199,14 @@ export function initAmazonModals(hydration = {}, options = {}) {
       case "close-patch-modal":
         if (openModalEl === patchModal) closeAmazonModals();
         break;
+      case "close-image-patch-modal":
+        if (openModalEl === imagePatchModal) closeAmazonModals();
+        break;
       case "close-bulk-patch-modal":
         if (openModalEl === bulkPatchModal) closeAmazonModals();
+        break;
+      case "close-inactive-fix-modal":
+        if (openModalEl === inactiveFixModal) closeAmazonModals();
         break;
       case "close-listing-details-modal":
         closeAmazonModals();
@@ -177,10 +225,18 @@ export function initAmazonModals(hydration = {}, options = {}) {
     });
   });
 
-  [pushModal, mappingModal, patchModal, bulkPatchModal, qs("#amazonListingDetailsModal"), qs("#amazonTableSettingsModal")].forEach((modal) => {
+  [pushModal, mappingModal, patchModal, imagePatchModal, bulkPatchModal, inactiveFixModal, qs("#amazonListingDetailsModal"), qs("#amazonTableSettingsModal")].forEach((modal) => {
     modal?.addEventListener("click", (event) => {
       const dialog = modal.querySelector('[role="dialog"]');
-      if (dialog && !dialog.contains(/** @type {Node} */ (event.target))) {
+      if (!dialog) return;
+
+      // Use composedPath so clicks that re-render innerHTML (gallery picker, image strip)
+      // still count as inside the dialog after the original target node is removed.
+      const path = typeof event.composedPath === "function" ? event.composedPath() : [];
+      const clickedInsideDialog = path.includes(dialog)
+        || dialog.contains(/** @type {Node} */ (event.target));
+
+      if (!clickedInsideDialog) {
         closeAmazonModals();
       }
     });
@@ -192,5 +248,5 @@ export function initAmazonModals(hydration = {}, options = {}) {
     closeAmazonModals();
   });
 
-  return { closeAmazonModals, openPush, openMapping, openPatch, openBulkPatch };
+  return { closeAmazonModals, openPush, openMapping, openMappingFromListingRow, openPatch, openImagePatch, openBulkPatch, openInactiveFix };
 }

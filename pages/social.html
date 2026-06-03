@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#f58f86" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="apple-touch-icon" href="/imgs/icons/apple-touch-icon.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/imgs/icons/favicon-32x32.png" />
+  <title>Follow Us | Karry Kraze</title>
+
+  <meta name="description" content="Follow Karry Kraze on Instagram, TikTok, and Pinterest for new drops, styling ideas, deals, and behind-the-scenes updates." />
+  <link rel="canonical" href="https://karrykraze.com/pages/social.html" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="KARRY KRAZE" />
+  <meta property="og:title" content="Follow Karry Kraze on Social" />
+  <meta property="og:description" content="New drops, styling ideas, deals, and behind-the-scenes updates." />
+  <meta property="og:image" content="https://karrykraze.com/imgs/brand/og-default.jpg" />
+  <meta property="og:url" content="https://karrykraze.com/pages/social.html" />
+
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Follow Karry Kraze on Social" />
+  <meta name="twitter:description" content="New drops, styling ideas, deals, and behind-the-scenes updates." />
+  <meta name="twitter:image" content="https://karrykraze.com/imgs/brand/og-default.jpg" />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            kkpink: '#f58f86',
+            kkpeach: '#f6dcc6',
+          }
+        }
+      }
+    }
+  </script>
+
+  <link rel="stylesheet" href="/css/theme/base.css">
+  <link rel="stylesheet" href="/css/theme/components.css">
+  <link rel="stylesheet" href="/css/pages/social.css">
+
+  <script src="/js/shared/metaPixel.js"></script>
+</head>
+
+<body class="bg-gray-50 min-h-screen flex flex-col">
+
+  <div id="kkNavbarMount"></div>
+
+  <main class="flex-1 max-w-2xl mx-auto w-full px-4 py-10 sm:py-14">
+    <header class="text-center mb-10">
+      <p class="text-xs font-black uppercase tracking-[0.2em] text-kkpink mb-3">Stay in the loop</p>
+      <h1 class="text-3xl sm:text-4xl font-black tracking-tight mb-4">Follow Karry Kraze</h1>
+      <p class="text-gray-600 text-base sm:text-lg leading-relaxed max-w-md mx-auto">
+        Follow us for new drops, styling ideas, deals, and behind-the-scenes updates.
+      </p>
+    </header>
+
+    <div id="kkSocialPlatforms" class="flex flex-col gap-4" aria-busy="true" aria-live="polite">
+      <p class="kk-social-loading text-center text-sm text-gray-400 py-4">Loading social links...</p>
+      <div class="kk-social-skeleton rounded-2xl border-2 border-gray-200 bg-white h-24 animate-pulse" aria-hidden="true"></div>
+      <div class="kk-social-skeleton rounded-2xl border-2 border-gray-200 bg-white h-24 animate-pulse" aria-hidden="true"></div>
+      <div class="kk-social-skeleton rounded-2xl border-2 border-gray-200 bg-white h-24 animate-pulse" aria-hidden="true"></div></div>
+
+    <p class="text-center text-gray-400 text-sm mt-8">
+      Links open in a new tab on Instagram, TikTok, or Pinterest.
+    </p>
+  </main>
+
+  <div id="kkFooterMount"></div>
+
+  <script type="module" src="/js/pages/social/index.js"></script>
+  <script type="module" src="/js/shared/pwa.js"></script>
+</body>
+</html>

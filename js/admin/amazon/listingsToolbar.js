@@ -47,7 +47,7 @@ export function initAmazonListingsToolbar(liveListings) {
       fulfillment: fulfillmentFilter instanceof HTMLSelectElement ? fulfillmentFilter.value : "",
       sort: sortFilter instanceof HTMLSelectElement ? sortFilter.value : "last_synced_desc",
       pageSize: rowsPerPage instanceof HTMLSelectElement
-        ? Number(rowsPerPage.value) || 25
+        ? (rowsPerPage.value === "all" ? 0 : Number(rowsPerPage.value) || 25)
         : 25,
     };
   }

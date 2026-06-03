@@ -166,6 +166,15 @@ Nice-to-have for a “complete” admin experience.
 
 ---
 
+## Phase 7 — Planned (not started)
+
+Future tracks documented for implementation when ready:
+
+- [x] **7A — Product variants (Phases 1–3)** — [`ux/048_amazon_variants_implementation_plan.md`](ux/048_amazon_variants_implementation_plan.md) — variant infrastructure, variation families, bulk push + recovery
+- [x] **7B — Amazon orders on line items page (SP-API sync)** — Phase A–C shipped; cron SQL in `supabase/SETUP_AMAZON_ORDERS_CRON.sql`
+
+---
+
 ## Edge Functions Inventory
 
 | Function | Status | Phase |

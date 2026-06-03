@@ -8,6 +8,7 @@ import {
   issueRefund,
   updateRefundReason,
   buyShippingLabel,
+  confirmAmazonShipment,
   voidShippingLabel,
   fetchPackagePresets,
   getSignedLabelUrl,
@@ -701,6 +702,24 @@ async function _wireLabelButtons(container, order, shipment) {
         alert("Void failed: " + (err.message || err));
         btnVoid.disabled = false;
         btnVoid.textContent = "✕ Void Label";
+      }
+    });
+  }
+
+  const btnPushAmazon = container.querySelector("[data-push-amazon-tracking]");
+  if (btnPushAmazon) {
+    btnPushAmazon.addEventListener("click", async () => {
+      btnPushAmazon.disabled = true;
+      btnPushAmazon.textContent = "⏳ Pushing…";
+      try {
+        await confirmAmazonShipment(sessionId);
+        alert("Tracking confirmed on Amazon!");
+        openWorkspace(_currentRow, { tab: _currentTab });
+        await _onSaved?.();
+      } catch (err) {
+        alert("Amazon push failed: " + (err.message || err));
+        btnPushAmazon.disabled = false;
+        btnPushAmazon.textContent = "Push to Amazon";
       }
     });
   }

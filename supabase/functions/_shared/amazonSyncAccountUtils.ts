@@ -35,6 +35,7 @@ export type SyncEnvConfig = {
   awsSecretAccessKey: string | null;
   awsSessionToken: string | null;
   awsRegionOverride: string | null;
+  awsRoleArn: string | null;
   allowUnsignedSpApi: boolean;
 };
 
@@ -171,6 +172,7 @@ export function readSyncEnvConfig(): SyncEnvConfig {
     awsSecretAccessKey: Deno.env.get("AWS_SECRET_ACCESS_KEY") || null,
     awsSessionToken: Deno.env.get("AWS_SESSION_TOKEN") || null,
     awsRegionOverride: Deno.env.get("AWS_REGION") || null,
+    awsRoleArn: Deno.env.get("AMAZON_IAM_ROLE_ARN") || null,
     allowUnsignedSpApi: Deno.env.get("AMAZON_ALLOW_UNSIGNED_SP_API") === "true",
   };
 }
@@ -331,6 +333,7 @@ export function buildCronSyncResponse(
     recordsCreated: response.recordsCreated,
     recordsUpdated: response.recordsUpdated,
     recordsFailed: response.recordsFailed,
+    recordsMarkedAbsent: response.recordsMarkedAbsent,
     status: response.status,
     runs: response.runs,
     warnings: response.warnings,

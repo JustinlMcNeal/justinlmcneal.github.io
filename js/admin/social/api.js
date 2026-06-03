@@ -441,26 +441,48 @@ export async function getHashtagsForCategory(categoryId, categoryName) {
 // Pinterest Boards
 // ============================================
 
+const PINTEREST_BOARD_COLUMNS =
+  "id, name, pinterest_board_id, category_id, is_default, is_active, intent_key, content_types, mapped_category_ids, strategy_notes, synced_at, last_used_at, created_at, updated_at";
+
 export async function fetchBoards() {
   const { data, error } = await sb()
     .from("pinterest_boards")
-    .select(`
-      *,
-      category:categories(id, name)
-    `)
+    .select(PINTEREST_BOARD_COLUMNS)
+    .eq("is_active", true)
     .order("name");
-  
+
   if (error) throw error;
-  return data || [];
+
+  const boards = data || [];
+  if (!boards.length) return boards;
+
+  const categoryIds = [...new Set(boards.map((b) => b.category_id).filter(Boolean))];
+  if (!categoryIds.length) return boards;
+
+  const { data: categories, error: catError } = await sb()
+    .from("categories")
+    .select("id, name")
+    .in("id", categoryIds);
+
+  if (catError) {
+    console.warn("[boards] Could not load category names:", catError.message);
+    return boards;
+  }
+
+  const catMap = Object.fromEntries((categories || []).map((c) => [c.id, c]));
+  return boards.map((b) => ({
+    ...b,
+    category: b.category_id ? catMap[b.category_id] || null : null,
+  }));
 }
 
 export async function createBoard(board) {
   const { data, error } = await sb()
     .from("pinterest_boards")
     .insert(board)
-    .select()
+    .select(PINTEREST_BOARD_COLUMNS)
     .single();
-  
+
   if (error) throw error;
   return data;
 }
@@ -470,20 +492,47 @@ export async function updateBoard(boardId, updates) {
     .from("pinterest_boards")
     .update({ ...updates, updated_at: new Date().toISOString() })
     .eq("id", boardId)
-    .select()
+    .select(PINTEREST_BOARD_COLUMNS)
     .single();
-  
+
   if (error) throw error;
   return data;
 }
 
+/** Remove from strategy UI; does not delete on Pinterest. Survives Pinterest sync. */
 export async function deleteBoard(boardId) {
+  const { data: target, error: fetchErr } = await sb()
+    .from("pinterest_boards")
+    .select("is_default")
+    .eq("id", boardId)
+    .maybeSingle();
+
+  if (fetchErr) throw fetchErr;
+
   const { error } = await sb()
     .from("pinterest_boards")
-    .delete()
+    .update({
+      is_active: false,
+      is_default: false,
+      updated_at: new Date().toISOString(),
+    })
     .eq("id", boardId);
-  
+
   if (error) throw error;
+
+  if (target?.is_default) {
+    const { data: next } = await sb()
+      .from("pinterest_boards")
+      .select("id")
+      .eq("is_active", true)
+      .neq("id", boardId)
+      .order("name")
+      .limit(1)
+      .maybeSingle();
+    if (next?.id) {
+      await updateBoard(next.id, { is_default: true });
+    }
+  }
 }
 
 export async function getBoardForCategory(categoryId) {
@@ -491,27 +540,27 @@ export async function getBoardForCategory(categoryId) {
   if (categoryId) {
     const { data } = await sb()
       .from("pinterest_boards")
-      .select("*")
+      .select(PINTEREST_BOARD_COLUMNS)
       .eq("category_id", categoryId)
-      .single();
-    
+      .maybeSingle();
+
     if (data) return data;
   }
-  
-  // Fall back to default board
-  const { data: defaultBoard } = await sb()
+
+  const { data: defaultBoards } = await sb()
     .from("pinterest_boards")
-    .select("*")
+    .select(PINTEREST_BOARD_COLUMNS)
+    .eq("is_active", true)
     .eq("is_default", true)
-    .single();
-  
-  return defaultBoard || null;
+    .limit(1);
+
+  return defaultBoards?.[0] || null;
 }
 
 export async function upsertPinterestBoardFromApi({ pinterest_board_id, name }) {
   const { data: existing } = await sb()
     .from("pinterest_boards")
-    .select("id")
+    .select("id, is_active")
     .eq("pinterest_board_id", pinterest_board_id)
     .maybeSingle();
 
@@ -523,6 +572,9 @@ export async function upsertPinterestBoardFromApi({ pinterest_board_id, name }) 
   };
 
   if (existing?.id) {
+    if (existing.is_active === false) {
+      return { id: existing.id, skipped: true, reason: "removed_from_strategy" };
+    }
     return updateBoard(existing.id, patch);
   }
 
@@ -530,9 +582,8 @@ export async function upsertPinterestBoardFromApi({ pinterest_board_id, name }) 
     name,
     pinterest_board_id,
     is_active: true,
-    intent_key: "other",
+    intent_key: "product-category",
     content_types: ["product"],
-    mapped_category_ids: [],
     is_default: false,
     synced_at: patch.synced_at,
   });
@@ -542,6 +593,7 @@ export async function setDefaultPinterestBoard(boardUuid) {
   await sb()
     .from("pinterest_boards")
     .update({ is_default: false, updated_at: new Date().toISOString() })
+    .eq("is_active", true)
     .eq("is_default", true);
 
   if (!boardUuid) return null;

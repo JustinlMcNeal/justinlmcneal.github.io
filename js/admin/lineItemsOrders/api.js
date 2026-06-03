@@ -123,7 +123,9 @@ export async function fetchOrderDetails(stripe_checkout_session_id) {
   // For eBay orders: fetch Finance API earnings for accurate profit calculation.
   // v_ebay_order_profit joins ebay_finance_transactions (upserted by ebay-sync-finances).
   const isEbayOrder = String(stripe_checkout_session_id).startsWith("ebay_api_");
+  const isAmazonOrder = String(stripe_checkout_session_id).startsWith("amazon_");
   let ebayFinancials = null;
+  let amazonFinancials = null;
   if (isEbayOrder) {
     const { data: ebayFin, error: ebayFinErr } = await supabase
       .from("v_ebay_order_profit")
@@ -134,6 +136,18 @@ export async function fetchOrderDetails(stripe_checkout_session_id) {
       console.warn("[fetchOrderDetails] v_ebay_order_profit fetch failed:", ebayFinErr.message);
     } else {
       ebayFinancials = ebayFin || null;
+    }
+  }
+  if (isAmazonOrder) {
+    const { data: amazonFin, error: amazonFinErr } = await supabase
+      .from("v_amazon_order_profit")
+      .select("*")
+      .eq("stripe_checkout_session_id", stripe_checkout_session_id)
+      .maybeSingle();
+    if (amazonFinErr) {
+      console.warn("[fetchOrderDetails] v_amazon_order_profit fetch failed:", amazonFinErr.message);
+    } else {
+      amazonFinancials = amazonFin || null;
     }
   }
 
@@ -169,6 +183,8 @@ export async function fetchOrderDetails(stripe_checkout_session_id) {
   } else if (isEbayOrder && isEstimatedEbay) {
     // Ad fee not yet billed by eBay — profit unknown; set null so UI shows estimate badge
     profitCents = null;
+  } else if (isAmazonOrder && amazonFinancials?.amazon_net_profit_cents != null) {
+    profitCents = Number(amazonFinancials.amazon_net_profit_cents);
   } else if (orderData.refund_status === "full" && (!refundReason || refundReason === "cancelled_before_ship")) {
     // Never shipped / cancelled → no costs incurred → $0 profit
     profitCents = 0;
@@ -187,6 +203,7 @@ export async function fetchOrderDetails(stripe_checkout_session_id) {
     refund: refund || null,
     refund_reason: refundReason,
     ebay_financials: ebayFinancials,
+    amazon_financials: amazonFinancials,
   };
 
   return {
@@ -421,6 +438,43 @@ async function getEbayFinancesMap(sessionIds) {
   return m;
 }
 
+async function getAmazonFinancesMap(sessionIds) {
+  if (!sessionIds?.length) return new Map();
+
+  const amazonIds = sessionIds.filter((id) => id?.startsWith("amazon_"));
+  if (!amazonIds.length) return new Map();
+
+  const { data, error } = await supabase
+    .from("v_amazon_order_profit")
+    .select(
+      [
+        "stripe_checkout_session_id",
+        "amazon_order_earnings_cents",
+        "amazon_total_fee_cents",
+        "fee_referral_cents",
+        "fee_fba_cents",
+        "fee_other_cents",
+        "product_cost_cents",
+        "shippo_label_cost_cents",
+        "amazon_net_profit_cents",
+        "finance_status",
+        "finance_synced_at",
+        "buyer_total_cents",
+        "fee_breakdown",
+      ].join(",")
+    )
+    .in("stripe_checkout_session_id", amazonIds);
+
+  if (error) {
+    console.warn("[api] v_amazon_order_profit fetch failed:", error.message);
+    return new Map();
+  }
+
+  const m = new Map();
+  for (const row of data || []) m.set(row.stripe_checkout_session_id, row);
+  return m;
+}
+
 function buildSearchOr(q) {
   const like = `%${q}%`;
   return [
@@ -554,6 +608,7 @@ export async function fetchOrderSummaryPage({
   const refundMap = await getRefundsMap(sessionIds);
   const reviewMap = await getReviewCountsMap(sessionIds);
   const ebayFinanceMap = await getEbayFinancesMap(sessionIds);
+  const amazonFinanceMap = await getAmazonFinancesMap(sessionIds);
 
   // Cost & profit come from the v_order_summary_plus view (via v_order_financials).
   // For eBay orders, ebay_finance provides Finance API earnings for accurate profit.
@@ -562,7 +617,8 @@ export async function fetchOrderSummaryPage({
     const refund = refundMap.get(r.stripe_checkout_session_id) || null;
     const review_count = reviewMap.get(r.stripe_checkout_session_id) || 0;
     const ebay_finance = ebayFinanceMap.get(r.stripe_checkout_session_id) || null;
-    return { ...r, shipment, refund, review_count, ebay_finance };
+    const amazon_finance = amazonFinanceMap.get(r.stripe_checkout_session_id) || null;
+    return { ...r, shipment, refund, review_count, ebay_finance, amazon_finance };
   });
 
   const totalCount = Number(count ?? 0);
@@ -756,6 +812,29 @@ export async function voidShippingLabel(stripe_checkout_session_id) {
   return result;
 }
 
+export async function confirmAmazonShipment(stripe_checkout_session_id) {
+  if (!stripe_checkout_session_id) throw new Error("Missing session ID");
+
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/amazon-confirm-shipment`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token || SUPABASE_ANON_KEY}`,
+      "apikey": SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify({ stripe_checkout_session_id }),
+  });
+
+  const result = await res.json();
+  if (!res.ok || !result.ok) {
+    throw new Error(result.error || `Amazon shipment confirm failed (${res.status})`);
+  }
+  return result;
+}
+
 export async function getSignedLabelUrl(storagePath) {
   if (!storagePath) throw new Error("No label path");
   const { data, error } = await supabase.storage
@@ -796,13 +875,13 @@ export async function issueRefund(stripe_checkout_session_id, amount_cents = nul
  * Record a CTA label print event in cta_label_prints.
  * Phase 2C: lightweight insert-only analytics — never throws; returns ok/error.
  *
- * Caller (index.js wireCta) is responsible for treating failures as non-blocking
+ * Caller (ctaPrintFlow.js) is responsible for treating failures as non-blocking
  * and showing only a secondary status message.
  *
  * @param {object} params
  * @param {string} params.sessionId    - stripe_checkout_session_id
- * @param {string|null} params.kkOrderId - kk_order_id (null for eBay orders)
- * @param {string} params.orderSource  - 'kk' | 'ebay'
+ * @param {string|null} params.kkOrderId - kk_order_id (null for marketplace orders)
+ * @param {string} params.orderSource  - 'kk' | 'ebay' | 'amazon'
  * @param {string} params.labelType    - 'review_cta' | 'channel_cta'
  * @param {object} [params.metadata]  - optional extra data (e.g. qr_target)
  * @returns {Promise<{ ok: true, id: string|null } | { ok: false, error: string }>}
@@ -849,8 +928,8 @@ export async function trackCtaLabelPrint({ sessionId, kkOrderId, orderSource, la
  * @param {object} params
  * @param {string|null} params.printId      - id from cta_label_prints (may be null)
  * @param {string}      params.sessionId    - stripe_checkout_session_id
- * @param {string|null} params.kkOrderId    - kk_order_id (null for eBay)
- * @param {string}      params.orderSource  - 'kk' | 'ebay'
+ * @param {string|null} params.kkOrderId    - kk_order_id (null for marketplace orders)
+ * @param {string}      params.orderSource  - 'kk' | 'ebay' | 'amazon'
  * @param {string}      params.labelType    - 'review_cta' | 'channel_cta'
  * @param {string}      params.destinationUrl - full final destination URL
  * @param {object}      [params.metadata]   - optional extra metadata

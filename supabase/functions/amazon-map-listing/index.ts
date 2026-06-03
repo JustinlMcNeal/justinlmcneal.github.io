@@ -22,6 +22,7 @@ const VALID_CONFIDENCE = new Set([
 type MapPayload = {
   amazonListingId?: unknown;
   kkProductId?: unknown;
+  kkVariantId?: unknown;
   kkSku?: unknown;
   mappingStatus?: unknown;
   mappingConfidence?: unknown;
@@ -108,6 +109,10 @@ Deno.serve(async (req) => {
     ? null
     : parseUuid(body.kkProductId);
 
+  const kkVariantId = body.kkVariantId === null || body.kkVariantId === undefined || body.kkVariantId === ""
+    ? null
+    : parseUuid(body.kkVariantId);
+
   const kkSku = parseOptionalText(body.kkSku, 120);
   const notes = parseOptionalText(body.notes, 2000);
 
@@ -133,6 +138,54 @@ Deno.serve(async (req) => {
       return json({ ok: false, error: "listing_not_found" }, 404);
     }
 
+    let productIdsToUnmap = new Set<string>();
+    if (kkProductId) productIdsToUnmap.add(kkProductId);
+
+    const { data: mappedOnListing, error: mappedOnListingErr } = await serviceClient
+      .from("amazon_listing_mappings")
+      .select("kk_product_id")
+      .eq("amazon_listing_id", amazonListingId)
+      .eq("mapping_status", "mapped");
+
+    if (mappedOnListingErr) {
+      console.log(`${LOG_PREFIX} database_error`);
+      return json({ ok: false, error: "database_error" }, 500);
+    }
+
+    for (const row of mappedOnListing || []) {
+      if (row?.kk_product_id) productIdsToUnmap.add(String(row.kk_product_id));
+    }
+
+    await serviceClient
+      .from("amazon_listing_mappings")
+      .update({
+        mapping_status: "legacy",
+        updated_at: now,
+      })
+      .eq("amazon_listing_id", amazonListingId)
+      .eq("mapping_status", "mapped");
+
+    // Only remapping to a new KK product/variant should demote other listings for that target.
+    // Hide/ignore/legacy must stay scoped to this amazon_listing_id only.
+    if (mappingStatus === "mapped" && kkProductId) {
+      let demoteQuery = serviceClient
+        .from("amazon_listing_mappings")
+        .update({
+          mapping_status: "legacy",
+          updated_at: now,
+        })
+        .eq("kk_product_id", kkProductId)
+        .eq("mapping_status", "mapped");
+
+      if (kkVariantId) {
+        demoteQuery = demoteQuery.eq("kk_variant_id", kkVariantId);
+      } else {
+        demoteQuery = demoteQuery.is("kk_variant_id", null);
+      }
+
+      await demoteQuery;
+    }
+
     let resolvedKkSku = kkSku;
     if (mappingStatus === "mapped" && kkProductId) {
       const { data: product, error: productErr } = await serviceClient
@@ -148,17 +201,21 @@ Deno.serve(async (req) => {
       if (!product) {
         return json({ ok: false, error: "product_not_found" }, 404);
       }
+      if (kkVariantId) {
+        const { data: variant, error: variantErr } = await serviceClient
+          .from("product_variants")
+          .select("id, product_id")
+          .eq("id", kkVariantId)
+          .maybeSingle();
+        if (variantErr) {
+          return json({ ok: false, error: "database_error" }, 500);
+        }
+        if (!variant || String(variant.product_id) !== String(product.id)) {
+          return json({ ok: false, error: "invalid_request" }, 400);
+        }
+      }
       if (!resolvedKkSku) resolvedKkSku = product.code ?? null;
     }
-
-    await serviceClient
-      .from("amazon_listing_mappings")
-      .update({
-        mapping_status: "legacy",
-        updated_at: now,
-      })
-      .eq("amazon_listing_id", amazonListingId)
-      .eq("mapping_status", "mapped");
 
     if (mappingStatus === "mapped") {
       const { data: inserted, error: insertErr } = await serviceClient
@@ -166,6 +223,7 @@ Deno.serve(async (req) => {
         .insert({
           amazon_listing_id: amazonListingId,
           kk_product_id: kkProductId,
+          kk_variant_id: kkVariantId,
           kk_sku: resolvedKkSku,
           mapping_status: "mapped",
           mapping_confidence: mappingConfidence,
@@ -212,6 +270,7 @@ Deno.serve(async (req) => {
         .from("amazon_listing_mappings")
         .update({
           kk_product_id: kkProductId,
+          kk_variant_id: kkVariantId,
           kk_sku: resolvedKkSku,
           mapping_confidence: mappingConfidence,
           mapped_by: admin.userId,
@@ -234,6 +293,7 @@ Deno.serve(async (req) => {
         .insert({
           amazon_listing_id: amazonListingId,
           kk_product_id: kkProductId,
+          kk_variant_id: kkVariantId,
           kk_sku: resolvedKkSku,
           mapping_status: mappingStatus,
           mapping_confidence: mappingConfidence,

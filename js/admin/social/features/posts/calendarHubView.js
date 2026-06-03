@@ -1,4 +1,4 @@
-// Calendar tab — calendar grid vs queue list view toggle
+// Calendar tab — calendar grid vs list view toggle
 
 import { loadQueuePosts } from "./queueList.js";
 

@@ -4,6 +4,7 @@
  */
 
 import { getSupabaseClient } from "./supabaseClient.js";
+import { applyPublicSocialLinks } from "./socialLinks.js";
 
 const FOOTER_HTML_PATH = '/page_inserts/footer.html';
 
@@ -23,6 +24,8 @@ export async function initFooter() {
     
     const html = await res.text();
     mount.innerHTML = html;
+
+    applyPublicSocialLinks(mount);
     
     // Update copyright year dynamically
     updateCopyrightYear();

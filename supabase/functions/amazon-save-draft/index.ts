@@ -1,11 +1,18 @@
 // amazon-save-draft — Admin-only local Amazon listing draft save (no SP-API writes).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { corsHeadersJson, json, requireAdminJson, UUID_RE } from "../_shared/amazonAuthUtils.ts";
+import {
+  corsHeadersJson,
+  isParentVariationDraftRow,
+  json,
+  requireAdminJson,
+  UUID_RE,
+} from "../_shared/amazonAuthUtils.ts";
 
 const LOG_PREFIX = "[amazon-save-draft]";
 
 const VALID_ACTIONS = new Set(["save_draft", "save_ready", "preview"]);
 const VALID_REQUIREMENTS = new Set(["LISTING", "LISTING_PRODUCT_ONLY", "LISTING_OFFER_ONLY"]);
+const VALID_PUSH_WORKFLOWS = new Set(["new_catalog", "offer_on_asin", "create_local_draft_only"]);
 const VALID_DRAFT_STATUSES = new Set([
   "draft",
   "needs_attributes",
@@ -25,6 +32,7 @@ type ValidationIssue = {
 type DraftPayloadInput = {
   draftId?: unknown;
   kkProductId?: unknown;
+  kkVariantId?: unknown;
   kkSku?: unknown;
   sellerAccountId?: unknown;
   marketplaceId?: unknown;
@@ -38,6 +46,10 @@ type DraftPayloadInput = {
   pushWorkflow?: unknown;
   draftStatus?: unknown;
   draftPayload?: unknown;
+  variationRole?: unknown;
+  parentDraftId?: unknown;
+  parentSellerSku?: unknown;
+  variationTheme?: unknown;
   action?: unknown;
 };
 
@@ -59,12 +71,30 @@ function asDraftPayload(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
+function draftTitle(payload: Record<string, unknown>): string {
+  const title = typeof payload.title === "string" ? payload.title.trim() : "";
+  if (title) return title;
+  const itemName = typeof payload.item_name === "string" ? payload.item_name.trim() : "";
+  return itemName;
+}
+
+const VALID_VARIATION_ROLES = new Set(["standalone", "parent", "child"]);
+
+function isVariationParentPayload(draftPayload: Record<string, unknown>): boolean {
+  const level = typeof draftPayload.parentage_level === "string"
+    ? draftPayload.parentage_level.trim().toLowerCase()
+    : "";
+  return level === "parent";
+}
+
 function validateLocalDraft(
   sellerSku: string,
   draftPayload: Record<string, unknown>,
+  variationRole: string | null = null,
 ): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   const title = typeof draftPayload.title === "string" ? draftPayload.title.trim() : "";
+  const isParent = variationRole === "parent" || isVariationParentPayload(draftPayload);
 
   if (!title) {
     issues.push({ field: "title", severity: "error", message: "Amazon title is required." });
@@ -74,16 +104,42 @@ function validateLocalDraft(
     issues.push({ field: "sellerSku", severity: "error", message: "Seller SKU is required." });
   }
 
-  const price = draftPayload.price;
-  const priceNum = typeof price === "number" ? price : Number(price);
-  if (price === undefined || price === null || price === "" || !Number.isFinite(priceNum) || priceNum < 0) {
-    issues.push({ field: "price", severity: "warning", message: "Amazon price should be set." });
+  if (!isParent) {
+    const price = draftPayload.price;
+    const priceNum = typeof price === "number" ? price : Number(price);
+    if (price === undefined || price === null || price === "" || !Number.isFinite(priceNum) || priceNum < 0) {
+      issues.push({ field: "price", severity: "warning", message: "Amazon price should be set." });
+    }
+
+    const quantity = draftPayload.quantity;
+    const qtyNum = typeof quantity === "number" ? quantity : Number(quantity);
+    if (quantity === undefined || quantity === null || quantity === "" || !Number.isFinite(qtyNum) || qtyNum < 0) {
+      issues.push({ field: "quantity", severity: "warning", message: "Quantity should be set." });
+    }
   }
 
-  const quantity = draftPayload.quantity;
-  const qtyNum = typeof quantity === "number" ? quantity : Number(quantity);
-  if (quantity === undefined || quantity === null || quantity === "" || !Number.isFinite(qtyNum) || qtyNum < 0) {
-    issues.push({ field: "quantity", severity: "warning", message: "Quantity should be set." });
+  if (variationRole === "child") {
+    const parentSku = typeof draftPayload.child_parent_sku_relationship === "string"
+      ? draftPayload.child_parent_sku_relationship.trim()
+      : "";
+    const theme = typeof draftPayload.variation_theme === "string"
+      ? draftPayload.variation_theme.trim()
+      : "";
+    if (!parentSku) {
+      issues.push({ field: "parentSellerSku", severity: "error", message: "Parent seller SKU is required for child listings." });
+    }
+    if (!theme) {
+      issues.push({ field: "variationTheme", severity: "error", message: "Variation theme is required for child listings." });
+    }
+  }
+
+  if (variationRole === "parent") {
+    const theme = typeof draftPayload.variation_theme === "string"
+      ? draftPayload.variation_theme.trim()
+      : "";
+    if (!theme) {
+      issues.push({ field: "variationTheme", severity: "error", message: "Variation theme is required for parent listings." });
+    }
   }
 
   const productType = typeof draftPayload.productType === "string"
@@ -94,6 +150,20 @@ function validateLocalDraft(
   }
 
   return issues;
+}
+
+function resolveParentageLevel(
+  variationRole: string | null,
+  draftPayload: Record<string, unknown>,
+): string | null {
+  if (variationRole === "parent") return "PARENT";
+  if (variationRole === "child") return "CHILD";
+  const level = typeof draftPayload.parentage_level === "string"
+    ? draftPayload.parentage_level.trim().toLowerCase()
+    : "";
+  if (level === "parent") return "PARENT";
+  if (level === "child") return "CHILD";
+  return null;
 }
 
 function resolveDraftStatus(
@@ -221,19 +291,38 @@ Deno.serve(async (req) => {
 
   const draftId = body.draftId ? parseUuid(body.draftId) : null;
   const kkProductId = parseUuid(body.kkProductId);
+  const kkVariantId = body.kkVariantId ? parseUuid(body.kkVariantId) : null;
+  const variationRoleRaw = typeof body.variationRole === "string" ? body.variationRole.trim() : "standalone";
+  const variationRole = VALID_VARIATION_ROLES.has(variationRoleRaw) ? variationRoleRaw : "standalone";
+  const parentDraftId = body.parentDraftId ? parseUuid(body.parentDraftId) : null;
+  const parentSellerSku = parseOptionalText(body.parentSellerSku, 120);
+  const variationTheme = parseOptionalText(body.variationTheme, 120);
   const sellerAccountId = body.sellerAccountId ? parseUuid(body.sellerAccountId) : null;
   const marketplaceId = parseOptionalText(body.marketplaceId, 32);
   const sellerSku = parseOptionalText(body.sellerSku, 120) || "";
   const draftPayload = asDraftPayload(body.draftPayload);
 
-  if (!kkProductId || !marketplaceId || !draftPayload.title) {
-    return json({ ok: false, error: "invalid_request" }, 400);
+  const resolvedTitle = draftTitle(draftPayload);
+  if (!kkProductId) {
+    return json({ ok: false, error: "invalid_request", reason: "missing_kk_product_id" }, 400);
   }
+  if (!marketplaceId) {
+    return json({ ok: false, error: "invalid_request", reason: "missing_marketplace_id" }, 400);
+  }
+  if (!resolvedTitle) {
+    return json({ ok: false, error: "invalid_request", reason: "missing_title" }, 400);
+  }
+  draftPayload.title = resolvedTitle;
 
   const requirements = typeof body.requirements === "string" &&
       VALID_REQUIREMENTS.has(body.requirements)
     ? body.requirements
     : "LISTING";
+
+  const pushWorkflow = typeof body.pushWorkflow === "string" &&
+      VALID_PUSH_WORKFLOWS.has(body.pushWorkflow)
+    ? body.pushWorkflow
+    : (requirements === "LISTING_OFFER_ONLY" ? "offer_on_asin" : "create_local_draft_only");
 
   const requestedStatus = typeof body.draftStatus === "string" &&
       VALID_DRAFT_STATUSES.has(body.draftStatus)
@@ -258,6 +347,41 @@ Deno.serve(async (req) => {
       return json({ ok: false, error: "product_not_found" }, 404);
     }
 
+    if (kkVariantId) {
+      const { data: variant, error: variantErr } = await serviceClient
+        .from("product_variants")
+        .select("id, product_id")
+        .eq("id", kkVariantId)
+        .maybeSingle();
+      if (variantErr) {
+        return json({ ok: false, error: "database_error" }, 500);
+      }
+      if (!variant || String(variant.product_id) !== String(product.id)) {
+        return json({ ok: false, error: "invalid_request" }, 400);
+      }
+    }
+
+    if (variationRole === "parent" && kkVariantId) {
+      return json({ ok: false, error: "invalid_request" }, 400);
+    }
+
+    if (parentDraftId) {
+      const { data: parentDraft, error: parentErr } = await serviceClient
+        .from("amazon_listing_drafts")
+        .select("id, kk_product_id, variation_role, seller_sku")
+        .eq("id", parentDraftId)
+        .maybeSingle();
+      if (parentErr) {
+        return json({ ok: false, error: "database_error" }, 500);
+      }
+      if (!parentDraft || String(parentDraft.kk_product_id) !== String(kkProductId)) {
+        return json({ ok: false, error: "invalid_request", reason: "parent_draft_not_found" }, 400);
+      }
+      if (!isParentVariationDraftRow(parentDraft)) {
+        return json({ ok: false, error: "invalid_request", reason: "parent_draft_not_parent_role" }, 400);
+      }
+    }
+
     const { data: marketplace, error: marketplaceErr } = await serviceClient
       .from("amazon_marketplaces")
       .select("marketplace_id")
@@ -274,28 +398,52 @@ Deno.serve(async (req) => {
     }
 
     const sellerAccount = await resolveSellerAccount(serviceClient, sellerAccountId);
+    const matchedAsin = parseOptionalText(body.matchedAsin, 32);
+    if (!matchedAsin || requirements !== "LISTING_OFFER_ONLY") {
+      delete draftPayload.merchant_suggested_asin;
+    } else {
+      draftPayload.merchant_suggested_asin = matchedAsin;
+    }
+    const resolvedMatchedAsin = matchedAsin && requirements === "LISTING_OFFER_ONLY"
+      ? matchedAsin
+      : null;
+    const resolvedRequirements = resolvedMatchedAsin ? "LISTING_OFFER_ONLY" : "LISTING";
+    const resolvedPushWorkflow = resolvedMatchedAsin ? "offer_on_asin" : "new_catalog";
+
     const validationErrors = validateLocalDraft(sellerSku, {
       ...draftPayload,
       productType: body.productType ?? draftPayload.productType,
-    });
+    }, variationRole);
     const draftStatus = resolveDraftStatus(validationErrors, action, requestedStatus);
     const kkSku = parseOptionalText(body.kkSku, 120) || product.code || null;
+    const resolvedVariantId = variationRole === "parent" ? null : kkVariantId;
+    const resolvedParentSellerSku = variationRole === "child"
+      ? (parentSellerSku || parseOptionalText(draftPayload.child_parent_sku_relationship, 120))
+      : (variationRole === "parent" ? sellerSku : null);
+    const resolvedVariationTheme = variationTheme ||
+      parseOptionalText(draftPayload.variation_theme, 120);
 
     const baseRow = {
       seller_account_id: sellerAccount?.id ?? null,
       seller_id: sellerAccount?.seller_id ?? null,
       kk_product_id: kkProductId,
+      kk_variant_id: resolvedVariantId,
       kk_sku: kkSku,
       marketplace_id: marketplaceId,
       asin: parseOptionalText(body.asin, 32),
-      matched_asin: parseOptionalText(body.matchedAsin, 32),
+      matched_asin: resolvedMatchedAsin,
       seller_sku: sellerSku,
       product_type: parseOptionalText(body.productType, 120) ||
         parseOptionalText(draftPayload.productType, 120),
-      requirements,
+      requirements: resolvedRequirements,
       requirements_enforced: parseOptionalText(body.requirementsEnforced, 32) || "ENFORCED",
       product_type_version: parseOptionalText(body.productTypeVersion, 64),
-      push_workflow: "create_local_draft_only",
+      parentage_level: resolveParentageLevel(variationRole, draftPayload),
+      variation_role: variationRole,
+      parent_draft_id: variationRole === "child" ? parentDraftId : null,
+      parent_seller_sku: resolvedParentSellerSku,
+      variation_theme: resolvedVariationTheme,
+      push_workflow: resolvedPushWorkflow,
       draft_status: draftStatus,
       draft_payload: draftPayload,
       validation_errors: validationErrors,
