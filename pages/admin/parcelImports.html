@@ -1,0 +1,1248 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#f58f86" />
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="apple-touch-icon" href="/imgs/icons/apple-touch-icon.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/imgs/icons/favicon-32x32.png" />
+  <title>Admin · Parcel Imports</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            kkpink: '#f58f86',
+            kkpeach: '#f6dcc6',
+          },
+          borderWidth: {
+            '4': '4px',
+          }
+        }
+      }
+    }
+  </script>
+
+  <link rel="stylesheet" href="/css/theme/base.css">
+  <link rel="stylesheet" href="/css/theme/components.css">
+</head>
+
+<body class="kk-page kk-admin bg-gray-50 min-h-screen">
+
+  <div id="kkAdminNavMount"></div>
+
+  <main
+    class="max-w-[88rem] mx-auto px-3 sm:px-6 py-4 sm:py-8 pb-32 sm:pb-40 flex flex-col gap-4 sm:gap-6 overflow-x-hidden"
+    id="parcelImportsPage"
+    data-page="parcel-imports"
+  >
+
+    <p id="parcelImportsPreviewNote" class="sr-only">
+      Parcel Imports admin — upload, map, save drafts, approve CPI, and link expenses.
+    </p>
+
+    <!-- Page Header (Phase 1) -->
+    <header class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6">
+      <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+        <div>
+          <div class="inline-block bg-black text-white px-2 py-1 text-[10px] font-black uppercase tracking-[.25em] mb-2">
+            Admin Panel
+          </div>
+          <h1 class="text-2xl sm:text-4xl font-black tracking-tight">Parcel Imports</h1>
+          <p class="text-xs sm:text-sm text-gray-500 mt-1 max-w-xl">
+            Import Baestao parcels, map items, and update landed CPI.
+          </p>
+        </div>
+        <div class="flex flex-col gap-2 w-full sm:w-auto sm:items-end">
+          <div class="grid grid-cols-2 gap-2 w-full sm:flex sm:flex-wrap sm:w-auto sm:justify-end">
+            <button
+              type="button"
+              data-parcel-action="new-import"
+              title="Start a new Baestao parcel import"
+              class="inline-flex items-center justify-center gap-2 border-4 border-black bg-white text-black px-3 sm:px-4 py-2.5 font-black uppercase tracking-[.12em] text-[10px] sm:text-xs w-full sm:w-auto min-h-[44px] hover:bg-gray-50"
+            >
+              <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+              </svg>
+              New Import
+            </button>
+            <button
+              type="button"
+              id="parcelSaveDraftBtnHeader"
+              data-parcel-action="save-draft"
+              title="Save import draft"
+              disabled
+              class="inline-flex items-center justify-center gap-2 border-4 border-black bg-white text-black px-3 sm:px-4 py-2.5 font-black uppercase tracking-[.12em] text-[10px] sm:text-xs w-full sm:w-auto min-h-[44px] hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
+              </svg>
+              Save Draft
+            </button>
+            <button
+              type="button"
+              id="parcelApproveCpiBtnHeader"
+              data-parcel-action="approve-cpi"
+              title="Approve parcel and update product CPI"
+              disabled
+              class="inline-flex items-center justify-center gap-2 border-4 border-black bg-black text-white px-3 sm:px-4 py-2.5 font-black uppercase tracking-[.12em] text-[10px] sm:text-xs w-full sm:w-auto min-h-[44px] hover:bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+              Approve + Update CPI
+            </button>
+            <button
+              type="button"
+              title="Export parcel data (not wired)"
+              class="inline-flex items-center justify-center gap-2 border-2 border-black bg-white text-black px-3 sm:px-4 py-2.5 font-bold uppercase tracking-[.12em] text-[10px] sm:text-xs w-full sm:w-auto min-h-[44px] hover:bg-gray-50"
+            >
+              <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+              </svg>
+              Export
+            </button>
+          </div>
+          <p id="parcelActionStatus" class="text-[11px] sm:text-xs text-gray-500 max-w-xl sm:text-right leading-relaxed" role="status" aria-live="polite">
+            Log in as admin to save drafts and view import history.
+          </p>
+          <p id="parcelDuplicateWarning" class="hidden text-[11px] sm:text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 max-w-xl sm:text-right leading-relaxed" role="status" aria-live="polite"></p>
+        </div>
+      </div>
+    </header>
+
+    <!-- KPI Cards (Phase 2) -->
+    <section
+      class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-4"
+      id="parcelImportStats"
+      aria-label="Parcel import summary"
+    >
+      <article class="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 shadow-sm hover:shadow-md transition-shadow">
+        <div class="flex items-start justify-between gap-2">
+          <div class="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center text-gray-700" aria-hidden="true">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+            </svg>
+          </div>
+        </div>
+        <p data-field="kpiTotalImports" class="text-2xl sm:text-3xl font-black mt-3 text-gray-900">—</p>
+        <p class="text-[10px] sm:text-xs font-black uppercase tracking-[.14em] text-gray-500 mt-1">Total Imports</p>
+        <p class="text-[11px] text-gray-400 mt-2 hidden sm:block">All time</p>
+      </article>
+
+      <article class="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 shadow-sm hover:shadow-md transition-shadow">
+        <div class="flex items-start justify-between gap-2">
+          <div class="w-9 h-9 rounded-lg bg-slate-50 flex items-center justify-center text-slate-700" aria-hidden="true">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+          </div>
+        </div>
+        <p data-field="kpiDraftImports" class="text-2xl sm:text-3xl font-black mt-3 text-slate-700">—</p>
+        <p class="text-[10px] sm:text-xs font-black uppercase tracking-[.14em] text-gray-500 mt-1">Draft Imports</p>
+        <p class="text-[11px] text-gray-400 mt-2 hidden sm:block">Not submitted</p>
+      </article>
+
+      <article class="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 shadow-sm hover:shadow-md transition-shadow">
+        <div class="flex items-start justify-between gap-2">
+          <div class="w-9 h-9 rounded-lg bg-amber-50 flex items-center justify-center text-amber-700" aria-hidden="true">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+          </div>
+        </div>
+        <p data-field="kpiAwaitingApproval" class="text-2xl sm:text-3xl font-black mt-3 text-amber-600">—</p>
+        <p class="text-[10px] sm:text-xs font-black uppercase tracking-[.14em] text-gray-500 mt-1">Awaiting Approval</p>
+        <p class="text-[11px] text-gray-400 mt-2 hidden sm:block">Ready for review</p>
+      </article>
+
+      <article class="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 shadow-sm hover:shadow-md transition-shadow">
+        <div class="flex items-start justify-between gap-2">
+          <div class="w-9 h-9 rounded-lg bg-green-50 flex items-center justify-center text-green-700" aria-hidden="true">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+          </div>
+        </div>
+        <p data-field="kpiApproved" class="text-2xl sm:text-3xl font-black mt-3 text-green-700">—</p>
+        <p class="text-[10px] sm:text-xs font-black uppercase tracking-[.14em] text-gray-500 mt-1">Approved</p>
+        <p class="text-[11px] text-gray-400 mt-2 hidden sm:block">CPI updates applied</p>
+      </article>
+
+      <article class="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 shadow-sm hover:shadow-md transition-shadow col-span-2 sm:col-span-1">
+        <div class="flex items-start justify-between gap-2">
+          <div class="w-9 h-9 rounded-lg bg-red-50 flex items-center justify-center text-red-700" aria-hidden="true">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+            </svg>
+          </div>
+        </div>
+        <p data-field="kpiUnmappedRows" class="text-2xl sm:text-3xl font-black mt-3 text-red-600">—</p>
+        <p class="text-[10px] sm:text-xs font-black uppercase tracking-[.14em] text-gray-500 mt-1">Needs Review</p>
+        <p data-field="kpiUnmappedHint" class="text-[11px] text-gray-400 mt-2 hidden sm:block">Across drafts</p>
+      </article>
+      <p
+        id="parcelStatsCurrentParse"
+        class="hidden col-span-2 sm:col-span-3 lg:col-span-5 text-[11px] text-gray-500 leading-relaxed px-1"
+      >
+        Live counts from saved parcel imports. Open an import to see row-level unmapped counts.
+      </p>
+    </section>
+
+    <!-- Work Area Tabs (Phase 3) -->
+    <nav id="parcelImportViewTabs" aria-label="Parcel import work areas">
+      <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+        <p class="text-[9px] font-black uppercase tracking-[.18em] text-gray-500 shrink-0">Work Area</p>
+        <div
+          class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2 flex-1"
+          role="tablist"
+          aria-label="Parcel import workflow steps"
+        >
+          <button
+            type="button"
+            role="tab"
+            id="parcelTabUpload"
+            aria-selected="true"
+            aria-controls="parcelImportUploadSummary"
+            tabindex="0"
+            title="Upload Baestao parcel export"
+            class="flex items-center justify-center sm:justify-start px-3 py-2.5 rounded-xl border-4 border-black bg-black text-white text-left min-h-[44px]"
+          >
+            <span class="text-[10px] font-black uppercase tracking-[.12em]">Upload</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            id="parcelTabReview"
+            aria-selected="false"
+            aria-controls="parcelImportChargeOverrides"
+            tabindex="-1"
+            title="Review parcel summary and charges"
+            class="flex items-center justify-center sm:justify-start px-3 py-2.5 rounded-xl border-2 border-black bg-white text-black text-left min-h-[44px] hover:bg-gray-50"
+          >
+            <span class="text-[10px] font-black uppercase tracking-[.12em]">Review Parcel</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            id="parcelTabMap"
+            aria-selected="false"
+            aria-controls="parcelImportItemMapping"
+            tabindex="-1"
+            title="Map Baestao items to KK products"
+            class="flex items-center justify-center sm:justify-start px-3 py-2.5 rounded-xl border-2 border-black bg-white text-black text-left min-h-[44px] hover:bg-gray-50"
+          >
+            <span class="text-[10px] font-black uppercase tracking-[.12em]">Map Items</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            id="parcelTabCpi"
+            aria-selected="false"
+            aria-controls="parcelImportCpiPreview"
+            tabindex="-1"
+            title="Preview landed CPI impact"
+            class="flex items-center justify-center sm:justify-start px-3 py-2.5 rounded-xl border-2 border-black bg-white text-black text-left min-h-[44px] hover:bg-gray-50"
+          >
+            <span class="text-[10px] font-black uppercase tracking-[.12em]">CPI Preview</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            id="parcelTabHistory"
+            aria-selected="false"
+            aria-controls="parcelImportHistory"
+            tabindex="-1"
+            title="Previous parcel imports"
+            class="flex items-center justify-center sm:justify-start px-3 py-2.5 rounded-xl border-2 border-black bg-white text-black text-left min-h-[44px] hover:bg-gray-50 col-span-2 md:col-span-1"
+          >
+            <span class="text-[10px] font-black uppercase tracking-[.12em]">Previous Imports</span>
+          </button>
+        </div>
+      </div>
+      <p class="text-[11px] text-gray-400 mt-2">
+        Five-step static workflow — upload Baestao parcel, review charges, map items, preview CPI, then review import history.
+      </p>
+    </nav>
+
+    <!-- Upload + Parcel Summary (Phase 4) -->
+    <section
+      id="parcelImportUploadSummary"
+      aria-label="Upload parcel and summary"
+      role="tabpanel"
+      aria-labelledby="parcelTabUpload"
+    >
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+
+        <!-- Card 1: Upload -->
+        <article id="parcelUploadCard" class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6 flex flex-col">
+          <h2 class="text-lg sm:text-xl font-black tracking-tight">Upload parcel file</h2>
+          <p class="text-xs sm:text-sm text-gray-500 mt-1">
+            Add a Baestao export file to begin reviewing landed cost details.
+          </p>
+
+          <input
+            type="file"
+            id="parcelFileInput"
+            accept=".xls,.xlsx"
+            class="sr-only"
+            aria-label="Select Baestao parcel export file"
+          />
+
+          <div
+            id="parcelUploadDropZone"
+            class="mt-4 flex-1 flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-300 bg-gray-50/80 px-4 py-10 sm:py-12 text-center"
+          >
+            <div class="w-12 h-12 rounded-xl bg-white border border-gray-200 flex items-center justify-center text-gray-600 mb-4" aria-hidden="true">
+              <svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3-3m3 3V4"/>
+              </svg>
+            </div>
+            <p class="text-sm sm:text-base font-black text-gray-900">Drop Baestao export here</p>
+            <p class="text-xs text-gray-500 mt-1">or select a file from your computer</p>
+            <button
+              type="button"
+              id="parcelSelectFileBtn"
+              title="Select Baestao parcel export file"
+              class="mt-5 inline-flex items-center justify-center border-4 border-black bg-white text-black px-4 py-2.5 font-black uppercase tracking-[.12em] text-[10px] sm:text-xs min-h-[44px] hover:bg-gray-100"
+            >
+              Select File
+            </button>
+          </div>
+
+          <div id="parcelUploadStatus" class="mt-4 hidden" role="status" aria-live="polite"></div>
+
+          <p class="text-[11px] text-gray-500 mt-4">
+            <span class="font-bold text-gray-700">Accepted:</span>
+            .xls, .xlsx — Baestao HTML-table export (binary Excel not supported in Phase 1A)
+          </p>
+          <p class="text-[11px] text-gray-400 mt-2 italic">
+            Parsed locally in your browser — nothing is saved until a later phase.
+          </p>
+        </article>
+
+        <!-- Card 2: Parcel summary -->
+        <article class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6">
+          <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
+            <h2 class="text-lg sm:text-xl font-black tracking-tight">Parcel summary</h2>
+            <div id="parcelSummaryStatusBadges" class="hidden flex flex-wrap gap-1.5 sm:justify-end" role="group" aria-label="Import status"></div>
+          </div>
+
+          <dl id="parcelSummaryFields" class="mt-4 sm:mt-5 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+            <div class="sm:col-span-2 flex justify-between gap-4 border-b border-gray-100 pb-3">
+              <dt class="text-[11px] font-black uppercase tracking-[.12em] text-gray-500">Parcel ID</dt>
+              <dd data-field="parcelId" class="font-mono font-bold text-gray-900 text-right">—</dd>
+            </div>
+            <div class="sm:col-span-2 flex justify-between gap-4">
+              <dt class="text-[11px] font-black uppercase tracking-[.12em] text-gray-500">Import file</dt>
+              <dd data-field="sourceFileName" class="font-mono text-xs sm:text-sm text-gray-800 text-right break-all">—</dd>
+            </div>
+            <div class="flex justify-between gap-4">
+              <dt class="text-[11px] font-black uppercase tracking-[.12em] text-gray-500">Import date</dt>
+              <dd data-field="importDate" class="font-medium text-gray-900 text-right">—</dd>
+            </div>
+            <div class="flex justify-between gap-4">
+              <dt class="text-[11px] font-black uppercase tracking-[.12em] text-gray-500">Source</dt>
+              <dd data-field="source" class="text-gray-800 text-right text-xs sm:text-sm">—</dd>
+            </div>
+            <div class="flex justify-between gap-4">
+              <dt class="text-[11px] font-black uppercase tracking-[.12em] text-gray-500">Total items</dt>
+              <dd data-field="totalItems" class="font-medium text-gray-900 text-right tabular-nums">—</dd>
+            </div>
+            <div class="flex justify-between gap-4">
+              <dt class="text-[11px] font-black uppercase tracking-[.12em] text-gray-500">Parcel weight</dt>
+              <dd data-field="parcelWeightGrams" class="font-medium text-gray-900 text-right tabular-nums">—</dd>
+            </div>
+            <div class="sm:col-span-2 flex justify-between gap-4 items-center rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 -mx-0.5">
+              <dt class="text-[11px] font-black uppercase tracking-[.12em] text-amber-900">Charged weight</dt>
+              <dd data-field="chargedWeightGrams" class="font-black text-amber-900 text-right tabular-nums">—</dd>
+            </div>
+            <div class="flex justify-between gap-4">
+              <dt class="text-[11px] font-black uppercase tracking-[.12em] text-gray-500">Total item fee</dt>
+              <dd data-field="totalItemFeeCny" class="font-medium text-gray-900 text-right tabular-nums">—</dd>
+            </div>
+            <div class="flex justify-between gap-4">
+              <dt class="text-[11px] font-black uppercase tracking-[.12em] text-gray-500">Shipment fee</dt>
+              <dd data-field="shipmentFeeCny" class="font-medium text-gray-900 text-right tabular-nums">—</dd>
+            </div>
+            <div class="flex justify-between gap-4">
+              <dt class="text-[11px] font-black uppercase tracking-[.12em] text-gray-500">Insurance</dt>
+              <dd data-field="insurance" class="font-medium text-gray-900 text-right">—</dd>
+            </div>
+            <div class="flex justify-between gap-4">
+              <dt class="text-[11px] font-black uppercase tracking-[.12em] text-gray-500">Status</dt>
+              <dd data-field="status" class="text-right">—</dd>
+            </div>
+          </dl>
+
+          <p class="text-[11px] text-gray-400 mt-4 pt-4 border-t border-gray-100 leading-relaxed">
+            Upload a Baestao file to populate parcel summary fields.
+          </p>
+        </article>
+
+      </div>
+    </section>
+
+    <!-- Actual Charges / Override (Phase 5) -->
+    <section
+      id="parcelImportChargeOverrides"
+      role="tabpanel"
+      aria-labelledby="parcelTabReview"
+      aria-label="Actual charges and overrides"
+    >
+      <article class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6">
+        <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+          <div>
+            <div class="flex flex-wrap items-center gap-2">
+              <h2 class="text-lg sm:text-xl font-black tracking-tight">Actual charges &amp; overrides</h2>
+              <span class="text-[10px] font-black uppercase tracking-wide text-amber-900 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-0.5">
+                Volume weight review
+              </span>
+            </div>
+            <p class="text-xs sm:text-sm text-gray-500 mt-1 max-w-3xl">
+              Review Baestao’s exported values against the actual charged parcel totals before CPI allocation.
+            </p>
+          </div>
+        </div>
+
+        <div class="mt-5 hidden sm:grid sm:grid-cols-2 gap-4 sm:gap-6 pb-2 border-b border-gray-100">
+          <p class="text-[10px] font-black uppercase tracking-[.14em] text-gray-500">From XLS</p>
+          <p class="text-[10px] font-black uppercase tracking-[.14em] text-gray-900">Actual / override</p>
+        </div>
+
+        <div class="mt-4 sm:mt-5 space-y-3 sm:space-y-4" role="group" aria-label="Charge comparison fields">
+
+          <!-- Parcel weight -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6">
+            <div class="rounded-xl bg-gray-50 border border-gray-200 px-3 py-3 sm:px-4">
+              <p class="text-[10px] font-black uppercase tracking-[.12em] text-gray-500 sm:hidden mb-1">From XLS</p>
+              <label class="block text-[11px] font-bold text-gray-600">Parcel weight</label>
+              <div data-field="parcelWeightXls" class="mt-1 text-sm font-medium text-gray-800 tabular-nums">—</div>
+            </div>
+            <div data-override-wrap="parcelWeightGrams" class="rounded-xl bg-white border-2 border-gray-300 px-3 py-3 sm:px-4">
+              <p class="text-[10px] font-black uppercase tracking-[.12em] text-gray-900 sm:hidden mb-1">Actual / override</p>
+              <div class="flex items-start justify-between gap-2">
+                <label for="overrideParcelWeight" class="block text-[11px] font-bold text-gray-800">Parcel weight <span class="font-normal text-gray-500">(grams)</span></label>
+                <span data-override-edited="parcelWeightGrams" class="hidden text-[9px] font-black uppercase tracking-wide text-amber-800 bg-amber-100 border border-amber-300 rounded-full px-2 py-0.5 shrink-0">Edited</span>
+              </div>
+              <input
+                id="overrideParcelWeight"
+                data-override-key="parcelWeightGrams"
+                data-field="parcelWeightOverride"
+                type="number"
+                min="0"
+                step="1"
+                inputmode="numeric"
+                placeholder="e.g. 5050"
+                class="mt-1 w-full border-2 border-gray-200 rounded-lg px-3 py-2 text-sm font-medium tabular-nums bg-white text-gray-900"
+              />
+              <p data-override-msg="parcelWeightGrams" class="hidden text-[10px] mt-1.5"></p>
+            </div>
+          </div>
+
+          <!-- Charged weight (highlighted) -->
+          <div id="parcelChargedWeightRow" class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6 px-0.5">
+            <div class="rounded-lg bg-gray-50 border border-gray-200 px-3 py-3 sm:px-4">
+              <p class="text-[10px] font-black uppercase tracking-[.12em] text-gray-500 sm:hidden mb-1">From XLS</p>
+              <label class="block text-[11px] font-bold text-gray-700">Charged weight</label>
+              <div data-field="chargedWeightXls" class="mt-1 text-sm font-medium text-gray-800 tabular-nums">—</div>
+            </div>
+            <div data-override-wrap="chargedWeightGrams" class="rounded-lg bg-white border-2 border-gray-300 px-3 py-3 sm:px-4">
+              <p class="text-[10px] font-black uppercase tracking-[.12em] text-gray-900 sm:hidden mb-1">Actual / override</p>
+              <div class="flex items-start justify-between gap-2">
+                <label for="overrideChargedWeight" class="block text-[11px] font-bold text-gray-800">Charged weight <span class="font-normal text-gray-500">(grams)</span></label>
+                <span data-override-edited="chargedWeightGrams" class="hidden text-[9px] font-black uppercase tracking-wide text-amber-800 bg-amber-100 border border-amber-300 rounded-full px-2 py-0.5 shrink-0">Edited</span>
+              </div>
+              <input
+                id="overrideChargedWeight"
+                data-override-key="chargedWeightGrams"
+                data-field="chargedWeightOverride"
+                type="number"
+                min="0"
+                step="1"
+                inputmode="numeric"
+                placeholder="Enter if not in XLS"
+                class="mt-1 w-full border-2 border-gray-200 rounded-lg px-3 py-2 text-sm font-medium tabular-nums bg-white text-gray-900"
+              />
+              <p data-override-msg="chargedWeightGrams" class="hidden text-[10px] mt-1.5"></p>
+              <p id="parcelChargedWeightHint" class="text-[10px] text-amber-800 mt-1.5 hidden">Volume weight likely applied.</p>
+              <p id="parcelChargedWeightMissingNote" class="hidden text-[10px] text-gray-500 mt-1.5">Not provided by export</p>
+            </div>
+          </div>
+
+          <!-- Shipment fee -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6">
+            <div class="rounded-xl bg-gray-50 border border-gray-200 px-3 py-3 sm:px-4">
+              <p class="text-[10px] font-black uppercase tracking-[.12em] text-gray-500 sm:hidden mb-1">From XLS</p>
+              <label class="block text-[11px] font-bold text-gray-600">Shipment fee</label>
+              <div data-field="shipmentFeeXls" class="mt-1 text-sm font-medium text-gray-800 tabular-nums">—</div>
+            </div>
+            <div data-override-wrap="shipmentFeeCny" class="rounded-xl bg-white border-2 border-gray-300 px-3 py-3 sm:px-4">
+              <p class="text-[10px] font-black uppercase tracking-[.12em] text-gray-900 sm:hidden mb-1">Actual / override</p>
+              <div class="flex items-start justify-between gap-2">
+                <label for="overrideShipmentFee" class="block text-[11px] font-bold text-gray-800">Shipment fee <span class="font-normal text-gray-500">(CNY)</span></label>
+                <span data-override-edited="shipmentFeeCny" class="hidden text-[9px] font-black uppercase tracking-wide text-amber-800 bg-amber-100 border border-amber-300 rounded-full px-2 py-0.5 shrink-0">Edited</span>
+              </div>
+              <input
+                id="overrideShipmentFee"
+                data-override-key="shipmentFeeCny"
+                data-field="shipmentFeeOverride"
+                type="number"
+                min="0"
+                step="0.01"
+                inputmode="decimal"
+                placeholder="e.g. 585.00"
+                class="mt-1 w-full border-2 border-gray-200 rounded-lg px-3 py-2 text-sm font-medium tabular-nums bg-white text-gray-900"
+              />
+              <p data-override-msg="shipmentFeeCny" class="hidden text-[10px] mt-1.5"></p>
+            </div>
+          </div>
+
+          <!-- Service fee -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6">
+            <div class="rounded-xl bg-gray-50 border border-gray-200 px-3 py-3 sm:px-4">
+              <p class="text-[10px] font-black uppercase tracking-[.12em] text-gray-500 sm:hidden mb-1">From XLS</p>
+              <label class="block text-[11px] font-bold text-gray-600">Service fee</label>
+              <div data-field="serviceFeeXls" class="mt-1 text-sm font-medium text-gray-400 tabular-nums">—</div>
+            </div>
+            <div data-override-wrap="serviceFeeCny" class="rounded-xl bg-white border-2 border-gray-300 px-3 py-3 sm:px-4">
+              <p class="text-[10px] font-black uppercase tracking-[.12em] text-gray-900 sm:hidden mb-1">Actual / override</p>
+              <div class="flex items-start justify-between gap-2">
+                <label for="overrideServiceFee" class="block text-[11px] font-bold text-gray-800">Service fee <span class="font-normal text-gray-500">(CNY)</span></label>
+                <span data-override-edited="serviceFeeCny" class="hidden text-[9px] font-black uppercase tracking-wide text-amber-800 bg-amber-100 border border-amber-300 rounded-full px-2 py-0.5 shrink-0">Edited</span>
+              </div>
+              <input
+                id="overrideServiceFee"
+                data-override-key="serviceFeeCny"
+                data-field="serviceFeeOverride"
+                type="number"
+                min="0"
+                step="0.01"
+                inputmode="decimal"
+                placeholder="Optional"
+                class="mt-1 w-full border-2 border-gray-200 rounded-lg px-3 py-2 text-sm font-medium tabular-nums bg-white text-gray-900"
+              />
+              <p data-override-msg="serviceFeeCny" class="hidden text-[10px] mt-1.5"></p>
+            </div>
+          </div>
+
+          <!-- Insurance -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6">
+            <div class="rounded-xl bg-gray-50 border border-gray-200 px-3 py-3 sm:px-4">
+              <p class="text-[10px] font-black uppercase tracking-[.12em] text-gray-500 sm:hidden mb-1">From XLS</p>
+              <label class="block text-[11px] font-bold text-gray-600">Insurance</label>
+              <div data-field="insuranceXls" class="mt-1 text-sm font-medium text-gray-800">—</div>
+            </div>
+            <div data-override-wrap="insuranceYes" class="rounded-xl bg-white border-2 border-gray-300 px-3 py-3 sm:px-4 space-y-2">
+              <p class="text-[10px] font-black uppercase tracking-[.12em] text-gray-900 sm:hidden mb-1">Actual / override</p>
+              <div class="flex items-start justify-between gap-2">
+                <label for="overrideInsuranceYes" class="block text-[11px] font-bold text-gray-800">Insurance coverage</label>
+                <span data-override-edited="insuranceYes" class="hidden text-[9px] font-black uppercase tracking-wide text-amber-800 bg-amber-100 border border-amber-300 rounded-full px-2 py-0.5 shrink-0">Edited</span>
+              </div>
+              <select
+                id="overrideInsuranceYes"
+                data-override-key="insuranceYes"
+                class="w-full border-2 border-gray-200 rounded-lg px-3 py-2 text-sm bg-white text-gray-900"
+              >
+                <option value="unknown">Unknown</option>
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </select>
+              <p data-override-msg="insuranceYes" class="hidden text-[10px]"></p>
+              <div data-override-wrap="insuranceCny">
+                <label for="overrideInsuranceCny" class="block text-[11px] font-bold text-gray-700">Insurance amount <span class="font-normal text-gray-500">(CNY, optional)</span></label>
+                <input
+                  id="overrideInsuranceCny"
+                  data-override-key="insuranceCny"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  inputmode="decimal"
+                  placeholder="If known"
+                  class="mt-1 w-full border-2 border-gray-200 rounded-lg px-3 py-2 text-sm font-medium tabular-nums bg-white text-gray-900"
+                />
+                <p data-override-msg="insuranceCny" class="hidden text-[10px] mt-1.5"></p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Total actual parcel charge -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6 pt-2 border-t border-gray-100">
+            <div class="rounded-xl bg-gray-50 border border-gray-200 px-3 py-3 sm:px-4">
+              <p class="text-[10px] font-black uppercase tracking-[.12em] text-gray-500 sm:hidden mb-1">From XLS</p>
+              <label class="block text-[11px] font-bold text-gray-600">Total actual parcel charge</label>
+              <div data-field="totalChargeXls" class="mt-1 text-sm font-medium text-gray-800 tabular-nums">—</div>
+            </div>
+            <div data-override-wrap="totalParcelChargeCny" class="rounded-xl bg-white border-2 border-black px-3 py-3 sm:px-4">
+              <p class="text-[10px] font-black uppercase tracking-[.12em] text-gray-900 sm:hidden mb-1">Actual / override</p>
+              <div class="flex items-start justify-between gap-2">
+                <label for="overrideTotalCharge" class="block text-[11px] font-bold text-gray-900">Total actual parcel charge <span class="font-normal text-gray-500">(CNY)</span></label>
+                <span data-override-edited="totalParcelChargeCny" class="hidden text-[9px] font-black uppercase tracking-wide text-amber-800 bg-amber-100 border border-amber-300 rounded-full px-2 py-0.5 shrink-0">Edited</span>
+              </div>
+              <input
+                id="overrideTotalCharge"
+                data-override-key="totalParcelChargeCny"
+                data-field="totalChargeOverride"
+                type="number"
+                min="0"
+                step="0.01"
+                inputmode="decimal"
+                placeholder="Card / actual total"
+                class="mt-1 w-full border-2 border-gray-200 rounded-lg px-3 py-2 text-base font-black tabular-nums bg-white text-gray-900"
+              />
+              <p data-override-msg="totalParcelChargeCny" class="hidden text-[10px] mt-1.5"></p>
+            </div>
+          </div>
+
+          <!-- Effective exchange rate -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6">
+            <div class="rounded-xl bg-gray-50 border border-gray-200 px-3 py-3 sm:px-4">
+              <p class="text-[10px] font-black uppercase tracking-[.12em] text-gray-500 sm:hidden mb-1">From XLS</p>
+              <label class="block text-[11px] font-bold text-gray-600">Effective exchange rate</label>
+              <div data-field="fxRateXls" class="mt-1 text-sm font-medium text-gray-400 tabular-nums">—</div>
+            </div>
+            <div data-override-wrap="effectiveFxRate" class="rounded-xl bg-white border-2 border-gray-300 px-3 py-3 sm:px-4">
+              <p class="text-[10px] font-black uppercase tracking-[.12em] text-gray-900 sm:hidden mb-1">Actual / override</p>
+              <div class="flex items-start justify-between gap-2">
+                <label for="overrideFxRate" class="block text-[11px] font-bold text-gray-800">Effective exchange rate <span class="font-normal text-gray-500">(CNY/USD)</span></label>
+                <span data-override-edited="effectiveFxRate" class="hidden text-[9px] font-black uppercase tracking-wide text-amber-800 bg-amber-100 border border-amber-300 rounded-full px-2 py-0.5 shrink-0">Edited</span>
+              </div>
+              <input
+                id="overrideFxRate"
+                data-override-key="effectiveFxRate"
+                data-field="fxRateOverride"
+                type="number"
+                min="0"
+                step="0.0001"
+                inputmode="decimal"
+                placeholder="e.g. 7.2100"
+                class="mt-1 w-full border-2 border-gray-200 rounded-lg px-3 py-2 text-sm font-medium tabular-nums bg-white text-gray-900"
+              />
+              <p data-override-msg="effectiveFxRate" class="hidden text-[10px] mt-1.5"></p>
+            </div>
+          </div>
+
+          <!-- USD equivalent -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6">
+            <div class="rounded-xl bg-gray-50 border border-gray-200 px-3 py-3 sm:px-4">
+              <p class="text-[10px] font-black uppercase tracking-[.12em] text-gray-500 sm:hidden mb-1">From XLS</p>
+              <label class="block text-[11px] font-bold text-gray-600">USD equivalent</label>
+              <div data-field="usdXls" class="mt-1 text-sm font-medium text-gray-400 tabular-nums">—</div>
+            </div>
+            <div data-override-wrap="usdEquivalent" class="rounded-xl bg-white border-2 border-gray-300 px-3 py-3 sm:px-4">
+              <p class="text-[10px] font-black uppercase tracking-[.12em] text-gray-900 sm:hidden mb-1">Actual / override</p>
+              <div class="flex items-start justify-between gap-2">
+                <label for="overrideUsdEquivalent" class="block text-[11px] font-bold text-gray-800">USD equivalent <span class="font-normal text-gray-500">(USD)</span></label>
+                <span data-override-edited="usdEquivalent" class="hidden text-[9px] font-black uppercase tracking-wide text-amber-800 bg-amber-100 border border-amber-300 rounded-full px-2 py-0.5 shrink-0">Edited</span>
+              </div>
+              <input
+                id="overrideUsdEquivalent"
+                data-override-key="usdEquivalent"
+                data-field="usdOverride"
+                type="number"
+                min="0"
+                step="0.01"
+                inputmode="decimal"
+                placeholder="e.g. 90.32"
+                class="mt-1 w-full border-2 border-gray-200 rounded-lg px-3 py-2 text-sm font-medium tabular-nums bg-white text-gray-900"
+              />
+              <p data-override-msg="usdEquivalent" class="hidden text-[10px] mt-1.5"></p>
+            </div>
+          </div>
+
+        </div>
+
+        <div
+          id="parcelOverrideValidation"
+          class="hidden mt-4 rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3 space-y-1"
+          aria-live="polite"
+        ></div>
+
+        <aside
+          class="mt-5 sm:mt-6 rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3 text-xs sm:text-sm text-amber-950 leading-relaxed"
+          aria-label="Volume weight guidance"
+        >
+          <p class="font-bold text-amber-900">Charged weight may exceed parcel weight when volume weight applies.</p>
+          <p class="mt-2 text-amber-900/90">
+            <span class="font-semibold">Formula:</span>
+            L × W × H / 5000
+          </p>
+          <p class="mt-1 text-amber-800/90 font-mono text-[11px] sm:text-xs">
+            Example: 46 × 36 × 34 / 5000 = 11.26 kg
+          </p>
+        </aside>
+      </article>
+    </section>
+
+    <!-- Item Mapping Table (Phase 6) -->
+    <section
+      id="parcelImportItemMapping"
+      role="tabpanel"
+      aria-labelledby="parcelTabMap"
+      aria-label="Item mapping table"
+    >
+      <article class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-4 sm:px-6 py-4 sm:py-5 border-b border-gray-100">
+          <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+            <div>
+              <h2 class="text-lg sm:text-xl font-black tracking-tight">Item mapping</h2>
+              <p class="text-xs sm:text-sm text-gray-500 mt-1 max-w-2xl">
+                Match Baestao parcel rows to Karry Kraze products before CPI updates are approved.
+              </p>
+            </div>
+            <div id="parcelMappingChips" class="flex flex-wrap gap-1.5 lg:justify-end" aria-label="Mapping summary counts">
+              <span data-field="mapChipRowsImported" class="text-[10px] font-black uppercase tracking-wide text-gray-700 bg-gray-100 border border-gray-200 rounded-full px-2.5 py-0.5">—</span>
+              <span data-field="mapChipMatched" class="text-[10px] font-black uppercase tracking-wide text-green-800 bg-green-50 border border-green-200 rounded-full px-2.5 py-0.5">—</span>
+              <span data-field="mapChipVariantUncertain" class="text-[10px] font-black uppercase tracking-wide text-amber-800 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-0.5">—</span>
+              <span data-field="mapChipPersonalExcluded" class="text-[10px] font-black uppercase tracking-wide text-gray-600 bg-gray-100 border border-gray-300 rounded-full px-2.5 py-0.5">—</span>
+              <span data-field="mapChipNeedMapping" class="text-[10px] font-black uppercase tracking-wide text-red-800 bg-red-50 border border-red-200 rounded-full px-2.5 py-0.5">—</span>
+            </div>
+          </div>
+
+          <div class="mt-4 flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2 sm:gap-3">
+            <label class="sr-only" for="parcelMapSearch">Search source item</label>
+            <input
+              id="parcelMapSearch"
+              type="search"
+              readonly
+              placeholder="Search source item…"
+              class="w-full sm:max-w-xs border-2 border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500 cursor-default"
+            />
+            <button
+              type="button"
+              class="inline-flex items-center justify-center border-2 border-black bg-white text-black px-3 py-2 text-[10px] font-black uppercase tracking-[.12em] min-h-[40px] hover:bg-gray-50"
+            >
+              Filters
+            </button>
+            <button
+              type="button"
+              class="inline-flex items-center justify-center border-2 border-black bg-white text-black px-3 py-2 text-[10px] font-black uppercase tracking-[.12em] min-h-[40px] hover:bg-gray-50"
+            >
+              Bulk Actions
+            </button>
+            <p id="parcelMappingParseNote" class="text-[11px] text-gray-400 sm:ml-auto w-full sm:w-auto">
+              Upload a file to parse and map Baestao rows.
+            </p>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto overscroll-x-contain border-t border-gray-100" aria-label="Baestao item mapping rows">
+          <table id="parcelMappingTable" class="w-full border-collapse text-sm min-w-[1100px]">
+            <thead class="bg-gray-50 border-b border-gray-200 sticky top-0 z-[1]">
+              <tr class="text-left text-[10px] font-black uppercase tracking-[.1em] text-gray-600">
+                <th scope="col" class="px-2 py-2.5 w-10">
+                  <input type="checkbox" disabled aria-label="Select all rows on page" class="w-4 h-4 border-2 border-gray-400 rounded-sm cursor-not-allowed opacity-60" />
+                </th>
+                <th scope="col" class="px-2 py-2.5 w-10">Row</th>
+                <th scope="col" class="px-3 py-2.5 min-w-[140px]">
+                  Baestao Item
+                  <span class="block font-bold normal-case tracking-normal text-gray-400 text-[9px] mt-0.5">hover for full name</span>
+                </th>
+                <th scope="col" class="px-2 py-2.5">Seller</th>
+                <th scope="col" class="px-2 py-2.5">Order ID</th>
+                <th scope="col" class="px-2 py-2.5 text-right">Unit Price CNY</th>
+                <th scope="col" class="px-2 py-2.5 text-right">Qty</th>
+                <th scope="col" class="px-2 py-2.5 text-right">Weight g</th>
+                <th scope="col" class="px-2 py-2.5 text-right">Seller Freight</th>
+                <th scope="col" class="px-3 py-2.5 min-w-[160px]">Mapped KK Product</th>
+                <th scope="col" class="px-2 py-2.5 min-w-[120px]">Variant</th>
+                <th scope="col" class="px-2 py-2.5 min-w-[130px]">Type</th>
+                <th scope="col" class="px-2 py-2.5 text-center min-w-[100px]">Status</th>
+              </tr>
+            </thead>
+            <tbody id="parcelMappingTbody" class="divide-y divide-gray-100"></tbody>
+          </table>
+        </div>
+        <p class="px-4 sm:px-6 py-2 text-[10px] text-gray-400 border-t border-gray-100 lg:hidden">
+          Scroll horizontally for all mapping columns →
+        </p>
+
+        <footer class="px-4 sm:px-6 py-4 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <p id="parcelMappingRangeText" class="text-xs text-gray-500 font-medium"></p>
+          <div class="flex items-center gap-2" aria-label="Pagination (static)">
+            <button type="button" disabled class="border-2 border-gray-200 bg-gray-50 text-gray-400 px-3 py-1.5 text-[10px] font-black uppercase tracking-[.12em] min-h-[36px] cursor-not-allowed">Prev</button>
+            <span class="text-xs font-bold tabular-nums px-2">Page 1 of 7</span>
+            <button type="button" disabled class="border-2 border-gray-200 bg-gray-50 text-gray-400 px-3 py-1.5 text-[10px] font-black uppercase tracking-[.12em] min-h-[36px] cursor-not-allowed">Next</button>
+          </div>
+        </footer>
+      </article>
+    </section>
+
+    <!-- Saved Match Suggestions (Phase 7) -->
+    <section
+      id="parcelImportMatchSuggestions"
+      aria-label="Saved match suggestions"
+    >
+      <article class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6">
+        <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+          <div>
+            <h2 class="text-lg sm:text-xl font-black tracking-tight">Saved match suggestions</h2>
+            <p class="text-xs sm:text-sm text-gray-500 mt-1 max-w-2xl">
+              Use previous seller, source title, and sourcing URL hints to speed up item mapping.
+            </p>
+          </div>
+          <button
+            type="button"
+            title="View all suggestions (not wired)"
+            class="shrink-0 inline-flex items-center justify-center border-2 border-black bg-white text-black px-3 py-2 text-[10px] font-black uppercase tracking-[.12em] min-h-[40px] hover:bg-gray-50"
+          >
+            View All Suggestions
+          </button>
+        </div>
+
+        <p class="text-[10px] font-black uppercase tracking-[.14em] text-gray-400 mt-4 mb-3">
+          Helper suggestions — not final mappings
+        </p>
+        <p id="parcelMatchSuggestionsNote" class="text-xs text-gray-500 mb-3">
+          No saved mapping logic yet — upload a parcel file to load rows.
+        </p>
+
+        <ul id="parcelMatchSuggestionsList" class="space-y-3" role="list">
+          <li class="hidden" data-parcel-suggestion-placeholder class="flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl border border-green-200 bg-green-50/40 px-3 py-3 sm:px-4">
+            <div class="flex items-start gap-3 flex-1 min-w-0">
+              <div class="w-9 h-9 rounded-lg bg-green-100 border border-green-200 flex items-center justify-center text-green-700 shrink-0" aria-hidden="true">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                </svg>
+              </div>
+              <div class="min-w-0">
+                <p class="text-[10px] font-black uppercase tracking-[.12em] text-green-800">Same seller matched before</p>
+                <p class="text-sm text-gray-800 mt-1 leading-snug">
+                  <span class="font-medium">义乌锐普饰品厂</span> previously mapped to
+                  <span class="font-semibold">Cosmic Bear Charm Keychain</span>
+                </p>
+                <span class="inline-block mt-2 text-[10px] font-black uppercase tracking-wide text-green-800 bg-green-100 border border-green-200 rounded-full px-2 py-0.5">
+                  High confidence
+                </span>
+              </div>
+            </div>
+            <button type="button" class="shrink-0 border-2 border-green-700 bg-white text-green-800 px-3 py-2 text-[10px] font-black uppercase tracking-[.12em] min-h-[40px] hover:bg-green-100">
+              Apply Match
+            </button>
+          </li>
+
+          <!-- Suggestion 2 -->
+          <li class="flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl border border-amber-200 bg-amber-50/40 px-3 py-3 sm:px-4">
+            <div class="flex items-start gap-3 flex-1 min-w-0">
+              <div class="w-9 h-9 rounded-lg bg-amber-100 border border-amber-200 flex items-center justify-center text-amber-700 shrink-0" aria-hidden="true">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+              </div>
+              <div class="min-w-0">
+                <p class="text-[10px] font-black uppercase tracking-[.12em] text-amber-800">Similar source title found</p>
+                <p class="text-sm text-gray-800 mt-1 leading-snug">
+                  <span class="font-mono text-xs">毛绒包包2024秋…</span> resembles
+                  <span class="font-semibold">Plush Mini Bag Charm</span>
+                </p>
+                <span class="inline-block mt-2 text-[10px] font-black uppercase tracking-wide text-amber-800 bg-amber-100 border border-amber-200 rounded-full px-2 py-0.5">
+                  Medium confidence
+                </span>
+              </div>
+            </div>
+            <button type="button" class="shrink-0 border-2 border-amber-600 bg-white text-amber-900 px-3 py-2 text-[10px] font-black uppercase tracking-[.12em] min-h-[40px] hover:bg-amber-100">
+              Review
+            </button>
+          </li>
+
+          <!-- Suggestion 3 -->
+          <li class="flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl border border-blue-200 bg-blue-50/40 px-3 py-3 sm:px-4">
+            <div class="flex items-start gap-3 flex-1 min-w-0">
+              <div class="w-9 h-9 rounded-lg bg-blue-100 border border-blue-200 flex items-center justify-center text-blue-700 shrink-0" aria-hidden="true">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+                </svg>
+              </div>
+              <div class="min-w-0">
+                <p class="text-[10px] font-black uppercase tracking-[.12em] text-blue-800">Possible match from saved sourcing URL</p>
+                <p class="text-sm text-gray-800 mt-1 leading-snug">
+                  Saved product sourcing URL points to
+                  <span class="font-semibold">8-Ball Dice Charm Keychain</span>
+                </p>
+                <span class="inline-block mt-2 text-[10px] font-black uppercase tracking-wide text-blue-800 bg-blue-100 border border-blue-200 rounded-full px-2 py-0.5">
+                  High confidence
+                </span>
+              </div>
+            </div>
+            <button type="button" class="shrink-0 border-2 border-blue-700 bg-white text-blue-800 px-3 py-2 text-[10px] font-black uppercase tracking-[.12em] min-h-[40px] hover:bg-blue-100">
+              Confirm Variant
+            </button>
+          </li>
+
+          <!-- Suggestion 4 -->
+          <li class="flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl border border-gray-300 bg-gray-50 px-3 py-3 sm:px-4">
+            <div class="flex items-start gap-3 flex-1 min-w-0">
+              <div class="w-9 h-9 rounded-lg bg-gray-100 border border-gray-300 flex items-center justify-center text-gray-600 shrink-0" aria-hidden="true">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+              </div>
+              <div class="min-w-0">
+                <p class="text-[10px] font-black uppercase tracking-[.12em] text-gray-700">Variant needs confirmation</p>
+                <p class="text-sm text-gray-800 mt-1 leading-snug">
+                  Duplicate Baestao rows share the same source name but may represent different variants.
+                </p>
+                <span class="inline-block mt-2 text-[10px] font-black uppercase tracking-wide text-gray-600 bg-gray-200 border border-gray-300 rounded-full px-2 py-0.5">
+                  Low confidence
+                </span>
+              </div>
+            </div>
+            <button type="button" class="shrink-0 border-2 border-gray-500 bg-white text-gray-800 px-3 py-2 text-[10px] font-black uppercase tracking-[.12em] min-h-[40px] hover:bg-gray-100">
+              Mark Uncertain
+            </button>
+          </li>
+        </ul>
+
+        <p class="text-[11px] text-gray-400 mt-4 pt-4 border-t border-gray-100 leading-relaxed">
+          Suggestions come from saved mapping memory after prior draft saves. Apply to a row, then confirm variant if needed.
+        </p>
+      </article>
+    </section>
+
+    <!-- CPI Preview (Phase 8) -->
+    <section
+      id="parcelImportCpiPreview"
+      role="tabpanel"
+      aria-labelledby="parcelTabCpi"
+      aria-label="CPI preview and cost summary"
+    >
+      <article class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6">
+        <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+          <div>
+            <h2 class="text-lg sm:text-xl font-black tracking-tight">CPI preview</h2>
+            <p class="text-xs sm:text-sm text-gray-500 mt-1 max-w-2xl">
+              Preview landed cost impact before applying weighted-average CPI updates.
+            </p>
+          </div>
+          <span id="parcelCpiBadge" data-field="cpiBadge" class="shrink-0 text-[10px] font-black uppercase tracking-wide text-blue-800 bg-blue-50 border border-blue-200 rounded-full px-2.5 py-0.5">
+            Static estimate
+          </span>
+        </div>
+
+        <div
+          id="parcelCpiWarnings"
+          class="hidden mt-4 rounded-xl border border-amber-200 bg-amber-50/50 px-4 py-3"
+          aria-live="polite"
+          aria-label="CPI preview warnings"
+        ></div>
+
+        <!-- Summary metrics -->
+        <div id="parcelCpiSummaryFields" class="mt-5 grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4" aria-label="CPI summary metrics">
+          <div class="rounded-xl border border-gray-200 bg-gray-50/50 p-4 shadow-sm">
+            <p class="text-[10px] font-black uppercase tracking-[.14em] text-gray-500">Landed CPI Preview</p>
+            <p data-field="cpiLandedPreview" class="text-xl sm:text-2xl font-black mt-2 tabular-nums text-gray-900">—</p>
+            <p class="text-[11px] text-gray-400 mt-2">Current parcel estimate</p>
+          </div>
+          <div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+            <p class="text-[10px] font-black uppercase tracking-[.14em] text-gray-500">Latest CPI</p>
+            <p data-field="cpiLatest" class="text-xl sm:text-2xl font-black mt-2 tabular-nums text-gray-900">—</p>
+            <p data-field="cpiLatestHint" class="text-[11px] text-gray-400 mt-2">Last approved import</p>
+          </div>
+          <div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+            <p class="text-[10px] font-black uppercase tracking-[.14em] text-gray-500">Weighted Avg CPI</p>
+            <p data-field="cpiWeightedAvg" class="text-xl sm:text-2xl font-black mt-2 tabular-nums text-gray-900">—</p>
+            <p data-field="cpiWeightedAvgHint" class="text-[11px] text-gray-400 mt-2">Product-level average</p>
+          </div>
+          <div class="rounded-xl border border-violet-200 bg-violet-50/50 p-4 shadow-sm col-span-2 lg:col-span-1">
+            <p class="text-[10px] font-black uppercase tracking-[.14em] text-violet-800">Fulfilled CPI Preview</p>
+            <p data-field="cpiFulfilledPreview" class="text-xl sm:text-2xl font-black mt-2 tabular-nums text-violet-900">—</p>
+            <p data-field="cpiFulfilledHint" class="text-[11px] text-violet-700/80 mt-2">Includes outbound shipping avg</p>
+          </div>
+        </div>
+
+        <div class="mt-6 lg:grid lg:grid-cols-3 lg:gap-6">
+          <!-- Cost breakdown table -->
+          <div class="lg:col-span-2">
+            <h3 class="text-sm font-black uppercase tracking-[.1em] text-gray-800 mb-3">Cost breakdown per unit</h3>
+            <div class="overflow-x-auto rounded-xl border border-gray-200">
+              <table class="w-full border-collapse text-sm min-w-[480px]">
+                <thead class="bg-gray-50 border-b border-gray-200">
+                  <tr class="text-left text-[10px] font-black uppercase tracking-[.1em] text-gray-600">
+                    <th scope="col" class="px-3 py-2.5">Cost line</th>
+                    <th scope="col" class="px-3 py-2.5 text-right">CNY</th>
+                    <th scope="col" class="px-3 py-2.5 text-right">USD est.</th>
+                    <th scope="col" class="px-3 py-2.5">Notes</th>
+                  </tr>
+                </thead>
+                <tbody id="parcelCpiBreakdownFields" class="divide-y divide-gray-100">
+                  <tr>
+                    <td class="px-3 py-2 font-medium text-gray-900">Product cost</td>
+                    <td data-field="cpiCostProductCny" class="px-3 py-2 text-right tabular-nums">—</td>
+                    <td data-field="cpiCostProductUsd" class="px-3 py-2 text-right tabular-nums">—</td>
+                    <td class="px-3 py-2 text-xs text-gray-500">Item subtotal allocation</td>
+                  </tr>
+                  <tr>
+                    <td class="px-3 py-2 font-medium text-gray-900">Seller freight</td>
+                    <td data-field="cpiCostSellerFreightCny" class="px-3 py-2 text-right tabular-nums">—</td>
+                    <td data-field="cpiCostSellerFreightUsd" class="px-3 py-2 text-right tabular-nums">—</td>
+                    <td class="px-3 py-2 text-xs text-gray-500">Domestic seller-to-Baestao fee</td>
+                  </tr>
+                  <tr>
+                    <td class="px-3 py-2 font-medium text-gray-900">Parcel shipping share</td>
+                    <td data-field="cpiCostParcelShippingCny" class="px-3 py-2 text-right tabular-nums">—</td>
+                    <td data-field="cpiCostParcelShippingUsd" class="px-3 py-2 text-right tabular-nums">—</td>
+                    <td class="px-3 py-2 text-xs text-gray-500">Allocated by weight</td>
+                  </tr>
+                  <tr>
+                    <td class="px-3 py-2 font-medium text-gray-900">Insurance / service share</td>
+                    <td data-field="cpiCostInsuranceServiceCny" class="px-3 py-2 text-right tabular-nums">—</td>
+                    <td data-field="cpiCostInsuranceServiceUsd" class="px-3 py-2 text-right tabular-nums">—</td>
+                    <td class="px-3 py-2 text-xs text-gray-500">Parcel-level fee allocation</td>
+                  </tr>
+                  <tr>
+                    <td class="px-3 py-2 font-medium text-gray-900">FX / payment share</td>
+                    <td data-field="cpiCostFxCny" class="px-3 py-2 text-right tabular-nums">—</td>
+                    <td data-field="cpiCostFxUsd" class="px-3 py-2 text-right tabular-nums">—</td>
+                    <td class="px-3 py-2 text-xs text-gray-500">Effective exchange/payment estimate</td>
+                  </tr>
+                  <tr class="bg-gray-50 font-black">
+                    <td class="px-3 py-3 text-gray-900">Total landed CPI preview</td>
+                    <td data-field="cpiCostTotalCny" class="px-3 py-3 text-right tabular-nums">—</td>
+                    <td data-field="cpiCostTotalUsd" class="px-3 py-3 text-right tabular-nums">—</td>
+                    <td class="px-3 py-3 text-xs font-bold text-gray-600">Before outbound shipping</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Approval impact preview -->
+          <aside id="parcelCpiImpactFields" class="mt-6 lg:mt-0 rounded-xl border border-gray-200 bg-gray-50 p-4" aria-label="Approval impact preview">
+            <h3 class="text-sm font-black uppercase tracking-[.1em] text-gray-800">Approval impact preview</h3>
+            <dl class="mt-4 space-y-3 text-sm">
+              <div class="flex justify-between gap-3">
+                <dt class="text-gray-600">Products affected</dt>
+                <dd data-field="cpiProductsAffected" class="font-black tabular-nums text-gray-900">—</dd>
+              </div>
+              <div class="flex justify-between gap-3">
+                <dt class="text-gray-600">Rows excluded</dt>
+                <dd data-field="cpiRowsExcluded" class="font-black tabular-nums text-gray-900">—</dd>
+              </div>
+              <div class="flex justify-between gap-3">
+                <dt class="text-gray-600">Rows needing mapping</dt>
+                <dd data-field="cpiRowsNeedingMapping" class="font-black tabular-nums text-red-700">—</dd>
+              </div>
+              <div class="pt-3 border-t border-gray-200">
+                <dt class="text-[11px] font-black uppercase tracking-[.12em] text-gray-500">Ready to update CPI</dt>
+                <dd data-field="cpiReadyToUpdate" class="mt-1 text-sm font-bold text-amber-800">—</dd>
+              </div>
+            </dl>
+          </aside>
+        </div>
+
+        <aside
+          class="mt-5 sm:mt-6 rounded-xl border border-blue-200 bg-blue-50/50 px-4 py-3 text-xs sm:text-sm text-blue-950 leading-relaxed"
+          aria-label="CPI update guidance"
+        >
+          <p>
+            Product CPI updates will use <span class="font-semibold">weighted average</span> from approved imports.
+            Fulfilled CPI preview can later use real Shippo outbound label averages.
+          </p>
+        </aside>
+      </article>
+    </section>
+
+    <!-- Previous Parcel Imports (Phase 9) -->
+    <section
+      id="parcelImportHistory"
+      role="tabpanel"
+      aria-labelledby="parcelTabHistory"
+      aria-label="Previous parcel imports"
+    >
+      <article class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-4 sm:px-6 py-4 sm:py-5 border-b border-gray-100 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+          <div>
+            <h2 class="text-lg sm:text-xl font-black tracking-tight">Previous parcel imports</h2>
+            <p class="text-xs sm:text-sm text-gray-500 mt-1 max-w-2xl">
+              Review past Baestao parcel imports, approval status, and product CPI update history.
+            </p>
+          </div>
+          <button
+            type="button"
+            title="Export import history (not wired)"
+            class="shrink-0 inline-flex items-center justify-center gap-2 border-2 border-black bg-white text-black px-3 py-2 text-[10px] font-black uppercase tracking-[.12em] min-h-[40px] hover:bg-gray-50"
+          >
+            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+            </svg>
+            Export History
+          </button>
+        </div>
+
+        <div class="px-4 sm:px-6 py-3 border-b border-gray-100 flex flex-col sm:flex-row flex-wrap gap-2 sm:items-center">
+          <label class="sr-only" for="parcelHistorySearch">Search parcel imports</label>
+          <input
+            type="search"
+            id="parcelHistorySearch"
+            placeholder="Parcel ID or filename"
+            class="border-2 border-gray-300 rounded-lg px-3 py-2 text-xs font-mono min-w-[12rem] flex-1 sm:max-w-xs"
+          />
+          <label class="sr-only" for="parcelHistoryStatusFilter">Filter by status</label>
+          <select
+            id="parcelHistoryStatusFilter"
+            class="border-2 border-gray-300 rounded-lg px-3 py-2 text-xs font-bold uppercase tracking-wide min-h-[40px]"
+          >
+            <option value="">All statuses</option>
+            <option value="draft">Draft</option>
+            <option value="needs_review">Needs review</option>
+            <option value="ready_to_approve">Ready to approve</option>
+            <option value="approved">Approved</option>
+          </select>
+          <button
+            type="button"
+            id="parcelHistorySearchBtn"
+            class="inline-flex items-center justify-center border-2 border-black bg-white text-black px-3 py-2 text-[10px] font-black uppercase tracking-[.12em] min-h-[40px] hover:bg-gray-50"
+          >
+            Search
+          </button>
+          <button
+            type="button"
+            id="parcelHistoryLoadMoreBtn"
+            class="hidden inline-flex items-center justify-center border-2 border-gray-300 bg-gray-50 text-gray-800 px-3 py-2 text-[10px] font-bold uppercase tracking-[.12em] min-h-[40px] hover:bg-gray-100"
+          >
+            Load more
+          </button>
+        </div>
+
+        <div class="overflow-x-auto overscroll-x-contain" aria-label="Previous parcel import rows">
+          <table class="w-full border-collapse text-sm min-w-[960px]">
+            <thead class="bg-gray-50 border-b border-gray-200">
+              <tr class="text-left text-[10px] font-black uppercase tracking-[.1em] text-gray-600">
+                <th scope="col" class="px-3 py-2.5">Parcel ID</th>
+                <th scope="col" class="px-3 py-2.5">Import date</th>
+                <th scope="col" class="px-3 py-2.5 text-center">Status</th>
+                <th scope="col" class="px-3 py-2.5 text-right">Items</th>
+                <th scope="col" class="px-3 py-2.5 text-right">Charged weight</th>
+                <th scope="col" class="px-3 py-2.5 text-right">CNY total</th>
+                <th scope="col" class="px-3 py-2.5 text-right">USD total est.</th>
+                <th scope="col" class="px-3 py-2.5">Products updated</th>
+                <th scope="col" class="px-3 py-2.5">Issues</th>
+                <th scope="col" class="px-3 py-2.5">Expense</th>
+                <th scope="col" class="px-3 py-2.5 text-center min-w-[120px]">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="parcelHistoryTbody" class="divide-y divide-gray-100"></tbody>
+          </table>
+        </div>
+        <p class="px-4 sm:px-6 py-2 text-[10px] text-gray-400 border-t border-gray-100 lg:hidden">
+          Scroll horizontally for import history columns →
+        </p>
+
+        <footer class="px-4 sm:px-6 py-4 border-t border-gray-100">
+          <p id="parcelHistoryFootnote" class="text-[11px] text-gray-400 leading-relaxed">
+            Recent saved imports load here when you are logged in as admin.
+          </p>
+        </footer>
+      </article>
+    </section>
+
+    <!-- Bottom Action Bar (Phase 10) -->
+    <section
+      id="parcelImportActionBar"
+      class="sticky bottom-3 z-20"
+      aria-label="Parcel import actions"
+    >
+      <div class="bg-white rounded-2xl shadow-lg border-2 border-gray-200 p-4 sm:p-5">
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-bold text-gray-900">Parcel expense linkage</p>
+            <p id="parcelExpenseStatus" class="text-[11px] text-gray-500 mt-1 leading-relaxed max-w-xl" role="status" aria-live="polite">
+              Approve an import to create or link an Inventory expense.
+            </p>
+            <div class="flex flex-col sm:flex-row flex-wrap gap-2 mt-3">
+              <button
+                type="button"
+                id="parcelCreateExpenseBtn"
+                data-parcel-action="create-expense"
+                title="Create linked expense from parcel charges"
+                disabled
+                class="inline-flex items-center justify-center border-2 border-black bg-white text-black px-3 py-2 font-bold uppercase tracking-[.1em] text-[10px] min-h-[40px] hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Create Linked Expense
+              </button>
+              <div class="flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  id="parcelLinkExpenseInput"
+                  placeholder="Existing expense ID"
+                  disabled
+                  class="border-2 border-gray-300 rounded-lg px-3 py-2 text-xs font-mono min-w-[12rem] disabled:opacity-50"
+                />
+                <button
+                  type="button"
+                  id="parcelLinkExpenseBtn"
+                  data-parcel-action="link-expense"
+                  title="Link existing expense by ID"
+                  disabled
+                  class="inline-flex items-center justify-center border-2 border-black bg-white text-black px-3 py-2 font-bold uppercase tracking-[.1em] text-[10px] min-h-[40px] hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Link Expense
+                </button>
+              </div>
+            </div>
+            <p class="text-sm font-bold text-gray-900 mt-4">Inventory receiving</p>
+            <p id="parcelInventoryReceiveStatus" class="text-[11px] text-gray-500 mt-1 leading-relaxed max-w-xl" role="status" aria-live="polite">
+              Approve an import to receive inventory into variant stock.
+            </p>
+          </div>
+
+          <div class="flex flex-col sm:flex-row flex-wrap gap-2 w-full lg:w-auto lg:justify-end">
+            <button
+              type="button"
+              id="parcelSaveDraftBtnBar"
+              data-parcel-action="save-draft"
+              title="Save import draft"
+              disabled
+              class="inline-flex items-center justify-center border-4 border-black bg-white text-black px-4 py-2.5 font-black uppercase tracking-[.12em] text-[10px] sm:text-xs min-h-[44px] hover:bg-gray-50 w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Save Draft
+            </button>
+            <button
+              type="button"
+              title="Approve import without CPI update (not wired)"
+              class="inline-flex items-center justify-center border-2 border-black bg-white text-black px-4 py-2.5 font-bold uppercase tracking-[.12em] text-[10px] sm:text-xs min-h-[44px] hover:bg-gray-50 w-full sm:w-auto"
+            >
+              Approve Import
+            </button>
+            <button
+              type="button"
+              id="parcelApproveCpiBtnBar"
+              data-parcel-action="approve-cpi"
+              title="Approve parcel and update product CPI"
+              disabled
+              class="inline-flex items-center justify-center gap-2 border-4 border-black bg-black text-white px-4 py-2.5 font-black uppercase tracking-[.12em] text-[10px] sm:text-xs min-h-[44px] hover:bg-gray-900 w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+              Approve + Update CPI
+            </button>
+            <button
+              type="button"
+              id="parcelReceiveInventoryBtn"
+              data-parcel-action="receive-inventory"
+              title="Receive matched inventory into variant stock"
+              disabled
+              class="inline-flex items-center justify-center border-2 border-gray-300 bg-gray-100 text-gray-500 px-4 py-2.5 font-bold uppercase tracking-[.12em] text-[10px] sm:text-xs min-h-[44px] w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Receive Inventory
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script type="module">
+    import { initAdminNav } from "/js/shared/adminNav.js";
+    initAdminNav("Parcel Imports");
+  </script>
+  <script type="module" src="/js/admin/parcelImports/index.js"></script>
+  <script type="module" src="/js/shared/pwa.js"></script>
+</body>
+</html>
