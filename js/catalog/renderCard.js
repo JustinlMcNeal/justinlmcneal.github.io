@@ -22,7 +22,6 @@ function getColorVariants(product) {
   const variants = product.variants || [];
   return variants
     .filter((v) => (v.option_name || "").toLowerCase() === "color")
-    .filter((v) => (v.stock ?? 0) > 0)
     .map((v) => (v.option_value || "").trim())
     .filter(Boolean);
 }

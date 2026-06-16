@@ -58,8 +58,7 @@ export function normalizeWeightToGrams(raw) {
   const num = parseFloat(text.replace(/,/g, "").replace(/[^\d.-]/g, ""));
   if (!Number.isFinite(num)) return null;
   if (text.includes("kg")) return Math.round(num * 1000);
-  if (num >= 50 && !text.includes("g")) return Math.round(num);
-  if (num < 50 && !text.includes("g")) return Math.round(num * 1000);
+  // Baestao exports usually omit the unit; weights are grams unless "kg" is present.
   return Math.round(num);
 }
 

@@ -11,6 +11,10 @@ import {
 } from "../_shared/amazonConfirmShipmentUtils.ts";
 import { resolveAmazonCredentials } from "../_shared/amazonPtdAuthUtils.ts";
 import { readSyncEnvConfig } from "../_shared/amazonSyncAccountUtils.ts";
+import {
+  formatValidationError,
+  validateShippingAddressWithShippo,
+} from "../_shared/shippoAddressValidation.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const serviceKey  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -196,6 +200,20 @@ Deno.serve(async (req) => {
     if (orderErr || !order) {
       console.error("[shippo-create-label] order lookup failed:", JSON.stringify({ orderErr, sessionId: stripe_checkout_session_id }));
       return json({ error: "Order not found", detail: orderErr?.message || "no data" }, 404);
+    }
+
+    const addressCheck = await validateShippingAddressWithShippo(order, shippoKey);
+    if (!addressCheck.is_valid) {
+      return json({
+        error: "Shipping address is not valid for label purchase.",
+        address_validation: {
+          is_valid: false,
+          local_issues: addressCheck.local_issues,
+          messages: addressCheck.messages,
+          suggested: addressCheck.suggested ?? null,
+        },
+        detail: formatValidationError(addressCheck),
+      }, 422);
     }
 
     // ── 3. Fetch package preset ──

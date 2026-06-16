@@ -1,7 +1,31 @@
 import { escapeHtml, money } from "./dom.js";
 import { state } from "./state.js";
-import { getProfitIndicator, calculateProfitProjections } from "../pStorage/profitCalc.js";
 import { quickUpdateProduct, fetchProducts } from "./api.js";
+import {
+  countVariantCpiOverrides,
+  formatLandedCpiUsd,
+  resolveLandedCpiUsd,
+} from "../../shared/landedCpi.js";
+import {
+  formatCardCpiHint,
+  formatCardMarginHtml,
+  productMarginSortValue,
+  renderProductMarginCell,
+} from "./productMargin.js";
+
+function productCpiCell(p) {
+  const variants = (p.product_variants || []).filter((v) => v.is_active !== false);
+  const { landedCpiUsd } = resolveLandedCpiUsd({ unitCost: p.unit_cost });
+  const overrideCount = countVariantCpiOverrides(variants);
+  const base = formatLandedCpiUsd(landedCpiUsd);
+  if (!overrideCount) {
+    return `<span class="font-mono text-sm" title="Product CPI">${base}</span>`;
+  }
+  return `<div class="text-right">
+    <div class="font-mono text-sm" title="Product default CPI">${base}</div>
+    <div class="text-[9px] font-bold uppercase tracking-wide text-amber-800 mt-0.5">${overrideCount} variant CPI</div>
+  </div>`;
+}
 
 function stockBadge(totalStock) {
   if (totalStock == null) return '<span class="text-gray-400">—</span>';
@@ -39,11 +63,8 @@ function sortProducts(products, catMap) {
         bVal = Number(b.price) || 0;
         break;
       case 'margin':
-        // Calculate margin for sorting
-        const aProj = (a.unit_cost && a.price) ? calculateProfitProjections({ price: a.price, weight_g: a.weight_g, unit_cost: a.unit_cost }) : null;
-        const bProj = (b.unit_cost && b.price) ? calculateProfitProjections({ price: b.price, weight_g: b.weight_g, unit_cost: b.unit_cost }) : null;
-        aVal = aProj?.cpiPaidShipping?.marginPercent ?? -999;
-        bVal = bProj?.cpiPaidShipping?.marginPercent ?? -999;
+        aVal = productMarginSortValue(a);
+        bVal = productMarginSortValue(b);
         break;
       case 'status':
         aVal = a.is_active ? 1 : 0;
@@ -85,18 +106,8 @@ function mobileCardRow(p, cat, active, readOnly) {
   const productPageUrl = p.slug ? `/pages/product.html?slug=${encodeURIComponent(p.slug)}` : null;
   const supplierUrl = p.supplier_url || null;
 
-  // Calculate margin for mobile card
-  let marginBadge = '';
-  if (p.unit_cost && p.price) {
-    const indicator = getProfitIndicator({
-      target_price: p.price,
-      weight_g: p.weight_g,
-      unit_cost: p.unit_cost
-    });
-    if (indicator.hasData) {
-      marginBadge = `<span class="px-1.5 py-0.5 text-[8px] font-bold rounded-sm">${indicator.html}</span>`;
-    }
-  }
+  const marginBadge = formatCardMarginHtml(p);
+  const cpiHint = formatCardCpiHint(p);
 
   return `
     <div class="bg-white border-b-2 border-gray-200 p-3 active:bg-gray-50" data-product-card="${p.id}">
@@ -133,9 +144,10 @@ function mobileCardRow(p, cat, active, readOnly) {
 
           <!-- Bottom row: Price + Margin + Stock + Edit -->
           <div class="flex items-center justify-between mt-2">
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 flex-wrap">
               <div class="font-black text-base">${money(p.price)}</div>
               ${marginBadge}
+              ${cpiHint}
               ${stockBadge(p._totalStock)}
             </div>
             ${!readOnly ? `
@@ -227,18 +239,7 @@ export function renderTable({
       const statusClass = p.is_active ? "status-active" : "status-inactive";
       const statusText = p.is_active ? "Active" : "Inactive";
 
-      // Calculate margin if we have unit_cost and price
-      let marginHtml = '<span class="text-gray-400">—</span>';
-      if (p.unit_cost && p.price) {
-        const indicator = getProfitIndicator({
-          target_price: p.price,
-          weight_g: p.weight_g,
-          unit_cost: p.unit_cost
-        });
-        if (indicator.hasData) {
-          marginHtml = indicator.html;
-        }
-      }
+      const marginHtml = renderProductMarginCell(p);
 
       // Build product page URL
       const productPageUrl = p.slug ? `/pages/product.html?slug=${encodeURIComponent(p.slug)}` : null;
@@ -277,6 +278,9 @@ export function renderTable({
                   title="Click to edit price">
               ${money(p.price)}
             </span>
+          </td>
+          <td class="px-4 py-3 text-right hidden md:table-cell">
+            ${productCpiCell(p)}
           </td>
           <td class="px-4 py-3 text-center hidden lg:table-cell">
             ${marginHtml}
@@ -343,18 +347,8 @@ export function renderTable({
         const productPageUrl = p.slug ? `/pages/product.html?slug=${encodeURIComponent(p.slug)}` : null;
         const supplierUrl = p.supplier_url || null;
 
-        // Calculate margin
-        let marginBadge = '';
-        if (p.unit_cost && p.price) {
-          const indicator = getProfitIndicator({
-            target_price: p.price,
-            weight_g: p.weight_g,
-            unit_cost: p.unit_cost
-          });
-          if (indicator.hasData) {
-            marginBadge = indicator.html;
-          }
-        }
+        const marginBadge = formatCardMarginHtml(p);
+        const cpiHint = formatCardCpiHint(p);
 
         return `
           <div class="bg-white border-2 border-gray-200 rounded-lg overflow-hidden hover:border-black hover:shadow-lg transition-all group">
@@ -374,10 +368,11 @@ export function renderTable({
                 ? `<a href="${productPageUrl}" target="_blank" class="font-bold text-sm line-clamp-2 hover:text-kkpink">${escapeHtml(p.name || "")}</a>`
                 : `<div class="font-bold text-sm line-clamp-2">${escapeHtml(p.name || "")}</div>`}
               
-              <div class="flex items-center justify-between mt-2">
+              <div class="flex items-center justify-between mt-2 flex-wrap gap-1">
                 <div class="font-black text-lg">${money(p.price)}</div>
-                ${marginBadge}
+                <div class="flex items-center flex-wrap gap-1">${marginBadge}</div>
               </div>
+              ${cpiHint ? `<div class="mt-1">${cpiHint}</div>` : ""}
               
               <div class="text-xs text-gray-500 mt-1 truncate">${escapeHtml(cat || "No category")}</div>
               

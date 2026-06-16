@@ -62,6 +62,40 @@ function refundBadgeHtml(refund) {
   return `<span class="inline-flex items-center border-[3px] ${cls} px-2 py-1 text-[10px] font-black uppercase tracking-[.18em] whitespace-nowrap ml-1">${label}${amt}</span>`;
 }
 
+/** Phase 10P — marketplace observation badges (no Stripe refund yet). */
+function marketplaceObsBadgeHtml(r) {
+  if (r.refund?.refund_status) return "";
+  const ms = r.marketplace_status;
+  if (!ms) return "";
+
+  const badges = [];
+  const base =
+    "inline-flex items-center border-[3px] px-2 py-1 text-[10px] font-black uppercase tracking-[.14em] whitespace-nowrap ml-1";
+
+  if (ms.cancel_status === "observed" || ms.order_status === "canceled_observed") {
+    badges.push(
+      `<span class="${base} border-gray-600 bg-gray-100 text-gray-800" title="Marketplace cancel observed (guidance only)">CANCELED</span>`,
+    );
+  }
+  if (ms.refund_status_derived === "observed" || ms.order_status === "refund_observed") {
+    badges.push(
+      `<span class="${base} border-red-500 bg-red-50 text-red-700" title="Marketplace refund observed (guidance only)">REFUND OBSERVED</span>`,
+    );
+  }
+  if (ms.return_observation_status) {
+    badges.push(
+      `<span class="${base} border-purple-500 bg-purple-50 text-purple-700" title="Return observation — manual review">RETURN REVIEW</span>`,
+    );
+  }
+  if (ms.is_afn_observed) {
+    badges.push(
+      `<span class="${base} border-blue-400 bg-blue-50 text-blue-700" title="Amazon Fulfilled Network (external fulfillment)">AFN EXTERNAL</span>`,
+    );
+  }
+
+  return badges.join("");
+}
+
 function displayStatus(labelStatus) {
   return String(labelStatus || "pending").replaceAll("_", " ");
 }
@@ -245,6 +279,7 @@ function renderMobileCards(rows = [], getRowExtras = () => ({})) {
                       ${esc(displayStatus(labelStatus))}
                     </span>
                     ${refundBadgeHtml(r.refund)}
+                    ${marketplaceObsBadgeHtml(r)}
                   </div>
 
                   <button
@@ -353,6 +388,7 @@ function renderDesktopRows(rows = [], getRowExtras = () => ({})) {
                 ${esc(displayStatus(labelStatus))}
               </span>
               ${refundBadgeHtml(r.refund)}
+              ${marketplaceObsBadgeHtml(r)}
             </div>
           </td>
 

@@ -2,6 +2,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeadersJson, json, requireAdminJson } from "../_shared/amazonAuthUtils.ts";
 import { syncAmazonFinancesToDb } from "../_shared/amazonFinanceSyncUtils.ts";
+import { refreshMarketplaceObservationsAfterSync } from "../_shared/marketplaceObservationRefresh.ts";
 import { resolveAmazonCredentials } from "../_shared/amazonPtdAuthUtils.ts";
 import {
   isSyncEnvConfigured,
@@ -84,7 +85,13 @@ Deno.serve(async (req) => {
       );
     }
 
-    return json({ ok: true, success: true, days_back: daysBack, ...syncResult.stats });
+    const obsRefresh = await refreshMarketplaceObservationsAfterSync(serviceClient, {
+      channel: "amazon",
+      daysBack,
+      logPrefix: LOG_PREFIX,
+    });
+
+    return json({ ok: true, success: true, days_back: daysBack, ...syncResult.stats, observation_refresh: obsRefresh });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     return json({ ok: false, error: message }, 500);

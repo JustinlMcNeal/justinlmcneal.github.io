@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeadersJson, json } from "../_shared/amazonAuthUtils.ts";
 import { resolveAmazonCredentials } from "../_shared/amazonPtdAuthUtils.ts";
 import { syncAmazonOrdersToDb } from "../_shared/amazonOrderSyncUtils.ts";
+import { refreshMarketplaceObservationsAfterSync } from "../_shared/marketplaceObservationRefresh.ts";
 import {
   isSyncEnvConfigured,
   loadActiveSellerAccounts,
@@ -71,12 +72,19 @@ Deno.serve(async (req) => {
       );
     }
 
+    const obsRefresh = await refreshMarketplaceObservationsAfterSync(serviceClient, {
+      channel: "amazon",
+      daysBack,
+      logPrefix: LOG_PREFIX,
+    });
+
     return json({
       ok: true,
       success: true,
       days_back: daysBack,
       synced: totalSynced,
       warnings,
+      observation_refresh: obsRefresh,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);

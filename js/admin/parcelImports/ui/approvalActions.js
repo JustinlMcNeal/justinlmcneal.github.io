@@ -2,7 +2,7 @@
 
 import { approveParcelImportCpi } from "../api/approvalApi.js";
 import { computeStatusIntent } from "../api/parcelImportsMappers.js";
-import { buildCpiPreview } from "../cpi/cpiPreview.js";
+import { buildCpiPreview, resolveEffectiveFxRate } from "../cpi/cpiPreview.js";
 import { getDom } from "../dom.js";
 import {
   getState,
@@ -11,7 +11,10 @@ import {
   setApprovalStatus,
   setImportStatus,
 } from "../state.js";
-import { validateOverrides } from "../validation/overrideValidators.js";
+import {
+  hasOverrideFieldErrors,
+  validateOverrides,
+} from "../validation/overrideValidators.js";
 import { hydrateExpenseLinkFromHeader, updateExpenseLinkUi } from "./expenseLinkActions.js";
 import { updateInventoryReceiveUi } from "./inventoryReceiveActions.js";
 import { loadAndRenderHistory } from "./historyTable.js";
@@ -20,6 +23,8 @@ import {
   renderActionStatus,
   updateSaveDraftButtonState,
 } from "./saveDraft.js";
+import { activateTab } from "./tabs.js";
+import { updateWorkflowChrome } from "./exportActions.js";
 
 let refreshHistoryFn = loadAndRenderHistory;
 
@@ -87,10 +92,15 @@ export function getApprovalBlockReason(state) {
     rowMappings: state.rowMappings,
   });
   const validation = validateOverrides(state.overrides, state.xlsBaseline);
-  const overrideErrors = Object.values(validation.fieldMessages).some((m) => m.length > 0);
+  const overrideErrors = hasOverrideFieldErrors(validation.fieldMessages);
 
   if (state.errors?.length > 0) return "Parse errors must be resolved.";
   if (overrideErrors) return "Override validation errors must be fixed.";
+  const fxRate = resolveEffectiveFxRate(state.overrides);
+  if (!fxRate) {
+    return "Exchange rate required — enter FX rate or total charge + USD equivalent in Parcel Charges, then Save Draft.";
+  }
+
   if (!cpiPreview.summary?.readyToUpdate) {
     if (cpiPreview.summary?.needsMappingRows > 0) {
       return "Mapping issues remain — resolve all business rows.";
@@ -98,7 +108,7 @@ export function getApprovalBlockReason(state) {
     if (cpiPreview.summary?.productsAffected === 0) {
       return "No matched business rows for CPI update.";
     }
-    return "Not ready to approve — check mapping and overrides.";
+    return "Not ready to approve — check mapping, quantities, and parcel charges.";
   }
 
   const statusIntent = computeStatusIntent(state, cpiPreview);
@@ -142,14 +152,20 @@ export async function handleApproveCpi() {
     await refreshHistoryFn();
     await refreshGlobalKpis();
     await hydrateExpenseLinkFromHeader(state.currentImportId);
+    activateTab("parcelTabCpi");
   } catch (err) {
     console.error("[parcelImports] approve failed", err);
-    setApprovalStatus("error", `Approve failed: ${err?.message || "Unknown error"}`);
+    const raw = err?.message || "Unknown error";
+    const friendly = /no product cpi targets updated/i.test(raw)
+      ? "Missing exchange rate or stale draft — enter FX rate in Parcel Charges, Save Draft, then approve again."
+      : raw;
+    setApprovalStatus("error", `Approve failed: ${friendly}`);
   } finally {
     renderActionStatus();
     updateApprovalButtonState();
     updateSaveDraftButtonState();
     updateExpenseLinkUi();
     updateInventoryReceiveUi();
+    updateWorkflowChrome();
   }
 }

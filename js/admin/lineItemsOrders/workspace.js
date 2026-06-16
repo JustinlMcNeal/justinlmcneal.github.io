@@ -5,14 +5,26 @@ import {
   fetchOrderDetails,
   fetchCtaLabelHistory,
   upsertFulfillmentShipment,
+  finalizeKkOrderReservations,
   issueRefund,
   updateRefundReason,
   buyShippingLabel,
+  updateOrderShippingAddress,
+  validateOrderShippingAddress,
   confirmAmazonShipment,
   voidShippingLabel,
   fetchPackagePresets,
   getSignedLabelUrl,
 } from "./api.js";
+import {
+  localAddressIssues,
+  readShippingFieldsFromDom,
+  populateShippingFields,
+  renderAddressStatusHtml,
+  customerDisplayName,
+  splitPrintableFirstLast,
+} from "./shippingAddress.js";
+import { renderCustomerInfoSection } from "./workspaceOverview.js";
 import {
   isoToLocalDatetimeValue,
   localDatetimeValueToIso,
@@ -46,6 +58,10 @@ let _wsDirty = false;
 let _detail = null;       // { order, lineItems, shipment }
 let _focusTrigger = null; // element to restore focus to on close
 let _presetsCache = null; // package presets — cached for session lifetime
+/** @type {{ sessionId: string, is_valid: boolean, messages?: object[], suggested?: object } | null} */
+let _shippingValidation = null;
+let _shippingAddrDirty = false;
+let _lastSuggestedAddress = null;
 
 const STATUS_COLORS = {
   pending: "bg-amber-500",
@@ -84,11 +100,17 @@ export function initWorkspace({ onSaved } = {}) {
   });
 }
 
-export async function openWorkspace(row, { tab = "overview" } = {}) {
+let _focusLineItemId = null;
+
+export async function openWorkspace(row, { tab = "overview", focusLineItemId = null } = {}) {
   if (!row?.stripe_checkout_session_id) return;
+  _focusLineItemId = focusLineItemId;
   _currentRow = row;
   _currentTab = tab;
   _wsDirty = false;
+  _shippingValidation = null;
+  _shippingAddrDirty = false;
+  _lastSuggestedAddress = null;
   _detail = null;
 
   const ws = document.getElementById("orderWorkspace");
@@ -127,6 +149,9 @@ export async function openWorkspace(row, { tab = "overview" } = {}) {
       };
     }
     _renderTabBody(tab);
+    if (_focusLineItemId) {
+      requestAnimationFrame(() => _applyLineFocusAfterRender(tab));
+    }
     requestAnimationFrame(() => document.getElementById("btnWsClose")?.focus());
   } catch (err) {
     console.error(err);
@@ -147,6 +172,84 @@ export function closeWorkspace() {
   _currentRow = null;
   _detail = null;
   _wsDirty = false;
+  _shippingValidation = null;
+  _shippingAddrDirty = false;
+  _lastSuggestedAddress = null;
+  _focusLineItemId = null;
+}
+
+function _clearWorkspaceNotice() {
+  document.getElementById("wsBody")?.querySelector("[data-ws-deeplink-notice]")?.remove();
+}
+
+function _showWorkspaceNotice(message, { variant = "warn", actionLabel = null, onAction = null } = {}) {
+  const wsBody = document.getElementById("wsBody");
+  if (!wsBody) return;
+  _clearWorkspaceNotice();
+
+  const notice = document.createElement("div");
+  notice.setAttribute("data-ws-deeplink-notice", "1");
+  notice.className =
+    variant === "info"
+      ? "mx-3 sm:mx-6 mt-3 border-4 border-indigo-300 bg-indigo-50 p-3 text-sm text-indigo-950"
+      : "mx-3 sm:mx-6 mt-3 border-4 border-amber-400 bg-amber-50 p-3 text-sm text-amber-950";
+  notice.innerHTML = `<p class="font-bold">${esc(message)}</p>`;
+
+  if (actionLabel && onAction) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className =
+      "mt-2 text-[10px] font-black uppercase text-indigo-800 hover:underline border-2 border-indigo-700 px-2 py-1";
+    btn.textContent = actionLabel;
+    btn.addEventListener("click", onAction);
+    notice.appendChild(btn);
+  }
+
+  wsBody.prepend(notice);
+}
+
+/** @param {string} tab */
+function _applyLineFocusAfterRender(tab) {
+  if (!_focusLineItemId) return;
+
+  if (tab !== "overview") {
+    _showWorkspaceNotice(
+      "Line highlight is available on the Overview tab.",
+      {
+        variant: "info",
+        actionLabel: "Switch to Overview",
+        onAction: () => {
+          if (!_currentRow) return;
+          void openWorkspace(_currentRow, { tab: "overview", focusLineItemId: _focusLineItemId });
+        },
+      },
+    );
+    return;
+  }
+
+  const found = _highlightLineItem(_focusLineItemId);
+  if (!found) {
+    _showWorkspaceNotice("Order opened, but line could not be found in the loaded items.");
+  }
+}
+
+/** @param {string} lineItemId @returns {boolean} */
+function _highlightLineItem(lineItemId) {
+  if (!lineItemId) return false;
+  const el = document.querySelector(`[data-ws-line-item="${CSS.escape(String(lineItemId))}"]`);
+  if (!el) return false;
+
+  el.classList.add("ring-4", "ring-kkpink", "ring-offset-2", "animate-pulse");
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+
+  window.setTimeout(() => {
+    el.classList.remove("animate-pulse");
+    window.setTimeout(() => {
+      el.classList.remove("ring-4", "ring-kkpink", "ring-offset-2");
+    }, 2500);
+  }, 3500);
+
+  return true;
 }
 
 // ── header ───────────────────────────────────────────────────────
@@ -221,6 +324,9 @@ function _switchTab(tab) {
   _setFooter(tab === "fulfillment");
   document.getElementById("wsBody")?.scrollTo?.(0, 0);
   _renderTabBody(tab);
+  if (_focusLineItemId) {
+    requestAnimationFrame(() => _applyLineFocusAfterRender(tab));
+  }
 }
 
 // ── footer / dirty ───────────────────────────────────────────────
@@ -247,14 +353,20 @@ function _renderTabBody(tab) {
   if (!wsBody || !_detail) return;
   const { order, lineItems, shipment, ctaLabelHistory } = _detail;
 
-  if (tab === "overview") wsBody.innerHTML = renderOverview(order, lineItems);
+  if (tab === "overview") wsBody.innerHTML = renderOverview(order, lineItems, { focusLineItemId: _focusLineItemId });
   else if (tab === "financials") wsBody.innerHTML = renderFinancials(order, shipment);
   else if (tab === "fulfillment") wsBody.innerHTML = renderFulfillment(order, shipment);
   else if (tab === "labels") wsBody.innerHTML = renderLabels(order, ctaLabelHistory);
   else if (tab === "ids") wsBody.innerHTML = renderIds(order);
 
-  if (tab === "fulfillment") {
+  if (tab === "overview") {
+    populateShippingFields(order, wsBody);
+    _renderAddressStatusMount(wsBody);
+    _wireShippingAddressButtons(wsBody, order);
+    _wireOverviewCustomerActions(wsBody, order);
+  } else if (tab === "fulfillment") {
     _populateFulfillmentFields(order, shipment);
+    _renderFulfillmentAddrHint(wsBody);
     _wireRefundButtons(wsBody, order);
     _wireLabelButtons(wsBody, order, shipment);
     _wireCtaPrintButton(wsBody, order);
@@ -370,6 +482,23 @@ async function _save() {
       patch,
       previousShipment,
     });
+
+    const prevStatus = previousShipment?.label_status || "pending";
+    const nextStatus = saved?.label_status || patch.label_status || "pending";
+    const finalizeStatuses = ["shipped", "delivered"];
+    if (
+      finalizeStatuses.includes(nextStatus) &&
+      !finalizeStatuses.includes(prevStatus)
+    ) {
+      try {
+        await finalizeKkOrderReservations({
+          stripe_checkout_session_id: _currentRow.stripe_checkout_session_id,
+          reference_id: saved?.tracking_number || _currentRow.stripe_checkout_session_id,
+        });
+      } catch (finErr) {
+        console.warn("[workspace] KK reservation finalize failed (non-fatal):", finErr);
+      }
+    }
 
     setStatus("Saved shipment ✓");
     if (_detail) _detail.shipment = saved;
@@ -553,6 +682,291 @@ function _wireRefundButtons(container, order) {
   }
 }
 
+function _invalidateShippingValidation() {
+  _shippingValidation = null;
+  _lastSuggestedAddress = null;
+}
+
+function _setShippingValidation(apiResult, sessionId) {
+  _shippingValidation = {
+    sessionId,
+    is_valid: Boolean(apiResult?.is_valid),
+    messages: apiResult?.messages || [],
+    local_issues: apiResult?.local_issues || [],
+    suggested: apiResult?.suggested || null,
+  };
+  if (apiResult?.suggested) _lastSuggestedAddress = apiResult.suggested;
+}
+
+function _renderAddressStatusMount(container) {
+  const mount = container.querySelector("#addrStatusMount");
+  if (!mount) return;
+
+  const order = _detail?.order;
+  const sessionId = order?.stripe_checkout_session_id;
+  const issues = localAddressIssues(order);
+
+  if (_shippingAddrDirty) {
+    mount.innerHTML = renderAddressStatusHtml({ pending: true });
+    return;
+  }
+
+  if (
+    _shippingValidation &&
+    _shippingValidation.sessionId === sessionId
+  ) {
+    mount.innerHTML = renderAddressStatusHtml({
+      isValid: _shippingValidation.is_valid,
+      issues: _shippingValidation.local_issues || [],
+      messages: _shippingValidation.messages || [],
+      suggested: _shippingValidation.suggested,
+    });
+    const applyBtn = mount.querySelector("[data-apply-suggested-address]");
+    if (applyBtn) applyBtn.addEventListener("click", () => _applySuggestedAddress(container));
+    return;
+  }
+
+  if (issues.length) {
+    mount.innerHTML = renderAddressStatusHtml({ issues, isValid: null });
+    return;
+  }
+
+  mount.innerHTML = renderAddressStatusHtml({
+    pending: true,
+  });
+}
+
+function _renderFulfillmentAddrHint(container) {
+  const mount = container.querySelector("#fulfillmentAddrHint");
+  if (!mount) return;
+
+  const order = _detail?.order;
+  const sessionId = order?.stripe_checkout_session_id;
+  const labelStatus = _detail?.shipment?.label_status || "pending";
+  if (labelStatus !== "pending" && labelStatus !== "voided") {
+    mount.innerHTML = "";
+    return;
+  }
+
+  if (_shippingAddrDirty) {
+    mount.innerHTML = renderAddressStatusHtml({ pending: true });
+    return;
+  }
+
+  if (
+    _shippingValidation &&
+    _shippingValidation.sessionId === sessionId &&
+    _shippingValidation.is_valid
+  ) {
+    mount.innerHTML = renderAddressStatusHtml({ isValid: true });
+    return;
+  }
+
+  const issues = localAddressIssues(order);
+  if (
+    _shippingValidation &&
+    _shippingValidation.sessionId === sessionId &&
+    !_shippingValidation.is_valid
+  ) {
+    mount.innerHTML = renderAddressStatusHtml({
+      isValid: false,
+      issues: _shippingValidation.local_issues || issues,
+      messages: _shippingValidation.messages || [],
+      suggested: _shippingValidation.suggested,
+    });
+    return;
+  }
+
+  mount.innerHTML = renderAddressStatusHtml({
+    issues: issues.length ? issues : ["Validate the shipping address on the Overview tab before buying a label."],
+    isValid: issues.length ? null : false,
+  });
+}
+
+function _showAddrActionMsg(text, isError = false) {
+  const el = document.getElementById("addrActionMsg");
+  if (!el) return;
+  el.textContent = text || "";
+  el.classList.toggle("hidden", !text);
+  el.classList.toggle("text-red-600", Boolean(isError));
+  el.classList.toggle("text-emerald-700", Boolean(text) && !isError);
+}
+
+function _mergeOrderAddress(patch) {
+  if (!_detail?.order) return;
+  Object.assign(_detail.order, patch);
+  if (_currentRow) {
+    for (const k of Object.keys(patch)) {
+      if (k in _currentRow) _currentRow[k] = patch[k];
+    }
+  }
+}
+
+function _refreshCustomerInfoMount(container, order, { pendingSave = false } = {}) {
+  const mount = container.querySelector("#customerInfoMount");
+  if (!mount || !order) return;
+  mount.innerHTML = renderCustomerInfoSection(order, { pendingSave });
+  _wireOverviewCustomerActions(container, order);
+}
+
+function _orderFromShippingFields(container, baseOrder) {
+  const fields = readShippingFieldsFromDom(container);
+  return { ...baseOrder, ...fields };
+}
+
+function _focusNameForLabel(container) {
+  container.querySelector("#shippingAddressSection")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  window.setTimeout(() => {
+    container.querySelector("#addrFirstName")?.focus({ preventScroll: true });
+  }, 280);
+}
+
+function _applyPrintableName(container, order) {
+  const { first_name, last_name } = splitPrintableFirstLast(customerDisplayName(order));
+  const firstEl = container.querySelector("#addrFirstName");
+  const lastEl = container.querySelector("#addrLastName");
+  if (firstEl) firstEl.value = first_name ?? "";
+  if (lastEl) lastEl.value = last_name ?? "";
+  _shippingAddrDirty = true;
+  _invalidateShippingValidation();
+  _renderAddressStatusMount(container);
+  _refreshCustomerInfoMount(container, _orderFromShippingFields(container, order), { pendingSave: true });
+  _showAddrActionMsg("Printable name applied — click Save Address, then Validate.", false);
+  _focusNameForLabel(container);
+}
+
+function _wireOverviewCustomerActions(container, order) {
+  container.querySelector("[data-edit-name-for-label]")?.addEventListener("click", () => {
+    _focusNameForLabel(container);
+  });
+  container.querySelector("[data-use-printable-name]")?.addEventListener("click", () => {
+    _applyPrintableName(container, _orderFromShippingFields(container, order));
+  });
+}
+
+function _applySuggestedAddress(container) {
+  const s = _lastSuggestedAddress;
+  if (!s) return;
+  if (s.street_address) container.querySelector("#addrStreet").value = s.street_address;
+  if (s.city) container.querySelector("#addrCity").value = s.city;
+  if (s.state) container.querySelector("#addrState").value = s.state;
+  if (s.zip) container.querySelector("#addrZip").value = s.zip;
+  if (s.country) container.querySelector("#addrCountry").value = s.country;
+  _shippingAddrDirty = true;
+  _invalidateShippingValidation();
+  _renderAddressStatusMount(container);
+  _showAddrActionMsg("Suggested address applied — click Save Address, then Validate.", false);
+}
+
+function _wireShippingAddressButtons(container, order) {
+  const sessionId = order.stripe_checkout_session_id;
+  const ids = ["addrFirstName", "addrLastName", "addrStreet", "addrCity", "addrState", "addrZip", "addrCountry"];
+
+  for (const id of ids) {
+    const el = container.querySelector(`#${id}`);
+    if (!el) continue;
+    el.addEventListener("input", () => {
+      _shippingAddrDirty = true;
+      _invalidateShippingValidation();
+      _renderAddressStatusMount(container);
+      if (id === "addrFirstName" || id === "addrLastName") {
+        _refreshCustomerInfoMount(container, _orderFromShippingFields(container, order), {
+          pendingSave: true,
+        });
+      }
+      const hint = document.getElementById("fulfillmentAddrHint");
+      if (hint) _renderFulfillmentAddrHint(document.getElementById("wsBody") || container);
+    });
+  }
+
+  container.querySelector("[data-save-address]")?.addEventListener("click", async (btn) => {
+    const fields = readShippingFieldsFromDom(container);
+    btn.disabled = true;
+    const orig = btn.textContent;
+    btn.textContent = "Saving…";
+    _showAddrActionMsg("");
+    try {
+      const result = await updateOrderShippingAddress(sessionId, fields);
+      _mergeOrderAddress(result.order || fields);
+      _shippingAddrDirty = false;
+      _invalidateShippingValidation();
+      _renderAddressStatusMount(container);
+      _refreshCustomerInfoMount(container, _detail?.order || order);
+      _populateHeader(_currentRow || order);
+      setStatus("Shipping address saved ✓");
+      try {
+        const validation = await validateOrderShippingAddress(sessionId);
+        _setShippingValidation(validation, sessionId);
+        _renderAddressStatusMount(container);
+        if (validation.is_valid) {
+          _showAddrActionMsg("Address saved and validated — OK to buy a label.", false);
+        } else {
+          _showAddrActionMsg(validation.error || "Saved, but address still needs review.", true);
+        }
+      } catch (valErr) {
+        _showAddrActionMsg(
+          "Address saved. Validate manually before buying a label.",
+          false,
+        );
+        console.warn("[workspace] auto-validate after save:", valErr);
+      }
+      await _onSaved?.();
+    } catch (err) {
+      _showAddrActionMsg(err.message || "Save failed", true);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = orig;
+    }
+  });
+
+  container.querySelector("[data-validate-address]")?.addEventListener("click", async (btn) => {
+    if (_shippingAddrDirty) {
+      alert("Save the address before validating.");
+      return;
+    }
+    btn.disabled = true;
+    const orig = btn.textContent;
+    btn.textContent = "Validating…";
+    _showAddrActionMsg("");
+    try {
+      const result = await validateOrderShippingAddress(sessionId);
+      _setShippingValidation(result, sessionId);
+      _renderAddressStatusMount(container);
+      if (_currentTab === "fulfillment") {
+        _renderFulfillmentAddrHint(document.getElementById("wsBody") || container);
+      }
+      if (result.is_valid) {
+        _showAddrActionMsg("Address validated — OK to buy a label.", false);
+      } else {
+        _showAddrActionMsg(result.error || "Address could not be validated.", true);
+      }
+    } catch (err) {
+      _showAddrActionMsg(err.message || "Validation failed", true);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = orig;
+    }
+  });
+}
+
+function _buyLabelBlockedReason(sessionId, order) {
+  if (_shippingAddrDirty) {
+    return "Save the shipping address on the Overview tab before buying a label.";
+  }
+  if (
+    !_shippingValidation ||
+    _shippingValidation.sessionId !== sessionId ||
+    !_shippingValidation.is_valid
+  ) {
+    const local = localAddressIssues(order);
+    if (local.length) {
+      return `Shipping address is not valid:\n\n${local.join("\n")}\n\nOverview → Save Address → Validate Address.`;
+    }
+    return "Validate the shipping address on the Overview tab before buying a label.";
+  }
+  return null;
+}
+
 async function _refreshCtaLabelHistory() {
   if (!_currentRow || !_detail) return;
   try {
@@ -616,6 +1030,13 @@ async function _wireLabelButtons(container, order, shipment) {
     btnBuy.addEventListener("click", async () => {
       const presetId = presetSelect?.value || null;
       if (!_warnIfDirty("buying this label")) return;
+
+      const blockReason = _buyLabelBlockedReason(sessionId, order);
+      if (blockReason) {
+        alert(blockReason);
+        return;
+      }
+
       btnBuy.disabled = true;
       btnBuy.textContent = "⏳ Buying…";
       try {
@@ -630,7 +1051,20 @@ async function _wireLabelButtons(container, order, shipment) {
         openWorkspace(_currentRow, { tab: _currentTab });
         await _onSaved?.();
       } catch (err) {
-        alert("Label purchase failed: " + (err.message || err));
+        if (err.addressValidation) {
+          _setShippingValidation(
+            {
+              is_valid: false,
+              messages: err.addressValidation.messages,
+              local_issues: err.addressValidation.local_issues,
+              suggested: err.addressValidation.suggested,
+            },
+            sessionId,
+          );
+          _renderFulfillmentAddrHint(container);
+        }
+        const detail = err.detail ? `\n\n${err.detail}` : "";
+        alert("Label purchase failed: " + (err.message || err) + detail);
         btnBuy.disabled = false;
         btnBuy.textContent = "🏷️ Buy Label";
       }

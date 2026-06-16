@@ -345,6 +345,12 @@ entrypoint = "./functions/stripe-webhook/index.ts"
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/stripe-webhook/*.html" ]
 
+[functions.stripe-refresh-refund-details]
+enabled = true
+verify_jwt = true
+import_map = "./functions/stripe-refresh-refund-details/deno.json"
+entrypoint = "./functions/stripe-refresh-refund-details/index.ts"
+
 [functions.process-scheduled-posts]
 enabled = true
 verify_jwt = false
@@ -394,6 +400,16 @@ entrypoint = "./functions/autopilot-fill/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/shippo-webhook/index.ts"
+
+[functions.shippo-validate-address]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/shippo-validate-address/index.ts"
+
+[functions.update-order-shipping-address]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/update-order-shipping-address/index.ts"
 
 [functions.cta-label-redirect]
 enabled = true

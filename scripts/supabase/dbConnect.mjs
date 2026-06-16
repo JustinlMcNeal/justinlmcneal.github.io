@@ -45,7 +45,7 @@ export async function connectPgClient(options = {}) {
 export function runLinkedSqlFile(filePath, repoRoot) {
   const result = spawnSync(
     "npx",
-    ["supabase", "db", "query", "--linked", "-f", filePath],
+    ["supabase@2.106.0", "db", "query", "--linked", "-f", filePath],
     {
       cwd: repoRoot,
       encoding: "utf8",
@@ -64,7 +64,7 @@ export function runLinkedSqlFile(filePath, repoRoot) {
 export function runLinkedSql(sql, repoRoot) {
   const result = spawnSync(
     "npx",
-    ["supabase", "db", "query", "--linked", sql],
+    ["supabase@2.106.0", "db", "query", "--linked", sql],
     {
       cwd: repoRoot,
       encoding: "utf8",

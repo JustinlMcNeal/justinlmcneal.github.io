@@ -1,4 +1,9 @@
 // /js/product/render.js
+import {
+  KK_BACKORDER_WEEKS,
+  kkBackorderTooltipSuffix,
+  kkProductShippingLine,
+} from "../shared/kkAvailableStock.js";
 
 function esc(str) {
   return String(str).replace(/[&<>"']/g, (m) => (
@@ -11,22 +16,17 @@ export function money(n) {
   return num.toLocaleString(undefined, { style: "currency", currency: "USD" });
 }
 
-export function shippingText(shipping_status, variant = null) {
-  if (shipping_status === "mto") return "⏳ Made to order · ships in 2–4 weeks";
-  if (variant && (variant.stock ?? null) !== null && variant.stock <= 0) {
-    return "🕐 Shipping time 2–4 weeks";
-  }
-  return "🚀 In Stock · ships in 1–2 business days";
+export function shippingText(_shipping_status, variant = null) {
+  const stock = variant?.stock ?? null;
+  const isBackorder = stock != null && stock <= 0;
+  return kkProductShippingLine(isBackorder);
 }
 
-export function stockBadgeHtml(variant = null, shipping_status = "") {
-  if (shipping_status === "mto") {
-    return `<span class="inline-block bg-blue-100 text-blue-800 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">Made to Order</span>`;
-  }
+export function stockBadgeHtml(variant = null, _shipping_status = "") {
   if (!variant || (variant.stock ?? null) === null) return "";
   const stock = variant.stock;
   if (stock <= 0) {
-    return `<span class="inline-block bg-blue-100 text-blue-800 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">Shipping time 2–4 weeks</span>`;
+    return `<span class="inline-block bg-amber-100 text-amber-900 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">Backorder · ${KK_BACKORDER_WEEKS}</span>`;
   }
   if (stock <= 3) {
     return `<span class="inline-block bg-yellow-100 text-yellow-800 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">⚠ Only ${stock} left!</span>`;
@@ -298,8 +298,8 @@ export function renderVariantSwatches(container, variants = [], onSelect) {
       btn.classList.add("ring-1", "ring-inset", "ring-black/10");
     }
 
-    btn.setAttribute("aria-label", `${label || `Color option ${idx + 1}`}${isOutOfStock ? " (2–4 week shipping)" : ""}`);
-    btn.title = `${label || ""}${isOutOfStock ? " (2–4 week shipping)" : ""}`;
+    btn.setAttribute("aria-label", `${label || `Color option ${idx + 1}`}${isOutOfStock ? kkBackorderTooltipSuffix() : ""}`);
+    btn.title = `${label || ""}${isOutOfStock ? kkBackorderTooltipSuffix() : ""}`;
 
     btn.onclick = () => {
       if (activeBtn) {
@@ -366,14 +366,9 @@ export function renderSizeButtons(container, variants = [], onSelect) {
     ].join(" ");
 
     if (isOutOfStock) {
-      btn.setAttribute(
-        "title",
-        `${variant.option_value || ""} (2–4 week shipping)`
-      );
-      btn.setAttribute(
-        "aria-label",
-        `${variant.option_value || ""} (2–4 week shipping)`
-      );
+      const suffix = kkBackorderTooltipSuffix();
+      btn.setAttribute("title", `${variant.option_value || ""}${suffix}`);
+      btn.setAttribute("aria-label", `${variant.option_value || ""}${suffix}`);
     } else {
       btn.setAttribute("aria-label", variant.option_value || label);
     }

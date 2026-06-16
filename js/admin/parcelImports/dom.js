@@ -42,8 +42,22 @@ export function initDom() {
   refs.historyStatusFilter = document.getElementById("parcelHistoryStatusFilter");
   refs.historySearchBtn = document.getElementById("parcelHistorySearchBtn");
   refs.historyLoadMoreBtn = document.getElementById("parcelHistoryLoadMoreBtn");
+  refs.historyReceivedFilter = document.getElementById("parcelHistoryReceivedFilter");
+  refs.historyExpenseFilter = document.getElementById("parcelHistoryExpenseFilter");
+  refs.historyExportBtn = document.getElementById("parcelHistoryExportBtn");
+  refs.exportAllocationsBtns = document.querySelectorAll(
+    '[data-parcel-action="export-allocations"]',
+  );
+  refs.importDetailsBtn = document.getElementById("parcelImportDetailsBtn");
+  refs.actionBar = document.getElementById("parcelImportActionBar");
+  refs.postApprovalSection = document.getElementById("parcelImportPostApproval");
+  refs.detailsModal = document.getElementById("parcelImportDetailsModal");
+  refs.detailsBodyEl = document.getElementById("parcelImportDetailsBody");
+  refs.detailsTitleEl = document.getElementById("parcelImportDetailsTitle");
+  refs.detailsCloseBtns = document.querySelectorAll("[data-parcel-details-close]");
   refs.createExpenseBtns = document.querySelectorAll('[data-parcel-action="create-expense"]');
   refs.linkExpenseBtn = document.getElementById("parcelLinkExpenseBtn");
+  refs.unlinkExpenseBtn = document.getElementById("parcelUnlinkExpenseBtn");
   refs.linkExpenseInput = document.getElementById("parcelLinkExpenseInput");
   refs.expenseStatusEl = document.getElementById("parcelExpenseStatus");
   refs.newImportBtns = document.querySelectorAll('[data-parcel-action="new-import"]');

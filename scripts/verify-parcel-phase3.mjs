@@ -7,6 +7,7 @@ import { createServer } from "http";
 import { readFileSync, existsSync } from "fs";
 import { join, dirname, extname } from "path";
 import { fileURLToPath } from "url";
+import { goToParcelTab } from "./verify-parcel-tabHelpers.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
@@ -98,6 +99,7 @@ async function main() {
       }
     }
 
+    await goToParcelTab(page, "parcelTabMap");
     const firstType = page.locator('[data-mapping-field="rowType"]').first();
     await firstType.selectOption("Personal / Excluded");
     await page.waitForTimeout(100);
@@ -153,7 +155,7 @@ async function main() {
       errors.push(`Step 8: expected Variant Uncertain, got "${variantText}"`);
     }
 
-    await page.locator("#parcelTabReview").click();
+    await goToParcelTab(page, "parcelTabReview");
     const chargedInput = page.locator('[data-override-key="chargedWeightGrams"]');
     await chargedInput.scrollIntoViewIfNeeded();
     await chargedInput.click();

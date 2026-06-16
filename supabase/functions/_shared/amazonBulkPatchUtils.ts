@@ -368,3 +368,202 @@ export async function processBulkListingPatches(params: {
 
   return { results, summary };
 }
+
+export type PerListingQuantityItem = {
+  amazonListingId: string;
+  quantity: number;
+  variantId?: string | null;
+  productId?: string | null;
+  sellerSku?: string | null;
+  marketplaceId?: string | null;
+  previousQty?: number | null;
+};
+
+/** Patch each listing with its own target quantity (inventory available sync). */
+export async function processPerListingQuantityPatches(params: {
+  // deno-lint-ignore no-explicit-any
+  client: any;
+  items: PerListingQuantityItem[];
+  preview: boolean;
+  syncEnv: ReturnType<typeof readSyncEnvConfig>;
+  now: string;
+}): Promise<{
+  results: BulkPatchItemResult[];
+  summary: { total: number; succeeded: number; failed: number; skipped: number };
+}> {
+  const results: BulkPatchItemResult[] = [];
+  const items = params.items.slice(0, BULK_PATCH_MAX_ITEMS);
+
+  if (!items.length) {
+    return {
+      results,
+      summary: { total: 0, succeeded: 0, failed: 0, skipped: 0 },
+    };
+  }
+
+  const listingIds = items.map((it) => it.amazonListingId.trim()).filter(Boolean);
+  const { data: rows, error } = await params.client
+    .from("v_amazon_listing_workspace")
+    .select([
+      "amazon_listing_id",
+      "seller_account_id",
+      "seller_sku",
+      "marketplace_id",
+      "product_type",
+      "currency",
+      "fulfillment_channel",
+      "price",
+      "fbm_quantity",
+      "fba_fulfillable_quantity",
+      "kk_price",
+      "kk_stock",
+    ].join(","))
+    .in("amazon_listing_id", listingIds);
+
+  if (error) throw new Error("database_error");
+
+  const rowById = new Map<string, BulkPatchListingRow>();
+  for (const row of (rows || []) as BulkPatchListingRow[]) {
+    rowById.set(String(row.amazon_listing_id), row);
+  }
+
+  /** @type {Map<string, Awaited<ReturnType<typeof resolveAmazonCredentials>> & { ok: true }>} */
+  const credsCache = new Map();
+
+  for (let index = 0; index < items.length; index++) {
+    const item = items[index];
+    const listingId = item.amazonListingId.trim();
+    const listing = rowById.get(listingId);
+    const sellerSku = String(item.sellerSku || listing?.seller_sku || "").trim() || null;
+
+    if (!listing) {
+      results.push({
+        amazonListingId: listingId,
+        sellerSku,
+        status: "failed",
+        error: "listing_not_found",
+      });
+      continue;
+    }
+
+    const productType = String(listing.product_type || "").trim();
+    const marketplaceId = String(item.marketplaceId || listing.marketplace_id || "").trim();
+    const sellerAccountId = String(listing.seller_account_id || "").trim();
+
+    if (!sellerSku || !productType || !marketplaceId) {
+      results.push({
+        amazonListingId: listingId,
+        sellerSku,
+        status: "failed",
+        error: "listing_not_patchable",
+      });
+      continue;
+    }
+
+    const targetQty = Math.max(0, Math.trunc(Number(item.quantity)));
+    const computed = computeBulkPatchInput(listing, "set_quantity", targetQty);
+    if (!computed.ok) {
+      results.push({
+        amazonListingId: listingId,
+        sellerSku,
+        status: computed.error === "no_change" ? "skipped" : "failed",
+        error: computed.error,
+      });
+      if (index < items.length - 1) await sleep(BULK_PATCH_DELAY_MS);
+      continue;
+    }
+
+    let credsResult = credsCache.get(sellerAccountId);
+    if (!credsResult) {
+      credsResult = await resolveAmazonCredentials(
+        params.client,
+        sellerAccountId,
+        params.syncEnv,
+      );
+      if (!credsResult.ok) {
+        results.push({
+          amazonListingId: listingId,
+          sellerSku,
+          status: "failed",
+          error: credsResult.error,
+        });
+        continue;
+      }
+      credsCache.set(sellerAccountId, credsResult);
+    }
+
+    const patches = buildListingPatchOperations(
+      marketplaceId,
+      String(listing.currency || "USD"),
+      computed.patch,
+      String(listing.fulfillment_channel || "DEFAULT") || "DEFAULT",
+    );
+
+    const patchParams = {
+      creds: credsResult.creds,
+      sellerId: credsResult.creds.account.seller_id,
+      sellerSku,
+      marketplaceId,
+      productType,
+      patches,
+    };
+
+    const patchResult = params.preview
+      ? await patchListingsItemValidationPreview(patchParams)
+      : await patchListingsItemLiveUpdate(patchParams);
+
+    if (!patchResult.ok) {
+      results.push({
+        amazonListingId: listingId,
+        sellerSku,
+        status: "failed",
+        error: patchResult.error,
+      });
+      if (index < items.length - 1) await sleep(BULK_PATCH_DELAY_MS);
+      continue;
+    }
+
+    const issues = mapPatchIssues(patchResult.issues);
+    if (!patchSubmissionAccepted(patchResult.submissionStatus)) {
+      results.push({
+        amazonListingId: listingId,
+        sellerSku,
+        status: "failed",
+        error: "patch_rejected",
+        patch: computed.patch,
+        issues,
+      });
+      if (index < items.length - 1) await sleep(BULK_PATCH_DELAY_MS);
+      continue;
+    }
+
+    if (!params.preview) {
+      await applyLocalListingPatchUpdate(
+        params.client,
+        listingId,
+        computed.patch,
+        params.now,
+      );
+    }
+
+    results.push({
+      amazonListingId: listingId,
+      sellerSku,
+      status: "success",
+      patch: computed.patch,
+      issues,
+    });
+
+    if (index < items.length - 1) await sleep(BULK_PATCH_DELAY_MS);
+  }
+
+  return {
+    results,
+    summary: {
+      total: results.length,
+      succeeded: results.filter((row) => row.status === "success").length,
+      failed: results.filter((row) => row.status === "failed").length,
+      skipped: results.filter((row) => row.status === "skipped").length,
+    },
+  };
+}

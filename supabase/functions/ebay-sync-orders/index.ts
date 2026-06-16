@@ -9,6 +9,9 @@ import {
   EBAY_API,
   KKProduct,
 } from "../_shared/ebayUtils.ts";
+import { upsertEbayCancelObservations } from "../_shared/marketplaceObservationSync.ts";
+import { isEbayOrderCanceled, updateExistingEbayOrderFromApi } from "../_shared/ebayOrderCancelAware.ts";
+import { refreshMarketplaceObservationsAfterSync } from "../_shared/marketplaceObservationRefresh.ts";
 
 /** Fetch orders from eBay Fulfillment API */
 async function fetchEbayOrders(
@@ -140,22 +143,28 @@ serve(async (req) => {
 
     let synced = 0;
     let skipped = 0;
+    let updated = 0;
+    let canceledUpdated = 0;
     let matched = 0;
     let unmatched = 0;
 
     for (const order of ebayOrders as Record<string, unknown>[]) {
       const orderId = order.orderId as string;
       const sessionId = `ebay_api_${orderId}`;
+      const isCanceled = isEbayOrderCanceled(order);
 
-      // Check for existing order (both CSV import and API import)
       const { data: existing } = await supabase
         .from("orders_raw")
-        .select("id")
+        .select("stripe_checkout_session_id")
         .or(`stripe_checkout_session_id.eq.ebay_${orderId},stripe_checkout_session_id.eq.${sessionId}`)
         .maybeSingle();
 
       if (existing) {
-        skipped++;
+        const updateResult = await updateExistingEbayOrderFromApi(supabase, order, {
+          syncSource: "order_sync",
+        });
+        if (updateResult.canceled) canceledUpdated++;
+        else updated++;
         continue;
       }
 
@@ -255,9 +264,9 @@ serve(async (req) => {
       // Extract fulfillment/tracking data from eBay order
       const orderFulfillmentStatus = order.orderFulfillmentStatus as string || "";
 
-      // Map eBay fulfillment status → our label_status
       let labelStatus = "pending";
-      if (orderFulfillmentStatus === "FULFILLED") labelStatus = "shipped";
+      if (isCanceled) labelStatus = "cancelled";
+      else if (orderFulfillmentStatus === "FULFILLED") labelStatus = "shipped";
       else if (orderFulfillmentStatus === "IN_PROGRESS") labelStatus = "label_purchased";
 
       // Fetch actual tracking info from eBay shipping fulfillments endpoint
@@ -304,14 +313,43 @@ serve(async (req) => {
         console.error(`[ebay-sync] Shipment upsert error for ${orderId}:`, shipErr.message);
       }
 
+      if (isCanceled) {
+        const lineItems = (order.lineItems as Record<string, unknown>[]) || [];
+        await upsertEbayCancelObservations(supabase, {
+          sourceOrderId: sessionId,
+          observedAt: String(order.creationDate || new Date().toISOString()),
+          orderPayload: order,
+          lineItemIds: lineItems.map((item) => String(item.lineItemId || "")).filter(Boolean),
+        });
+        canceledUpdated++;
+      }
+
       synced++;
     }
 
-    console.log(`[ebay-sync] Done: synced=${synced}, skipped=${skipped}, matched=${matched}, unmatched=${unmatched}`);
+    console.log(
+      `[ebay-sync] Done: synced=${synced}, updated=${updated}, canceledUpdated=${canceledUpdated}, skipped=${skipped}, matched=${matched}, unmatched=${unmatched}`,
+    );
+
+    const obsRefresh = await refreshMarketplaceObservationsAfterSync(supabase, {
+      channel: "ebay",
+      daysBack,
+      logPrefix: "[ebay-sync]",
+    });
 
     return new Response(
-      JSON.stringify({ success: true, synced, skipped, matched, unmatched, total: ebayOrders.length }),
-      { headers: corsHeaders }
+      JSON.stringify({
+        success: true,
+        synced,
+        updated,
+        canceledUpdated,
+        skipped,
+        matched,
+        unmatched,
+        total: ebayOrders.length,
+        observation_refresh: obsRefresh,
+      }),
+      { headers: corsHeaders },
     );
   } catch (err: unknown) {
     console.error("[ebay-sync] Error:", err instanceof Error ? err.message : String(err));

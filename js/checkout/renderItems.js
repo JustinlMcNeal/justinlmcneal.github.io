@@ -3,6 +3,13 @@
 
 import { setQty, removeItem } from "../shared/cartStore.js";
 import { getSupabaseClient } from "../shared/supabaseClient.js";
+import {
+  fetchCheckoutAvailabilityMaps,
+  normVariantKey,
+  validateCartAvailability,
+  isBackorderAvailable,
+  kkCheckoutItemShipNote,
+} from "../shared/kkAvailableStock.js";
 
 function money(n) {
   return `$${Number(n || 0).toFixed(2)}`;
@@ -16,64 +23,54 @@ function esc(s) {
     .replaceAll('"', "&quot;");
 }
 
-function normVariant(v) {
-  const s = (v ?? "").toString().trim();
-  return s.length ? s : "";
-}
-
 /* ── Stock & shipping status lookup ── */
 let stockMap = null;
-let mtoSet = null; // product IDs with shipping_status = 'mto'
+let mtoSet = null;
+let availabilityMaps = null;
 
 async function fetchStockLevels(items) {
   if (stockMap) return stockMap;
   stockMap = {};
   mtoSet = new Set();
+  availabilityMaps = null;
   try {
     const supabase = getSupabaseClient();
     const ids = [...new Set(items.map((it) => it.id).filter(Boolean))];
     if (!ids.length) return stockMap;
 
-    // Fetch stock levels and shipping_status in parallel
-    const [variantsRes, productsRes] = await Promise.all([
-      supabase
-        .from("product_variants")
-        .select("product_id, option_value, stock")
-        .in("product_id", ids),
-      supabase
-        .from("products")
-        .select("id, shipping_status")
-        .in("id", ids),
-    ]);
+    availabilityMaps = await fetchCheckoutAvailabilityMaps(supabase, ids);
+    mtoSet = availabilityMaps.mtoProductIds;
 
-    if (variantsRes.data) {
-      for (const row of variantsRes.data) {
-        const key = `${row.product_id}::${normVariant(row.option_value)}`;
-        stockMap[key] = row.stock ?? null;
-      }
-    }
-
-    if (productsRes.data) {
-      for (const row of productsRes.data) {
-        if (row.shipping_status === "mto") mtoSet.add(row.id);
-      }
+    for (const [key, qty] of availabilityMaps.byProductVariant) {
+      stockMap[key] = qty;
     }
   } catch {
-    // silently skip — don't block checkout
+    // silently skip — don't block checkout UI
   }
   return stockMap;
 }
 
 function isMto(productId) {
-  return mtoSet?.has(productId) ?? false;
+  return mtoSet?.has(String(productId)) ?? false;
+}
+
+function lookupAvailable(item) {
+  if (!availabilityMaps) return null;
+  if (item.variant_id && availabilityMaps.byVariantId.has(String(item.variant_id))) {
+    return availabilityMaps.byVariantId.get(String(item.variant_id));
+  }
+  const key = `${item.id}::${normVariantKey(item.variant)}`;
+  if (availabilityMaps.byProductVariant.has(key)) {
+    return availabilityMaps.byProductVariant.get(key);
+  }
+  return null;
 }
 
 /* ── Render a single item card ── */
 function renderItemCard(item, stock, madeToOrder) {
   const id = String(item.id || "");
-  const variant = normVariant(item.variant);
-  // Phase 2: prefer variant_title for display; keep variant text as fallback
-  const variantLabel = normVariant(item.variant_title) || variant;
+  const variant = normVariantKey(item.variant);
+  const variantLabel = normVariantKey(item.variant_title) || variant;
   const variantId = String(item.variant_id || "");
   const qty = Math.max(1, Number(item.qty || 1));
   const img = item.image || "/imgs/placeholder.png";
@@ -82,15 +79,14 @@ function renderItemCard(item, stock, madeToOrder) {
   const lineTotal = unit * qty;
   const slug = item.slug || "";
 
-  const isBackorder = madeToOrder || (typeof stock === "number" && stock <= 0);
-  const badgeLabel = madeToOrder ? "MADE TO ORDER" : "BACKORDER";
-  const shipNote = madeToOrder
-    ? "✂️ Made to order — ships in 3–4 weeks"
-    : "⏳ Backorder — ships in 3–4 weeks";
-  const lowStock = !madeToOrder && typeof stock === "number" && stock > 0 && stock <= 5;
+  const qtyExceeds = typeof stock === "number" && stock > 0 && qty > stock;
+  const isBackorder = madeToOrder || isBackorderAvailable(stock);
+  const badgeLabel = "BACKORDER";
+  const shipNote = kkCheckoutItemShipNote();
+  const lowStock = typeof stock === "number" && stock > 0 && stock <= 5;
 
   return `
-<article class="bg-white rounded-xl p-4 shadow-sm border border-black/5">
+<article class="bg-white rounded-xl p-4 shadow-sm border border-black/5${qtyExceeds ? " border-red-200" : ""}">
   <div class="flex gap-4">
     <!-- Image -->
     <a href="/pages/product.html?slug=${esc(slug)}" class="block w-24 h-24 sm:w-28 sm:h-28 rounded-lg overflow-hidden bg-black/5 flex-shrink-0 relative">
@@ -110,7 +106,8 @@ function renderItemCard(item, stock, madeToOrder) {
           <a href="/pages/product.html?slug=${esc(slug)}" class="font-bold text-sm leading-tight line-clamp-2 hover:underline">${name}</a>
           ${variantLabel ? `<p class="text-xs text-black/50 mt-0.5">${esc(variantLabel)}</p>` : ""}
           ${isBackorder ? `<p class="text-xs font-bold text-amber-600 mt-1">${shipNote}</p>` : ""}
-          ${lowStock ? `<p class="text-xs font-bold text-red-500 mt-1">Only ${stock} left!</p>` : ""}
+          ${qtyExceeds ? `<p class="text-xs font-bold text-red-600 mt-1">Only ${stock} available — reduce quantity to continue.</p>` : ""}
+          ${lowStock && !qtyExceeds ? `<p class="text-xs font-bold text-red-500 mt-1">Only ${stock} left!</p>` : ""}
         </div>
 
         <!-- Remove -->
@@ -149,12 +146,14 @@ function renderItemCard(item, stock, madeToOrder) {
           <span class="w-10 text-center text-sm font-bold select-none">${qty}</span>
           <button
             type="button"
-            class="w-12 h-12 flex items-center justify-center text-black/70 hover:text-black hover:bg-black/[0.12] rounded-full transition-colors"
+            class="w-12 h-12 flex items-center justify-center text-black/70 hover:text-black hover:bg-black/[0.12] rounded-full transition-colors disabled:opacity-30 disabled:pointer-events-none"
             data-checkout-qty-plus
             data-id="${esc(id)}"
             data-variant="${esc(variant)}"
             data-variant-id="${esc(variantId)}"
+            data-max-qty="${typeof stock === "number" && stock > 0 ? stock : ""}"
             aria-label="Increase quantity"
+            ${typeof stock === "number" && stock > 0 && qty >= stock ? "disabled" : ""}
           >
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
@@ -198,22 +197,22 @@ export async function renderCheckoutItems(items, container) {
 
   if (!items || !items.length) {
     container.innerHTML = renderEmpty();
-    return { stockMap: {}, mtoSet: new Set() };
+    return { stockMap: {}, mtoSet: new Set(), stockErrors: [] };
   }
 
-  // Fetch stock levels in background (non-blocking)
   const stocks = await fetchStockLevels(items);
 
   container.innerHTML = items
     .map((item) => {
-      const key = `${item.id}::${normVariant(item.variant)}`;
-      const stock = stocks[key] ?? null;
+      const key = `${item.id}::${normVariantKey(item.variant)}`;
+      const stock = stocks[key] ?? lookupAvailable(item) ?? null;
       return renderItemCard(item, stock, isMto(item.id));
     })
     .join("");
 
-  // Return stock map + mtoSet so summary can use for delivery estimates
-  return { stockMap: stocks, mtoSet: mtoSet || new Set() };
+  const stockErrors = availabilityMaps ? validateCartAvailability(items, availabilityMaps) : [];
+
+  return { stockMap: stocks, mtoSet: mtoSet || new Set(), stockErrors };
 }
 
 /* ── Wire delegated click handlers ── */
@@ -226,7 +225,6 @@ export function wireItemControls(container, onCartChange) {
 
     const id = btn.dataset.id;
     const variant = btn.dataset.variant || "";
-    // Phase 2: pick up variant_id when embedded in button dataset
     const variantId = btn.dataset.variantId || null;
 
     if (btn.hasAttribute("data-checkout-remove")) {
@@ -248,6 +246,9 @@ export function wireItemControls(container, onCartChange) {
 
     if (btn.hasAttribute("data-checkout-qty-plus")) {
       const current = parseInt(btn.closest("article")?.querySelector(".text-center")?.textContent || "1", 10);
+      const maxRaw = btn.dataset.maxQty;
+      const maxQty = maxRaw ? parseInt(maxRaw, 10) : null;
+      if (maxQty != null && Number.isFinite(maxQty) && current >= maxQty) return;
       setQty(id, variant, current + 1, variantId);
       onCartChange();
     }
@@ -258,4 +259,5 @@ export function wireItemControls(container, onCartChange) {
 export function resetStockCache() {
   stockMap = null;
   mtoSet = null;
+  availabilityMaps = null;
 }

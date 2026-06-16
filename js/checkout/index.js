@@ -10,6 +10,10 @@ import { getAppliedCoupon } from "../shared/couponManager.js";
 import { checkPromotionApplies } from "../shared/promotions/promoScope.js";
 import { renderCheckoutItems, wireItemControls, resetStockCache } from "./renderItems.js";
 import { updateSummary, wireCouponUI, loadReviewBadge } from "./summary.js";
+import {
+  fetchCheckoutAvailabilityMaps,
+  validateCartAvailability,
+} from "../shared/kkAvailableStock.js";
 
 /* ── Helpers ── */
 function getSiteBasePath() {
@@ -50,7 +54,15 @@ async function refresh() {
 
   // Render items (returns stock map + mtoSet for delivery estimates)
   resetStockCache();
-  const { stockMap, mtoSet } = await renderCheckoutItems(cart, container);
+  const { stockMap, mtoSet, stockErrors } = await renderCheckoutItems(cart, container);
+
+  // Disable pay buttons when cart exceeds available stock
+  const payBlocked = stockErrors?.length > 0;
+  for (const btn of [els.payBtn(), els.mobilePayBtn()]) {
+    if (!btn) continue;
+    btn.disabled = payBlocked;
+    btn.title = payBlocked ? stockErrors.join(" ") : "";
+  }
 
   // Calculate totals
   const totals = await calculateCartTotals(cart);
@@ -91,6 +103,15 @@ async function handleCheckout(btn) {
 
   try {
     const supabase = getSupabaseClient();
+
+    const productIds = [...new Set(cart.map((i) => i.id).filter(Boolean))];
+    const availMaps = await fetchCheckoutAvailabilityMaps(supabase, productIds);
+    const stockErrors = validateCartAvailability(cart, availMaps);
+    if (stockErrors.length) {
+      alert(`Cannot checkout:\n\n${stockErrors.join("\n")}`);
+      return;
+    }
+
     const totals = await calculateCartTotals(cart);
 
     const subtotal = Number(totals.subtotal || 0);

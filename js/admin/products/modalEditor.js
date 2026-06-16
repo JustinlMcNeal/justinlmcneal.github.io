@@ -21,10 +21,7 @@ import {
   collectSectionItems,
 } from "./modalRows.js";
 
-import {
-  calculateProfitProjections,
-  renderProfitCard,
-} from "../pStorage/profitCalc.js";
+import { renderModalProductProfitPanel } from "./productMargin.js";
 
 /**
  * Updates an image preview element
@@ -89,23 +86,21 @@ export function bindModal(els, refreshTable, sectionApi = {}) {
    */
   function updateProfitProjections() {
     if (!els.profitProjectionsPanel) return;
-    
+
     const price = parseFloat(els.fPrice?.value) || 0;
     const weight = parseFloat(els.fWeight?.value) || 0;
     const unitCost = parseFloat(els.fUnitCost?.value) || 0;
-    
-    // Build item object for profit calculation
-    const item = {
-      target_price: price,
-      unit_cost: unitCost,
-      weight_g: weight,
-      bulk_qty: 30, // Default bulk quantity for estimation
-    };
-    
-    const projections = calculateProfitProjections(item);
-    
-    if (projections.hasEnoughData) {
-      els.profitProjectionsPanel.innerHTML = renderProfitCard(projections);
+    const variants = state.editing?.variants || [];
+
+    const html = renderModalProductProfitPanel({
+      price,
+      weightG: weight,
+      unitCost,
+      variants,
+    });
+
+    if (html) {
+      els.profitProjectionsPanel.innerHTML = html;
       els.profitProjectionsPanel.classList.remove("hidden");
     } else {
       els.profitProjectionsPanel.classList.add("hidden");
@@ -161,7 +156,19 @@ export function bindModal(els, refreshTable, sectionApi = {}) {
     els.fTags.value = (full.tags || []).map((t) => t.name).join(", ");
 
     clearLists();
-    (full.variants || []).filter((v) => v.is_active !== false).forEach((v) => addVariantRow(els.variantList, v));
+    const productUnitCost = full.product?.unit_cost ?? null;
+    const productPrice = full.product?.price ?? null;
+    const productWeightG = full.product?.weight_g ?? null;
+    (full.variants || [])
+      .filter((v) => v.is_active !== false)
+      .forEach((v) =>
+        addVariantRow(els.variantList, {
+          ...v,
+          _productUnitCost: productUnitCost,
+          _productPrice: productPrice,
+          _productWeightG: productWeightG,
+        }),
+      );
     (full.gallery || []).forEach((g) => addGalleryRow(els.galleryList, g));
 
     // Sections
@@ -380,7 +387,13 @@ export function bindModal(els, refreshTable, sectionApi = {}) {
       });
   });
 
-  els.btnAddVariant.addEventListener("click", () => addVariantRow(els.variantList));
+  els.btnAddVariant.addEventListener("click", () =>
+    addVariantRow(els.variantList, {
+      _productUnitCost: els.fUnitCost?.value ? Number(els.fUnitCost.value) : null,
+      _productPrice: els.fPrice?.value ? Number(els.fPrice.value) : null,
+      _productWeightG: els.fWeight?.value ? Number(els.fWeight.value) : null,
+    }),
+  );
   
   // Gallery file upload - multi-select support
   els.galleryFileInput?.addEventListener("change", async (e) => {

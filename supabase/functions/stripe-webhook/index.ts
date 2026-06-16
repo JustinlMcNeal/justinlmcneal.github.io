@@ -1,6 +1,21 @@
 // supabase/functions/stripe-webhook/index.ts
 import Stripe from "npm:stripe@17.7.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  claimStripeInventoryDedup,
+  DEDUP_CHECKOUT_RESERVE,
+  DEDUP_CHECKOUT_STOCK_DEDUCT,
+  decrementVariantStockForOrder,
+  getKkReservationMode,
+  resolveCheckoutLineVariant,
+  upsertKkReservation,
+} from "../_shared/stripeWebhookInventory.ts";
+import { recordBundleReservationShadowsForCheckout } from "../_shared/bundleCheckoutShadow.ts";
+import {
+  isBundleLiveDeductionEnabled,
+  reserveLiveBundleComponents,
+} from "../_shared/bundleLiveInventory.ts";
+import { handleChargeRefundedEvent } from "../_shared/stripeWebhookChargeRefunded.ts";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -129,152 +144,13 @@ if (req.method === "GET") {
     // ── Handle charge.refunded ──────────────────────────────────
     if (event.type === "charge.refunded") {
       const charge = event.data.object as Stripe.Charge;
-      const paymentIntentId = safeStr(charge.payment_intent).trim();
-      if (!paymentIntentId) return json({ received: true, note: "no PI on charge" }, 200);
-
-      // Find the order by stripe_payment_intent_id OR by looking up the checkout session
-      // Stripe charges have payment_intent; our orders_raw has stripe_checkout_session_id.
-      // We need to find the order. Strategy:
-      // 1) Try to match by stripe_payment_intent_id (if we stored it)
-      // 2) Retrieve the payment intent to find the checkout session metadata
-
-      const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
-
-      // The checkout session ID might be in the PI metadata or we search by PI
-      let orderSessionId: string | null = null;
-
-      // Check PI metadata first (our webhook stores kk_order_id but not session_id on PI)
-      // Fallback: list checkout sessions for this payment intent
-      const sessions = await stripe.checkout.sessions.list({
-        payment_intent: paymentIntentId,
-        limit: 1,
+      const result = await handleChargeRefundedEvent({
+        sb: supabaseAdmin,
+        stripe,
+        event,
+        charge,
       });
-      if (sessions.data.length > 0) {
-        orderSessionId = sessions.data[0].id;
-      }
-
-      if (!orderSessionId) {
-        // Try matching by payment_intent_id in our DB
-        const { data: matchRows } = await supabaseAdmin
-          .from("orders_raw")
-          .select("stripe_checkout_session_id")
-          .eq("stripe_payment_intent_id", paymentIntentId)
-          .limit(1);
-        if (matchRows?.length) {
-          orderSessionId = matchRows[0].stripe_checkout_session_id;
-        }
-      }
-
-      if (!orderSessionId) {
-        console.error("[stripe-webhook] charge.refunded: could not find order for PI", paymentIntentId);
-        return json({ received: true, warning: "Order not found for refund" }, 200);
-      }
-
-      // Calculate refund totals from the charge object
-      const totalRefundedCents = charge.amount_refunded ?? 0;
-      const totalChargedCents = charge.amount ?? 0;
-      const isFullRefund = totalRefundedCents >= totalChargedCents;
-      const latestRefundId = charge.refunds?.data?.[0]?.id ?? null;
-
-      const refundPatch = {
-        refund_status: isFullRefund ? "full" : "partial",
-        refund_amount_cents: totalRefundedCents,
-        refunded_at: new Date().toISOString(),
-        stripe_refund_id: latestRefundId,
-        stripe_payment_intent_id: paymentIntentId,
-        updated_at: new Date().toISOString(),
-      };
-
-      const { error: refErr } = await supabaseAdmin
-        .from("orders_raw")
-        .update(refundPatch)
-        .eq("stripe_checkout_session_id", orderSessionId);
-
-      if (refErr) {
-        console.error("[stripe-webhook] refund update failed", refErr);
-        return json({ error: "Failed to update refund", detail: refErr }, 500);
-      }
-
-      console.log(`[stripe-webhook] Refund recorded: ${orderSessionId} → ${isFullRefund ? "FULL" : "PARTIAL"} $${(totalRefundedCents / 100).toFixed(2)}`);
-
-      // ✅ Re-increment stock on full refund
-      if (isFullRefund) {
-        try {
-          // Get original line items for this order
-          const { data: orderLines } = await supabaseAdmin
-            .from("line_items_raw")
-            .select("product_id, variant, variant_id, quantity")
-            .eq("stripe_checkout_session_id", orderSessionId);
-
-          for (const li of orderLines || []) {
-            const qty = li.quantity || 1;
-            let variantRow: { id: string; stock: number; product_id: string } | null = null;
-
-            // ── Phase 2: prefer variant_id for direct lookup ─────────────
-            if (li.variant_id) {
-              const { data: byId } = await supabaseAdmin
-                .from("product_variants")
-                .select("id, stock, product_id")
-                .eq("id", li.variant_id)
-                .limit(1);
-              if (byId?.length) variantRow = byId[0] as typeof variantRow;
-            }
-
-            // ── Legacy fallback: SKU → product UUID → option_value match ──
-            if (!variantRow && li.product_id) {
-              const { data: prodRow } = await supabaseAdmin
-                .from("products")
-                .select("id")
-                .eq("code", li.product_id)
-                .single();
-
-              if (prodRow?.id) {
-                const vQuery = supabaseAdmin
-                  .from("product_variants")
-                  .select("id, stock, product_id")
-                  .eq("product_id", prodRow.id);
-
-                if (li.variant) vQuery.eq("option_value", li.variant);
-
-                const { data: vRows } = await vQuery.limit(1);
-                if (vRows?.length) variantRow = vRows[0] as typeof variantRow;
-              }
-            }
-
-            if (!variantRow) continue;
-
-            const stockBefore = variantRow.stock ?? 0;
-            const stockAfter = stockBefore + qty;
-
-            await supabaseAdmin
-              .from("product_variants")
-              .update({ stock: stockAfter })
-              .eq("id", variantRow.id);
-
-            await supabaseAdmin.from("stock_ledger").insert({
-              variant_id: variantRow.id,
-              product_id: variantRow.product_id,
-              change: qty,
-              reason: "refund",
-              reference_id: orderSessionId,
-              stock_before: stockBefore,
-              stock_after: stockAfter,
-            });
-
-            console.log(`[stripe-webhook] stock refund: ${li.product_id || li.variant_id}/${li.variant} ${stockBefore} → ${stockAfter} (+${qty})`);
-          }
-        } catch (stockRefundErr) {
-          console.error("[stripe-webhook] stock re-increment on refund failed (non-fatal):", stockRefundErr);
-        }
-      }
-
-      return json({
-        received: true,
-        type: "charge.refunded",
-        orderSessionId,
-        refund_status: refundPatch.refund_status,
-        refund_amount_cents: totalRefundedCents,
-      }, 200);
+      return json(result.body, result.status);
     }
 
     // ── Ignore other event types ─────────────────────────────────
@@ -743,87 +619,147 @@ if (fErr) {
       return json({ error: "Failed to upsert line items", detail: liErr }, 500);
     }
 
-    // ✅ 2.5) STOCK DECREMENT — non-blocking (order succeeds even if stock update fails)
+    // ✅ 2.5) Inventory — mode-aware (legacy deduct / shadow / reserve-only)
     try {
+      const kkMode = await getKkReservationMode(supabaseAdmin);
+      const checkoutDedupAction = kkMode === "reserve_only"
+        ? DEDUP_CHECKOUT_RESERVE
+        : DEDUP_CHECKOUT_STOCK_DEDUCT;
+
+      const inventoryDedup = await claimStripeInventoryDedup(
+        supabaseAdmin,
+        event.id,
+        checkoutDedupAction,
+        sessionId,
+      );
+
+      if (!inventoryDedup.claimed) {
+        console.log(
+          `[stripe-webhook] checkout inventory dedup skip event=${event.id} session=${sessionId} mode=${kkMode}`,
+        );
+      }
+
       for (const row of lineRows) {
         const sku = row.product_id;
         const variantName = row.variant;
         const qty = row.quantity || 1;
+        const lineItemId = safeStr(row.stripe_line_item_id).trim();
 
         if (!sku && !row.variant_id) continue;
 
-        let variantRow: { id: string; stock: number; product_id: string } | null = null;
-
-        // ── Phase 2: prefer direct variant_id lookup ─────────────────────
-        if (row.variant_id) {
-          const { data: byId, error: idErr } = await supabaseAdmin
-            .from("product_variants")
-            .select("id, stock, product_id")
-            .eq("id", row.variant_id)
-            .limit(1);
-
-          if (!idErr && byId?.length) {
-            variantRow = byId[0] as typeof variantRow;
-          } else if (idErr) {
-            console.warn(`[stripe-webhook] stock: variant_id lookup failed for ${row.variant_id}:`, idErr.message);
-          }
-        }
-
-        // ── Legacy fallback: SKU + option_value text match ───────────────
-        if (!variantRow && sku) {
-          const lookup = skuMap.get(sku);
-          if (!lookup?.product_uuid) {
-            console.warn(`[stripe-webhook] stock: product not found for SKU ${sku}`);
-            continue;
-          }
-
-          const variantQuery = supabaseAdmin
-            .from("product_variants")
-            .select("id, stock, product_id")
-            .eq("product_id", lookup.product_uuid);
-
-          if (variantName) variantQuery.eq("option_value", variantName);
-
-          const { data: byText, error: tErr } = await variantQuery.limit(1);
-          if (tErr || !byText?.length) {
-            console.warn(`[stripe-webhook] stock: variant not found for ${sku}/${variantName}`);
-            continue;
-          }
-          variantRow = byText[0] as typeof variantRow;
-        }
-
+        const variantRow = await resolveCheckoutLineVariant(supabaseAdmin, row, skuMap);
         if (!variantRow) continue;
 
-        const stockBefore = variantRow.stock ?? 0;
-        const stockAfter = Math.max(0, stockBefore - qty);
+        const productUuid = variantRow.product_id || (sku ? skuMap.get(sku)?.product_uuid : null) || "";
 
-        const { error: updateErr } = await supabaseAdmin
-          .from("product_variants")
-          .update({ stock: stockAfter })
-          .eq("id", variantRow.id);
+        if (kkMode === "reserve_only") {
+          if (lineItemId && variantRow.product_id) {
+            try {
+              const liveBundle = await isBundleLiveDeductionEnabled(
+                supabaseAdmin,
+                variantRow.id,
+              );
+              if (liveBundle) {
+                const liveReserve = await reserveLiveBundleComponents(supabaseAdmin, {
+                  orderId: sessionId,
+                  orderItemId: lineItemId,
+                  bundleVariantId: variantRow.id,
+                  quantity: qty,
+                });
+                if (liveReserve.reservedComponents && liveReserve.reservedComponents > 0) {
+                  console.log(
+                    `[stripe-webhook] live bundle components reserved: ${sessionId}/${lineItemId} components=${liveReserve.reservedComponents}`,
+                  );
+                }
+                if (liveReserve.failedComponents && liveReserve.failedComponents > 0) {
+                  console.error(
+                    `[stripe-webhook] live bundle component shortage: ${sessionId}/${lineItemId}`,
+                    liveReserve.issues,
+                  );
+                }
+                continue;
+              }
 
-        if (updateErr) {
-          console.error(`[stripe-webhook] stock decrement failed for variant ${variantRow.id}:`, updateErr);
+              const reservation = await upsertKkReservation(supabaseAdmin, {
+                orderId: sessionId,
+                orderItemId: lineItemId,
+                variantId: variantRow.id,
+                productId: variantRow.product_id,
+                quantity: qty,
+                sourceReference: sessionId,
+                isShadow: false,
+              });
+              if (reservation.inserted) {
+                console.log(
+                  `[stripe-webhook] active reservation: ${sessionId}/${lineItemId} qty=${qty}`,
+                );
+              }
+            } catch (reserveErr) {
+              console.error("[stripe-webhook] active reservation failed (non-fatal):", reserveErr);
+            }
+          }
           continue;
         }
 
-        // Resolve product UUID for ledger (from variant row or skuMap)
-        const productUuid = variantRow.product_id || (sku ? skuMap.get(sku)?.product_uuid : null) || "";
+        if (inventoryDedup.claimed && kkMode !== "reserve_only") {
+          try {
+            await decrementVariantStockForOrder(
+              supabaseAdmin,
+              variantRow,
+              qty,
+              kk_order_id || sessionId,
+              productUuid,
+            );
+            console.log(
+              `[stripe-webhook] stock: ${sku || row.variant_id}/${variantName} (-${qty}) mode=${kkMode}`,
+            );
+          } catch (decrementErr) {
+            console.error(
+              `[stripe-webhook] stock decrement failed for variant ${variantRow.id}:`,
+              decrementErr,
+            );
+            continue;
+          }
+        }
 
-        await supabaseAdmin.from("stock_ledger").insert({
-          variant_id: variantRow.id,
-          product_id: productUuid,
-          change: -qty,
-          reason: "order",
-          reference_id: kk_order_id || sessionId,
-          stock_before: stockBefore,
-          stock_after: stockAfter,
-        });
-
-        console.log(`[stripe-webhook] stock: ${sku || row.variant_id}/${variantName} ${stockBefore} → ${stockAfter} (-${qty})`);
+        if (kkMode === "shadow" && lineItemId && variantRow.product_id) {
+          try {
+            const shadow = await upsertKkReservation(supabaseAdmin, {
+              orderId: sessionId,
+              orderItemId: lineItemId,
+              variantId: variantRow.id,
+              productId: variantRow.product_id,
+              quantity: qty,
+              sourceReference: sessionId,
+              isShadow: true,
+            });
+            if (shadow.inserted) {
+              console.log(`[stripe-webhook] shadow reservation: ${sessionId}/${lineItemId} qty=${qty}`);
+            }
+          } catch (shadowErr) {
+            console.error("[stripe-webhook] shadow reservation failed (non-fatal):", shadowErr);
+          }
+        }
       }
     } catch (stockErr) {
-      console.error("[stripe-webhook] stock decrement failed (non-fatal):", stockErr);
+      console.error("[stripe-webhook] checkout inventory failed (non-fatal):", stockErr);
+    }
+
+    // ✅ 2.6) Virtual bundle checkout shadow (Phase 10D — log only, never mutates inventory)
+    try {
+      const bundleShadow = await recordBundleReservationShadowsForCheckout(supabaseAdmin, {
+        sessionId,
+        kkOrderId: kk_order_id,
+        lineRows,
+        resolveVariant: (sb, row) => resolveCheckoutLineVariant(sb, row, skuMap),
+      });
+      if (bundleShadow.inserted > 0 || bundleShadow.errors > 0) {
+        console.log(
+          `[stripe-webhook] bundle shadow: attempted=${bundleShadow.attempted} inserted=${bundleShadow.inserted} skipped=${bundleShadow.skipped} errors=${bundleShadow.errors}`,
+        );
+      }
+    } catch (bundleShadowErr) {
+      console.error("[stripe-webhook] bundle checkout shadow failed (non-fatal):", bundleShadowErr);
     }
 
     // ✅ 3) Send push notification to admin about new order (fire-and-forget)

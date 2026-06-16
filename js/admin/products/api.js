@@ -40,7 +40,9 @@ export async function fetchCategories() {
 export async function fetchProducts() {
   const { data, error } = await sb()
     .from("products")
-    .select(PRODUCT_SELECT)
+    .select(
+      `${PRODUCT_SELECT}, product_variants(id, option_name, option_value, unit_cost_override_cents, is_active)`,
+    )
     .order("created_at", { ascending: false });
 
   if (error) throw new Error(error.message);

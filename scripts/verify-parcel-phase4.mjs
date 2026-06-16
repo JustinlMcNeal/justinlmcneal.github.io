@@ -7,6 +7,7 @@ import { createServer } from "http";
 import { readFileSync, existsSync } from "fs";
 import { join, dirname, extname } from "path";
 import { fileURLToPath } from "url";
+import { goToParcelTab } from "./verify-parcel-tabHelpers.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
@@ -75,12 +76,13 @@ async function main() {
     if (preview.summary.weightedAverageLandedCpiUsd != null) {
       errors.push("Before FX: USD should be null in preview");
     }
+    await goToParcelTab(page, "parcelTabCpi");
     const landedText = await page.locator('[data-field="cpiLandedPreview"]').textContent();
     if (landedText?.includes("$")) {
       errors.push(`Before FX: landed preview should not show USD: ${landedText}`);
     }
     const warnings = await page.locator("#parcelCpiWarnings").textContent();
-    if (!/Missing FX rate/i.test(warnings || "")) {
+    if (!/Missing (FX rate|exchange rate)/i.test(warnings || "")) {
       errors.push("Missing FX warning not shown");
     }
     if (preview.summary.productsAffected !== 0) {
@@ -93,6 +95,7 @@ async function main() {
       errors.push("Initial CPI CNY should be available for business rows");
     }
 
+    await goToParcelTab(page, "parcelTabReview");
     await page.locator('[data-override-key="effectiveFxRate"]').fill("7.21");
     await page.locator('[data-override-key="effectiveFxRate"]').dispatchEvent("input");
     await page.waitForTimeout(150);
@@ -114,6 +117,7 @@ async function main() {
       errors.push(`Shipment increase should raise CPI: ${previewLowShip} -> ${previewHighShip}`);
     }
 
+    await goToParcelTab(page, "parcelTabMap");
     const personalType = page.locator('[data-mapping-field="rowType"]').first();
     await personalType.selectOption("Personal / Excluded");
     await page.waitForTimeout(100);

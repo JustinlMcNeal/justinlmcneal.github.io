@@ -1,7 +1,7 @@
 // /js/product/cart.js
 import { effectiveOptionValues } from "../shared/variantUtils.js";
 
-export function wireQtyControls(els) {
+export function wireQtyControls(els, { maxQty = null } = {}) {
   if (!els?.qty || !els?.qtyMinus || !els?.qtyPlus) return;
 
   els.qtyMinus.onclick = () => {
@@ -10,8 +10,10 @@ export function wireQtyControls(els) {
   };
 
   els.qtyPlus.onclick = () => {
-    const v = Math.max(1, Number(els.qty.value || 1) + 1);
-    els.qty.value = v;
+    const current = Math.max(1, Number(els.qty.value || 1));
+    const cap = maxQty != null && Number.isFinite(maxQty) ? Math.max(0, maxQty) : null;
+    const next = cap != null ? Math.min(current + 1, cap) : current + 1;
+    els.qty.value = Math.max(1, next);
   };
 }
 

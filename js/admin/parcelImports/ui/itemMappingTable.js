@@ -4,7 +4,7 @@ import { MAPPING_TYPE_OPTIONS, TRUNCATE_ITEM_NAME, TRUNCATE_SELLER } from "../co
 import { getDom } from "../dom.js";
 import { statusPillClasses } from "../mapping/mappingState.js";
 import { formatCny, truncateText } from "../parser/normalizers.js";
-import { getState, updateRowMappingField } from "../state.js";
+import { getState, isImportEditable, updateItemField, updateRowMappingField } from "../state.js";
 import { renderCpiPreviewFromState } from "./cpiPreviewPanel.js";
 import {
   buildProductPickerHtml,
@@ -61,6 +61,8 @@ export function initMappingListeners() {
   if (!mappingTbody) return;
 
   mappingTbody.addEventListener("change", onMappingChange);
+  mappingTbody.addEventListener("input", onItemFieldInput);
+  mappingTbody.addEventListener("change", onItemFieldChange);
   document.addEventListener("parcel-mapping-changed", onParcelMappingChanged);
   mappingListenersBound = true;
 }
@@ -80,6 +82,33 @@ function onMappingChange(e) {
 function onParcelMappingChanged(e) {
   const rowNumber = e.detail?.rowNumber;
   if (Number.isFinite(rowNumber)) refreshMappingRowUi(rowNumber);
+  refreshMappingSummaryUi();
+}
+
+function onItemFieldInput(e) {
+  const el = e.target;
+  if (!(el instanceof HTMLInputElement)) return;
+  if (el.getAttribute("data-item-field") !== "sellerFreightCny") return;
+  if (isPartialDecimalEntry(el.value)) return;
+
+  const rowNumber = Number(el.getAttribute("data-mapping-row"));
+  if (!Number.isFinite(rowNumber)) return;
+
+  updateItemField(rowNumber, "sellerFreightCny", parseItemDecimal(el.value));
+  refreshMappingSummaryUi();
+}
+
+function onItemFieldChange(e) {
+  const el = e.target;
+  if (!(el instanceof HTMLInputElement)) return;
+  if (el.getAttribute("data-item-field") !== "sellerFreightCny") return;
+
+  const rowNumber = Number(el.getAttribute("data-mapping-row"));
+  if (!Number.isFinite(rowNumber)) return;
+
+  const value = parseItemDecimal(el.value);
+  updateItemField(rowNumber, "sellerFreightCny", value);
+  el.value = formatFreightInputValue(value);
   refreshMappingSummaryUi();
 }
 
@@ -141,7 +170,7 @@ function buildMappingRow(item, mapping) {
     <td class="px-2 py-2 text-right tabular-nums">${formatCny(item.unitPriceCny)}</td>
     <td class="px-2 py-2 text-right tabular-nums">${item.quantity ?? "—"}</td>
     <td class="px-2 py-2 text-right tabular-nums">${item.itemWeightGrams ?? "—"}</td>
-    <td class="px-2 py-2 text-right tabular-nums">${formatCny(item.sellerFreightCny ?? 0)}</td>
+    <td class="px-2 py-2 text-right tabular-nums">${buildSellerFreightCell(item, mapping.rowNumber)}</td>
     <td class="px-3 py-2">${buildProductPickerHtml(mapping)}</td>
     <td class="px-2 py-2">${buildVariantPickerHtml(mapping)}</td>
     <td class="px-2 py-2">${buildTypeSelect(mapping)}</td>
@@ -211,9 +240,86 @@ function renderMappingFooter(rowCount) {
 
 function updateMappingToolbarNote(count) {
   const note = document.getElementById("parcelMappingParseNote");
-  if (note) {
-    note.textContent = `Parsed ${count} row(s) — search products and select variants per row.`;
+  if (!note) return;
+  if (!isImportEditable()) {
+    note.textContent = `Approved import — ${count} row(s). Seller freight is read-only (CPI already applied).`;
+    return;
   }
+  const { items } = getState();
+  const missingFreight = items.some(sellerFreightMissingFromExport);
+  let text = `Parsed ${count} row(s) — search products and select variants per row.`;
+  if (missingFreight) {
+    text +=
+      " Seller freight was not in the export — enter domestic ¥ freight per row if you have it.";
+  }
+  note.textContent = text;
+}
+
+/** @param {object} item @param {number} rowNumber */
+function buildSellerFreightCell(item, rowNumber) {
+  if (!isImportEditable()) {
+    return buildSellerFreightReadOnly(item);
+  }
+  return buildSellerFreightInput(item, rowNumber);
+}
+
+/** @param {object} item */
+function buildSellerFreightReadOnly(item) {
+  const amount =
+    item.sellerFreightCny != null && Number.isFinite(item.sellerFreightCny)
+      ? formatCny(item.sellerFreightCny)
+      : formatCny(0);
+  return `<span class="inline-block text-gray-700" title="Approved import — seller freight cannot be changed">${amount}</span>`;
+}
+
+/** @param {object} item @param {number} rowNumber */
+function buildSellerFreightInput(item, rowNumber) {
+  const missing = sellerFreightMissingFromExport(item);
+  const borderClass = missing
+    ? "border-amber-400 bg-amber-50/40"
+    : "border-gray-200 bg-white";
+  const title = missing
+    ? "Not in export — domestic seller→warehouse freight (CNY). Enter if known."
+    : "Domestic seller→warehouse freight (CNY)";
+  return `<input
+    type="text"
+    inputmode="decimal"
+    autocomplete="off"
+    data-item-field="sellerFreightCny"
+    data-mapping-row="${rowNumber}"
+    value="${escapeAttr(formatFreightInputValue(item.sellerFreightCny))}"
+    placeholder="0"
+    title="${escapeAttr(title)}"
+    aria-label="Seller freight row ${rowNumber}"
+    class="w-full min-w-[4.5rem] border-2 ${borderClass} rounded-lg px-2 py-1 text-right text-xs tabular-nums text-gray-900"
+  />`;
+}
+
+/** @param {object} item */
+function sellerFreightMissingFromExport(item) {
+  if (item.sellerFreightCny != null && item.sellerFreightCny > 0) return false;
+  const raw = item.raw?.sellerFreightCny;
+  return raw == null || String(raw).trim() === "" || String(raw).trim() === "—";
+}
+
+/** @param {number | null | undefined} value */
+function formatFreightInputValue(value) {
+  return value == null || !Number.isFinite(value) ? "" : String(value);
+}
+
+/** @param {string} raw */
+function isPartialDecimalEntry(raw) {
+  const trimmed = String(raw).trim();
+  if (!trimmed) return false;
+  return /^-?\d+[.,]$/.test(trimmed.replace(/,/g, "."));
+}
+
+/** @param {string} raw */
+function parseItemDecimal(raw) {
+  const trimmed = String(raw).trim();
+  if (!trimmed) return null;
+  const n = parseFloat(trimmed.replace(/,/g, "."));
+  return Number.isFinite(n) ? n : null;
 }
 
 function escapeHtml(str) {

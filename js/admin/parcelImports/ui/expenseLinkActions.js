@@ -5,6 +5,7 @@ import {
   createExpenseFromParcelImport,
   getLinkedExpense,
   linkExpenseToParcelImport,
+  unlinkExpenseFromParcelImport,
 } from "../api/expenseLinkApi.js";
 import { fetchParcelImportHeader } from "../api/parcelImportsApi.js";
 import { getDom } from "../dom.js";
@@ -23,7 +24,7 @@ let refreshHistoryFn = async () => {};
 /** @param {{ refreshHistory?: () => Promise<void> }} [opts] */
 export function initExpenseLinkActions(opts = {}) {
   refreshHistoryFn = opts.refreshHistory ?? refreshHistoryFn;
-  const { createExpenseBtns, linkExpenseBtn } = getDom();
+  const { createExpenseBtns, linkExpenseBtn, unlinkExpenseBtn } = getDom();
 
   createExpenseBtns?.forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -35,13 +36,22 @@ export function initExpenseLinkActions(opts = {}) {
     void handleLinkExpense();
   });
 
+  unlinkExpenseBtn?.addEventListener("click", () => {
+    void handleUnlinkExpense();
+  });
+
   updateExpenseLinkUi();
 }
 
 export function updateExpenseLinkUi() {
   const state = getState();
-  const { createExpenseBtns, linkExpenseBtn, linkExpenseInput, expenseStatusEl } =
-    getDom();
+  const {
+    createExpenseBtns,
+    linkExpenseBtn,
+    unlinkExpenseBtn,
+    linkExpenseInput,
+    expenseStatusEl,
+  } = getDom();
   const blockReason = getExpenseBlockReason(state);
   const linked = !!state.expenseId;
 
@@ -101,6 +111,20 @@ export function updateExpenseLinkUi() {
 
   if (linkExpenseInput) {
     linkExpenseInput.disabled = !canAct || linked;
+  }
+
+  if (unlinkExpenseBtn) {
+    const canUnlink =
+      state.sessionReady &&
+      state.adminOk &&
+      state.currentImportId &&
+      linked &&
+      state.expenseLinkStatus !== "linking";
+    unlinkExpenseBtn.disabled = !canUnlink;
+    unlinkExpenseBtn.classList.toggle("hidden", !linked);
+    unlinkExpenseBtn.title = linked
+      ? "Remove expense link from this import (does not delete the expense)"
+      : "No expense linked";
   }
 }
 
@@ -223,6 +247,38 @@ export async function handleLinkExpense() {
   } catch (err) {
     console.error("[parcelImports] link expense failed", err);
     setExpenseLinkStatus("error", err?.message || "Link expense failed");
+  } finally {
+    updateExpenseLinkUi();
+    updateInventoryReceiveUi();
+  }
+}
+
+export async function handleUnlinkExpense() {
+  const state = getState();
+  if (!state.currentImportId || !state.expenseId) {
+    setExpenseLinkStatus("error", "No expense linked.");
+    updateExpenseLinkUi();
+    return;
+  }
+
+  const confirmed = window.confirm(
+    "Unlink this expense from the parcel import? The expense record will not be deleted.",
+  );
+  if (!confirmed) return;
+
+  setExpenseLinkStatus("linking", "Unlinking expense…");
+  updateExpenseLinkUi();
+
+  try {
+    await unlinkExpenseFromParcelImport(state.currentImportId);
+    setExpenseId(null);
+    setLinkedExpenseSummary(null);
+    setExpenseLinkStatus("idle", "Expense unlinked.");
+    await refreshHistoryFn();
+    await refreshGlobalKpis();
+  } catch (err) {
+    console.error("[parcelImports] unlink expense failed", err);
+    setExpenseLinkStatus("error", err?.message || "Unlink expense failed");
   } finally {
     updateExpenseLinkUi();
     updateInventoryReceiveUi();

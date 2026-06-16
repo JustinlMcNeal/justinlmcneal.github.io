@@ -6,7 +6,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY } from "/js/config/env.js";
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const HISTORY_SELECT =
-  "id, parcel_id, status, imported_at, xls_total_items, actual_total_charge_cny, products_affected_count, rows_needing_mapping_count, expense_id, inventory_received_at, source_file_name, file_hash, xls_charged_weight_grams, usd_equivalent";
+  "id, parcel_id, status, imported_at, approved_at, xls_total_items, actual_total_charge_cny, effective_fx_rate, usd_equivalent, products_affected_count, rows_needing_mapping_count, expense_id, inventory_received_at, source_file_name, file_hash, xls_charged_weight_grams";
 
 /** @returns {Promise<import('@supabase/supabase-js').Session>} */
 export async function requireAuthenticatedSession() {
@@ -50,7 +50,7 @@ export async function fetchImportSmokeCounts(importId) {
       .eq("allocation_run_type", "preview"),
     supabase
       .from("parcel_import_events")
-      .select("event_type, created_at")
+      .select("event_type, event_message, created_at")
       .eq("parcel_import_id", importId)
       .order("created_at", { ascending: true }),
   ]);
@@ -69,11 +69,12 @@ export async function fetchImportSmokeCounts(importId) {
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-/** @param {{ limit?: number, status?: string, search?: string, importId?: string, offset?: number }} [opts] */
+/** @param {{ limit?: number, status?: string, search?: string, importId?: string, offset?: number, received?: string, expense?: string }} [opts] */
 export async function listParcelImports(opts = {}) {
   await requireAuthenticatedSession();
 
-  const { limit = 25, status, search, importId, offset = 0 } = opts;
+  const { limit = 25, status, search, importId, offset = 0, received, expense } =
+    opts;
 
   if (importId) {
     const { data, error } = await supabase
@@ -92,6 +93,18 @@ export async function listParcelImports(opts = {}) {
 
   if (status) query = query.eq("status", status);
 
+  if (received === "received") {
+    query = query.not("inventory_received_at", "is", null);
+  } else if (received === "not_received") {
+    query = query.is("inventory_received_at", null);
+  }
+
+  if (expense === "linked") {
+    query = query.not("expense_id", "is", null);
+  } else if (expense === "not_linked") {
+    query = query.is("expense_id", null);
+  }
+
   const term = search?.trim();
   if (term) {
     if (UUID_RE.test(term)) {
@@ -108,6 +121,84 @@ export async function listParcelImports(opts = {}) {
   const { data, error } = await query;
   if (error) throw new Error(error.message);
   return data ?? [];
+}
+
+/** @param {string} importId */
+export async function fetchParcelImportEvents(importId) {
+  await requireAuthenticatedSession();
+
+  const { data, error } = await supabase
+    .from("parcel_import_events")
+    .select("event_type, event_message, event_payload, created_at, actor_id")
+    .eq("parcel_import_id", importId)
+    .order("created_at", { ascending: true });
+
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+/** @param {string} importId */
+export async function fetchParcelImportAllocationsForExport(importId) {
+  await requireAuthenticatedSession();
+
+  const [header, items, mappings] = await Promise.all([
+    fetchParcelImportHeader(importId),
+    fetchParcelImportItems(importId),
+    fetchParcelImportMappings(importId),
+  ]);
+
+  let runType = "preview";
+  if (header.status === "approved") {
+    const { count, error: countErr } = await supabase
+      .from("parcel_import_cost_allocations")
+      .select("id", { count: "exact", head: true })
+      .eq("parcel_import_id", importId)
+      .eq("allocation_run_type", "final");
+    if (countErr) throw new Error(countErr.message);
+    if ((count ?? 0) > 0) runType = "final";
+  }
+
+  const { data: allocs, error } = await supabase
+    .from("parcel_import_cost_allocations")
+    .select(
+      "parcel_import_item_id, landed_total_cny, landed_cpi_cny, landed_cpi_usd, included_in_final_product_cpi",
+    )
+    .eq("parcel_import_id", importId)
+    .eq("allocation_run_type", runType);
+
+  if (error) throw new Error(error.message);
+
+  const itemById = new Map(items.map((row) => [row.id, row]));
+  const mappingByItemId = new Map(
+    mappings.map((row) => [row.parcel_import_item_id, row]),
+  );
+  const allocByItemId = new Map(
+    (allocs ?? []).map((row) => [row.parcel_import_item_id, row]),
+  );
+
+  return items
+    .sort((a, b) => a.row_number - b.row_number)
+    .map((item) => {
+      const mapping = mappingByItemId.get(item.id) ?? {};
+      const alloc = allocByItemId.get(item.id) ?? {};
+      return {
+        parcel_id: header.parcel_id ?? "",
+        row_number: item.row_number,
+        item_name: item.source_item_name ?? "",
+        seller: item.seller_name ?? "",
+        qty: item.quantity ?? "",
+        row_type: mapping.row_type ?? "",
+        mapping_status: mapping.mapping_status ?? "",
+        product_label: mapping.mapped_product_label ?? "",
+        variant_label: mapping.mapped_variant_label ?? "",
+        product_id: mapping.product_id ?? "",
+        product_variant_id: mapping.product_variant_id ?? "",
+        landed_total_cny: alloc.landed_total_cny ?? "",
+        landed_cpi_cny: alloc.landed_cpi_cny ?? "",
+        landed_cpi_usd: alloc.landed_cpi_usd ?? "",
+        included_in_final_cpi: alloc.included_in_final_product_cpi ? "yes" : "no",
+      };
+    });
 }
 
 /** @param {{ parcelId?: string, fileHash?: string, currentImportId?: string | null }} params */

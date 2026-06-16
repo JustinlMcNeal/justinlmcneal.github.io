@@ -93,6 +93,27 @@ export function parseAmazonTSV(text) {
   return { total: amazonRows.length, valid, cancelled, errors };
 }
 
+/**
+ * Phase 10P — Retain canceled Amazon TSV rows as read-only marketplace observations.
+ * Does not create orders_raw rows, reservations, or stock mutations.
+ */
+export async function retainAmazonTsvCanceledObservations(cancelledOrderIds) {
+  if (!cancelledOrderIds?.length) {
+    return { inserted: 0, updated: 0, retained: 0 };
+  }
+
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.rpc("retain_amazon_tsv_canceled_observations", {
+    p_amazon_order_ids: cancelledOrderIds,
+  });
+
+  if (error) {
+    throw new Error(`Canceled observation retention failed: ${error.message}`);
+  }
+
+  return data || { inserted: 0, updated: 0, retained: 0 };
+}
+
 // ── importAmazonOrders (actual DB insert) ───────────────────────
 
 export async function importAmazonOrders(validRows) {
@@ -284,11 +305,16 @@ export function wireAmazonImport({
       const parsed = parseAmazonTSV(text);
 
       if (parsed.errors.length) throw new Error(parsed.errors.join(" | "));
-      if (!parsed.valid.length) throw new Error("No importable rows found (all cancelled?).");
+      if (!parsed.valid.length && !parsed.cancelled?.length) {
+        throw new Error("No importable rows found.");
+      }
 
       if (showPreview) {
         showPreview({ fileName: file.name, parsed, onConfirm: () => doImport(parsed) });
-        setStatus?.(`${parsed.valid.length} orders ready to import.`);
+        const parts = [];
+        if (parsed.valid.length) parts.push(`${parsed.valid.length} orders`);
+        if (parsed.cancelled?.length) parts.push(`${parsed.cancelled.length} canceled (observation-only)`);
+        setStatus?.(`${parts.join(", ")} ready to import.`);
       } else {
         await doImport(parsed);
       }
@@ -301,9 +327,32 @@ export function wireAmazonImport({
   async function doImport(parsed) {
     try {
       setStatus?.("Importing Amazon orders…");
-      const result = await importAmazonOrders(parsed.valid);
-      setStatus?.(`Done! ${result.ordersInserted} orders, ${result.lineItemsInserted} line items imported.`);
-      onImported?.(result);
+      let result = {
+        ordersInserted: 0,
+        lineItemsInserted: 0,
+        skippedDuplicates: 0,
+        revenue: 0,
+        shipping: 0,
+        unmappedSkus: [],
+        breakdown: [],
+      };
+      let canceledObs = { inserted: 0, updated: 0, retained: 0 };
+
+      if (parsed.valid.length) {
+        result = await importAmazonOrders(parsed.valid);
+      }
+
+      if (parsed.cancelled?.length) {
+        canceledObs = await retainAmazonTsvCanceledObservations(parsed.cancelled);
+      }
+
+      const canceledNote = canceledObs.retained
+        ? ` ${canceledObs.retained} canceled observation${canceledObs.retained === 1 ? "" : "s"} retained.`
+        : "";
+      setStatus?.(
+        `Done! ${result.ordersInserted} orders, ${result.lineItemsInserted} line items imported.${canceledNote}`,
+      );
+      onImported?.({ ...result, canceledObservations: canceledObs });
     } catch (e) {
       console.error(e);
       setStatus?.(`Amazon import failed: ${e?.message || e}`, true);

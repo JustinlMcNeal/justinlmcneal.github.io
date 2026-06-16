@@ -1,5 +1,6 @@
 // /js/home/api.js
 import { getSupabaseClient } from "../shared/supabaseClient.js";
+import { enrichVariantsWithAvailableStock } from "../shared/kkAvailableStock.js";
 
 const supabase = getSupabaseClient();
 
@@ -203,6 +204,19 @@ export async function fetchVariantsForProducts(productIds = []) {
     if (!map.has(key)) map.set(key, []);
     map.get(key).push(row);
   }
+
+  const flat = [];
+  for (const list of map.values()) flat.push(...list);
+  const enriched = await enrichVariantsWithAvailableStock(supabase, flat);
+  const enrichedById = new Map(enriched.map((v) => [v.id, v]));
+
+  for (const [pid, list] of map) {
+    map.set(
+      pid,
+      list.map((v) => enrichedById.get(v.id) || v),
+    );
+  }
+
   return map;
 }
 /** Fetch products priced at $0.99 (active only). */

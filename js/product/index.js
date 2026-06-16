@@ -243,7 +243,6 @@ async function initProductPage() {
   initStickyDockFX();
 
   const els = getProductEls();
-  wireQtyControls(els);
 
   const ident = getProductIdentFromUrl();
 
@@ -321,9 +320,27 @@ async function initProductPage() {
     const stockBadgeEl = document.getElementById("stockBadge");
 
     // Helper: update shipping text + stock badge when variant changes
+    function resolveSellableVariant() {
+      if (selectedVariant) return selectedVariant;
+      if (variantMode === "simple" && activeVariants.length === 1) return activeVariants[0];
+      return null;
+    }
+
+    function syncPurchaseControls() {
+      const v = resolveSellableVariant();
+      const maxQty =
+        v && typeof v.stock === "number" && v.stock > 0 ? v.stock : null;
+      wireQtyControls(els, { maxQty });
+
+      if (!els.addBtn) return;
+      els.addBtn.disabled = false;
+      els.addBtn.classList.remove("opacity-50", "cursor-not-allowed");
+    }
+
     function updateStockDisplay(variant) {
       if (shippingSpan) shippingSpan.textContent = shippingText(product.shipping_status, variant);
       if (stockBadgeEl) stockBadgeEl.innerHTML = stockBadgeHtml(variant, product.shipping_status);
+      syncPurchaseControls();
     }
 
     // Amazon link (show/hide button and set href)
@@ -431,6 +448,12 @@ async function initProductPage() {
       // No variants — hide the options section entirely.
       if (variantSection) variantSection.style.display = "none";
       if (variantDivider) variantDivider.style.display = "none";
+      if (activeVariants.length === 1) {
+        selectedVariant = activeVariants[0];
+        updateStockDisplay(selectedVariant);
+      } else {
+        syncPurchaseControls();
+      }
 
     } else if (variantMode === "size") {
       // Size product — pill buttons, no auto-select, explicit selection required.
@@ -486,7 +509,19 @@ async function initProductPage() {
           return;
         }
 
-        const payload = buildCartPayload(els, product, tags, selectedVariant);
+        const sellVariant = resolveSellableVariant();
+        const reqQty = Math.max(1, Number(els.qty?.value || 1));
+        if (
+          sellVariant &&
+          typeof sellVariant.stock === "number" &&
+          sellVariant.stock > 0 &&
+          reqQty > sellVariant.stock
+        ) {
+          setActionMsg(els, `Only ${sellVariant.stock} available.`, true);
+          return;
+        }
+
+        const payload = buildCartPayload(els, product, tags, selectedVariant || sellVariant);
         emitAddToCart(payload);
         setActionMsg(els, "Added to cart.");
 

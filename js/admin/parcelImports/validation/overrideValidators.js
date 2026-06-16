@@ -1,5 +1,17 @@
 /** Local validation for parcel charge overrides (Phase 2). */
 
+export const OVERRIDE_ERROR_RE = /must be|cannot be negative/i;
+
+/**
+ * True only for hard validation failures (not "confirm" warnings on a field).
+ * @param {Record<string, string[]>} fieldMessages
+ */
+export function hasOverrideFieldErrors(fieldMessages) {
+  return Object.values(fieldMessages).some((msgs) =>
+    msgs.some((m) => OVERRIDE_ERROR_RE.test(m)),
+  );
+}
+
 /**
  * @param {object | null} overrides
  * @param {object | null} xlsBaseline

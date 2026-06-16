@@ -3,9 +3,14 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "/js/config/env.js";
 import { initAdminNav } from "/js/shared/adminNav.js";
 import { initFooter } from "/js/shared/footer.js";
-import { els, wireDomHelpers, setStatus, setCountLabel, moneyFromCents } from "./dom.js";
+import { els, wireDomHelpers, setStatus, setCountLabel, moneyFromCents, getOrderSource } from "./dom.js";
 import { state } from "./state.js";
-import { fetchOrderSummaryPage, fetchOrderSummaryAllForExport, fetchOrderKpis } from "./api.js";
+import {
+  fetchOrderSummaryPage,
+  fetchOrderSummaryAllForExport,
+  fetchOrderKpis,
+  fetchOrderSummaryRow,
+} from "./api.js";
 import { renderOrdersRows } from "./renderTable.js";
 import { downloadShipReadyCSV } from "./shipReadyCsv.js";
 import { wireAmazonImport } from "./amazonImport.js";
@@ -45,8 +50,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (navMount && toolbar) toolbar.style.top = `${navMount.offsetHeight}px`;
   });
 
-  // Defaults — check URL for ?q= search param (used by admin reviews order links)
-  const urlQ = new URLSearchParams(window.location.search).get("q") || "";
+  // Defaults — check URL for deep-link params (Phase 9A + admin reviews order links)
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlQ =
+    urlParams.get("q") ||
+    urlParams.get("session_id") ||
+    urlParams.get("order_id") ||
+    "";
   els.searchInput.value = urlQ;
   els.statusFilter.value = "";
   els.dateFrom.value = "";
@@ -60,7 +70,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   wireEvents();
-  reload({ hard: true });
+  await reload({ hard: true });
+  await applyLineItemsDeepLink(urlParams);
 });
 
 // ── Shared helpers used by multiple wire* functions ──────────────
@@ -356,6 +367,70 @@ function readFilters() {
     dateTo: (els.dateTo.value || "").trim(),
     reviewStatus: (els.reviewFilter?.value || "").trim(),
   };
+}
+
+const VALID_WS_TABS = new Set(["overview", "fulfillment", "financials", "labels", "ids"]);
+
+/**
+ * Match an order summary row by session / kk order id with optional channel hint.
+ * @param {string} sessionId
+ * @param {string} [channelHint]
+ */
+function findLoadedOrderRow(sessionId, channelHint = "") {
+  const matches = state.rows.filter(
+    (r) =>
+      r.stripe_checkout_session_id === sessionId || String(r.kk_order_id || "") === sessionId,
+  );
+  if (!matches.length) return null;
+  if (channelHint) {
+    return matches.find((r) => getOrderSource(r) === channelHint) || matches[0];
+  }
+  return matches[0];
+}
+
+/**
+ * Open workspace when session_id / order_id deep-link params are present (Phase 9A + 10I).
+ * @param {URLSearchParams} urlParams
+ */
+async function applyLineItemsDeepLink(urlParams) {
+  const sessionId = (urlParams.get("session_id") || urlParams.get("order_id") || "").trim();
+  if (!sessionId) return;
+
+  const lineId = (urlParams.get("line_id") || "").trim() || null;
+  const channelHint = (urlParams.get("channel") || "").trim().toLowerCase();
+  const rawTab = (urlParams.get("tab") || "").trim().toLowerCase();
+  const tab =
+    VALID_WS_TABS.has(rawTab) ? rawTab : lineId && !rawTab ? "overview" : "overview";
+
+  let row = findLoadedOrderRow(sessionId, channelHint);
+
+  if (!row) {
+    try {
+      row = await fetchOrderSummaryRow(sessionId);
+      if (row && channelHint && getOrderSource(row) !== channelHint) {
+        const { rows } = await fetchOrderSummaryPage({ q: sessionId, limit: 25, offset: 0 });
+        const alt = rows.find(
+          (r) =>
+            (r.stripe_checkout_session_id === sessionId ||
+              String(r.kk_order_id || "") === sessionId) &&
+            getOrderSource(r) === channelHint,
+        );
+        if (alt) row = alt;
+      }
+    } catch (err) {
+      console.warn("[lineItemsDeepLink] order lookup failed:", err);
+    }
+  }
+
+  if (!row) {
+    setStatus(`Order not found for deep link: ${sessionId}`, true);
+    return;
+  }
+
+  await openWorkspace(row, {
+    tab,
+    focusLineItemId: lineId,
+  });
 }
 
 /**

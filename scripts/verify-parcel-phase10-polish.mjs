@@ -10,6 +10,7 @@ import { join, dirname, extname } from "path";
 import { fileURLToPath } from "url";
 import pg from "pg";
 import { getPoolerConnectionString } from "./supabase/dbConnect.mjs";
+import { goToParcelTab } from "./verify-parcel-tabHelpers.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
@@ -127,6 +128,7 @@ async function main() {
     if (kpisIdle.total !== "—") errors.push(`KPI should be idle on load, got ${kpisIdle.total}`);
     if (kpisIdle.parcelId !== "—") errors.push("Parcel summary should be blank on load");
 
+    await goToParcelTab(page, "parcelTabUpload");
     await page.locator("#parcelFileInput").setInputFiles(FIXTURE);
     await page.waitForFunction(
       () => /Parsed 11 row/i.test(
@@ -248,6 +250,7 @@ async function main() {
       }
     }
 
+    await goToParcelTab(page, "parcelTabHistory");
     const expenseLinked = await page.evaluate(() => {
       const rows = [...document.querySelectorAll("#parcelHistoryTbody tr")];
       return rows.some((tr) => /Expense linked/i.test(tr.textContent || ""));

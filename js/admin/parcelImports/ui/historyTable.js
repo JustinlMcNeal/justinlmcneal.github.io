@@ -31,33 +31,84 @@ import {
   renderActionStatus,
   updateSaveDraftButtonState,
 } from "./saveDraft.js";
+import { openImportDetailsModal } from "./importDetailsModal.js";
+import { updateWorkflowChrome } from "./exportActions.js";
+import { activateTab } from "./tabs.js";
 
 const PAGE_SIZE = 25;
 
-/** @type {{ search: string, status: string, limit: number, hasMore: boolean, loading: boolean }} */
+/** @type {{ search: string, status: string, received: string, expense: string, limit: number, hasMore: boolean, loading: boolean }} */
 const historyQuery = {
   search: "",
   status: "",
+  received: "",
+  expense: "",
   limit: PAGE_SIZE,
   hasMore: false,
   loading: false,
 };
+
+export function getHistoryQuery() {
+  return { ...historyQuery };
+}
+
+/**
+ * Apply URL deep-link params to history filters (Inventory → Parcel Imports).
+ * @param {{ status?: string, received?: string, expense?: string, search?: string }} params
+ */
+export async function applyHistoryDeepLinkParams(params) {
+  const {
+    historySearchInput,
+    historyStatusFilter,
+    historyReceivedFilter,
+    historyExpenseFilter,
+  } = getDom();
+
+  if (params.search != null) {
+    historyQuery.search = params.search;
+    if (historySearchInput) historySearchInput.value = params.search;
+  }
+  if (params.status != null) {
+    historyQuery.status = params.status;
+    if (historyStatusFilter) historyStatusFilter.value = params.status;
+  }
+  if (params.received != null) {
+    historyQuery.received = params.received;
+    if (historyReceivedFilter) historyReceivedFilter.value = params.received;
+  }
+  if (params.expense != null) {
+    historyQuery.expense = params.expense;
+    if (historyExpenseFilter) historyExpenseFilter.value = params.expense;
+  }
+
+  historyQuery.limit = PAGE_SIZE;
+  await loadAndRenderHistory();
+}
 
 export function initHistoryTable() {
   const {
     historyTbody,
     historySearchInput,
     historyStatusFilter,
+    historyReceivedFilter,
+    historyExpenseFilter,
     historySearchBtn,
     historyLoadMoreBtn,
   } = getDom();
   if (!historyTbody) return;
 
   historyTbody.addEventListener("click", (event) => {
-    const btn = event.target.closest("[data-open-draft]");
-    if (!btn) return;
-    const importId = btn.getAttribute("data-open-draft");
-    if (importId) void openDraft(importId);
+    const openBtn = event.target.closest("[data-open-draft]");
+    if (openBtn) {
+      const importId = openBtn.getAttribute("data-open-draft");
+      if (importId) void openDraft(importId);
+      return;
+    }
+    const detailsBtn = event.target.closest("[data-import-details]");
+    if (detailsBtn) {
+      const importId = detailsBtn.getAttribute("data-import-details");
+      if (importId) void openImportDetailsModal(importId);
+    }
   });
 
   historySearchBtn?.addEventListener("click", () => {
@@ -72,6 +123,14 @@ export function initHistoryTable() {
   });
 
   historyStatusFilter?.addEventListener("change", () => {
+    void applyHistoryFilters();
+  });
+
+  historyReceivedFilter?.addEventListener("change", () => {
+    void applyHistoryFilters();
+  });
+
+  historyExpenseFilter?.addEventListener("change", () => {
     void applyHistoryFilters();
   });
 
@@ -120,12 +179,19 @@ export async function loadAndRenderHistory(opts = {}) {
       limit: fetchLimit,
       status: historyQuery.status || undefined,
       search: historyQuery.search || undefined,
+      received: historyQuery.received || undefined,
+      expense: historyQuery.expense || undefined,
     });
     historyQuery.hasMore = rows.length > historyQuery.limit;
     const visible = rows.slice(0, historyQuery.limit);
     setHistoryRows(visible);
     renderHistoryTable(visible, {
-      filtered: !!(historyQuery.search || historyQuery.status),
+      filtered: !!(
+        historyQuery.search ||
+        historyQuery.status ||
+        historyQuery.received ||
+        historyQuery.expense
+      ),
     });
     updateHistoryControls();
     await refreshGlobalKpis();
@@ -142,9 +208,16 @@ export async function loadAndRenderHistory(opts = {}) {
 }
 
 async function applyHistoryFilters() {
-  const { historySearchInput, historyStatusFilter } = getDom();
+  const {
+    historySearchInput,
+    historyStatusFilter,
+    historyReceivedFilter,
+    historyExpenseFilter,
+  } = getDom();
   historyQuery.search = historySearchInput?.value?.trim() ?? "";
   historyQuery.status = historyStatusFilter?.value ?? "";
+  historyQuery.received = historyReceivedFilter?.value ?? "";
+  historyQuery.expense = historyExpenseFilter?.value ?? "";
   historyQuery.limit = PAGE_SIZE;
   await loadAndRenderHistory();
 }
@@ -183,11 +256,18 @@ export function renderHistoryTable(rows, opts = {}) {
 
   historyTbody.innerHTML = rows.map(renderHistoryRow).join("");
   if (historyFootnote) {
-    const filterNote = historyQuery.search
-      ? ` matching “${historyQuery.search}”`
-      : historyQuery.status
-        ? ` with status ${historyQuery.status.replace(/_/g, " ")}`
-        : "";
+    const filterParts = [];
+    if (historyQuery.search) filterParts.push(`matching “${historyQuery.search}”`);
+    if (historyQuery.status) {
+      filterParts.push(`status ${historyQuery.status.replace(/_/g, " ")}`);
+    }
+    if (historyQuery.received === "received") filterParts.push("inventory received");
+    if (historyQuery.received === "not_received") {
+      filterParts.push("not yet received");
+    }
+    if (historyQuery.expense === "linked") filterParts.push("expense linked");
+    if (historyQuery.expense === "not_linked") filterParts.push("no expense");
+    const filterNote = filterParts.length ? ` (${filterParts.join(", ")})` : "";
     historyFootnote.textContent = `Showing ${rows.length} import(s)${filterNote}.`;
   }
 }
@@ -241,14 +321,24 @@ function renderHistoryRow(row) {
       <td class="px-3 py-2.5 text-xs text-gray-700">${escapeHtml(issues)}</td>
       <td class="px-3 py-2.5 text-xs ${expenseCls}">${escapeHtml(expense)}</td>
       <td class="px-3 py-2.5 text-center">
-        <button
-          type="button"
-          data-open-draft="${escapeAttr(row.id)}"
-          title="${escapeAttr(openLabel)}"
-          class="border border-gray-300 bg-white text-gray-800 px-2 py-1 text-[10px] font-bold uppercase tracking-wide hover:bg-gray-50"
-        >
-          ${escapeHtml(openLabel)}
-        </button>
+        <div class="flex flex-wrap items-center justify-center gap-1">
+          <button
+            type="button"
+            data-open-draft="${escapeAttr(row.id)}"
+            title="${escapeAttr(openLabel)}"
+            class="border border-gray-300 bg-white text-gray-800 px-2 py-1 text-[10px] font-bold uppercase tracking-wide hover:bg-gray-50"
+          >
+            ${escapeHtml(openLabel)}
+          </button>
+          <button
+            type="button"
+            data-import-details="${escapeAttr(row.id)}"
+            title="View import details and timeline"
+            class="border border-gray-200 bg-gray-50 text-gray-700 px-2 py-1 text-[10px] font-bold uppercase tracking-wide hover:bg-gray-100"
+          >
+            Details
+          </button>
+        </div>
       </td>
     </tr>`;
 }
@@ -282,6 +372,7 @@ export async function openDraft(importId) {
       parcelId: bundle.parcel?.parcelId,
       fileHash: bundle.header?.file_hash ?? null,
     });
+    activateTab("parcelTabUpload");
   } catch (err) {
     console.error("[parcelImports] open draft failed", err);
     setSaveStatus("error", `Load failed: ${err?.message || "Unknown error"}`);
@@ -291,6 +382,7 @@ export async function openDraft(importId) {
     updateApprovalButtonState();
     updateExpenseLinkUi();
     updateInventoryReceiveUi();
+    updateWorkflowChrome();
   }
 }
 

@@ -19,6 +19,8 @@ import { renderUploadStatus } from "./ui/upload.js";
 import { updateApprovalButtonState } from "./ui/approvalActions.js";
 import { updateExpenseLinkUi } from "./ui/expenseLinkActions.js";
 import { updateInventoryReceiveUi } from "./ui/inventoryReceiveActions.js";
+import { updateWorkflowChrome } from "./ui/exportActions.js";
+import { activateTab } from "./ui/tabs.js";
 import { refreshGlobalKpis, renderStatsFromParse } from "./ui/stats.js";
 import {
   refreshDuplicateWarning,
@@ -115,8 +117,13 @@ function applyParseResult(text, fileMeta) {
   updateApprovalButtonState();
   updateExpenseLinkUi();
   updateInventoryReceiveUi();
+  updateWorkflowChrome();
   void refreshDuplicateWarning({ parcelId: result.parcel?.parcelId });
   void refreshMappingSuggestions();
+
+  if (itemCount > 0 && !hasErrors) {
+    activateTab("parcelTabMap");
+  }
 }
 
 export function initParcelEvents() {

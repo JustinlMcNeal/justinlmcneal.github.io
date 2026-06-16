@@ -396,6 +396,17 @@ export function updateRowMappingField(rowNumber, field, value) {
   recomputeDerivedFromMapping();
 }
 
+/**
+ * @param {number} rowNumber
+ * @param {string} field
+ * @param {unknown} value
+ */
+export function updateItemField(rowNumber, field, value) {
+  const item = state.items.find((i) => i.rowNumber === rowNumber);
+  if (!item) return;
+  item[field] = value;
+}
+
 export function recomputeDerivedFromMapping() {
   if (!state.rowMappings.length) {
     state.derived = computeDerivedCounts(

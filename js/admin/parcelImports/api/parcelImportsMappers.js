@@ -4,7 +4,10 @@ import { SOURCE_FORMAT, MAPPING_STATUS, ROW_TYPE, PLACEHOLDER_PRODUCT } from "..
 import { buildCpiPreview } from "../cpi/cpiPreview.js";
 import { buildWeightAllocation } from "../cpi/costAllocation.js";
 import { encodeAllocationMethod, encodeMappingStatus, encodeRowType } from "../mapping/enumCodec.js";
-import { validateOverrides } from "../validation/overrideValidators.js";
+import {
+  hasOverrideFieldErrors,
+  validateOverrides,
+} from "../validation/overrideValidators.js";
 
 /**
  * @param {File} file
@@ -104,15 +107,10 @@ function serializeAllocationRow(row, summaryFx) {
   };
 }
 
-/** @param {Record<string, string[]>} fieldMessages */
-function hasOverrideErrors(fieldMessages) {
-  return Object.values(fieldMessages).some((msgs) => msgs.length > 0);
-}
-
 /** @param {object} state @param {object} cpiPreview */
 export function computeStatusIntent(state, cpiPreview) {
   const validation = validateOverrides(state.overrides, state.xlsBaseline);
-  const overrideErrors = hasOverrideErrors(validation.fieldMessages);
+  const overrideErrors = hasOverrideFieldErrors(validation.fieldMessages);
 
   if (state.errors?.length > 0) return "needs_review";
   if (overrideErrors) return "needs_review";
@@ -201,13 +199,17 @@ export async function buildSaveDraftPayload(state) {
   }
 
   const summaryFx = toJsonNumber(cpiPreview.summary?.effectiveFxRate);
+  const overridesForSave = stripOverrides(state.overrides);
+  if (overridesForSave.effectiveFxRate == null && summaryFx != null) {
+    overridesForSave.effectiveFxRate = summaryFx;
+  }
 
   return {
     importId: state.currentImportId ?? null,
     fileMeta,
     parcel: { ...state.parcel },
     xlsBaseline: state.xlsBaseline ? { ...state.xlsBaseline } : {},
-    overrides: stripOverrides(state.overrides),
+    overrides: overridesForSave,
     items: state.items.map(serializeItem),
     mappings,
     cpiPreview: {

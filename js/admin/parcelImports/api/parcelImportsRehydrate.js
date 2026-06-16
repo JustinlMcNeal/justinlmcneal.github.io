@@ -27,7 +27,10 @@ export function headerToParcel(header) {
       : null,
     totalItems: header.xls_total_items ?? null,
     parcelWeightGrams: fromDbNumber(header.xls_parcel_weight_grams),
-    chargedWeightGrams: fromDbNumber(header.xls_charged_weight_grams),
+    // Baestao exports often omit charged weight; fall back to saved actual override.
+    chargedWeightGrams:
+      fromDbNumber(header.xls_charged_weight_grams) ??
+      fromDbNumber(header.actual_charged_weight_grams),
     totalItemFeeCny: fromDbNumber(header.xls_total_item_fee_cny),
     shipmentFeeCny: fromDbNumber(header.xls_shipment_fee_cny),
     insuranceCny: fromDbNumber(header.xls_insurance_cny),

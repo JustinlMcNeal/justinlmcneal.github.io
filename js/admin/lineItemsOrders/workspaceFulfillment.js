@@ -88,6 +88,8 @@ export function renderFulfillment(order, shipment) {
         : ""
     }
 
+    <div id="fulfillmentAddrHint" class="mt-4"></div>
+
     <div class="mt-4 flex flex-wrap gap-3" data-label-actions>
       ${
         labelStatus === "pending" || labelStatus === "voided"

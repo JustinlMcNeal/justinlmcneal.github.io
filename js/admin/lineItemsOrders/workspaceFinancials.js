@@ -119,9 +119,9 @@ export function renderFinancials(order, shipment) {
       }
       <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div class="border-4 border-black p-4">
-          <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">Product CPI</div>
+          <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">Landed CPI</div>
           <div class="font-black text-lg text-red-600">${moneyFromCents(order.product_cpi_cents)}</div>
-          <div class="text-[9px] text-black/50 mt-1">Unit + China Ship</div>
+          <div class="text-[9px] text-black/50 mt-1">Variant override or product CPI + est. China ship</div>
         </div>
         <div class="border-4 border-black p-4">
           <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">USPS Label</div>
@@ -224,8 +224,9 @@ export function renderFinancials(order, shipment) {
       ${sh("Cost & Amazon Net Profit")}
       <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div class="border-4 border-black p-4">
-          <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">Product CPI</div>
+          <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">Landed CPI</div>
           <div class="font-black text-lg text-red-600">${moneyFromCents(order.product_cpi_cents)}</div>
+          <div class="text-[9px] text-black/50 mt-1">Variant override or product CPI + est. China ship</div>
         </div>
         <div class="border-4 border-black p-4">
           <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">USPS Label</div>
@@ -274,9 +275,9 @@ export function renderFinancials(order, shipment) {
       ${sh("Cost & Profit")}
       <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div class="border-4 border-black p-4">
-          <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">Product CPI</div>
+          <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">Landed CPI</div>
           <div class="font-black text-lg text-red-600">${moneyFromCents(order.product_cpi_cents)}</div>
-          <div class="text-[9px] text-black/50 mt-1">Unit + China Ship</div>
+          <div class="text-[9px] text-black/50 mt-1">Variant override or product CPI + est. China ship</div>
         </div>
         <div class="border-4 border-black p-4">
           <div class="text-[10px] font-black uppercase tracking-[.18em] text-black/60 mb-1">USPS Label</div>

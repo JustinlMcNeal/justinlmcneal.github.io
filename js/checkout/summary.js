@@ -3,6 +3,7 @@
 
 import { renderFreeShippingBar, getFreeShippingSettings } from "../shared/cart/freeShippingBar.js";
 import { applyCoupon, removeCoupon, getAppliedCoupon } from "../shared/couponManager.js";
+import { normVariantKey, kkCheckoutShipTimeText, kkEstimatedDeliveryRange } from "../shared/kkAvailableStock.js";
 
 function money(n) {
   return `$${Number(n || 0).toFixed(2)}`;
@@ -17,39 +18,13 @@ function esc(s) {
 }
 
 /* ── Estimated delivery date ── */
-function addBusinessDays(date, days) {
-  const result = new Date(date);
-  let added = 0;
-  while (added < days) {
-    result.setDate(result.getDate() + 1);
-    const dow = result.getDay();
-    if (dow !== 0 && dow !== 6) added++;
-  }
-  return result;
-}
 
 function getEstimatedDelivery(hasBackorder) {
-  const now = new Date();
-  const fmt = (d) =>
-    d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-
-  if (hasBackorder) {
-    // Backorder: 3-4 weeks (15-20 business days)
-    const from = addBusinessDays(now, 15);
-    const to = addBusinessDays(now, 20);
-    return `${fmt(from)} – ${fmt(to)}`;
-  }
-
-  // Normal: 5-8 business days
-  const from = addBusinessDays(now, 5);
-  const to = addBusinessDays(now, 8);
-  return `${fmt(from)} – ${fmt(to)}`;
+  return kkEstimatedDeliveryRange(hasBackorder);
 }
 
 function getShippingTimeText(hasBackorder) {
-  return hasBackorder
-    ? "Ships in 3–4 weeks (backorder)"
-    : "Ships in 2–5 business days";
+  return kkCheckoutShipTimeText(hasBackorder);
 }
 
 /* ── Update summary UI ── */
@@ -73,7 +48,7 @@ export async function updateSummary(totals, stockInfo = {}) {
   const { cartItems = [], stockMap = {}, mtoSet = new Set() } = stockInfo;
   const hasBackorder = cartItems.some((item) => {
     if (mtoSet.has(item.id)) return true;
-    const key = `${item.id}::${(item.variant ?? "").toString().trim()}`;
+    const key = `${item.id}::${normVariantKey(item.variant)}`;
     const stock = stockMap[key];
     return typeof stock === "number" && stock <= 0;
   });

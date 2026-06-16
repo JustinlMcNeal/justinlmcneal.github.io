@@ -3,7 +3,7 @@
  */
 
 import { requireAuthenticatedSession } from "./api/parcelImportsApi.js";
-import { initDom } from "./dom.js";
+import { getDom, initDom } from "./dom.js";
 import { initParcelEvents } from "./events.js";
 import {
   getState,
@@ -12,6 +12,14 @@ import {
   setSessionReady,
 } from "./state.js";
 import { loadAndRenderHistory, initHistoryTable } from "./ui/historyTable.js";
+import { initExportActions } from "./ui/exportActions.js";
+import {
+  initImportDetailsModal,
+  openImportDetailsModal,
+} from "./ui/importDetailsModal.js";
+import { initParcelTabs } from "./ui/tabs.js";
+import { applyParcelImportsDeepLink } from "./ui/deepLink.js";
+import { updateWorkflowChrome } from "./ui/exportActions.js";
 import { initMappingListeners } from "./ui/itemMappingTable.js";
 import {
   initMappingMemoryUi,
@@ -64,15 +72,26 @@ async function init() {
   initInventoryReceiveActions({ refreshHistory });
   initNewImportUi({ refreshHistory });
   initHistoryTable();
+  initExportActions({ refreshHistory });
+  initImportDetailsModal();
+  initParcelTabs();
+
+  const { importDetailsBtn } = getDom();
+  importDetailsBtn?.addEventListener("click", () => {
+    const importId = getState().currentImportId;
+    if (importId) void openImportDetailsModal(importId);
+  });
 
   if (authed) {
-    await loadAndRenderHistory();
+    const deepLinked = await applyParcelImportsDeepLink();
+    if (!deepLinked) await loadAndRenderHistory();
   }
 
   updateSaveDraftButtonState();
   updateApprovalButtonState();
   updateExpenseLinkUi();
   updateInventoryReceiveUi();
+  updateWorkflowChrome();
   renderActionStatus();
 
   if (/localhost|127\.0\.0\.1/.test(location.hostname)) {

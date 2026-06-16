@@ -10,6 +10,7 @@ import { join, dirname, extname } from "path";
 import { fileURLToPath } from "url";
 import pg from "pg";
 import { getPoolerConnectionString } from "./supabase/dbConnect.mjs";
+import { goToParcelTab } from "./verify-parcel-tabHelpers.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
@@ -107,6 +108,7 @@ async function signInWithMagicLink(page, env) {
 }
 
 async function prepareApprovedImport(page) {
+  await goToParcelTab(page, "parcelTabUpload");
   await page.locator("#parcelFileInput").setInputFiles(FIXTURE);
   await page.waitForFunction(
     () => /Parsed 11 row/i.test(
@@ -115,6 +117,7 @@ async function prepareApprovedImport(page) {
     { timeout: 15000 },
   );
 
+  await goToParcelTab(page, "parcelTabMap");
   await page.locator('[data-product-search][data-mapping-row="1"]').fill("8-Ball");
   await page.waitForSelector('[data-pick-product][data-mapping-row="1"]', {
     timeout: 15000,
@@ -194,6 +197,7 @@ async function main() {
       { timeout: 20000 },
     );
 
+    await goToParcelTab(page, "parcelTabCpi");
     await page.locator('[data-parcel-action="create-expense"]').first().click();
     await page.waitForFunction(
       () => /Expense (created|linked)/i.test(
@@ -202,6 +206,7 @@ async function main() {
       { timeout: 20000 },
     );
 
+    await goToParcelTab(page, "parcelTabHistory");
     await page.waitForFunction(
       () => [...document.querySelectorAll("#parcelHistoryTbody tr")].some((tr) =>
         /Expense linked/i.test(tr.textContent || ""),

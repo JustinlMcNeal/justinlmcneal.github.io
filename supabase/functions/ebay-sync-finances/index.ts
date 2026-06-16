@@ -2,6 +2,7 @@
 // via the Finances API and insert into expenses table + update fulfillment_shipments label costs.
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { refreshMarketplaceObservationsAfterSync } from "../_shared/marketplaceObservationRefresh.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -409,12 +410,41 @@ serve(async (req) => {
         } else {
           nonSaleInserted++;
         }
+      } else if (["REFUND", "CREDIT", "REVERSAL"].includes(txn.transactionType)) {
+        const referenceOrderId =
+          txn.references?.find((r) => r.referenceType === "ORDER_ID")?.referenceId || null;
+        const refundOrderId = txn.orderId || referenceOrderId;
+        if (refundOrderId) {
+          saleUpsertRows.push({
+            transaction_id: txn.transactionId,
+            ebay_order_id: refundOrderId,
+            stripe_checkout_session_id: `ebay_api_${refundOrderId}`,
+            transaction_type: txn.transactionType,
+            transaction_status: txn.transactionStatus || null,
+            transaction_date: txn.transactionDate || null,
+            booking_entry: txn.bookingEntry || null,
+            amount_cents: absAmountCents(txn.amount),
+            total_fee_cents: 0,
+            fee_final_value_cents: 0,
+            fee_ad_cents: 0,
+            fee_regulatory_cents: 0,
+            fee_international_cents: 0,
+            fee_other_cents: 0,
+            fee_breakdown: txn.orderLineItems
+              ? txn.orderLineItems.map((oli) => ({
+                  lineItemId: oli.lineItemId,
+                  amount: oli.refunds?.length ? oli.refunds : oli,
+                }))
+              : [],
+            raw_payload: txn,
+            synced_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+        }
       }
-      // REFUND and CREDIT types are informational — order refund tracking is
-      // already handled in orders_raw via the order sync or admin UI
     }
 
-    // Batch upsert per-order SALE transactions to ebay_finance_transactions
+    // Batch upsert per-order finance transactions to ebay_finance_transactions
     let ebayFinUpserted = 0;
     if (saleUpsertRows.length > 0) {
       const { error: upsertErr } = await supabase
@@ -521,7 +551,13 @@ serve(async (req) => {
 
     console.log("[ebay-fin] Done:", JSON.stringify(result));
 
-    return new Response(JSON.stringify(result), { headers: corsHeaders });
+    const obsRefresh = await refreshMarketplaceObservationsAfterSync(supabase, {
+      channel: "ebay",
+      daysBack,
+      logPrefix: "[ebay-fin]",
+    });
+
+    return new Response(JSON.stringify({ ...result, observation_refresh: obsRefresh }), { headers: corsHeaders });
   } catch (err: unknown) {
     console.error(
       "[ebay-fin] Error:",

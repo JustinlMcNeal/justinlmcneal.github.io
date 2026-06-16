@@ -2,6 +2,11 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "/js/config/env.js";
 import { getSupplierShippingDetails } from "/js/admin/pStorage/profitCalc.js";
+import {
+  cpiSourceLabel,
+  normalizeVariantKey,
+  resolveOrderLineItemCost,
+} from "/js/shared/landedCpi.js";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -45,62 +50,62 @@ export async function fetchOrderDetails(stripe_checkout_session_id) {
   // Legacy items have been remapped to new codes so they can pull images correctly.
   const productCodes = [...new Set((lineItems || []).map(li => li.product_id).filter(Boolean))];
   let productsMap = new Map();
-  let variantsMap = new Map(); // key: "productCode|variantName" -> variant
+  let variantsMap = new Map(); // key: "productCode|variantName" -> variant row
   
   if (productCodes.length > 0) {
-    // Fetch products by code with their variants and weight
-    // CPI is calculated from: unit_cost + supplier_ship (from weight formula)
     const { data: products, error: pErr } = await supabase
       .from("products")
       .select(`
         id, code, slug, name, unit_cost, weight_g, primary_image_url, catalog_image_url,
-        product_variants (option_value, preview_image_url)
+        product_variants (id, option_value, preview_image_url, unit_cost_override_cents)
       `)
       .in("code", productCodes);
     
     if (pErr) console.error("[fetchOrderDetails] Products error:", pErr);
 
     for (const p of products || []) {
-      // Calculate supplier ship per unit using the weight formula (default 30 qty)
       const weightG = Number(p.weight_g ?? 0);
       const shipDetails = getSupplierShippingDetails(weightG, 30);
       const supplierShipPerUnit = shipDetails.perUnitUSD || 0;
       productsMap.set(p.code, { ...p, _supplierShipPerUnit: supplierShipPerUnit });
-      // Build variant image map
       for (const v of p.product_variants || []) {
-        if (v.option_value && v.preview_image_url) {
-          variantsMap.set(`${p.code}|${v.option_value}`, v.preview_image_url);
-        }
+        if (!v.option_value) continue;
+        variantsMap.set(`${p.code}|${normalizeVariantKey(v.option_value)}`, v);
       }
     }
   }
 
-  // Enrich line items with product data and calculate costs
-  // CPI (Paid Shipping) = unit_cost + supplier_ship_per_unit (calculated from weight)
   let calculatedCostCents = 0;
   const enrichedLineItems = (lineItems || []).map(li => {
     const product = productsMap.get(li.product_id);
     const qty = Number(li.quantity ?? 1);
-    const unitCostDollars = Number(product?.unit_cost ?? 0);
-    const supplierShipDollars = Number(product?._supplierShipPerUnit ?? 0);
-    // CPI for Paid Shipping scenario (customer pays USPS, we only pay supplier ship)
-    const cpiDollars = unitCostDollars + supplierShipDollars;
-    const lineCostCents = Math.round(cpiDollars * 100 * qty);
-    calculatedCostCents += lineCostCents;
-    
-    // Get variant-specific image, or fall back to product images
-    const variantKey = `${li.product_id}|${li.variant}`;
-    const variantImage = variantsMap.get(variantKey);
+    const variantKey = `${li.product_id}|${normalizeVariantKey(li.variant)}`;
+    const variant = variantsMap.get(variantKey) || null;
+
+    const cost = resolveOrderLineItemCost({
+      productUnitCost: product?.unit_cost,
+      variantOverrideCents: variant?.unit_cost_override_cents,
+      supplierShipPerUnitUsd: product?._supplierShipPerUnit ?? 0,
+      quantity: qty,
+    });
+    calculatedCostCents += cost.lineCostCents;
+
+    const variantImage = variant?.preview_image_url || null;
     const imageUrl = variantImage || product?.primary_image_url || product?.catalog_image_url || null;
     
     return {
       ...li,
       product_slug: product?.slug || null,
       product_image_url: imageUrl,
-      unit_cost_cents: Math.round(unitCostDollars * 100),
-      supplier_ship_cents: Math.round(supplierShipDollars * 100),
-      cpi_cents: Math.round(cpiDollars * 100), // CPI per unit (Paid Shipping)
-      line_cost_cents: lineCostCents, // CPI × quantity
+      product_variant_id: variant?.id || null,
+      unit_cost_cents: cost.unitCostCents,
+      supplier_ship_cents: cost.supplierShipCents,
+      cpi_cents: cost.cpiCents,
+      line_cost_cents: cost.lineCostCents,
+      landed_cpi_cents: cost.unitCostCents,
+      cost_source: cost.costSource,
+      cost_source_label: cpiSourceLabel(cost.costSource),
+      uses_landed_variant_cpi: cost.costSource === "variant",
     };
   });
 
@@ -392,6 +397,27 @@ async function getRefundsMap(sessionIds) {
   return m;
 }
 
+/** Phase 10P — derived marketplace cancel/refund/fulfillment status (guidance-only). */
+async function getMarketplaceStatusMap(sessionIds) {
+  if (!sessionIds?.length) return new Map();
+
+  const { data, error } = await supabase
+    .from("v_order_marketplace_status")
+    .select(
+      "stripe_checkout_session_id, order_status, cancel_status, refund_status, refund_status_derived, return_observation_status, fulfillment_status, is_afn_observed, marketplace_line_confidence",
+    )
+    .in("stripe_checkout_session_id", sessionIds);
+
+  if (error) {
+    console.warn("[api] v_order_marketplace_status fetch failed (migration may not be applied yet):", error.message);
+    return new Map();
+  }
+
+  const m = new Map();
+  for (const row of data || []) m.set(row.stripe_checkout_session_id, row);
+  return m;
+}
+
 /**
  * Batch-fetch eBay Finance API data from v_ebay_order_profit for a set of session IDs.
  * Only queries for session IDs that look like eBay orders (start with "ebay_api_").
@@ -606,25 +632,44 @@ export async function fetchOrderSummaryPage({
 
   const shipMap = await getShipmentsMap(sessionIds);
   const refundMap = await getRefundsMap(sessionIds);
+  const marketplaceStatusMap = await getMarketplaceStatusMap(sessionIds);
   const reviewMap = await getReviewCountsMap(sessionIds);
   const ebayFinanceMap = await getEbayFinancesMap(sessionIds);
   const amazonFinanceMap = await getAmazonFinancesMap(sessionIds);
 
-  // Cost & profit come from the v_order_summary_plus view (via v_order_financials).
+  // Cost & profit from v_order_summary_plus (landed CPI in SQL views; variant override when set).
   // For eBay orders, ebay_finance provides Finance API earnings for accurate profit.
   const merged = rows.map((r) => {
     const shipment = shipMap.get(r.stripe_checkout_session_id) || null;
     const refund = refundMap.get(r.stripe_checkout_session_id) || null;
+    const marketplace_status = marketplaceStatusMap.get(r.stripe_checkout_session_id) || null;
     const review_count = reviewMap.get(r.stripe_checkout_session_id) || 0;
     const ebay_finance = ebayFinanceMap.get(r.stripe_checkout_session_id) || null;
     const amazon_finance = amazonFinanceMap.get(r.stripe_checkout_session_id) || null;
-    return { ...r, shipment, refund, review_count, ebay_finance, amazon_finance };
+    return { ...r, shipment, refund, marketplace_status, review_count, ebay_finance, amazon_finance };
   });
 
   const totalCount = Number(count ?? 0);
   const hasMore = O + merged.length < totalCount;
 
   return { rows: merged, totalCount, hasMore };
+}
+
+/**
+ * Find a single order summary row by session / kk order id (Phase 10I deep links).
+ * @param {string} sessionOrOrderId
+ * @returns {Promise<Record<string, unknown>|null>}
+ */
+export async function fetchOrderSummaryRow(sessionOrOrderId) {
+  const id = (sessionOrOrderId || "").trim();
+  if (!id) return null;
+
+  const { rows } = await fetchOrderSummaryPage({ q: id, limit: 25, offset: 0 });
+  return (
+    rows.find(
+      (r) => r.stripe_checkout_session_id === id || String(r.kk_order_id || "") === id,
+    ) || null
+  );
 }
 
 export async function fetchOrderSummaryAllForExport(filters = {}) {
@@ -687,6 +732,30 @@ export async function upsertFulfillmentShipment({
   return data;
 }
 
+/** Phase 6E — finalize KK inventory reservations when order ships (admin path). */
+export async function finalizeKkOrderReservations({
+  stripe_checkout_session_id,
+  reference_id,
+  source = "admin_fulfillment",
+} = {}) {
+  if (!stripe_checkout_session_id) throw new Error("Missing stripe_checkout_session_id");
+  if (
+    stripe_checkout_session_id.startsWith("ebay") ||
+    stripe_checkout_session_id.startsWith("amazon")
+  ) {
+    return null;
+  }
+
+  const { data, error } = await supabase.rpc("finalize_kk_order_reservations", {
+    p_order_id: stripe_checkout_session_id,
+    p_reference_id: reference_id || stripe_checkout_session_id,
+    p_source: source,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
 export async function fetchOrderKpis({ q = "", status = "", dateFrom = "", dateTo = "" } = {}) {
   // Get base KPIs from RPC (orders count, revenue, unfulfilled)
   const { data, error } = await supabase.rpc("rpc_order_kpis", {
@@ -701,8 +770,7 @@ export async function fetchOrderKpis({ q = "", status = "", dateFrom = "", dateT
   const row = Array.isArray(data) ? data[0] : data;
   const baseKpis = row || { orders_count: 0, revenue_cents: 0, profit_cents: 0, unfulfilled_count: 0, refunded_count: 0, refunded_cents: 0 };
 
-  // Profit comes from v_order_summary_plus (via v_order_financials) which already
-  // handles legacy stored cost vs dynamic CPI. Sum it for the filtered orders.
+  // Profit from v_order_summary_plus (landed CPI views). Sum for filtered orders.
   let profitQ = supabase
     .from(SUMMARY)
     .select("profit_cents")
@@ -763,16 +831,11 @@ export async function fetchPackagePresets() {
   return data || [];
 }
 
-export async function buyShippingLabel(stripe_checkout_session_id, preset_id = null) {
-  if (!stripe_checkout_session_id) throw new Error("Missing session ID");
-
+async function invokeEdgeFunction(functionName, body) {
   const { data: { session } } = await supabase.auth.getSession();
   const token = session?.access_token;
 
-  const body = { stripe_checkout_session_id };
-  if (preset_id) body.preset_id = preset_id;
-
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/shippo-create-label`, {
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/${functionName}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -782,11 +845,36 @@ export async function buyShippingLabel(stripe_checkout_session_id, preset_id = n
     body: JSON.stringify(body),
   });
 
-  const result = await res.json();
+  const result = await res.json().catch(() => ({}));
   if (!res.ok || result.error) {
-    throw new Error(result.error || `Label purchase failed (${res.status})`);
+    const err = new Error(result.error || result.detail || `${functionName} failed (${res.status})`);
+    if (result.address_validation) err.addressValidation = result.address_validation;
+    if (result.detail) err.detail = result.detail;
+    throw err;
   }
   return result;
+}
+
+export async function updateOrderShippingAddress(stripe_checkout_session_id, address) {
+  if (!stripe_checkout_session_id) throw new Error("Missing session ID");
+  return invokeEdgeFunction("update-order-shipping-address", {
+    stripe_checkout_session_id,
+    ...address,
+  });
+}
+
+export async function validateOrderShippingAddress(stripe_checkout_session_id) {
+  if (!stripe_checkout_session_id) throw new Error("Missing session ID");
+  return invokeEdgeFunction("shippo-validate-address", { stripe_checkout_session_id });
+}
+
+export async function buyShippingLabel(stripe_checkout_session_id, preset_id = null) {
+  if (!stripe_checkout_session_id) throw new Error("Missing session ID");
+
+  const body = { stripe_checkout_session_id };
+  if (preset_id) body.preset_id = preset_id;
+
+  return invokeEdgeFunction("shippo-create-label", body);
 }
 
 export async function voidShippingLabel(stripe_checkout_session_id) {

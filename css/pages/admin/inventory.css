@@ -1,0 +1,47 @@
+/* Inventory admin — mockup-aligned helpers */
+
+.inv-table-scroll {
+  -webkit-overflow-scrolling: touch;
+}
+
+.inv-table-scroll thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #fff;
+}
+
+.inv-ledger-scroll {
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 1023px) {
+  #inventoryTabList {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 639px) {
+  #inventoryTabList button span:first-child {
+    font-size: 9px;
+  }
+}
+
+/* Returns & Restock Dashboard — mobile-safe modal (Phase 10Y) */
+[data-rrd-modal] > div {
+  max-height: min(92vh, 100dvh - 2rem);
+}
+
+[data-rrd-list] {
+  -webkit-overflow-scrolling: touch;
+}
+
+[data-rrd-tabs] {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  flex-wrap: nowrap;
+}
+
+[data-rrd-tabs] button {
+  flex-shrink: 0;
+}

@@ -2,6 +2,7 @@
 
 import type { AmazonCredentials } from "./amazonPtdAuthUtils.ts";
 import { createRestrictedDataToken, parsePayload, spApiGet } from "./amazonSpApiRequestUtils.ts";
+import { upsertAmazonCancelObservations } from "./marketplaceObservationSync.ts";
 
 export type ServiceClient = {
   from: (table: string) => {
@@ -28,6 +29,7 @@ export type AmazonOrderSyncStats = {
   fetched: number;
   synced: number;
   skipped: number;
+  canceledRetained: number;
   matched: number;
   unmatched: number;
   unmappedSkus: string[];
@@ -227,15 +229,13 @@ function buildOrderRows(
   orderRow: Record<string, unknown>;
   lineItemRows: Record<string, unknown>[];
   shipmentRow: Record<string, unknown>;
+  isCanceled: boolean;
 } | null {
   const amazonOrderId = String(order.AmazonOrderId || "").trim();
   if (!amazonOrderId) return null;
 
   const orderStatus = String(order.OrderStatus || "").toLowerCase();
-  if (orderStatus === "canceled" || orderStatus === "cancelled") {
-    stats.skipped++;
-    return null;
-  }
+  const isCanceled = orderStatus === "canceled" || orderStatus === "cancelled";
 
   const sessionId = `amazon_${amazonOrderId}`;
   const shortId = amazonOrderId.split("-").pop() || amazonOrderId;
@@ -336,19 +336,27 @@ function buildOrderRows(
   const shipmentRow: Record<string, unknown> = {
     stripe_checkout_session_id: sessionId,
     kk_order_id: kkOrderId,
-    label_status: labelStatus,
+    label_status: isCanceled ? "cancelled" : labelStatus,
     carrier: fulfillmentChannel === "AFN" ? "Amazon" : null,
     service: fulfillmentChannel === "AFN" ? "Fulfilled by Amazon" : null,
     tracking_number: null,
-    shipped_at: isShipped
-      ? (order.LatestShipDate ? String(order.LatestShipDate) : purchaseDate)
-      : null,
-    label_cost_cents: isShipped && totalWeightG ? estimateLabelCostCents(totalWeightG) : 0,
-    notes: `Synced from Amazon Orders API (${String(order.OrderStatus || "unknown")})`,
+    shipped_at: isCanceled
+      ? null
+      : isShipped
+        ? (order.LatestShipDate ? String(order.LatestShipDate) : purchaseDate)
+        : null,
+    label_cost_cents: isCanceled ? 0 : (isShipped && totalWeightG ? estimateLabelCostCents(totalWeightG) : 0),
+    notes: isCanceled
+      ? `Amazon order canceled (${String(order.OrderStatus || "Canceled")}) — observational retention only`
+      : `Synced from Amazon Orders API (${String(order.OrderStatus || "unknown")})`,
   };
 
-  stats.synced++;
-  return { orderRow, lineItemRows, shipmentRow };
+  if (isCanceled) {
+    stats.canceledRetained = (stats.canceledRetained ?? 0) + 1;
+  } else {
+    stats.synced++;
+  }
+  return { orderRow, lineItemRows, shipmentRow, isCanceled };
 }
 
 function stripNullPiiFields(orderRow: Record<string, unknown>): Record<string, unknown> {
@@ -492,6 +500,7 @@ export async function syncAmazonOrdersToDb(
     fetched: 0,
     synced: 0,
     skipped: 0,
+    canceledRetained: 0,
     matched: 0,
     unmatched: 0,
     unmappedSkus: [],
@@ -537,7 +546,11 @@ export async function syncAmazonOrdersToDb(
       .upsert(orderRowForUpsert, { onConflict: "stripe_checkout_session_id" });
     if (orderErr) {
       console.warn(`[amazon-order-sync] order upsert failed ${amazonOrderId}:`, orderErr.message);
-      stats.synced--;
+      if (built.isCanceled) {
+        stats.canceledRetained = Math.max(0, stats.canceledRetained - 1);
+      } else {
+        stats.synced--;
+      }
       stats.skipped++;
       continue;
     }
@@ -559,6 +572,20 @@ export async function syncAmazonOrdersToDb(
     }
 
     const fulfillmentChannel = String(order.FulfillmentChannel || "").toUpperCase();
+
+    if (built.isCanceled) {
+      await upsertAmazonCancelObservations(client, {
+        sourceOrderId: sessionId,
+        isAfn: fulfillmentChannel === "AFN",
+        observedAt: String(built.orderRow.order_date || new Date().toISOString()),
+        orderPayload: { order, items: itemsResult.items },
+        lineItemRows: built.lineItemRows.map((row) => ({
+          stripe_line_item_id: String(row.stripe_line_item_id),
+        })),
+      });
+      continue;
+    }
+
     const isMerchantFulfilled = fulfillmentChannel !== "AFN";
 
     if (isMerchantFulfilled) {

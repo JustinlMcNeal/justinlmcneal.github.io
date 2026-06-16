@@ -1,5 +1,12 @@
 import { escapeAttr } from "./dom.js";
 import { uploadProductImage } from "./api.js";
+import {
+  cpiSourceLabel,
+  formatLandedCpiUsd,
+  formatMarginBadgeHtml,
+  resolveLandedCpiUsd,
+} from "../../shared/landedCpi.js";
+import { computeVariantMargin } from "./productMargin.js";
 
 /* =========================
    VARIANTS
@@ -22,6 +29,30 @@ export function addVariantRow(
   const optionNameOptions = OPTION_NAMES
     .map((n) => `<option value="${n}" ${n === optionName ? "selected" : ""}>${n}</option>`)
     .join("");
+
+  const variantCpi = resolveLandedCpiUsd({
+    unitCost: v._productUnitCost,
+    unitCostOverrideCents: v.unit_cost_override_cents,
+  });
+  const cpiLabel = cpiSourceLabel(variantCpi.source);
+  const cpiDisplay = formatLandedCpiUsd(variantCpi.landedCpiUsd);
+  const cpiTitle =
+    variantCpi.source === "variant"
+      ? "Parcel-import landed CPI for this variant"
+      : "Falls back to product CPI when no variant override";
+
+  const variantMargin = computeVariantMargin({
+    price: v._productPrice,
+    weightG: v._productWeightG,
+    unitCost: v._productUnitCost,
+    unitCostOverrideCents: v.unit_cost_override_cents,
+  });
+  const marginBadge = variantMargin
+    ? formatMarginBadgeHtml(variantMargin.marginPercent)
+    : null;
+  const marginDisplay = marginBadge?.hasData
+    ? marginBadge.html
+    : '<span style="font-size:9px;color:#9ca3af;">—</span>';
 
   row.innerHTML = `
     <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
@@ -52,6 +83,22 @@ export function addVariantRow(
       <div style="width: 70px;">
         <input class="kk-input" style="padding: 8px 10px; font-size: 13px; border-width: 2px; text-align: center;" 
                type="number" min="0" placeholder="0" value="${Number(v.stock || 0)}" data-v="stock" title="Stock quantity" />
+      </div>
+
+      <!-- Landed CPI (read-only) -->
+      <div style="min-width: 88px; text-align: right;" title="${escapeAttr(cpiTitle)}">
+        <div style="font-size: 11px; font-weight: 800; font-family: ui-monospace, monospace;">${cpiDisplay}</div>
+        <div data-cpi-source="${escapeAttr(variantCpi.source)}" style="font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #92400e;">${cpiLabel}</div>
+      </div>
+
+      <!-- Margin (read-only, free-shipping est.) -->
+      <div style="min-width: 72px; text-align: center;" title="Free-shipping margin estimate from landed CPI">
+        ${marginDisplay}
+        ${
+          variantMargin
+            ? `<div style="font-size: 8px; font-weight: 700; color: #6b7280; margin-top: 2px;">${cpiLabel}</div>`
+            : ""
+        }
       </div>
       
       <!-- Hidden URL storage -->

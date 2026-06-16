@@ -9,6 +9,7 @@ import {
 import { formatCny, formatGrams } from "../parser/normalizers.js";
 import {
   isOverrideDirty,
+  OVERRIDE_ERROR_RE,
   validateOverrides,
 } from "../validation/overrideValidators.js";
 import { renderCpiPreviewFromState } from "./cpiPreviewPanel.js";
@@ -79,9 +80,29 @@ function onOverrideEvent(e) {
   const key = el.getAttribute("data-override-key");
   if (!key) return;
 
+  if (e.type === "input" && el instanceof HTMLInputElement && isPartialDecimalEntry(el.value)) {
+    refreshOverrideUi();
+    return;
+  }
+
   const value = parseOverrideInput(key, el);
   updateOverrideField(key, value);
+  maybeDeriveFxRate(key);
   refreshOverrideUi();
+}
+
+/** @param {string} changedKey */
+function maybeDeriveFxRate(changedKey) {
+  if (!["totalParcelChargeCny", "usdEquivalent"].includes(changedKey)) return;
+  const { overrides } = getState();
+  if (overrides?.effectiveFxRate != null) return;
+  const total = overrides?.totalParcelChargeCny;
+  const usd = overrides?.usdEquivalent;
+  if (total != null && total > 0 && usd != null && usd > 0) {
+    const derived = total / usd;
+    updateOverrideField("effectiveFxRate", derived);
+    setInputValue("effectiveFxRate", derived);
+  }
 }
 
 /**
@@ -95,9 +116,22 @@ function parseOverrideInput(key, el) {
     if (v === "no") return false;
     return null;
   }
-  const raw = String(el.value).trim();
-  if (!raw) return null;
-  const n = parseFloat(raw.replace(/,/g, ""));
+  return parseDecimalInput(el.value);
+}
+
+/** @param {string} raw */
+function isPartialDecimalEntry(raw) {
+  const trimmed = String(raw).trim();
+  if (!trimmed) return false;
+  return /^-?\d+[.,]$/.test(trimmed.replace(/,/g, "."));
+}
+
+/** @param {string} raw */
+function parseDecimalInput(raw) {
+  const trimmed = String(raw).trim();
+  if (!trimmed) return null;
+  const normalized = trimmed.replace(/,/g, ".");
+  const n = parseFloat(normalized);
   return Number.isFinite(n) ? n : null;
 }
 
@@ -185,9 +219,7 @@ function applyFieldChrome(key, validation) {
     overrides?.dirtyFields?.[key] ||
     isOverrideDirty(key, overrides?.[key], xlsBaseline?.[key]);
   const msgs = validation.fieldMessages[key] || [];
-  const hasError = msgs.some((m) =>
-    /must be|cannot be negative/i.test(m),
-  );
+  const hasError = msgs.some((m) => OVERRIDE_ERROR_RE.test(m));
 
   const wrap = document.querySelector(`[data-override-wrap="${key}"]`);
   const edited = document.querySelector(`[data-override-edited="${key}"]`);
@@ -284,6 +316,7 @@ function renderGlobalOverrideMessages(validation) {
 function setInputValue(key, value) {
   const el = document.querySelector(`[data-override-key="${key}"]`);
   if (!el || !(el instanceof HTMLInputElement)) return;
+  if (document.activeElement === el) return;
   el.value = value == null || !Number.isFinite(value) ? "" : String(value);
 }
 

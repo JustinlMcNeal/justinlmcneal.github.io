@@ -11,6 +11,43 @@ import {
   EBAY_API,
   KKProduct,
 } from "../_shared/ebayUtils.ts";
+import {
+  isEbayOrderCanceled,
+  updateExistingEbayOrderFromApi,
+} from "../_shared/ebayOrderCancelAware.ts";
+import { upsertEbayCancelObservations } from "../_shared/marketplaceObservationSync.ts";
+import { refreshMarketplaceObservationsAfterSync } from "../_shared/marketplaceObservationRefresh.ts";
+
+const ORDER_INGEST_TOPICS = new Set([
+  "ORDER_CONFIRMATION",
+  "MARKETPLACE_ORDER_CREATED",
+  "MARKETPLACE_ORDER_PAID",
+]);
+
+const ORDER_CANCEL_REFUND_TOPICS = new Set([
+  "MARKETPLACE_ORDER_CANCELLED",
+  "MARKETPLACE_ORDER_CANCELED",
+  "ORDER_CANCELLED",
+  "ORDER_CANCELED",
+  "MARKETPLACE_ORDER_UPDATED",
+  "MARKETPLACE_ORDER_REFUNDED",
+  "MARKETPLACE_REFUND_CREATED",
+  "PAYMENT_DISPUTE",
+  "PAYMENT_DISPUTE_CLOSED",
+]);
+
+function isCancelRefundTopic(topic: string): boolean {
+  const t = topic.toUpperCase();
+  if (ORDER_CANCEL_REFUND_TOPICS.has(t)) return true;
+  return t.includes("CANCEL") || t.includes("REFUND") || t.includes("RETURN") || t.includes("DISPUTE");
+}
+
+function extractOrderIdFromNotification(body: Record<string, unknown>): string {
+  const notifData = body?.notification?.data as Record<string, unknown> || {};
+  return (notifData?.orderId as string) ||
+    (notifData?.resourceId as string) ||
+    ((notifData?.resource as Record<string, unknown>)?.orderId as string) || "";
+}
 
 // ── Helpers ─────────────────────────────────────────────────
 
@@ -189,6 +226,79 @@ async function insertEbayOrder(
   return { inserted: true, matched, unmatched };
 }
 
+/** Route eBay order notification — insert, cancel-aware update, or observation-only. */
+async function processEbayOrderNotification(
+  supabase: ReturnType<typeof createServiceClient>,
+  accessToken: string,
+  orderId: string,
+  products: KKProduct[],
+  topic: string,
+): Promise<Record<string, unknown>> {
+  const order = await fetchEbayOrder(accessToken, orderId);
+  if (!order) {
+    return { success: false, error: "order_fetch_failed" };
+  }
+
+  const existingUpdate = await updateExistingEbayOrderFromApi(supabase, order, {
+    syncSource: "webhook",
+  });
+
+  if (existingUpdate.found) {
+    const obsRefresh = await refreshMarketplaceObservationsAfterSync(supabase, {
+      channel: "ebay",
+      sourceOrderId: existingUpdate.sessionId,
+      logPrefix: "[ebay-webhook]",
+    });
+    return {
+      success: true,
+      action: existingUpdate.canceled ? "canceled_updated" : "updated",
+      sessionId: existingUpdate.sessionId,
+      observation_refresh: obsRefresh,
+    };
+  }
+
+  const isCanceled = isEbayOrderCanceled(order);
+  if (isCanceled || (isCancelRefundTopic(topic) && isCanceled)) {
+    const sessionId = `ebay_api_${orderId}`;
+    const lineItems = (order.lineItems as Record<string, unknown>[]) || [];
+    await upsertEbayCancelObservations(supabase, {
+      sourceOrderId: sessionId,
+      observedAt: String(order.creationDate || new Date().toISOString()),
+      orderPayload: order,
+      lineItemIds: lineItems.map((item) => String(item.lineItemId || "")).filter(Boolean),
+      syncSource: "webhook",
+    });
+    const obsRefresh = await refreshMarketplaceObservationsAfterSync(supabase, {
+      channel: "ebay",
+      sourceOrderId: sessionId,
+      logPrefix: "[ebay-webhook]",
+    });
+    return {
+      success: true,
+      action: "cancel_observation_only",
+      inserted: false,
+      observation_refresh: obsRefresh,
+    };
+  }
+
+  if (isCancelRefundTopic(topic) && !ORDER_INGEST_TOPICS.has(topic)) {
+    const obsRefresh = await refreshMarketplaceObservationsAfterSync(supabase, {
+      channel: "ebay",
+      daysBack: 7,
+      logPrefix: "[ebay-webhook]",
+    });
+    return { success: true, action: "observation_refresh_only", observation_refresh: obsRefresh };
+  }
+
+  const result = await insertEbayOrder(supabase, order, products);
+  const obsRefresh = await refreshMarketplaceObservationsAfterSync(supabase, {
+    channel: "ebay",
+    sourceOrderId: `ebay_api_${orderId}`,
+    logPrefix: "[ebay-webhook]",
+  });
+  return { success: true, action: result.inserted ? "inserted" : "skipped", ...result, observation_refresh: obsRefresh };
+}
+
 // ── Main Handler ────────────────────────────────────────────
 
 serve(async (req) => {
@@ -265,41 +375,42 @@ serve(async (req) => {
       if (
         topic === "ORDER_CONFIRMATION" ||
         topic === "MARKETPLACE_ORDER_CREATED" ||
-        topic === "MARKETPLACE_ORDER_PAID"
+        topic === "MARKETPLACE_ORDER_PAID" ||
+        isCancelRefundTopic(topic)
       ) {
-        // eBay sends order data in the notification payload
-        const notifData = body?.notification?.data as Record<string, unknown> || {};
-        const resourceId = (notifData?.orderId as string) ||
-                           (notifData?.resourceId as string) ||
-                           (notifData?.resource?.orderId as string) || "";
+        const resourceId = extractOrderIdFromNotification(body);
 
         if (!resourceId) {
-          console.error("[ebay-webhook] Order event missing orderId/resourceId");
+          console.error("[ebay-webhook] Order event missing orderId/resourceId", { topic });
+          if (isCancelRefundTopic(topic)) {
+            await refreshMarketplaceObservationsAfterSync(supabase, {
+              channel: "ebay",
+              daysBack: 7,
+              logPrefix: "[ebay-webhook]",
+            });
+          }
           return new Response(null, { status: 200, headers: corsHeaders });
         }
 
-        console.log(`[ebay-webhook] Processing order: ${resourceId}`);
+        console.log(`[ebay-webhook] Processing order topic=${topic} order=${resourceId}`);
 
-        // Fetch full order details from eBay API
         const accessToken = await getAccessToken(supabase);
-        const order = await fetchEbayOrder(accessToken, resourceId);
-
-        if (!order) {
-          console.error(`[ebay-webhook] Could not fetch order ${resourceId}`);
-          return new Response(null, { status: 200, headers: corsHeaders });
-        }
-
-        // Load products for matching
         const { data: allProducts } = await supabase
           .from("products")
           .select("code, name");
         const products: KKProduct[] = (allProducts || []) as KKProduct[];
 
-        const result = await insertEbayOrder(supabase, order, products);
-        console.log(`[ebay-webhook] Order ${resourceId}: inserted=${result.inserted}, matched=${result.matched}, unmatched=${result.unmatched}`);
+        const result = await processEbayOrderNotification(
+          supabase,
+          accessToken,
+          resourceId,
+          products,
+          topic,
+        );
+        console.log(`[ebay-webhook] Order ${resourceId}:`, JSON.stringify(result));
 
         return new Response(
-          JSON.stringify({ success: true, ...result }),
+          JSON.stringify(result),
           { status: 200, headers: corsHeaders },
         );
       }

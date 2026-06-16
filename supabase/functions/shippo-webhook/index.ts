@@ -2,6 +2,11 @@
 // Receives Shippo webhook events (track_updated) and updates fulfillment_shipments
 // Also triggers transactional SMS for shipped + delivered statuses
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  finalizeKkOrderReservations,
+  shouldFinalizeOnShippoTracking,
+} from "../_shared/finalizeKkReservations.ts";
+import { recordBundleFinalizeShadowsForOrder } from "../_shared/bundleCheckoutShadow.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const serviceKey  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -130,6 +135,46 @@ Deno.serve(async (req) => {
               await triggerReviewRequest(shipment.stripe_checkout_session_id);
             } catch (rrErr: unknown) {
               console.error("[shippo-webhook] Review request error:", rrErr instanceof Error ? rrErr.message : String(rrErr));
+            }
+          }
+
+          // ── 5. Finalize KK inventory reservations on in-transit / delivery ──
+          if (shouldFinalizeOnShippoTracking(currentStatus, shipment.label_status)) {
+            try {
+              const fin = await finalizeKkOrderReservations(
+                sb,
+                shipment.stripe_checkout_session_id,
+                trackingNumber || shipment.stripe_checkout_session_id,
+                "shippo_track_updated",
+              );
+              if (fin && (fin.finalized_count ?? 0) > 0) {
+                console.log(
+                  `[shippo-webhook] KK reservations finalized: order=${shipment.kk_order_id} units=${fin.finalized_units}`,
+                );
+              }
+
+              try {
+                const bundleFin = await recordBundleFinalizeShadowsForOrder(sb, {
+                  orderId: shipment.stripe_checkout_session_id,
+                  referenceId: trackingNumber || shipment.stripe_checkout_session_id,
+                  source: "shippo_track_updated",
+                });
+                if (bundleFin.inserted > 0) {
+                  console.log(
+                    `[shippo-webhook] bundle finalize shadows: inserted=${bundleFin.inserted}`,
+                  );
+                }
+              } catch (bundleFinErr: unknown) {
+                console.error(
+                  "[shippo-webhook] bundle finalize shadow failed (non-fatal):",
+                  bundleFinErr instanceof Error ? bundleFinErr.message : String(bundleFinErr),
+                );
+              }
+            } catch (finErr: unknown) {
+              console.error(
+                "[shippo-webhook] KK reservation finalize failed (non-fatal):",
+                finErr instanceof Error ? finErr.message : String(finErr),
+              );
             }
           }
         }

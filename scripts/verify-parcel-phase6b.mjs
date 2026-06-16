@@ -10,6 +10,7 @@ import { join, dirname, extname } from "path";
 import { fileURLToPath } from "url";
 import pg from "pg";
 import { getPoolerConnectionString } from "./supabase/dbConnect.mjs";
+import { goToParcelTab } from "./verify-parcel-tabHelpers.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
@@ -123,6 +124,7 @@ async function main() {
       { timeout: 15000 },
     );
 
+    await goToParcelTab(page, "parcelTabUpload");
     await page.locator("#parcelFileInput").setInputFiles(FIXTURE);
     await page.waitForFunction(
       () => /Parsed 11 row/i.test(
@@ -185,6 +187,7 @@ async function main() {
       errors.push(`After update: allocation count ${afterUpdate.counts.allocationCount}`);
     }
 
+    await goToParcelTab(page, "parcelTabHistory");
     await page.waitForFunction(
       () => document.querySelectorAll("#parcelHistoryTbody [data-open-draft]").length > 0,
       { timeout: 15000 },
@@ -195,6 +198,7 @@ async function main() {
 
     const importId = afterUpdate.currentImportId;
 
+    await goToParcelTab(page, "parcelTabUpload");
     await page.locator("#parcelFileInput").setInputFiles(FIXTURE);
     await page.waitForFunction(
       () => /Parsed 11 row/i.test(
@@ -212,6 +216,7 @@ async function main() {
       errors.push("Duplicate warning not shown after re-uploading same parcel/file");
     }
 
+    await goToParcelTab(page, "parcelTabHistory");
     const openDraftBtn = page.locator(`[data-open-draft="${importId}"]`);
     if (await openDraftBtn.count()) {
       await openDraftBtn.click();

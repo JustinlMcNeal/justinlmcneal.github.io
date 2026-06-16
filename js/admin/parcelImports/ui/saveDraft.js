@@ -17,6 +17,7 @@ import {
 } from "../state.js";
 import { updateApprovalButtonState } from "./approvalActions.js";
 import { updateInventoryReceiveUi } from "./inventoryReceiveActions.js";
+import { updateWorkflowChrome } from "./exportActions.js";
 import { refreshGlobalKpis } from "./stats.js";
 
 let refreshHistoryFn = async () => {};
@@ -215,6 +216,7 @@ export async function handleSaveDraft() {
     updateSaveDraftButtonState();
     updateApprovalButtonState();
     updateInventoryReceiveUi();
+    updateWorkflowChrome();
   }
 }
 

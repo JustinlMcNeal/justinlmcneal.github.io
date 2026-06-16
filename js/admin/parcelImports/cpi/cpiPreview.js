@@ -46,7 +46,9 @@ export function buildCpiPreview({ parcel, items, overrides, rowMappings }) {
 
   const fxRate = resolveEffectiveFxRate(overrides);
   if (!fxRate) {
-    warnings.push("Missing FX rate — USD values unavailable.");
+    warnings.push(
+      "Missing exchange rate — enter FX rate or total parcel charge + USD equivalent before approving.",
+    );
   }
 
   /** @type {object[]} */
@@ -160,9 +162,10 @@ function isIncludedInCpiPreview(mapping) {
 }
 
 /**
- * @param {object} overrides
+ * Resolve CNY→USD rate from direct override or total charge ÷ USD equivalent.
+ * @param {object | null} overrides
  */
-function resolveEffectiveFxRate(overrides) {
+export function resolveEffectiveFxRate(overrides) {
   const direct = overrides.effectiveFxRate;
   if (direct != null && direct > 0) return direct;
 
@@ -225,8 +228,14 @@ function buildSummary(rows, overrides, fxRate, fees) {
     : rows.filter((r) => r.rowType === ROW_TYPE.BUSINESS);
   const weighted = weightedAverages(previewRows, fxRate);
 
+  const approvableRows = included.filter(
+    (r) => (r.quantity ?? 0) > 0 && r.landedCpiCny != null,
+  );
   const readyToUpdate =
-    productsAffected > 0 && businessMappingIssues === 0;
+    productsAffected > 0 &&
+    businessMappingIssues === 0 &&
+    fxRate != null &&
+    approvableRows.length > 0;
 
   const fulfilledCpiPreviewUsd =
     weighted.weightedAverageLandedCpiUsd != null

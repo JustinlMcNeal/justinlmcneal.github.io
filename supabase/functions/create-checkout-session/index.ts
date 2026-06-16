@@ -387,56 +387,79 @@ Deno.serve(async (req) => {
       (freeShippingEnabled && cartSubtotal >= freeShippingThreshold) ||
       hasFreeShippingCoupon;
 
-    // ✅ Stock check — determine which items are back-ordered (informational, not blocking)
+    // ✅ Stock validation — available = on_hand − reserved (Phase 7B)
     const backOrderSkus = new Set<string>();
     try {
       const uuids = [...productUuidMap.values()].filter(Boolean);
       if (uuids.length) {
-        const { data: variantRows } = await supabaseAdmin
-          .from("product_variants")
-          .select("id, product_id, option_value, stock")
-          .in("product_id", uuids)
-          .eq("is_active", true);
+        const [{ data: availRows }, { data: productRows }] = await Promise.all([
+          supabaseAdmin
+            .from("v_kk_variant_available_stock")
+            .select("variant_id, product_id, option_value, available_display, sku")
+            .in("product_id", uuids),
+          supabaseAdmin
+            .from("products")
+            .select("id, code, shipping_status")
+            .in("id", uuids),
+        ]);
 
-        // Build a map of product_uuid → variant → stock AND variant_id → stock
-        const stockByProduct = new Map<string, Map<string, number>>();
-        const stockByVariantId = new Map<string, number>();
-        for (const v of variantRows || []) {
-          const pid = String(v.product_id);
-          if (!stockByProduct.has(pid)) stockByProduct.set(pid, new Map());
-          stockByProduct.get(pid)!.set(String(v.option_value || "").toLowerCase(), v.stock ?? 0);
-          if (v.id) stockByVariantId.set(String(v.id), v.stock ?? 0);
+        const mtoProductIds = new Set(
+          (productRows || [])
+            .filter((p) => p.shipping_status === "mto")
+            .map((p) => String(p.id)),
+        );
+
+        const availByVariantId = new Map<string, number>();
+        const availByProductVariant = new Map<string, number>();
+        for (const row of availRows || []) {
+          const avail = Number(row.available_display ?? 0);
+          if (row.variant_id) availByVariantId.set(String(row.variant_id), avail);
+          const key = `${row.product_id}::${String(row.option_value || "").trim().toLowerCase()}`;
+          availByProductVariant.set(key, avail);
         }
 
-        // Check each cart item for back-order
         for (const it of items) {
           const sku = String(it?.product_id || it?.id || "").trim();
           const variantId = String(it?.variant_id || "").trim();
           const variant = String(it?.variant || "").trim().toLowerCase();
+          const qty = Math.max(1, Number(it?.qty || 1));
           const uuid = productUuidMap.get(sku);
 
-          // Phase 2: prefer variant_id for direct stock check
-          if (variantId && stockByVariantId.has(variantId)) {
-            if ((stockByVariantId.get(variantId) ?? 0) <= 0) {
-              backOrderSkus.add(sku);
-            }
+          if (uuid && mtoProductIds.has(String(uuid))) {
+            backOrderSkus.add(sku);
             continue;
           }
 
-          if (!uuid) continue;
-          const variants = stockByProduct.get(uuid);
-          if (!variants) continue;
+          let available: number | null = null;
+          if (variantId && availByVariantId.has(variantId)) {
+            available = availByVariantId.get(variantId)!;
+          } else if (uuid) {
+            const key = `${uuid}::${variant}`;
+            if (availByProductVariant.has(key)) {
+              available = availByProductVariant.get(key)!;
+            }
+          }
 
-          const variantStock = variant ? (variants.get(variant) ?? null) : null;
-          const totalStock = [...variants.values()].reduce((s, v) => s + v, 0);
+          if (available == null) continue;
 
-          if ((variantStock !== null && variantStock <= 0) || totalStock <= 0) {
+          if (available <= 0) {
             backOrderSkus.add(sku);
+            continue;
+          }
+          if (qty > available) {
+            const label = metaStr(it?.name || sku, 120);
+            return json(
+              {
+                error: `${label}: only ${available} available (requested ${qty}).`,
+              },
+              400,
+            );
           }
         }
       }
     } catch (stockErr) {
-      console.warn("[create-checkout-session] stock check failed (non-fatal):", stockErr);
+      console.error("[create-checkout-session] available stock check failed:", stockErr);
+      return json({ error: "Unable to verify stock availability. Please try again." }, 503);
     }
 
     // ✅ Stripe line items

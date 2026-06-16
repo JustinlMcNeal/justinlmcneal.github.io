@@ -1,6 +1,7 @@
 // /js/product/api.js
 import { getSupabaseClient } from "../shared/supabaseClient.js";
 import { PRODUCT_SELECT } from "../shared/productContract.js";
+import { enrichVariantsWithAvailableStock } from "../shared/kkAvailableStock.js";
 
 export async function fetchProductBySlug(slug) {
   const sb = getSupabaseClient();
@@ -66,7 +67,9 @@ export async function fetchVariants(productId) {
     .eq("product_id", productId)
     .order("sort_order", { ascending: true });
 
-  if (!error) return data || [];
+  if (!error) {
+    return enrichVariantsWithAvailableStock(sb, data || []);
+  }
 
   // Fallback: query only the legacy columns that are guaranteed to exist.
   // This keeps the product page functional if new columns are not yet migrated.
@@ -76,7 +79,7 @@ export async function fetchVariants(productId) {
     .eq("product_id", productId)
     .order("sort_order", { ascending: true });
 
-  return fallback || [];
+  return enrichVariantsWithAvailableStock(sb, fallback || []);
 }
 
 export async function fetchGallery(productId) {

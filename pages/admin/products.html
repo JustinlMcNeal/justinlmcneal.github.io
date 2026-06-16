@@ -263,7 +263,8 @@
               <th class="px-4 py-4 text-right cursor-pointer hover:bg-gray-800 transition-colors" data-sort="price">
                 <span class="flex items-center justify-end gap-1">Price <span data-sort-icon="price">↕</span></span>
               </th>
-              <th class="px-4 py-4 text-center hidden lg:table-cell cursor-pointer hover:bg-gray-800 transition-colors" data-sort="margin">
+              <th class="px-4 py-4 text-right hidden md:table-cell">CPI</th>
+              <th class="px-4 py-4 text-center hidden lg:table-cell cursor-pointer hover:bg-gray-800 transition-colors" data-sort="margin" title="Default product margin; variant range when landed CPI overrides exist">
                 <span class="flex items-center justify-center gap-1">Margin <span data-sort-icon="margin">↕</span></span>
               </th>
               <th class="px-4 py-4 text-center cursor-pointer hover:bg-gray-800 transition-colors" data-sort="stock">
@@ -401,7 +402,7 @@
 
               <div>
                 <label for="fUnitCost" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">
-                  Unit Cost ($)
+                  Product CPI ($)
                 </label>
                 <input id="fUnitCost" type="number" step="0.01"
                   class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none"

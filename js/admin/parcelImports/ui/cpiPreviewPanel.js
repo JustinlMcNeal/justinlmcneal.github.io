@@ -109,11 +109,12 @@ function renderCpiPanel(preview) {
   setText(cpiFields, "cpiProductsAffected", String(summary.productsAffected));
   setText(cpiFields, "cpiRowsExcluded", String(summary.rowsExcluded));
   setText(cpiFields, "cpiRowsNeedingMapping", String(summary.needsMappingRows));
-  setText(
-    cpiFields,
-    "cpiReadyToUpdate",
-    summary.readyToUpdate ? "Yes — matched business rows ready" : "No — mapping issues remain",
-  );
+  const readyLabel = summary.readyToUpdate
+    ? "Yes — matched business rows ready"
+    : !fx
+      ? "No — exchange rate required for USD CPI"
+      : "No — mapping or quantity issues remain";
+  setText(cpiFields, "cpiReadyToUpdate", readyLabel);
   setClass(
     cpiFields,
     "cpiReadyToUpdate",

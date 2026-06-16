@@ -22,6 +22,8 @@ import {
   updateSaveDraftButtonState,
 } from "./saveDraft.js";
 import { renderUploadStatus } from "./upload.js";
+import { updateWorkflowChrome } from "./exportActions.js";
+import { activateTab } from "./tabs.js";
 
 /** @param {{ refreshHistory?: () => Promise<void> }} [opts] */
 export function initNewImportUi(opts = {}) {
@@ -57,6 +59,8 @@ export async function handleNewImport(refreshHistory) {
   updateApprovalButtonState();
   updateExpenseLinkUi();
   updateInventoryReceiveUi();
+  updateWorkflowChrome();
+  activateTab("parcelTabUpload");
 
   if (refreshHistory) await refreshHistory();
 }
