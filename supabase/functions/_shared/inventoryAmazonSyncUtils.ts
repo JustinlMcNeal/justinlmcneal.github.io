@@ -44,6 +44,39 @@ export function targetQtyFromAvailable(
   return clampTargetQty(availableQty);
 }
 
+const SYNC_CTX_UUID_RE = /^[0-9a-f-]{36}$/i;
+
+export type InventorySyncRunContext = {
+  triggerSource?: string | null;
+  triggerReferenceType?: string | null;
+  triggerReferenceId?: string | null;
+  stockLedgerId?: string | null;
+  orchestrationId?: string | null;
+};
+
+/** Parse optional syncContext from edge function POST body (Phase 059A.4). */
+export function parseInventorySyncRunContext(value: unknown): InventorySyncRunContext {
+  if (!value || typeof value !== "object") return {};
+  const o = value as Record<string, unknown>;
+  const str = (snake: string, camel: string) => {
+    const raw = o[snake] ?? o[camel];
+    if (typeof raw !== "string") return null;
+    const trimmed = raw.trim();
+    return trimmed || null;
+  };
+  const uuid = (snake: string, camel: string) => {
+    const s = str(snake, camel);
+    return s && SYNC_CTX_UUID_RE.test(s) ? s : null;
+  };
+  return {
+    triggerSource: str("trigger_source", "triggerSource"),
+    triggerReferenceType: str("trigger_reference_type", "triggerReferenceType"),
+    triggerReferenceId: uuid("trigger_reference_id", "triggerReferenceId"),
+    stockLedgerId: uuid("stock_ledger_id", "stockLedgerId"),
+    orchestrationId: str("orchestration_id", "orchestrationId"),
+  };
+}
+
 export async function loadAmazonSyncCandidates(
   // deno-lint-ignore no-explicit-any
   client: any,
@@ -101,6 +134,11 @@ export async function createInventorySyncRun(
     requestedBy?: string | null;
     candidateCount: number;
     notes?: string | null;
+    triggerSource?: string | null;
+    triggerReferenceType?: string | null;
+    triggerReferenceId?: string | null;
+    stockLedgerId?: string | null;
+    orchestrationId?: string | null;
   },
 ): Promise<InventorySyncRunRow | null> {
   const { data, error } = await client
@@ -112,6 +150,11 @@ export async function createInventorySyncRun(
       requested_by: params.requestedBy ?? null,
       candidate_count: params.candidateCount,
       notes: params.notes ?? null,
+      trigger_source: params.triggerSource ?? null,
+      trigger_reference_type: params.triggerReferenceType ?? null,
+      trigger_reference_id: params.triggerReferenceId ?? null,
+      stock_ledger_id: params.stockLedgerId ?? null,
+      orchestration_id: params.orchestrationId ?? null,
     })
     .select("id, channel, mode, status")
     .single();

@@ -11,7 +11,7 @@ async function getAccessToken() {
 }
 
 /**
- * @param {{ preview?: boolean, variantIds?: string[], amazonListingIds?: string[], limit?: number }} payload
+ * @param {{ preview?: boolean, mode?: 'update_qty'|'inactive_restock', variantIds?: string[], amazonListingIds?: string[], limit?: number, syncContext?: Record<string, string>|null }} payload
  */
 export async function pushAmazonFbmInventory(payload = {}) {
   const token = await getAccessToken();

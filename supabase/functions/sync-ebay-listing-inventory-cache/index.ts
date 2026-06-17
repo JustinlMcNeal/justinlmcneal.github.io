@@ -16,6 +16,7 @@ import {
   createInventorySyncRun,
   finalizeInventorySyncRun,
   logInventorySyncResult,
+  parseInventorySyncRunContext,
 } from "../_shared/inventoryAmazonSyncUtils.ts";
 
 const LOG_PREFIX = "[sync-ebay-listing-inventory-cache]";
@@ -23,6 +24,7 @@ const LOG_PREFIX = "[sync-ebay-listing-inventory-cache]";
 type Payload = {
   productIds?: unknown;
   limit?: unknown;
+  syncContext?: unknown;
 };
 
 function parseUuidList(value: unknown): string[] {
@@ -79,6 +81,7 @@ Deno.serve(async (req) => {
 
   const productIds = parseUuidList(body.productIds);
   const limit = parseLimit(body.limit);
+  const syncCtx = parseInventorySyncRunContext(body.syncContext);
   const serviceClient = createClient(supabaseUrl, supabaseServiceKey);
   const now = new Date().toISOString();
 
@@ -102,6 +105,11 @@ Deno.serve(async (req) => {
       requestedBy: admin.userId ?? null,
       candidateCount: targets.length,
       notes: "eBay listing inventory cache refresh (read-only)",
+      triggerSource: syncCtx.triggerSource,
+      triggerReferenceType: syncCtx.triggerReferenceType,
+      triggerReferenceId: syncCtx.triggerReferenceId,
+      stockLedgerId: syncCtx.stockLedgerId,
+      orchestrationId: syncCtx.orchestrationId,
     });
 
     const ebayClient = createServiceClient();
@@ -202,6 +210,15 @@ Deno.serve(async (req) => {
       candidateCount: targets.length,
       summary,
       results,
+      syncContext: syncCtx.orchestrationId || syncCtx.triggerSource
+        ? {
+            trigger_source: syncCtx.triggerSource,
+            trigger_reference_type: syncCtx.triggerReferenceType,
+            trigger_reference_id: syncCtx.triggerReferenceId,
+            stock_ledger_id: syncCtx.stockLedgerId,
+            orchestration_id: syncCtx.orchestrationId,
+          }
+        : null,
     });
   } catch (err) {
     console.error(`${LOG_PREFIX} error`, err);

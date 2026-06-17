@@ -4,6 +4,7 @@
 
 import { esc } from "../utils/formatters.js";
 import { ADJUSTMENT_REASONS } from "../api/adjustInventoryApi.js";
+import { renderAdjustChannelPreviewShell } from "./renderAdjustChannelPreview.js";
 
 /**
  * @param {import('../services/mapWorkspaceRow.js').InventoryRow} row
@@ -74,11 +75,13 @@ export function renderAdjustModalContent(row) {
           </div>
 
           <div class="rounded-xl border-2 border-dashed border-gray-300 p-3 space-y-1 text-sm" data-adjust-preview>
-            <p class="text-[10px] font-black uppercase tracking-[.14em] text-gray-500">Preview</p>
+            <p class="text-[10px] font-black uppercase tracking-[.14em] text-gray-500">Stock preview</p>
             <p>Current: <span class="font-mono font-bold tabular-nums" data-preview-current>${row.onHand}</span></p>
             <p>Delta: <span class="font-mono font-bold tabular-nums" data-preview-delta>—</span></p>
             <p>New stock: <span class="font-mono font-black tabular-nums" data-preview-new>—</span></p>
           </div>
+
+          ${renderAdjustChannelPreviewShell()}
 
           <p class="hidden text-xs font-bold text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2" data-adjust-negative-warning role="alert">
             Warning: this adjustment will result in negative on-hand stock. Negative stock is allowed but will appear as an inventory issue.

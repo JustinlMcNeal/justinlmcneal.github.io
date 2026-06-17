@@ -11,6 +11,7 @@ import {
   createInventorySyncRun,
   finalizeInventorySyncRun,
   logInventorySyncResult,
+  parseInventorySyncRunContext,
   targetQtyFromAvailable,
 } from "./inventoryAmazonSyncUtils.ts";
 
@@ -365,4 +366,5 @@ export {
   createInventorySyncRun,
   finalizeInventorySyncRun,
   logInventorySyncResult,
+  parseInventorySyncRunContext,
 };

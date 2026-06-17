@@ -11,7 +11,7 @@ async function getAccessToken() {
 }
 
 /**
- * @param {{ preview?: boolean, variantIds?: string[], productIds?: string[], limit?: number }} payload
+ * @param {{ preview?: boolean, variantIds?: string[], productIds?: string[], limit?: number, syncContext?: Record<string, string>|null }} payload
  */
 export async function pushEbayInventoryQuantity(payload = {}) {
   const token = await getAccessToken();

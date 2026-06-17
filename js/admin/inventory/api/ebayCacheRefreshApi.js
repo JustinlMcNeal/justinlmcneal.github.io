@@ -10,7 +10,7 @@ async function getAccessToken() {
   return session.access_token;
 }
 
-/** @param {{ productIds?: string[], limit?: number }} [payload] */
+/** @param {{ productIds?: string[], limit?: number, syncContext?: Record<string, string>|null }} [payload] */
 export async function refreshEbayListingCache(payload = {}) {
   const token = await getAccessToken();
   const resp = await fetch(`${SUPABASE_URL}/functions/v1/sync-ebay-listing-inventory-cache`, {

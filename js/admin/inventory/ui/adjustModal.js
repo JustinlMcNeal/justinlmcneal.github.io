@@ -6,10 +6,19 @@ import { getDom } from "../dom.js";
 import { state } from "../state.js";
 import { renderAdjustModalContent } from "../renderers/renderAdjustModal.js";
 import { computeAdjustment } from "../services/adjustmentMath.js";
-import { adjustInventory } from "../api/adjustInventoryApi.js";
 import { refreshInventoryAfterAdjustment } from "../services/refreshInventoryData.js";
+import { runAdjustChannelOrchestration } from "../services/adjustChannelOrchestrator.js";
+import { formatAdjustOrchestratorToast } from "../services/adjustOrchestratorSummary.js";
+import { showAdjustResultPanel } from "./adjustResultPanel.js";
 import { showInventoryToast } from "../events.js";
-
+import {
+  loadAdjustChannelPreview,
+  refreshAdjustChannelPreview,
+  wireAdjustChannelPreview,
+  markAdjustSyncToggleUserSet,
+  resetAdjustChannelPreviewState,
+  isAdjustSyncChannelsEnabled,
+} from "./adjustModalChannelPreview.js";
 /** @type {import('../services/mapWorkspaceRow.js').InventoryRow|null} */
 let activeRow = null;
 
@@ -24,6 +33,7 @@ function closeAdjustModal() {
   const mount = getMount();
   if (mount) mount.innerHTML = "";
   activeRow = null;
+  resetAdjustChannelPreviewState();
   document.body.classList.remove("overflow-hidden");
 }
 
@@ -79,6 +89,8 @@ function updatePreview(row) {
   if (submitBtn) {
     submitBtn.disabled = submitting || !result.valid;
   }
+
+  refreshAdjustChannelPreview(mount, row);
 }
 
 function wireModalEvents(row) {
@@ -92,6 +104,8 @@ function wireModalEvents(row) {
   const form = mount.querySelector("#inventoryAdjustForm");
   form?.addEventListener("input", () => updatePreview(row));
   form?.addEventListener("change", () => updatePreview(row));
+
+  wireAdjustChannelPreview(mount, markAdjustSyncToggleUserSet);
 
   form?.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -139,24 +153,36 @@ function wireModalEvents(row) {
           ? crypto.randomUUID()
           : `adj-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-      const result = await adjustInventory({
-        variantId: activeRow.id,
-        deltaQty: calc.delta,
-        reason,
-        note,
-        referenceType: "manual_adjust",
-        referenceId: reason,
-        idempotencyKey,
+      const syncChannelsEnabled = isAdjustSyncChannelsEnabled(mount);
+
+      const orchestration = await runAdjustChannelOrchestration({
+        row: activeRow,
+        adjustParams: {
+          variantId: activeRow.id,
+          deltaQty: calc.delta,
+          reason,
+          note,
+          referenceType: "manual_adjust",
+          referenceId: reason,
+          idempotencyKey,
+        },
+        syncChannelsEnabled,
+        reservedQty: activeRow.reserved,
       });
 
-      closeAdjustModal();
+      if (orchestration.kk.status === "failed") {
+        throw new Error(orchestration.kk.message || "Adjustment failed.");
+      }
+
       await refreshInventoryAfterAdjustment();
 
-      const sign = result.delta > 0 ? "+" : "";
-      showInventoryToast(
-        `Stock updated: ${sign}${result.delta} → ${result.stockAfter} on hand`,
-        { variant: "success" },
-      );
+      const toast = formatAdjustOrchestratorToast(orchestration);
+      showInventoryToast(toast.message, { variant: toast.variant });
+
+      submitting = false;
+      showAdjustResultPanel(mount, orchestration, activeRow, {
+        onDone: closeAdjustModal,
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       showInventoryToast(message, { variant: "error" });
@@ -189,9 +215,11 @@ export function openAdjustModal(rowId) {
 
   activeRow = row;
   submitting = false;
+  resetAdjustChannelPreviewState();
   mount.innerHTML = renderAdjustModalContent(row);
   document.body.classList.add("overflow-hidden");
   wireModalEvents(row);
+  void loadAdjustChannelPreview(mount, row);
 
   const qtyInput = mount.querySelector("#inventoryAdjustQty");
   qtyInput?.focus();

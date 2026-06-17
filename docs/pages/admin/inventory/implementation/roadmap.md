@@ -73,6 +73,34 @@
 | 10AB | Missing SKU uses product.code | ✅ Complete | [056_phase_10y_final_stabilization_pool_safety.md](./056_phase_10y_final_stabilization_pool_safety.md) |
 | 10Y-Pool | DB recovery + production stabilization | ✅ Complete | [056_phase_10y_final_stabilization_pool_safety.md](./056_phase_10y_final_stabilization_pool_safety.md) · [057 runbook](./057_supabase_pool_exhaustion_runbook.md) |
 | **058** | **eBay column cache patch (post-freeze)** | ✅ Complete | [058_ebay_inventory_column_cache_patch.md](./058_ebay_inventory_column_cache_patch.md) |
+| **059** | **Adjust → unified channel restock** | ✅ Complete / Frozen | [059_adjust_stock_unified_channel_restock_plan.md](./059_adjust_stock_unified_channel_restock_plan.md) |
+| **060** | **eBay variation group automation** | ✅ Complete / Frozen / Production-ready | [060_ebay_variation_group_automation_plan.md](./060_ebay_variation_group_automation_plan.md) |
+
+### Phase 059 subphases (5 × 5 — complete at 059E.5)
+
+| Major | Name | Subphases | Status |
+|-------|------|-----------|--------|
+| **059A** | Adjust orchestration shell + safe existing paths | A.1 plan · A.2 preview · A.3 orchestrator · A.4 result/audit · A.5 QA | **059A ✅ Complete** |
+| **059B** | Amazon inactive restock / offer restore | B.1 audit · B.2 edge · B.3 integrate · B.4 verify · B.5 QA | **059B ✅ Complete** |
+| **059C** | eBay active cache refresh + qty polish | C.1 audit · C.2 cache chain · C.3 integrate · C.4 verify · C.5 QA | **059C ✅ Complete** |
+| **059D** | eBay ended single-SKU auto-relist | D.1 audit · D.2 edge · D.3 integrate · D.4 verify · D.5 QA | **059D ✅ Complete** |
+| **059E** | Final integration + completion | E.1 E2E · E.2 failures · E.3 UX · E.4 prod verify · E.5 freeze | **059E ✅ Complete (frozen)** |
+
+**Phase 059:** ✅ **Complete / Frozen / Production-ready** (2026-06-09). Verified by `scripts/verify-inventory-phase059-final-freeze.mjs` + `scripts/verify-inventory-phase059-final.mjs`.
+
+### Phase 060 — eBay variation group automation (5 × 5 per major at 060C.5)
+
+| Major | Name | Subphases | Status |
+|-------|------|-----------|--------|
+| **060A** | eBay active variation child qty sync | A.1 audit · A.2 view/loaders · A.3 edge · A.4 verify · A.5 freeze | **060A ✅ Complete / Frozen** |
+| **060B** | eBay ended variation group relist | B.1 audit · B.2 candidates · B.3 edge · B.4 verify · B.5 freeze | **060B ✅ Complete / Frozen** |
+| **060C** | Adjust integration + final freeze | C.1 plan · C.2 preview · C.3 orchestrator · C.4 verify · C.5 freeze | **060C.4 ✅ · 060C.5 ✅ · 060C Complete / Frozen** |
+
+**Phase 060:** ✅ **Complete / Frozen / Production-ready** (2026-06-09). Verified by `scripts/verify-inventory-phase060-final-freeze.mjs`.
+
+**060 complete when:** `060C.5` — variation qty + relist + Adjust integration frozen. **Achieved.**
+
+**JS organization:** Phase 059 modules must stay under 500 lines where practical; split by feature/responsibility (see [059 plan](./059_adjust_stock_unified_channel_restock_plan.md#javascript-structure-guardrails-all-subphases)).
 
 ---
 
@@ -141,7 +169,13 @@ Remove `mockData.js` after Phase 3 read wiring is stable.
 
 ## Next action
 
-**Next:** **Production apply** — deploy 10AA + 10AB if not live; run `node scripts/verify-inventory-phase10y-final-stabilization.mjs`. See [056_phase_10y_final_stabilization_pool_safety.md](./056_phase_10y_final_stabilization_pool_safety.md). No new Returns/Restock features until a new phase is opened.
+**Phase 060 is frozen.** No new inventory marketplace automation until a new phase is opened. Recommended next work outside Phase 060:
+
+- Production apply of Phase 060 migrations + edge functions if not yet live (see [060 deployment checklist](./060_ebay_variation_group_automation_plan.md#production-deployment-checklist-phase-060))
+- Optional live dry-run on test products only (explicit flags required)
+- Parcel import / CPI / products margin work (separate tracks in repo)
+
+For Returns/Restock baseline: run `node scripts/verify-inventory-phase10y-final-stabilization.mjs`. See [056_phase_10y_final_stabilization_pool_safety.md](./056_phase_10y_final_stabilization_pool_safety.md).
 
 ---
 
@@ -149,6 +183,7 @@ Remove `mockData.js` after Phase 3 read wiring is stable.
 
 | Date | Phase | Notes |
 |------|-------|-------|
+| 2026-06-09 | 060 | eBay variation group automation complete/frozen — Adjust integration for active child qty + ended group relist |
 | 2026-06-12 | 10Y-Pool | Supabase pool exhaustion fix: 10AA snapshot issues, 10AB missing-SKU, browser snapshot RPC removed, verification + runbook |
 | 2026-06-09 | 10Y | Feature freeze, deployment checklist, regression guard, UI polish |
 | 2026-06-09 | 10X | Paginated worklist RPC + target lookup + filtered export |
