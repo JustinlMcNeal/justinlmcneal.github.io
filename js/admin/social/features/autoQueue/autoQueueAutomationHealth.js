@@ -97,6 +97,12 @@ export async function loadAutomationHealth() {
     if (autopilotRun?.target_count != null && autopilotRun?.current_count != null) {
       autopilotDetail += ` · ${autopilotRun.current_count}/${autopilotRun.target_count} in window`;
     }
+    if (autopilotRun?.volume_mode) {
+      autopilotDetail += ` · ${autopilotRun.volume_mode}`;
+    }
+    if (autopilotRun?.posts_requested != null) {
+      autopilotDetail += ` · req ${autopilotRun.posts_requested}`;
+    }
     if (autopilotRun?.no_pool_asset_skipped > 0) {
       autopilotDetail += ` · ${autopilotRun.no_pool_asset_skipped} skipped (no pool)`;
     }
@@ -115,6 +121,31 @@ export async function loadAutomationHealth() {
       autopilotDetail += " · resurface on, no winners";
     }
     setText(els.aqHealthLastAutopilot, autopilotDetail);
+
+    const underfillEl = document.getElementById("aqHealthUnderfillWarning");
+    const runDeficit = Number(autopilotRun?.deficit) || 0;
+    const runCreated = Number(generatedCount) || 0;
+    const deficitRemaining =
+      autopilotRun?.deficit_remaining != null
+        ? Number(autopilotRun.deficit_remaining)
+        : Math.max(0, runDeficit - runCreated);
+    const showUnderfill =
+      autopilotOn &&
+      autopilotRun?.status === "success" &&
+      runDeficit > 0 &&
+      deficitRemaining > 0;
+
+    underfillEl?.classList.toggle("hidden", !showUnderfill);
+    if (underfillEl && showUnderfill) {
+      let underfillMsg = `Window under-filled — created ${runCreated}, need ${runDeficit} more (${deficitRemaining} still short).`;
+      if (autopilotRun?.posts_requested != null) {
+        underfillMsg += ` Requested ${autopilotRun.posts_requested}.`;
+      }
+      if (autopilotRun?.volume_mode) {
+        underfillMsg += ` Mode: ${autopilotRun.volume_mode}.`;
+      }
+      setText(underfillEl, underfillMsg);
+    }
 
     const resurfaceHealthEl = document.getElementById("aqHealthResurface");
     if (resurfaceHealthEl) {
@@ -224,5 +255,6 @@ export async function loadAutomationHealth() {
     setText(els.aqHealthPolicy, "Could not load automation health.");
     els.aqHealthTokenWarning?.classList.add("hidden");
     els.aqHealthRecentFailure?.classList.add("hidden");
+    document.getElementById("aqHealthUnderfillWarning")?.classList.add("hidden");
   }
 }

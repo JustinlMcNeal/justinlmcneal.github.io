@@ -140,6 +140,37 @@ function formatDate(date) {
 }
 
 /**
+ * True when dateStr (YYYY-MM-DD) is before today (local calendar day).
+ */
+function isPastDate(dateStr) {
+  const today = new Date();
+  const todayStr = formatDate(today);
+  return dateStr < todayStr;
+}
+
+/**
+ * Status glyph for calendar pills.
+ */
+function statusGlyph(status) {
+  switch (status) {
+    case "posted":
+      return "✓";
+    case "queued":
+    case "draft":
+    case "scheduled":
+      return "⏳";
+    case "failed":
+      return "✗";
+    case "processing":
+      return "…";
+    case "deleted":
+      return "❌";
+    default:
+      return "⏳";
+  }
+}
+
+/**
  * Get posts scheduled for a specific date
  */
 function getPostsForDate(dateStr) {
@@ -156,24 +187,32 @@ function getPostsForDate(dateStr) {
 function renderPostPill(post) {
   const platform = post.platform || "unknown";
   const status = post.status || "queued";
-  
-  // Truncate caption for display
-  let label = post.caption || "No caption";
-  if (label.length > 15) {
-    label = label.substring(0, 15) + "…";
-  }
-  
-  // Time
+  const postDate = post.scheduled_for ? post.scheduled_for.split("T")[0] : "";
+  const isPast = postDate ? isPastDate(postDate) : false;
+  const isPastNotPosted = isPast && status !== "posted" && status !== "deleted";
+
   const time = post.scheduled_for ? formatTime(post.scheduled_for) : "";
-  
-  // Special styling for deleted posts
-  const deletedClass = status === "deleted" ? "opacity-50 line-through" : "";
-  const icon = status === "deleted" ? "❌" : (platform === "instagram" ? "📸" : platform === "facebook" ? "📘" : "📌");
+  const glyph = statusGlyph(status);
+  const platformIcon =
+    status === "deleted"
+      ? ""
+      : platform === "instagram"
+        ? "📸"
+        : platform === "facebook"
+          ? "📘"
+          : "📌";
   const carouselBadge = post.media_type === "carousel" ? " 🎠" : "";
-  
+
+  const statusLabel =
+    status === "deleted"
+      ? "[DELETED] "
+      : post.media_type === "carousel"
+        ? "[CAROUSEL] "
+        : `[${status.toUpperCase()}] `;
+
   return `
-    <div class="cal-post ${platform} ${status} ${deletedClass}" data-post-id="${post.id}" title="${status === 'deleted' ? '[DELETED] ' : ''}${post.media_type === 'carousel' ? '[CAROUSEL] ' : ''}${post.caption || ""}">
-      ${time} ${icon}${carouselBadge}
+    <div class="cal-post ${platform} ${status} ${isPastNotPosted ? "past-not-posted" : ""}" data-post-id="${post.id}" title="${statusLabel}${post.caption || ""}">
+      ${glyph} ${time} ${platformIcon}${carouselBadge}
     </div>
   `;
 }
