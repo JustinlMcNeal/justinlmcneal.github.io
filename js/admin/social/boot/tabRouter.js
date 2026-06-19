@@ -59,6 +59,9 @@ export function activateTab(tab) {
     case "analytics":
       tabHandlers.loadAnalytics?.();
       break;
+    case "growth":
+      tabHandlers.loadGrowth?.();
+      break;
     case "carousel":
       tabHandlers.loadRecentCarousels?.();
       break;

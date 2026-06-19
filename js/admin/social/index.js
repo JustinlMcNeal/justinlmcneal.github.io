@@ -25,6 +25,7 @@ import { initImagePool, setupImagePool, loadAssets } from "./imagePool.js";
 import { initPlatformSettings, setupSettingsModal, applySettings } from "./platformSettings.js";
 import { initPostDetail, setupPostDetailModal, openPostDetail } from "./postDetail.js";
 import { initAnalytics, setupAnalytics, loadAnalytics, initPostAnalyticsModal, initLearningInsights } from "./analytics.js";
+import { loadGrowth } from "./growth.js";
 import { initPostsContext } from "./features/posts/postsContext.js";
 import { setupQueueFilter } from "./features/posts/queueFilters.js";
 import { loadQueuePosts } from "./features/posts/queueList.js";
@@ -367,6 +368,7 @@ async function init() {
         renderBoardList,
         loadAutoQueueStats,
         loadAnalytics,
+        loadGrowth,
         loadRecentCarousels,
       },
     });
