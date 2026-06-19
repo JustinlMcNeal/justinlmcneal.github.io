@@ -1563,7 +1563,10 @@
             No posted data in this range.
           </div>
           <div id="growthErrorState" class="hidden bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-800 text-center">
-            Could not load growth data.
+            <p><span data-growth-error-msg>Could not load growth data.</span></p>
+            <button type="button" id="btnGrowthRetry" class="mt-2 px-3 py-1.5 bg-red-700 text-white text-xs font-bold rounded-lg hover:bg-red-800">
+              Retry
+            </button>
           </div>
 
           <!-- Overall Growth Score placeholder -->
@@ -1663,7 +1666,9 @@
 
           <!-- Data coverage -->
           <div id="growthCoverageNote" class="bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm text-gray-600">
-            <p>Growth uses metrics from <strong>posted</strong> social posts. Instagram metrics are refreshed from the Analytics tab via Sync Insights.</p>
+            <div id="growthCoverageDetails">
+              <p>Growth uses metrics from <strong>posted</strong> social posts. Instagram metrics are refreshed from the Analytics tab via Sync Insights.</p>
+            </div>
             <button type="button" id="btnGrowthGoAnalytics" class="mt-2 text-sm font-medium text-blue-600 hover:underline">
               Go to Analytics for Sync Insights →
             </button>

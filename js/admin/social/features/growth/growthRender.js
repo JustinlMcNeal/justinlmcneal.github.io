@@ -1,60 +1,137 @@
-// Growth tab — static placeholder rendering (Phase 1)
+// Growth tab — dashboard rendering (Phase 2)
 
+import { formatCompactNumber, formatPercent } from "../../utils/formatters.js";
 import { getGrowthElements } from "./growthContext.js";
 import { getGrowthState } from "./growthState.js";
+import {
+  renderChartPlaceholder,
+  renderGrowthLineChart,
+  renderPlatformBreakdown,
+} from "./growthCharts.js";
 
-const PLACEHOLDER = "--";
-const CHANGE_PLACEHOLDER = "-- vs previous period";
+const CARD_MAP = {
+  likes: { value: "cardLikes", change: "cardLikesChange" },
+  comments: { value: "cardComments", change: "cardCommentsChange" },
+  saves: { value: "cardSaves", change: "cardSavesChange" },
+  impressions: { value: "cardImpressions", change: "cardImpressionsChange" },
+  reach: { value: "cardReach", change: "cardReachChange" },
+  engagement_rate: { value: "cardEngRate", change: "cardEngRateChange" },
+};
+
+const CHANGE_TONE_CLASS = {
+  neutral: "text-gray-400",
+  up: "text-emerald-600",
+  down: "text-red-600",
+  new: "text-emerald-600",
+};
 
 function setText(el, text) {
   if (el) el.textContent = text;
 }
 
+function setHtml(el, html) {
+  if (el) el.innerHTML = html;
+}
+
+function formatMetricValue(metric, value) {
+  if (value == null || !Number.isFinite(value)) return "--";
+  if (metric === "engagement_rate") return formatPercent(value, 1);
+  return formatCompactNumber(Math.round(value));
+}
+
 function highlightMetricCard(metric) {
   document.querySelectorAll(".growth-metric-card").forEach((card) => {
     const key = card.getAttribute("data-metric");
-    card.classList.toggle("growth-metric-card--active", key === metric);
+    card.classList.toggle("growth-metric-card--active", key === metric && metric !== "score");
   });
 }
 
+function setPanelVisibility(els, { loading, empty, error }) {
+  els.loadingState?.classList.toggle("hidden", !loading);
+  els.emptyState?.classList.toggle("hidden", !empty);
+  els.errorState?.classList.toggle("hidden", !error);
+}
+
 /**
- * Render Phase 1 placeholder UI (no data calculations).
+ * @param {string|null} message
  */
-export function renderGrowthPlaceholders() {
+export function renderGrowthError(message) {
+  const els = getGrowthElements();
+  setPanelVisibility(els, { loading: false, empty: false, error: true });
+  if (els.errorState && message) {
+    const msgEl = els.errorState.querySelector("[data-growth-error-msg]");
+    if (msgEl) msgEl.textContent = message;
+  }
+}
+
+export function renderGrowthLoading() {
+  const els = getGrowthElements();
+  setPanelVisibility(els, { loading: true, empty: false, error: false });
+}
+
+/**
+ * @param {ReturnType<import("./growthMetrics.js").computeGrowthAnalysis>} analysis
+ */
+export function renderGrowthDashboard(analysis) {
   const els = getGrowthElements();
   const { metric } = getGrowthState();
 
-  setText(els.scoreValue, PLACEHOLDER);
-  setText(els.scoreBadge, "Waiting for data");
+  setPanelVisibility(els, { loading: false, empty: !analysis.hasCurrentData, error: false });
 
-  setText(els.cardLikes, PLACEHOLDER);
-  setText(els.cardLikesChange, CHANGE_PLACEHOLDER);
-  setText(els.cardComments, PLACEHOLDER);
-  setText(els.cardCommentsChange, CHANGE_PLACEHOLDER);
-  setText(els.cardSaves, PLACEHOLDER);
-  setText(els.cardSavesChange, CHANGE_PLACEHOLDER);
-  setText(els.cardImpressions, PLACEHOLDER);
-  setText(els.cardImpressionsChange, CHANGE_PLACEHOLDER);
-  setText(els.cardReach, PLACEHOLDER);
-  setText(els.cardReachChange, CHANGE_PLACEHOLDER);
-  setText(els.cardEngRate, PLACEHOLDER);
-  setText(els.cardEngRateChange, CHANGE_PLACEHOLDER);
+  setText(els.scoreValue, "--");
+  setText(els.scoreBadge, "Coming in Phase 3");
+  setText(
+    els.scoreHelper,
+    "Overall Growth Score will combine reach, impressions, engagement rate, likes, comments, and saves in Phase 3."
+  );
 
-  if (els.mainChart) {
-    els.mainChart.className =
-      "growth-chart-placeholder flex flex-col items-center justify-center text-center text-sm text-gray-400 min-h-[220px] border border-dashed border-gray-200 rounded-lg bg-gray-50 p-6";
-    els.mainChart.textContent = "Phase 2 will render the selected metric over time.";
+  const comparisonSuffix = analysis.window.comparisonLabel;
+
+  for (const [key, refs] of Object.entries(CARD_MAP)) {
+    const card = analysis.cards[key];
+    setText(els[refs.value], formatMetricValue(key, card?.current ?? null));
+    const changeEl = els[refs.change];
+    if (changeEl) {
+      const change = card?.change || { text: "--", tone: "neutral" };
+      changeEl.textContent = `${change.text} ${comparisonSuffix}`;
+      changeEl.className = `text-xs mt-1 ${CHANGE_TONE_CLASS[change.tone] || CHANGE_TONE_CLASS.neutral}`;
+    }
   }
 
-  if (els.platformBarInstagram) els.platformBarInstagram.style.width = "40%";
-  if (els.platformBarFacebook) els.platformBarFacebook.style.width = "15%";
-  if (els.platformBarPinterest) els.platformBarPinterest.style.width = "10%";
+  highlightMetricCard(metric);
 
-  highlightMetricCard(metric === "score" ? null : metric);
+  const isRate = metric === "engagement_rate";
+  if (els.mainChart) {
+    if (metric === "score") {
+      renderChartPlaceholder(
+        els.mainChart,
+        "Overall Growth Score chart arrives in Phase 3. Select a metric above to view trends."
+      );
+    } else if (!analysis.hasCurrentData) {
+      renderChartPlaceholder(
+        els.mainChart,
+        "No posted data in this range — try widening the date range or sync Instagram insights on Analytics."
+      );
+    } else {
+      els.mainChart.className = "growth-line-chart-wrap";
+      setHtml(els.mainChart, renderGrowthLineChart(analysis.buckets, isRate));
+    }
+  }
 
-  els.loadingState?.classList.add("hidden");
-  els.emptyState?.classList.add("hidden");
-  els.errorState?.classList.add("hidden");
+  renderPlatformBreakdown(els.platformBreakdown, analysis.platformBreakdown, isRate);
+
+  const detailsEl = els.coverageDetails;
+  if (detailsEl) {
+    const lines = analysis.coverage.lines.map((line) => `<li>${line}</li>`).join("");
+    const warnings = analysis.coverage.warnings.length
+      ? `<p class="text-amber-700 mt-2">${analysis.coverage.warnings.join(" ")}</p>`
+      : "";
+    detailsEl.innerHTML = `
+      <p>Growth uses metrics from <strong>posted</strong> social posts (timeline: <code>posted_at</code>, with <code>scheduled_for</code> fallback when missing). Instagram metrics refresh from Analytics via Sync Insights.</p>
+      <ul class="mt-2 space-y-1 text-xs">${lines}</ul>
+      ${warnings}
+    `;
+  }
 }
 
 /**

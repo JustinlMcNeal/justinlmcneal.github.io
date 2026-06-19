@@ -264,6 +264,55 @@
   ) !important;
 }
 
+.growth-line-chart-wrap {
+  min-height: 220px;
+  overflow-x: auto;
+}
+
+.growth-line-chart {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.growth-chart-axis {
+  stroke: #e5e7eb;
+  stroke-width: 1;
+}
+
+.growth-chart-line {
+  stroke: #10b981;
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.growth-chart-dot {
+  fill: #059669;
+  stroke: #fff;
+  stroke-width: 1;
+}
+
+.growth-chart-axis-label {
+  fill: #6b7280;
+  font-size: 10px;
+}
+
+.growth-chart-empty,
+.growth-chart-message {
+  min-height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 0.875rem;
+  border: 1px dashed #e5e7eb;
+  border-radius: 0.5rem;
+  background: #f9fafb;
+  padding: 1.5rem;
+}
+
 /* Queue list items */
 .queue-item {
   display: flex;
