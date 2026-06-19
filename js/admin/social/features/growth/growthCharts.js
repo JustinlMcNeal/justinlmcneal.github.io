@@ -4,6 +4,15 @@ import { formatCompactNumber, formatPercent } from "../../utils/formatters.js";
 
 /** @typedef {import("./growthMetrics.js").computeGrowthAnalysis} GrowthAnalysis */
 
+const COMPARE_COLORS = {
+  likes: "#ec4899",
+  comments: "#3b82f6",
+  saves: "#eab308",
+  impressions: "#8b5cf6",
+  reach: "#10b981",
+  engagement_rate: "#f97316",
+};
+
 const PLATFORM_META = {
   instagram: { label: "📸 Instagram", barClass: "from-pink-500 to-purple-500", solidClass: "bg-gradient-to-r from-pink-500 to-purple-500" },
   facebook: { label: "📘 Facebook", barClass: "bg-blue-500", solidClass: "bg-blue-500" },
@@ -123,4 +132,65 @@ export function renderChartPlaceholder(el, message) {
   if (!el) return;
   el.className = "growth-chart-placeholder growth-chart-message";
   el.innerHTML = `<p>${message}</p>`;
+}
+
+/**
+ * Normalized multi-metric comparison (0–100 per series within period).
+ * @param {ReturnType<import("./growthMetrics.js").buildComparisonSeries>} seriesList
+ * @returns {string}
+ */
+export function renderComparisonChart(seriesList) {
+  if (!seriesList?.length || !seriesList[0]?.points?.length) {
+    return `<div class="growth-chart-empty">Not enough data to compare metrics.</div>`;
+  }
+
+  const pointCount = seriesList[0].points.length;
+  const width = 640;
+  const height = 240;
+  const pad = { top: 20, right: 12, bottom: 40, left: 36 };
+  const innerW = width - pad.left - pad.right;
+  const innerH = height - pad.top - pad.bottom;
+
+  const lines = seriesList
+    .map((series) => {
+      const color = COMPARE_COLORS[series.metric] || "#6b7280";
+      const coords = series.points.map((p, i) => {
+        const x = pad.left + (pointCount <= 1 ? innerW / 2 : (i / (pointCount - 1)) * innerW);
+        const y = pad.top + innerH - (p.normalized / 100) * innerH;
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+      });
+      return `<polyline points="${coords.join(" ")}" fill="none" stroke="${color}" stroke-width="2" opacity="0.9" />`;
+    })
+    .join("");
+
+  const legend = seriesList
+    .map((series) => {
+      const color = COMPARE_COLORS[series.metric] || "#6b7280";
+      return `<span class="growth-compare-legend-item"><span class="growth-compare-swatch" style="background:${color}"></span>${series.label}</span>`;
+    })
+    .join("");
+
+  const labelIndexes = new Set([0, Math.floor((pointCount - 1) / 2), pointCount - 1]);
+  const xLabels = seriesList[0].points
+    .map((p, i) =>
+      labelIndexes.has(i)
+        ? `<text x="${pad.left + (pointCount <= 1 ? innerW / 2 : (i / (pointCount - 1)) * innerW)}" y="${height - 8}" text-anchor="middle" class="growth-chart-axis-label">${p.label}</text>`
+        : ""
+    )
+    .join("");
+
+  return `
+    <div class="growth-compare-wrap">
+      <svg class="growth-line-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="Normalized metric comparison">
+        <line x1="${pad.left}" y1="${pad.top + innerH}" x2="${width - pad.right}" y2="${pad.top + innerH}" class="growth-chart-axis" />
+        <line x1="${pad.left}" y1="${pad.top}" x2="${pad.left}" y2="${pad.top + innerH}" class="growth-chart-axis" />
+        <text x="${pad.left - 4}" y="${pad.top + 4}" text-anchor="end" class="growth-chart-axis-label">100</text>
+        <text x="${pad.left - 4}" y="${pad.top + innerH}" text-anchor="end" class="growth-chart-axis-label">0</text>
+        ${lines}
+        ${xLabels}
+      </svg>
+      <div class="growth-compare-legend">${legend}</div>
+      <p class="growth-compare-note text-xs text-gray-400 mt-2">Each metric scaled to 0–100 within this period for shape comparison.</p>
+    </div>
+  `;
 }

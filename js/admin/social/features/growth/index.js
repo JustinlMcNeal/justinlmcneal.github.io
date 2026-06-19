@@ -103,6 +103,11 @@ function setupGrowthListeners() {
     scheduleRenderFromCache();
   });
 
+  els.compareMetrics?.addEventListener("change", () => {
+    setGrowthFilters({ compareMetrics: !!els.compareMetrics?.checked });
+    scheduleRenderFromCache();
+  });
+
   els.btnRefresh?.addEventListener("click", () => {
     readFiltersFromDom();
     loadGrowthData(true);

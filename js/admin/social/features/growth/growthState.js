@@ -29,6 +29,7 @@ const state = {
   error: null,
   renderGeneration: 0,
   dataLoaded: false,
+  compareMetrics: false,
 };
 
 export function getGrowthState() {
@@ -42,6 +43,7 @@ export function setGrowthFilters(partial) {
   if (partial.dateRange !== undefined) state.dateRange = partial.dateRange;
   if (partial.platform !== undefined) state.platform = partial.platform;
   if (partial.metric !== undefined) state.metric = partial.metric;
+  if (partial.compareMetrics !== undefined) state.compareMetrics = partial.compareMetrics;
 }
 
 export function setGrowthRows(rows) {
