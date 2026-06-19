@@ -8,6 +8,60 @@ const corsHeaders = {
   "Content-Type": "application/json"
 };
 
+function resolveCarouselEdgeError(igResp: Response, rawBody: string): string {
+  const trimmed = (rawBody || "").trim();
+  if (!trimmed) {
+    return `HTTP ${igResp.status}: empty response from instagram-carousel`;
+  }
+  try {
+    const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+    const err = parsed.error || parsed.message || parsed.db_warning;
+    if (err) return String(err);
+    if (!igResp.ok) {
+      return `HTTP ${igResp.status}: ${trimmed.slice(0, 200)}`;
+    }
+    return trimmed.slice(0, 200) || "Instagram carousel post failed";
+  } catch {
+    return `HTTP ${igResp.status}: ${trimmed.slice(0, 200)}`;
+  }
+}
+
+async function markPostFailed(
+  supabase: ReturnType<typeof createClient>,
+  postId: string,
+  errorMessage: string,
+  options: { preserveExistingDetailed?: boolean } = {}
+) {
+  if (options.preserveExistingDetailed) {
+    const { data: row } = await supabase
+      .from("social_posts")
+      .select("status, error_message")
+      .eq("id", postId)
+      .maybeSingle();
+    const existing = (row?.error_message || "").trim();
+    if (
+      row?.status === "failed" &&
+      existing.length > 0 &&
+      existing !== "Instagram carousel post failed" &&
+      existing !== "Instagram post failed"
+    ) {
+      console.log(
+        `[process-scheduled-posts] Keeping existing error_message for post ${postId}`
+      );
+      return;
+    }
+  }
+
+  await supabase
+    .from("social_posts")
+    .update({
+      status: "failed",
+      error_message: errorMessage,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", postId);
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -186,18 +240,19 @@ serve(async (req) => {
             const igResultText = await igResp.text();
             igRawResponse = igResultText;
             console.log(`[process-scheduled-posts] Instagram carousel raw response: ${igResultText}`);
-            
-            let igResult;
+
+            let igResult: Record<string, unknown> | null = null;
             try {
-              igResult = JSON.parse(igResultText);
+              igResult = JSON.parse(igResultText) as Record<string, unknown>;
             } catch (parseErr) {
-              throw new Error(`Failed to parse Instagram carousel response: ${igResultText}`);
+              const parseError = resolveCarouselEdgeError(igResp, igResultText);
+              throw new Error(parseError);
             }
-            
+
             console.log(`[process-scheduled-posts] Instagram carousel result:`, JSON.stringify(igResult));
 
             if (!igResult.success) {
-              throw new Error(igResult.error || "Instagram carousel post failed");
+              throw new Error(resolveCarouselEdgeError(igResp, igResultText));
             }
 
             results.push({ postId: post.id, platform: "instagram", success: true, type: "carousel" });
@@ -295,15 +350,10 @@ serve(async (req) => {
         const errorMessage = err instanceof Error ? err.message : String(err);
         console.error(`[process-scheduled-posts] Failed to process post ${post.id}:`, errorMessage);
 
-        // Mark as failed
-        await supabase
-          .from("social_posts")
-          .update({ 
-            status: "failed", 
-            error_message: errorMessage,
-            updated_at: new Date().toISOString() 
-          })
-          .eq("id", post.id);
+        // Mark as failed (preserve detailed errors written by publisher edges)
+        await markPostFailed(supabase, post.id, errorMessage, {
+          preserveExistingDetailed: true,
+        });
 
         results.push({ 
           postId: post.id, 

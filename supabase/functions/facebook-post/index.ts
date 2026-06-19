@@ -11,6 +11,72 @@ const corsHeaders = {
   "Content-Type": "application/json"
 };
 
+const FB_RETRY_DELAYS_MS = [2000, 5000, 10000];
+
+type GraphError = { message?: string; code?: number };
+
+function isFacebookRateLimitError(error: GraphError | undefined): boolean {
+  if (!error) return false;
+  const msg = (error.message || "").toLowerCase();
+  if (msg.includes("reduce the amount of data")) return true;
+  if (error.code === 4 || error.code === 17) return true;
+  return false;
+}
+
+function sanitizeGraphError(message: string): string {
+  return String(message || "Facebook API error")
+    .slice(0, 300)
+    .replace(/access_token=\S+/gi, "access_token=[redacted]");
+}
+
+async function postPhotoWithRetry(
+  postUrl: string,
+  postBody: Record<string, string>
+): Promise<Record<string, unknown>> {
+  let lastError = "Facebook API error";
+  let lastGraphError: GraphError | undefined;
+
+  for (let attempt = 0; attempt <= FB_RETRY_DELAYS_MS.length; attempt++) {
+    if (attempt > 0) {
+      const delay = FB_RETRY_DELAYS_MS[attempt - 1];
+      console.log(
+        `Facebook post rate-limit retry ${attempt}/${FB_RETRY_DELAYS_MS.length} after ${delay}ms`
+      );
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+
+    const postResp = await fetch(postUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(postBody),
+    });
+
+    const postResult = await postResp.json();
+
+    if (!postResult.error) {
+      if (attempt > 0) {
+        console.log(`Facebook post succeeded on retry attempt ${attempt}`);
+      }
+      return postResult;
+    }
+
+    lastGraphError = postResult.error as GraphError;
+    lastError = lastGraphError.message || "Facebook API error";
+    console.warn(
+      `Facebook API error (attempt ${attempt + 1}):`,
+      sanitizeGraphError(lastError)
+    );
+
+    if (!isFacebookRateLimitError(lastGraphError)) {
+      break;
+    }
+  }
+
+  const err = new Error(sanitizeGraphError(lastError)) as Error & { graphError?: GraphError };
+  err.graphError = lastGraphError;
+  throw err;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -89,31 +155,25 @@ Deno.serve(async (req) => {
       postBody.caption = caption;
     }
 
-    const postResp = await fetch(postUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(postBody)
-    });
-
-    const postResult = await postResp.json();
-
-    if (postResult.error) {
-      console.error("Facebook API error:", postResult.error);
-      
-      // Update post status to failed
+    let postResult: Record<string, unknown>;
+    try {
+      postResult = await postPhotoWithRetry(postUrl, postBody);
+    } catch (retryErr) {
+      const errMsg = sanitizeGraphError(
+        retryErr instanceof Error ? retryErr.message : String(retryErr)
+      );
       if (postId) {
         await supabase
           .from("social_posts")
           .update({
             status: "failed",
-            error_message: postResult.error.message || "Facebook API error",
-            updated_at: new Date().toISOString()
+            error_message: errMsg,
+            updated_at: new Date().toISOString(),
           })
           .eq("id", postId);
       }
-
       return new Response(
-        JSON.stringify({ success: false, error: postResult.error.message || "Failed to post to Facebook" }),
+        JSON.stringify({ success: false, error: errMsg }),
         { headers: corsHeaders, status: 400 }
       );
     }
@@ -168,8 +228,11 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error("Facebook post error:", error);
+    const errMsg = sanitizeGraphError(
+      error instanceof Error ? error.message : "Failed to post to Facebook"
+    );
     return new Response(
-      JSON.stringify({ success: false, error: error.message || "Failed to post to Facebook" }),
+      JSON.stringify({ success: false, error: errMsg }),
       { headers: corsHeaders, status: 500 }
     );
   }

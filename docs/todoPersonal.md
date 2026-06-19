@@ -49,13 +49,9 @@
 ### Shipping, Orders, and Customer Messaging
 
 - [ ] Send customers a text message when their website order ships.
-
 - [ ] Log customer phone numbers in order details.
-
 - [ ] Fix pending status on canceled orders.
-
 - [ ] Update `shipping.html` with more accurate information on how shipping works.
-
 - [ ] Create `returns.html` and link it in the footer.
 
 ### Expenses, Tax, and True Shop P&L
@@ -71,20 +67,15 @@
   - Subscriptions, Stripe costs, better organization.
 
 - [ ] Add Stripe fees into expenses automatically.
-
 - [ ] Ability to filter or split expenses to see true shop expense (order cost, advertising, profit).
-
 - [ ] Tax summary including eBay.
-
 - [ ] Delete MyBudget page (merge/replace with revamped expenses).
 
 ### Promotions and SMS
 
 - [ ] Upgrade the promotions page.
   - SMS promotions, website-wide promotions, coupons — separate but organized.
-
 - [ ] Page dedicated to SMS timeline (style view for outgoing SMS).
-
 - [ ] Add OpenClaw for SMS features.
 
 ---
@@ -94,31 +85,26 @@
 ### Admin Social Page
 
 - [x] Socials page overhaul.
-
 - [x] Learning for captions.
   - Deep Analysis learnings are now applied to Auto-Queue / Autopilot AI captions as soft guidance.
-
-- [ ] Fix Socials page — figure out why Instagram posts have been failing and not posting.
-
+- [x] Fix Socials autopilot volume — round-robin fill requests full deficit (Phase 013).
+- [x] Calendar post status clarity — ✓/⏳/✗ glyphs and past-day muting (Phase 013).
+- [x] Publish reliability — carousel error passthrough + Facebook rate-limit retry (Phase 013).
+- [ ] Optional: carousel reliability monitoring — alert if carousel failure rate spikes over 7 days.
 - [ ] Learning for comments.
   - Determine whether comment patterns should be analyzed.
   - Decide if comment learning should affect captions, CTAs, hashtags, or content selection.
-
 - [ ] Hashtag learning improvement.
   - Add explore-vs-exploit behavior to Auto-Queue.
   - Keep brand tags and top learned tags.
   - Reserve one slot for under-tested or category-specific hashtag candidates.
   - Tag posts as `explore` in metadata.
   - Compare performance so the system does not only reinforce early winners.
-
 - [ ] Begin OpenClaw integration for the Admin Social system.
   - Use OpenClaw for higher-level learning, recommendations, and optimization.
   - Start with read-only analysis before allowing automated changes.
-
 - [ ] On Socials page, add engagement tracker for Facebook and Pinterest.
-
 - [ ] Socials page — better visuals for Pinterest Board Strategy section.
-
 - [ ] Improve Admin Social page and tab mobile compatibility.
   - Review tab layout.
   - Review Analytics tab.
@@ -131,15 +117,10 @@
 ## Priority 2 — Marketplace and API Integrations
 
 - [ ] Amazon API integration.
-
 - [x] Update the eBay API page so items with variants can have images set for each variant.
-
 - [ ] Revamp eBay page to resemble Amazon page.
-
 - [ ] Product Amazon URL linked to Amazon listing page automatically.
-
 - [ ] On Amazon and eBay pages, mark items as website-only (not sellable on marketplace).
-
 - [ ] Sync eBay reviews to website reviews so eBay reviews can show on the website.
 
 ---
@@ -154,11 +135,8 @@
   - TikTok and Pinterest included
   - Footer **Follow Us** links to the social page
   - Platform icon URLs use `js/shared/socialLinks.js`
-
 - [ ] Update footer category links so they go to the Shop All page and filter by category.
-
 - [ ] Update banner style for the home page.
-
 - [x] Remove the slash for items that are out of stock / backorder.
 
 ---
@@ -177,24 +155,61 @@
 - [x] Remove unavailable slash for out-of-stock / backorder variants
 - [x] eBay variant images per variant
 
-## To Bo Sorted
-- [] Address security threats from cloudflare, github, and supabase
-- [] amazon page be able to click the listing sku, name or asin to take you tot he amazon page
-- [] amazon page be able to click the listing sku, name, or asin to take you to the kk product page
-- [] submit to amazon button should close to push proudct to amazon module
-- [] when parent is pushed, pushing child of parent should reuse all entries and settings from the parent during push
-- [] amazon page product push, requirements auto load upon product type selection
-- [] amaozn page clicking outside of module does not close module
-- [] amazon module fix bottom rounded
-- [] amazon page drop down feature for parent and kids
-- [] amazon page load reuiqrements is not loaded all requiprements for that product type. I click preview amaozn submit and it fails and tells me i need entries that where not preset prior.
-- [] amazon page cannot find button and pins product type/category
-- [] amazon page ai fill should fill every optional slot and/or add radio or check boxes for which sections to use ai on
-- [] on preview amazon submit, missing attributes should be highlighted
-- [] amazon product push for title max limit due to amazon update
-- [] fix this amaozn issue (This attribute 'Item Highlight' is currently unsupported. Please refer to the tool tip for additional details.)
-- [] orders page cancelled orders should not count as unfulled unless its like a partial refund or somthing, like orders that where never shipped shoulnt count toward unfullilled
-- [] what happens to my amazon listings if i delete or alter the content of listings from my kk products page?
-- [] parcel import support for supplies along with cpi cost for supplies, maybe a supplies page?
-- [] do catalog hover images actually work?
-- [] combine primary image and catalog image?
+## Backlog — Sorted by area
+
+### Security & infrastructure
+
+- [ ] Address security threats from Cloudflare, GitHub, and Supabase
+
+### Amazon admin
+
+- [ ] AI fill should fill every optional slot and/or add radio or checkboxes for which sections to use AI on
+- [ ] Click listing SKU, name, or ASIN to open the Amazon listing page
+- [ ] Click listing SKU, name, or ASIN to open the KK product page
+- [ ] Clicking outside the push modal should not close it
+- [ ] Dropdown feature for parent and child variation rows
+- [ ] Fix bottom rounded corners on the push modal
+- [ ] Fix Item Highlight attribute error (`This attribute 'Item Highlight' is currently unsupported`)
+- [ ] Highlight missing attributes on Preview Amazon Submit
+- [ ] Load Requirements should load all requirements for the product type before preview (no surprise missing fields on preview submit)
+- [ ] Pin product type / category on the push modal (cannot find button and pins)
+- [ ] Product push: enforce Amazon title max length (Item Highlights update)
+- [ ] Product push: requirements auto-load when product type is selected
+- [ ] Submit to Amazon button should close and return to the push product modal flow
+- [ ] What happens to Amazon listings if product content is deleted or altered from the KK products page?
+- [ ] When parent is pushed, pushing a child should reuse entries and settings from the parent during push
+
+### eBay admin
+
+- [ ] Remake eBay page to visually reflect the Amazon page
+
+### Orders & parcels
+
+- [ ] Cancelled orders should not count as unfulfilled unless partial refund (never-shipped orders should not count toward unfulfilled)
+- [ ] Parcel import: charged weight and USD total estimate not showing correctly on previous parcel imports
+- [ ] Parcel import: handle items bought for personal use (not inventory)
+- [ ] Parcel import: new tab with parcel summary — fiscal breakdown (item, weight, % of parcel, cost, CPI, new average CPI, total weight, yuan cost, USD cost)
+- [ ] Parcel import: setting charged weight in review should reflect in the upload tab during editing (not only after submission)
+- [ ] Parcel import: setting total actual parcel charge should reflect in parcel summary
+- [ ] Parcel import: support for supplies (tape, labels, boxes, etc.) with CPI cost — maybe a supplies page
+
+### Products (admin)
+
+- [ ] Catalog hover images — verify they actually work
+- [ ] Combine primary image and catalog image?
+- [ ] CPI: default estimate = average CPI across all variants when parcel import data exists per variant
+- [ ] CPI: overridden by parcel imports; otherwise fallback to default CPI from product cost and weight in basics panel
+- [ ] Rename product CPI section to **Product Cost** in product details
+
+### Public website — product page
+
+- [ ] Add **Product Informant** section (manually filled from product details, like description/details)
+- [ ] Add **Product Post** section above product details — 3×1 grid of most recent social post for that product (links to admin socials)
+- [ ] Change product details to horizontal buttons instead of dropdowns (description open by default; click to open others)
+- [ ] Change row/thumbnail images to vertical layout instead of under the main image
+- [ ] Customer reviews: shorten summary reviews to make room for carousel of customer product photos
+- [ ] Line item reviews: move image to the right of review text
+- [ ] Move **Pairs Well With** above customer reviews
+- [ ] Pairs Well With: add product rating, **View Product** button (or **Add to Cart** on same product; auto-scroll/highlight variants if not selected)
+- [ ] Sticky details column: deactivate sticky when it reaches the next section
+- [ ] Visual overhaul for product details page (match upgraded Amazon admin visuals)

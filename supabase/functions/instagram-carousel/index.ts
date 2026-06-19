@@ -9,6 +9,35 @@ const corsHeaders = {
   "Content-Type": "application/json"
 };
 
+type CarouselStage = "validate" | "auth" | "create_item" | "create_carousel" | "publish" | "unknown";
+
+async function failCarousel(
+  supabase: ReturnType<typeof createClient> | null,
+  postId: string | undefined,
+  stage: CarouselStage,
+  message: string,
+  httpStatus = 400
+) {
+  const error = `[${stage}] ${message}`;
+  console.error(`Instagram carousel failure (${stage}):`, message);
+
+  if (postId && supabase) {
+    await supabase
+      .from("social_posts")
+      .update({
+        status: "failed",
+        error_message: error,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", postId);
+  }
+
+  return new Response(
+    JSON.stringify({ success: false, error, stage }),
+    { headers: corsHeaders, status: httpStatus }
+  );
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -24,17 +53,11 @@ serve(async (req) => {
 
     // Validate inputs
     if (!imageUrls || !Array.isArray(imageUrls) || imageUrls.length < 2) {
-      return new Response(
-        JSON.stringify({ success: false, error: "Carousel requires at least 2 images (max 10)" }),
-        { headers: corsHeaders, status: 400 }
-      );
+      return failCarousel(null, postId, "validate", "Carousel requires at least 2 images (max 10)");
     }
 
     if (imageUrls.length > 10) {
-      return new Response(
-        JSON.stringify({ success: false, error: "Carousel can have maximum 10 images" }),
-        { headers: corsHeaders, status: 400 }
-      );
+      return failCarousel(null, postId, "validate", "Carousel can have maximum 10 images");
     }
 
     // Initialize Supabase client
@@ -53,9 +76,11 @@ serve(async (req) => {
     const expiresSetting = settings?.find(s => s.setting_key === "instagram_token_expires_at");
 
     if (!tokenSetting?.setting_value?.token || !userIdSetting?.setting_value?.user_id) {
-      return new Response(
-        JSON.stringify({ success: false, error: "Instagram not connected. Please connect Instagram first." }),
-        { headers: corsHeaders, status: 400 }
+      return failCarousel(
+        supabase,
+        postId,
+        "auth",
+        "Instagram not connected. Please connect Instagram first."
       );
     }
 
@@ -63,9 +88,12 @@ serve(async (req) => {
     if (expiresSetting?.setting_value?.expires_at) {
       const expiresAt = new Date(expiresSetting.setting_value.expires_at);
       if (expiresAt < new Date()) {
-        return new Response(
-          JSON.stringify({ success: false, error: "Instagram token expired. Please reconnect Instagram." }),
-          { headers: corsHeaders, status: 401 }
+        return failCarousel(
+          supabase,
+          postId,
+          "auth",
+          "Instagram token expired. Please reconnect Instagram.",
+          401
         );
       }
     }
@@ -97,25 +125,11 @@ serve(async (req) => {
 
       if (mediaResult.error) {
         console.error(`Failed to create container for image ${i + 1}:`, mediaResult.error);
-        
-        // Update post status to failed
-        if (postId) {
-          await supabase
-            .from("social_posts")
-            .update({
-              status: "failed",
-              error_message: `Failed on image ${i + 1}: ${mediaResult.error.message}`,
-              updated_at: new Date().toISOString()
-            })
-            .eq("id", postId);
-        }
-
-        return new Response(
-          JSON.stringify({ 
-            success: false, 
-            error: `Failed to create container for image ${i + 1}: ${mediaResult.error.message}` 
-          }),
-          { headers: corsHeaders, status: 400 }
+        return failCarousel(
+          supabase,
+          postId,
+          "create_item",
+          `Failed on image ${i + 1}: ${mediaResult.error.message || "Unknown error"}`
         );
       }
 
@@ -161,42 +175,21 @@ serve(async (req) => {
       }
 
       console.error("Failed to create carousel container:", carouselResult.error);
-      
-      if (postId) {
-        await supabase
-          .from("social_posts")
-          .update({
-            status: "failed",
-            error_message: `Carousel creation failed: ${carouselResult.error?.message || "Unknown error"}`,
-            updated_at: new Date().toISOString()
-          })
-          .eq("id", postId);
-      }
 
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: `Carousel creation failed: ${carouselResult.error?.message || "Unknown error"}` 
-        }),
-        { headers: corsHeaders, status: 400 }
+      return failCarousel(
+        supabase,
+        postId,
+        "create_carousel",
+        `Carousel creation failed: ${carouselResult.error?.message || "Unknown error"}`
       );
     }
 
     if (!carouselContainerId) {
-      const errMsg = "Carousel creation timed out waiting for child media";
-      if (postId) {
-        await supabase
-          .from("social_posts")
-          .update({
-            status: "failed",
-            error_message: errMsg,
-            updated_at: new Date().toISOString()
-          })
-          .eq("id", postId);
-      }
-      return new Response(
-        JSON.stringify({ success: false, error: errMsg }),
-        { headers: corsHeaders, status: 400 }
+      return failCarousel(
+        supabase,
+        postId,
+        "create_carousel",
+        "Carousel creation timed out waiting for child media"
       );
     }
 
@@ -209,24 +202,12 @@ serve(async (req) => {
 
     if ("error" in publishOutcome) {
       console.error("Failed to publish carousel:", publishOutcome.error);
-      
-      if (postId) {
-        await supabase
-          .from("social_posts")
-          .update({
-            status: "failed",
-            error_message: `Publish failed: ${publishOutcome.error}`,
-            updated_at: new Date().toISOString()
-          })
-          .eq("id", postId);
-      }
 
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: `Publish failed: ${publishOutcome.error}` 
-        }),
-        { headers: corsHeaders, status: 400 }
+      return failCarousel(
+        supabase,
+        postId,
+        "publish",
+        `Publish failed: ${publishOutcome.error}`
       );
     }
 
@@ -259,8 +240,13 @@ serve(async (req) => {
 
   } catch (error) {
     console.error("Instagram carousel error:", error);
+    const message = error instanceof Error ? error.message : "Failed to post carousel to Instagram";
     return new Response(
-      JSON.stringify({ success: false, error: error.message || "Failed to post carousel to Instagram" }),
+      JSON.stringify({
+        success: false,
+        error: `[unknown] ${message}`,
+        stage: "unknown",
+      }),
       { headers: corsHeaders, status: 500 }
     );
   }

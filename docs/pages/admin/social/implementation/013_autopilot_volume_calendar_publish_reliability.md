@@ -443,3 +443,11 @@ No new migrations expected.
 |------|--------|-------|
 | 2026-06-19 | **Planned** | Investigation complete; doc written before code |
 | 2026-06-19 | **Implemented** | Work items A–E coded; edge functions not deployed |
+
+## Git commits (Phase 013)
+
+| Commit | Message | Scope |
+|--------|---------|-------|
+| 1 | `fix(admin-social): correct autopilot fill volume` | Work item A — `autopilot-fill` volume math |
+| 2 | `feat(admin-social): clarify calendar and autopilot health status` | Work items B + E (health UI) |
+| 3 | `fix(admin-social): improve publish failure reliability` | Work items C + D + E (todo) |
