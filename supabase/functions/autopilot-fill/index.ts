@@ -6,7 +6,8 @@
 // 2. If below threshold, auto-generate more using auto-queue logic
 // 3. Respects autopilot settings (enabled, days_ahead, posts_per_day, platforms, tones)
 //
-// Volume math is unchanged here. Product selection/scoring (Phase 3c) lives in auto-queue,
+// Volume math (Phase 013): round-robin requests `deficit` posts; multi-platform uses
+// ceil(deficit / platforms.length). Product selection/scoring (Phase 3c) lives in auto-queue,
 // including selection_metadata.score_breakdown, penalties_applied, and scoring_weights from
 // social_settings.auto_queue when configured.
 
@@ -94,13 +95,16 @@ Deno.serve(async (req) => {
   let platforms: string[] = [];
 
   try {
-    const { data: settingsRow } = await supabase
+    const { data: settingsRows } = await supabase
       .from("social_settings")
-      .select("setting_value")
-      .eq("setting_key", "autopilot")
-      .single();
+      .select("setting_key, setting_value")
+      .in("setting_key", ["autopilot", "auto_queue"]);
 
-    settings = (settingsRow?.setting_value as Record<string, unknown>) || {
+    const settingsByKey = Object.fromEntries(
+      (settingsRows || []).map((r) => [r.setting_key, r.setting_value])
+    );
+
+    settings = (settingsByKey.autopilot as Record<string, unknown>) || {
       enabled: false,
       days_ahead: 7,
       posts_per_day: 2,
@@ -224,8 +228,18 @@ Deno.serve(async (req) => {
       );
     }
 
-    const postsToGenerate = Math.ceil(deficit / platforms.length);
-    console.log(`[autopilot] Generating up to ${postsToGenerate} product slot(s) per platform`);
+    const autoQueueSettings = (settingsByKey.auto_queue as Record<string, unknown>) || {};
+    const allowMultiPlatformPerProduct =
+      autoQueueSettings.allow_multi_platform_per_product === true;
+    const volumeMode = allowMultiPlatformPerProduct ? "multi_platform" : "round_robin";
+    const postsToGenerate = allowMultiPlatformPerProduct
+      ? Math.ceil(deficit / platforms.length)
+      : deficit;
+
+    console.log(
+      `[autopilot] volume_mode=${volumeMode} posts_requested=${postsToGenerate} ` +
+        `(deficit=${deficit}, platforms=${platforms.length})`
+    );
 
     const autoQueueUrl = `${supabaseUrl}/functions/v1/auto-queue`;
 
@@ -261,6 +275,7 @@ Deno.serve(async (req) => {
         resurface_in_autopilot: resurfaceInAutopilot,
         resurface_min_age_days: resurfaceMinAgeDays,
         resurface_max_per_run: resurfaceMaxPerRun,
+        allow_multi_platform_per_product: allowMultiPlatformPerProduct,
       }),
     });
 
@@ -321,6 +336,8 @@ Deno.serve(async (req) => {
       }
     }
 
+    const deficitRemaining = Math.max(0, deficit - generated);
+
     await writeAutopilotLastRun(supabase, {
       source,
       enabled: true,
@@ -330,6 +347,10 @@ Deno.serve(async (req) => {
       target_count: targetCount,
       current_count: currentCount,
       deficit,
+      deficit_remaining: deficitRemaining,
+      posts_requested: postsToGenerate,
+      volume_mode: volumeMode,
+      allow_multi_platform_per_product: allowMultiPlatformPerProduct,
       posts_created: generated,
       generated,
       resurfaced_count: resurfacedCount,
@@ -358,6 +379,9 @@ Deno.serve(async (req) => {
         current_count: currentCount,
         target_count: targetCount,
         deficit,
+        deficit_remaining: deficitRemaining,
+        posts_requested: postsToGenerate,
+        volume_mode: volumeMode,
         generated,
         posts_created: generated,
         posts_built: postsBuilt,
