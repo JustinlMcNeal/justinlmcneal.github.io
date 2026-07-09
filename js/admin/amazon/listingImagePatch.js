@@ -1,5 +1,6 @@
 import { qs } from "./dom.js";
 import {
+  fetchAmazonListingOpenIssues,
   fetchAmazonListingRaw,
   fetchKkProductForPush,
   patchAmazonListing,
@@ -62,16 +63,34 @@ function readSavedImagePatchOrder(listingId) {
 }
 
 /**
+ * @param {Record<string, unknown> | null | undefined} product
+ * @param {string} [kkVariantId]
+ */
+function buildListingPatchDefaultImageUrls(product, kkVariantId = "") {
+  const defaults = buildAmazonProductImageUrls(product);
+  const variantId = String(kkVariantId || "").trim();
+  if (!variantId || !Array.isArray(product?.product_variants)) return defaults;
+
+  const variant = product.product_variants.find((row) => String(row?.id || "") === variantId);
+  const preview = String(variant?.preview_image_url || "").trim();
+  if (!preview.startsWith("http")) return defaults;
+
+  const rest = defaults.filter((url) => url !== preview);
+  return [preview, ...rest].slice(0, AMAZON_MAX_IMAGES);
+}
+
+/**
  * Prefer last submitted order until Amazon attributes catch up, then Amazon order, then KK defaults.
  * @param {{
  *   product: Record<string, unknown> | null,
  *   listingRaw: Record<string, unknown> | null | undefined,
  *   marketplaceId: string,
  *   listingId: string,
+ *   kkVariantId?: string,
  * }} params
  */
-function resolvePatchImageSeedUrls({ product, listingRaw, marketplaceId, listingId }) {
-  const kkUrls = buildAmazonProductImageUrls(product);
+function resolvePatchImageSeedUrls({ product, listingRaw, marketplaceId, listingId, kkVariantId = "" }) {
+  const kkUrls = buildListingPatchDefaultImageUrls(product, kkVariantId);
   const amazonUrls = filterAmazonPatchableImageUrls(
     extractAmazonListingImageUrls(listingRaw?.raw_listing, marketplaceId),
   );
@@ -106,22 +125,38 @@ function syncImageUi() {
   renderAmazonImageStrip(STRIP_ID, patchImageUrls);
   const countEl = qs(`#${COUNT_ID}`);
   if (countEl) {
-    countEl.textContent = `${patchImageUrls.length} / ${AMAZON_MAX_IMAGES}`;
+    const patchable = filterAmazonPatchableImageUrls(patchImageUrls);
+    const amazonOnly = patchImageUrls.length - patchable.length;
+    let text = `${patchImageUrls.length} / ${AMAZON_MAX_IMAGES}`;
+    if (amazonOnly > 0) {
+      text += ` · ${patchable.length} will be sent`;
+      if (!patchable.length) {
+        text += " — add KK photos from gallery";
+      }
+    }
+    countEl.textContent = text;
   }
 }
 
-function renderIssues(issues) {
+function renderIssues(issues, err = null) {
   const panel = qs("#amazonListingImageIssues");
   if (!panel) return;
 
-  if (!issues?.length) {
+  /** @type {Array<Record<string, unknown>>} */
+  const rows = Array.isArray(issues) ? [...issues] : [];
+  if (!rows.length && err) {
+    const message = patchErrorMessage(err);
+    if (message) rows.push({ severity: "error", message });
+  }
+
+  if (!rows.length) {
     panel.classList.add("hidden");
     panel.innerHTML = "";
     return;
   }
 
   panel.classList.remove("hidden");
-  const items = issues.map((issue) => {
+  const items = rows.map((issue) => {
     const severity = String(issue.severity || "warning");
     const tone = severity === "error" ? "text-red-700" : "text-amber-700";
     return `<li class="${tone}"><span class="font-bold uppercase text-[10px]">${severity}</span> — ${String(issue.message || issue.field || "Issue")}</li>`;
@@ -158,13 +193,14 @@ export async function hydrateAmazonImagePatchModal(row) {
   setHydrate("image-patch-asin", String(row.asin || "—"));
   setHydrate("image-patch-seller-sku", String(row.seller_sku || row.kk_sku || "—"));
 
-  const listingId = String(row.amazon_listing_id || "");
+  const listingId = String(row.amazon_listing_id || row.id || "");
   const kkProductId = String(row.kk_product_id || "");
   const marketplaceId = String(row.marketplace_id || "ATVPDKIKX0DER");
 
-  const [product, listingRaw] = await Promise.all([
+  const [product, listingRaw, openIssues] = await Promise.all([
     kkProductId ? fetchKkProductForPush(kkProductId) : Promise.resolve(null),
     listingId ? fetchAmazonListingRaw(listingId) : Promise.resolve(null),
+    listingId ? fetchAmazonListingOpenIssues(listingId) : Promise.resolve([]),
   ]);
 
   patchProductRow = product;
@@ -177,14 +213,40 @@ export async function hydrateAmazonImagePatchModal(row) {
     listingRaw,
     marketplaceId,
     listingId,
+    kkVariantId: String(row.kk_variant_id || ""),
   });
   syncImageUi();
 
   const issuesPanel = qs("#amazonListingImageIssues");
   const patchableAmazonCount = filterAmazonPatchableImageUrls(amazonUrls).length;
-  if (issuesPanel && amazonUrls.length > patchableAmazonCount && buildAmazonProductImageUrls(product).length) {
+  const patchableSelectedCount = filterAmazonPatchableImageUrls(patchImageUrls).length;
+  const amazonIssueLines = (openIssues || [])
+    .filter((issue) => String(issue?.severity || "").toLowerCase() === "error")
+    .map((issue) => String(issue?.message || "").trim())
+    .filter(Boolean);
+  const imageIssueLines = amazonIssueLines.filter((message) =>
+    /image|background|media_locator|white/i.test(message),
+  );
+  const notes = [];
+
+  if (patchableSelectedCount === 0 && buildAmazonProductImageUrls(product).length) {
+    notes.push("Add at least one photo from the KK gallery. Amazon CDN images in the live listing cannot be re-submitted through SP-API.");
+  } else if (amazonUrls.length > patchableAmazonCount && buildAmazonProductImageUrls(product).length) {
+    notes.push("Live listing photos are Amazon-hosted. Pick KK gallery images below — the first slot becomes the main image Amazon evaluates.");
+  }
+
+  if (imageIssueLines.length) {
+    notes.push("Amazon image errors on this SKU:");
+    notes.push(...imageIssueLines.slice(0, 2));
+    notes.push("Amazon main images for hats and apparel usually need a pure white background (RGB 255,255,255). Lifestyle or colored backgrounds often stay in issue status even after a successful upload.");
+  } else if (amazonIssueLines.length) {
+    notes.push("Amazon also reports other open errors on this SKU (for example price). Fix those in Edit Listing if image updates keep failing.");
+    notes.push(amazonIssueLines[0]);
+  }
+
+  if (issuesPanel && notes.length) {
     issuesPanel.classList.remove("hidden");
-    issuesPanel.innerHTML = `<p class="text-xs text-amber-800">Showing your KK gallery order. Amazon-hosted photos in the live listing cannot be re-submitted — reorder using gallery images below.</p>`;
+    issuesPanel.innerHTML = `<ul class="space-y-1 text-xs text-amber-800 list-disc pl-4">${notes.map((line) => `<li>${line}</li>`).join("")}</ul>`;
   }
 }
 
@@ -226,7 +288,13 @@ async function previewPatch() {
       { tone: "success" },
     );
   } catch (err) {
-    renderIssues(err?.issues || []);
+    console.error("[amazon] image patch preview failed", {
+      code: err?.code || err?.error,
+      hint: err?.hint,
+      issues: err?.issues,
+      message: err?.message,
+    });
+    renderIssues(err?.issues || [], err);
     showAmazonNotification(patchErrorMessage(err), { tone: "error" });
   } finally {
     setSubmitting(false);
@@ -259,7 +327,13 @@ async function applyPatch() {
     await deps.onPatched?.();
     deps.closeModal?.();
   } catch (err) {
-    renderIssues(err?.issues || []);
+    console.error("[amazon] image patch apply failed", {
+      code: err?.code || err?.error,
+      hint: err?.hint,
+      issues: err?.issues,
+      message: err?.message,
+    });
+    renderIssues(err?.issues || [], err);
     showAmazonNotification(patchErrorMessage(err), { tone: "error" });
   } finally {
     setSubmitting(false);
@@ -272,17 +346,29 @@ function patchErrorMessage(err) {
   const messages = {
     live_patch_disabled: "Live listing updates are disabled on the server.",
     listing_not_found: "Listing not found.",
-    listing_not_patchable: "This listing cannot be patched yet (missing product type).",
-    invalid_image_urls: "Use KK-hosted https image URLs from the gallery (Amazon CDN links cannot be patched).",
+    listing_not_patchable: "This listing cannot be patched yet (missing product type). Sync this SKU from Amazon and try again.",
+    invalid_image_urls: "No KK-hosted photos to send. Amazon CDN images cannot be re-submitted — click + Add from Gallery.",
     invalid_request: "Invalid image update request.",
     patch_rejected: "Amazon rejected this image update.",
-    sp_api_patch_failed: "Amazon patch request failed.",
-    sp_api_validation_failed: "Amazon rejected these image URLs. Use KK gallery photos with public https links.",
+    sp_api_patch_failed: "Amazon rejected this image update.",
+    sp_api_validation_failed: "Amazon rejected these image URLs.",
     amazon_not_connected: "Amazon is not connected.",
+    token_missing: "Amazon token missing. Reconnect Seller Central.",
+    token_refresh_failed: "Amazon token expired. Reconnect Seller Central.",
     unauthorized: "Please sign in as an admin.",
   };
+  const issueMessages = Array.isArray(err?.issues)
+    ? err.issues
+      .map((issue) => String(issue?.message || "").trim())
+      .filter(Boolean)
+    : [];
+  if (issueMessages.length) {
+    return issueMessages.slice(0, 2).join(" ");
+  }
   const base = messages[code] || "Could not update Amazon listing images.";
-  return err?.hint ? `${base} ${err.hint}` : base;
+  const hint = typeof err?.hint === "string" && err.hint.trim() ? err.hint.trim() : "";
+  if (hint && !messages[code]) return hint;
+  return hint ? `${base} ${hint}` : base;
 }
 
 /** @type {{ onPatched?: () => Promise<void> | void, closeModal?: () => void }} */

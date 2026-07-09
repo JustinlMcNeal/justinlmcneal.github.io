@@ -1,6 +1,13 @@
 import { qs } from "./dom.js";
 import { escapeHtml } from "./renderListings.js";
 
+const BAG_LIKE_PRODUCT_TYPES = new Set(["HANDBAG", "TOTE_BAG"]);
+
+/** @param {string} [productType] */
+export function isBagLikeProductType(productType = "") {
+  return BAG_LIKE_PRODUCT_TYPES.has(String(productType || "").trim().toUpperCase());
+}
+
 /** Attributes already covered by the main push form fields. */
 export const COVERED_BY_MAIN_FORM = new Set([
   "item_name",
@@ -84,6 +91,18 @@ export const ATTRIBUTE_FIELD_META = {
     placeholder: "unisex-children",
     defaultValue: "unisex-adult",
   },
+  target_audience: {
+    label: "Target Audience",
+    placeholder: "Women",
+    hint: "Amazon audience enum for bags (e.g. Women, Unisex-Adults).",
+    defaultValue: "Women",
+  },
+  lining_description: {
+    label: "Lining Description",
+    placeholder: "Polyester",
+    hint: "Interior lining material (e.g. Polyester, Cotton).",
+    defaultValue: "Polyester",
+  },
   age_range_description: {
     label: "Age Range Description",
     placeholder: "Adult",
@@ -157,6 +176,46 @@ export const ATTRIBUTE_FIELD_META = {
     hint: "Height x Width x Length, e.g. 8 x 6 x 4 in",
     defaultValue: "8 x 6 x 4 in",
   },
+  size_info: {
+    label: "Size Info",
+    placeholder: "alpha|small|Mini / Small",
+    hint: "Size class, Amazon size code, and customer-facing label. Mini totes: alpha | small | Mini / Small.",
+    defaultValue: "alpha|small|Mini / Small",
+    composite: "size_info",
+  },
+  capacity: {
+    label: "Capacity",
+    placeholder: "1.5|liters",
+    hint: "Numeric capacity and unit (liters, cubic_inches). Mini bags often use 1.5|liters.",
+    defaultValue: "1.5|liters",
+    composite: "capacity",
+  },
+  outer: {
+    label: "Outer Material",
+    placeholder: "Faux Leather with heart embossing",
+    hint: "Exterior material description shown to customers.",
+    defaultValue: "Faux Leather",
+  },
+  inner: {
+    label: "Inner Material",
+    placeholder: "Polyester lining with slip pocket",
+    hint: "Interior lining / compartment material description.",
+    defaultValue: "Polyester lining",
+  },
+  strap_type: {
+    label: "Strap Type",
+    placeholder: "Shoulder",
+    hint: "How the bag is carried, e.g. Shoulder, Cross-Body, or Hand-Carry.",
+    defaultValue: "Shoulder",
+    enumValues: ["Adjustable", "Cross-Body", "Hand-Carry", "Shoulder", "Waist Strap"],
+  },
+  number_of_compartments: {
+    label: "Number Of Compartments",
+    placeholder: "1",
+    hint: "Count of separate storage compartments inside the bag.",
+    defaultValue: "1",
+    enumValues: ["1", "2", "3", "4"],
+  },
   merchant_suggested_asin: {
     label: "Suggested ASIN (optional — repush only)",
     placeholder: "Leave blank for new catalog listings",
@@ -219,8 +278,9 @@ export const ATTRIBUTE_FIELD_META = {
   batteries_required: {
     label: "Batteries Required",
     placeholder: "false",
-    hint: "Use false for plush items without batteries.",
+    hint: "Use false for hats and accessories without batteries.",
     defaultValue: "false",
+    enumValues: ["false", "true"],
   },
   parentage_level: {
     label: "Parentage Level",
@@ -265,7 +325,7 @@ export const ATTRIBUTE_FIELD_META = {
   style: {
     label: "Style",
     placeholder: "Casual",
-    hint: "Hat style such as Casual, Fashion, or Novelty.",
+    hint: "Product style such as Casual, Fashion, or Novelty.",
     defaultValue: "Casual",
   },
   care_instructions: {
@@ -283,9 +343,27 @@ export const ATTRIBUTE_FIELD_META = {
   seasons: {
     label: "Seasons",
     placeholder: "Fall",
-    hint: "Primary season(s) for this hat.",
+    hint: "Primary season(s) for this item.",
     defaultValue: "Fall",
     enumValues: ["Spring", "Summer", "Fall", "Winter", "All Seasons"],
+  },
+  special_size_type: {
+    label: "Special Size Type",
+    placeholder: "Standard",
+    hint: "Amazon special size category. Use Standard for regular one-size beanies and hats.",
+    defaultValue: "Standard",
+  },
+  lifestyle: {
+    label: "Lifestyle",
+    placeholder: "Casual",
+    hint: "Amazon lifestyle enum for HAT (e.g. Casual, Comfort).",
+    defaultValue: "Casual",
+  },
+  pattern_type: {
+    label: "Pattern Type",
+    placeholder: "Graphic",
+    hint: "Primary pattern on the hat (e.g. Graphic, Animal Print, Solid).",
+    defaultValue: "Graphic",
   },
   headwear_size: {
     label: "Headwear Size",
@@ -293,6 +371,45 @@ export const ATTRIBUTE_FIELD_META = {
     hint: "Use One Size for stretch beanies. Rendered as Amazon headwear_size (size class + value).",
     defaultValue: "One Size",
     composite: "headwear_size",
+  },
+  metals: {
+    label: "Metals",
+    hint: "Amazon metals composite: type, stamp, and ID (required for APPAREL_PIN).",
+    defaultValue: "Alloy|No Metal Stamp|1",
+    composite: "metals",
+  },
+  metal_type: {
+    label: "Metal Type",
+    placeholder: "alloy",
+    hint: "Top-level metal type enum (required alongside metals composite for APPAREL_PIN).",
+    defaultValue: "alloy",
+    enumValues: ["alloy", "brass", "copper", "stainless-steel", "zinc"],
+  },
+  stones: {
+    label: "Stones",
+    hint: "Stone composite: type, treatment, creation method, and ID. Use No Gemstone for enamel-only pins.",
+    defaultValue: "No Gemstone|Not Treated|Unknown|1",
+    composite: "stones",
+  },
+  gem_type: {
+    label: "Gem Type",
+    placeholder: "No Gemstone",
+    hint: "Required for pins. Use No Gemstone when the pin has no stone.",
+    defaultValue: "No Gemstone",
+    enumValues: [
+      "No Gemstone",
+      "Crystal",
+      "Glass",
+      "Rhinestone",
+      "Pearl",
+      "Cubic Zirconia",
+    ],
+  },
+  title_differentiation: {
+    label: "Title Differentiation",
+    placeholder: "Enamel Pin",
+    hint: "Short differentiator Amazon uses for similar titles (e.g. Enamel Pin, Lapel Pin).",
+    defaultValue: "Enamel Pin",
   },
   fabric_type: {
     label: "Fabric Type",
@@ -429,6 +546,8 @@ export const AMAZON_HAT_ATTRIBUTE_HINTS = [
   "supplier_declared_dg_hz_regulation",
   "item_type_keyword",
   "fabric_type",
+  "title_differentiation",
+  "special_size_type",
   "headwear_size",
   "department",
   "care_instructions",
@@ -436,6 +555,8 @@ export const AMAZON_HAT_ATTRIBUTE_HINTS = [
   "import_designation",
   "style",
   "seasons",
+  "lifestyle",
+  "pattern_type",
   "manufacturer",
   "material",
   "model_name",
@@ -445,6 +566,8 @@ export const AMAZON_HAT_ATTRIBUTE_HINTS = [
   "target_gender",
   "color",
   "theme",
+  "number_of_items",
+  "batteries_required",
   "item_package_dimensions",
   "item_package_weight",
 ];
@@ -468,6 +591,190 @@ export const HAT_FORM_DENYLIST = new Set([
   "plant_or_animal_product_type",
   "specific_uses_for_product",
   "indoor_outdoor_usage",
+]);
+
+export const AMAZON_PIN_ATTRIBUTE_HINTS = [
+  "supplier_declared_has_product_identifier_exemption",
+  "merchant_suggested_asin",
+  "country_of_origin",
+  "supplier_declared_dg_hz_regulation",
+  "item_type_keyword",
+  "material",
+  "metal_type",
+  "metals",
+  "stones",
+  "gem_type",
+  "size",
+  "department",
+  "title_differentiation",
+  "manufacturer",
+  "model_number",
+  "model_name",
+  "part_number",
+  "generic_keyword",
+  "target_gender",
+  "color",
+  "item_package_dimensions",
+  "item_package_weight",
+];
+
+/** Hide invalid fields for enamel pins. */
+export const APPAREL_PIN_FORM_DENYLIST = new Set([
+  "package_level",
+  "included_components",
+  "theme",
+  "variation_role",
+  "parentage_level",
+  "child_parent_sku_relationship",
+  "variation_theme",
+  "closure",
+  "special_feature",
+  "fabric_type",
+  "cpsia_cautionary_statement",
+  "safety_warning",
+  "toy_figure_type",
+  "subject_character",
+  "educational_objective",
+  "plant_or_animal_product_type",
+]);
+
+export const AMAZON_BELT_ATTRIBUTE_HINTS = [
+  "supplier_declared_has_product_identifier_exemption",
+  "merchant_suggested_asin",
+  "country_of_origin",
+  "supplier_declared_dg_hz_regulation",
+  "item_type_keyword",
+  "fabric_type",
+  "title_differentiation",
+  "department",
+  "size",
+  "care_instructions",
+  "import_designation",
+  "age_range_description",
+  "manufacturer",
+  "model_name",
+  "model_number",
+  "part_number",
+  "generic_keyword",
+  "material",
+  "target_gender",
+  "color",
+  "number_of_items",
+  "item_package_dimensions",
+  "item_package_weight",
+];
+
+/** Hide invalid fields for fashion belts. */
+export const APPAREL_BELT_FORM_DENYLIST = new Set([
+  "package_level",
+  "included_components",
+  "theme",
+  "variation_role",
+  "parentage_level",
+  "child_parent_sku_relationship",
+  "variation_theme",
+  "closure",
+  "special_feature",
+  "headwear_size",
+  "seasons",
+  "style",
+  "metals",
+  "metal_type",
+  "stones",
+  "gem_type",
+  "cpsia_cautionary_statement",
+  "safety_warning",
+  "toy_figure_type",
+  "subject_character",
+  "educational_objective",
+  "plant_or_animal_product_type",
+  "specific_uses_for_product",
+  "indoor_outdoor_usage",
+  "item_shape",
+  "container",
+  "is_refurbished",
+  "item_depth_width_height",
+]);
+
+export const AMAZON_HANDBAG_ATTRIBUTE_HINTS = [
+  "supplier_declared_has_product_identifier_exemption",
+  "merchant_suggested_asin",
+  "country_of_origin",
+  "supplier_declared_dg_hz_regulation",
+  "item_type_keyword",
+  "fabric_type",
+  "title_differentiation",
+  "lining_description",
+  "special_feature",
+  "target_audience",
+  "style",
+  "department",
+  "target_gender",
+  "age_range_description",
+  "import_designation",
+  "seasons",
+  "size_info",
+  "capacity",
+  "outer",
+  "inner",
+  "item_dimensions",
+  "closure",
+  "strap_type",
+  "number_of_compartments",
+  "manufacturer",
+  "material",
+  "model_name",
+  "model_number",
+  "part_number",
+  "generic_keyword",
+  "number_of_items",
+  "included_components",
+  "batteries_required",
+  "theme",
+  "item_package_dimensions",
+  "item_package_weight",
+];
+
+/** TOTE_BAG uses item_length_width_height instead of item_dimensions. */
+export const AMAZON_TOTE_BAG_ATTRIBUTE_HINTS = AMAZON_HANDBAG_ATTRIBUTE_HINTS
+  .filter((name) => name !== "item_dimensions" && name !== "included_components" && name !== "target_audience")
+  .concat(["item_length_width_height"]);
+
+/** Hide on TOTE_BAG forms and strip before save/payload. */
+export const TOTE_BAG_FORM_EXTRA_DENYLIST = new Set([
+  "target_audience",
+  "package_level",
+  "included_components",
+]);
+
+/** Hide invalid fields for handbags / mini totes. */
+export const HANDBAG_FORM_DENYLIST = new Set([
+  "package_level",
+  "variation_role",
+  "parentage_level",
+  "child_parent_sku_relationship",
+  "variation_theme",
+  "headwear_size",
+  "special_size_type",
+  "care_instructions",
+  "metals",
+  "metal_type",
+  "stones",
+  "gem_type",
+  "size",
+  "cpsia_cautionary_statement",
+  "safety_warning",
+  "toy_figure_type",
+  "subject_character",
+  "educational_objective",
+  "plant_or_animal_product_type",
+  "specific_uses_for_product",
+  "indoor_outdoor_usage",
+  "item_shape",
+  "container",
+  "is_refurbished",
+  "item_depth_width_height",
+  "target_audience_keyword",
 ]);
 
 export const AMAZON_GENERIC_ATTRIBUTE_HINTS = [
@@ -578,8 +885,9 @@ export const ARTIFICIAL_PLANT_FORM_DENYLIST = new Set([
 /**
  * Remove server-managed / invalid keys from draft payload before render or save.
  * @param {Record<string, unknown>} [payload]
+ * @param {string} [productType]
  */
-export function stripInvalidPushPayloadAttributes(payload = {}) {
+export function stripInvalidPushPayloadAttributes(payload = {}, productType = "") {
   /** @type {Record<string, unknown>} */
   const cleaned = { ...payload };
   for (const key of Object.keys(cleaned)) {
@@ -588,7 +896,7 @@ export function stripInvalidPushPayloadAttributes(payload = {}) {
       continue;
     }
     const value = cleaned[key];
-    if (typeof value === "string" && isBlankAttributeValue(key, value)) {
+    if (typeof value === "string" && isBlankAttributeValue(key, value, productType)) {
       delete cleaned[key];
     }
   }
@@ -605,6 +913,19 @@ export function filterFormAttributeNames(names, productType = "") {
   if (normalized === "HAT") {
     filtered = filtered.filter((name) => !HAT_FORM_DENYLIST.has(name));
   }
+  if (normalized === "APPAREL_PIN") {
+    filtered = filtered.filter((name) => !APPAREL_PIN_FORM_DENYLIST.has(name));
+  }
+  if (normalized === "APPAREL_BELT") {
+    filtered = filtered.filter((name) => !APPAREL_BELT_FORM_DENYLIST.has(name));
+  }
+  if (normalized === "HANDBAG") {
+    filtered = filtered.filter((name) => !HANDBAG_FORM_DENYLIST.has(name));
+  }
+  if (normalized === "TOTE_BAG") {
+    filtered = filtered.filter((name) => !HANDBAG_FORM_DENYLIST.has(name));
+    filtered = filtered.filter((name) => !TOTE_BAG_FORM_EXTRA_DENYLIST.has(name));
+  }
   return filtered;
 }
 
@@ -615,6 +936,10 @@ export function getExtendedAttributeHints(productType = "") {
   if (normalized === "KEYCHAIN") return [...AMAZON_KEYCHAIN_ATTRIBUTE_HINTS];
   if (normalized === "ARTIFICIAL_PLANT") return [...AMAZON_ARTIFICIAL_PLANT_ATTRIBUTE_HINTS];
   if (normalized === "HAT") return [...AMAZON_HAT_ATTRIBUTE_HINTS];
+  if (normalized === "APPAREL_PIN") return [...AMAZON_PIN_ATTRIBUTE_HINTS];
+  if (normalized === "APPAREL_BELT") return [...AMAZON_BELT_ATTRIBUTE_HINTS];
+  if (normalized === "HANDBAG") return [...AMAZON_HANDBAG_ATTRIBUTE_HINTS];
+  if (normalized === "TOTE_BAG") return [...AMAZON_TOTE_BAG_ATTRIBUTE_HINTS];
   return [...AMAZON_GENERIC_ATTRIBUTE_HINTS];
 }
 
@@ -649,6 +974,101 @@ const PRODUCT_TYPE_ENUM_HINTS = {
     seasons: ["Spring", "Summer", "Fall", "Winter", "All Seasons"],
     theme: ["Animal", "Cartoon", "Fantasy", "Meme", "Solid"],
     material: ["Acrylic", "Polyester", "Wool", "Cotton", "Faux Fur"],
+    special_size_type: [
+      "Standard",
+      "Big",
+      "Tall",
+      "Plus Size",
+      "Petite",
+      "Big & Tall",
+    ],
+    lifestyle: ["Casual", "Comfort", "Business Casual", "Formal", "Evening"],
+    pattern_type: [
+      "Graphic",
+      "Animal Print",
+      "Solid",
+      "Geometric",
+      "Camouflage",
+      "Floral",
+    ],
+  },
+  APPAREL_BELT: {
+    item_type_keyword: [
+      "apparel-belts",
+      "novelty-apparel-belts",
+      "gun-belts",
+      "baseball-belts",
+      "sports-fan-belts",
+    ],
+    department: ["Unisex", "Womens", "Mens", "Girls", "Boys"],
+    import_designation: ["Imported", "Made in the USA", "Made in the USA and Imported", "Made in the USA or Imported"],
+    care_instructions: ["Wipe Clean", "Hand Wash Only", "Machine Wash", "Dry Clean Only", "Do Not Wash"],
+    age_range_description: ["Adult", "Big Kid", "Little Kid", "Toddler", "Infant"],
+    target_gender: ["unisex", "female", "male"],
+    material: ["Faux Leather", "PU Leather", "Leather", "Polyurethane", "Synthetic Leather"],
+  },
+  HANDBAG: {
+    item_type_keyword: [
+      "top-handle-handbags",
+      "cross-body-handbags",
+      "shoulder-handbags",
+      "clutch-handbags",
+      "handbags",
+      "messenger-bags",
+    ],
+    department: ["Unisex", "Womens", "Mens", "Girls", "Boys"],
+    target_audience: ["Women", "Unisex-Adults", "Girls", "Men", "Unisex-Youth"],
+    special_feature: [
+      "Detachable Strap",
+      "Convertible",
+      "Cell Phone Holder",
+      "Anti-Theft",
+      "Lightweight",
+    ],
+    style: ["Casual", "Fashion", "Evening", "Classic", "Novelty"],
+    theme: ["Love", "Floral", "Animal", "Fantasy", "Solid"],
+    material: ["Faux Leather", "PU Leather", "Polyurethane", "Leather", "Polyester"],
+    fabric_type: ["Faux Leather", "PU Leather", "Polyurethane", "Leather"],
+    lining_description: ["Polyester", "Cotton", "Nylon", "Satin"],
+    included_components: ["Shoulder Strap", "Detachable Strap", "Bag"],
+    seasons: ["Spring", "Summer", "Fall", "Winter", "All Seasons"],
+    closure: ["Zipper", "Magnetic", "Snap", "Flap", "Drawstring", "Open Top"],
+    strap_type: ["Adjustable", "Cross-Body", "Hand-Carry", "Shoulder", "Waist Strap"],
+    import_designation: ["Imported", "Made in the USA", "Made in the USA and Imported", "Made in the USA or Imported"],
+    age_range_description: ["Adult", "Big Kid", "Little Kid", "Toddler", "Infant"],
+    number_of_compartments: ["1", "2", "3", "4"],
+  },
+  TOTE_BAG: {
+    item_type_keyword: [
+      "reusable-grocery-bags",
+      "shopping-totes",
+      "top-handle-handbags",
+      "shoulder-handbags",
+    ],
+    department: ["Unisex", "Womens", "Mens", "Girls", "Boys"],
+    target_audience: ["Women", "Unisex-Adults", "Girls", "Men", "Unisex-Youth"],
+    special_feature: ["Reusable", "Lightweight", "Foldable", "Eco-Friendly"],
+    style: ["Casual", "Fashion", "Classic", "Novelty"],
+    material: ["Cotton", "Canvas", "Polyester", "Polyurethane"],
+    fabric_type: ["Canvas", "100% Cotton", "Cotton Canvas"],
+    lining_description: ["Unlined", "Polyester", "Cotton", "Nylon"],
+    seasons: ["Spring", "Summer", "Fall", "Winter", "All Seasons"],
+    closure: ["Open Top", "Zipper", "Magnetic", "Snap", "Flap", "Drawstring"],
+    strap_type: ["Adjustable", "Cross-Body", "Hand-Carry", "Shoulder", "Waist Strap"],
+    import_designation: ["Imported", "Made in the USA", "Made in the USA and Imported", "Made in the USA or Imported"],
+    age_range_description: ["Adult", "Big Kid", "Little Kid", "Toddler", "Infant"],
+    number_of_compartments: ["1", "2", "3", "4"],
+  },
+  APPAREL_PIN: {
+    item_type_keyword: ["brooches-and-pins", "lapel-pins", "enamel-pins", "novelty-pins"],
+    department: ["Unisex", "Mens", "Womens", "Boys", "Girls"],
+    gem_type: ["No Gemstone", "Crystal", "Glass", "Plastic", "Resin"],
+    size: ["Small", "Medium", "Large", "One Size"],
+    metal_type: ["alloy", "brass", "copper", "stainless-steel", "zinc"],
+    material: ["Metal", "Enamel", "Zinc Alloy", "Brass"],
+    stone_type: ["No Gemstone", "Crystal", "Glass", "Plastic", "Resin"],
+    treatment_method: ["Not Treated", "Coated", "Dyed", "Heat Treated", "Irradiated", "Bleached"],
+    creation_method: ["Unknown", "Simulated", "Natural", "Lab-Created", "Compressed"],
   },
   ARTIFICIAL_PLANT: {
     item_type_keyword: ["artificial-flowers", "artificial-plants", "dried-plants", "wreaths"],
@@ -720,14 +1140,235 @@ export function resolveFieldMeta(name, productType = "", attributeEnums = {}) {
       meta.defaultValue = meta.defaultValue || "cold-weather-hats";
       meta.hint = "Browse-tree code. Beanies/earflap hats usually use cold-weather-hats.";
     }
+    if (name === "fabric_type") {
+      meta.placeholder = "100% Acrylic";
+      meta.hint = "Fiber content for the knit (e.g. 100% Acrylic). Never Plush or plant fabric terms.";
+      meta.defaultValue = meta.defaultValue || "100% Acrylic";
+    }
+    if (name === "title_differentiation") {
+      meta.label = "Item Highlight";
+      meta.placeholder = "Faux fur cat ears";
+      meta.hint = "Short benefit phrase for Amazon Item Highlights (max 125 chars).";
+      meta.defaultValue = "";
+    }
+    if (name === "special_size_type") {
+      meta.defaultValue = meta.defaultValue || "Standard";
+      meta.hint = "Use Standard for regular one-size beanies and stretch hats.";
+    }
     if (name === "material") {
       meta.defaultValue = meta.defaultValue || "Acrylic";
+    }
+    if (name === "color") {
+      meta.placeholder = "Black";
+      meta.hint = "Primary hat color (e.g. Black, Gray). Avoid Multicolor unless truly multi-color.";
+      meta.defaultValue = meta.defaultValue || "Black";
     }
     if (name === "style" && !meta.defaultValue) {
       meta.defaultValue = "Casual";
     }
     if (name === "headwear_size" && !meta.defaultValue) {
       meta.defaultValue = "One Size";
+    }
+    if (name === "lifestyle" && !meta.defaultValue) {
+      meta.defaultValue = "Casual";
+    }
+    if (name === "pattern_type" && !meta.defaultValue) {
+      meta.defaultValue = "Graphic";
+    }
+    if (name === "batteries_required" && !meta.defaultValue) {
+      meta.defaultValue = "false";
+    }
+  }
+
+  if (isBagLikeProductType(pt)) {
+    const isTote = pt === "TOTE_BAG";
+    if (name === "item_type_keyword") {
+      meta.defaultValue = meta.defaultValue || (isTote ? "reusable-grocery-bags" : "top-handle-handbags");
+      meta.hint = isTote
+        ? "Browse-tree code. Canvas mini totes often use reusable-grocery-bags."
+        : "Browse-tree code. Mini totes often use top-handle-handbags or cross-body-handbags.";
+    }
+    if (name === "fabric_type") {
+      meta.placeholder = isTote ? "Canvas" : "Faux Leather";
+      meta.hint = isTote
+        ? "Exterior material (e.g. Canvas, 100% Cotton). Never Plush or plant fabric terms."
+        : "Exterior material (e.g. Faux Leather, PU Leather). Never Plush or plant fabric terms.";
+      meta.defaultValue = meta.defaultValue || (isTote ? "Canvas" : "Faux Leather");
+    }
+    if (name === "title_differentiation") {
+      meta.label = "Item Highlight";
+      meta.placeholder = isTote ? "Mini pastel canvas tote" : "Heart-quilted faux leather";
+      meta.hint = "Short benefit phrase for Amazon Item Highlights (max 125 chars).";
+      meta.defaultValue = "";
+    }
+    if (name === "material") {
+      meta.defaultValue = meta.defaultValue || (isTote ? "Cotton" : "Faux Leather");
+      if (!meta.enumValues?.length) {
+        meta.enumValues = isTote
+          ? ["Cotton", "Canvas", "Polyester", "Polyurethane"]
+          : ["Faux Leather", "PU Leather", "Polyurethane", "Leather", "Polyester"];
+      }
+    }
+    if (name === "lining_description" && !meta.defaultValue) {
+      meta.defaultValue = isTote ? "Unlined" : "Polyester";
+    }
+    if (name === "target_audience" && !meta.defaultValue) {
+      meta.defaultValue = isTote ? "Unisex-Adults" : "Women";
+    }
+    if (name === "special_feature" && !meta.defaultValue) {
+      meta.defaultValue = isTote ? "Reusable" : "Detachable Strap";
+    }
+    if (!isTote && name === "included_components" && !meta.defaultValue) {
+      meta.defaultValue = "Shoulder Strap";
+    }
+    if (name === "style") {
+      meta.hint = "Bag style such as Casual, Fashion, or Evening.";
+      meta.defaultValue = meta.defaultValue || "Casual";
+    }
+    if (name === "department" && !meta.defaultValue) {
+      meta.defaultValue = isTote ? "Unisex" : "Womens";
+    }
+    if (name === "theme" && !meta.defaultValue) {
+      meta.defaultValue = isTote ? "" : "Love";
+    }
+    if (name === "color") {
+      meta.placeholder = "Black";
+      meta.hint = "Primary bag color. Variation parents: leave blank — color goes on child SKUs.";
+      meta.defaultValue = "";
+    }
+    if (name === "batteries_required" && !meta.defaultValue) {
+      meta.defaultValue = "false";
+    }
+    if (name === "closure") {
+      meta.placeholder = isTote ? "Open Top" : "Zipper";
+      meta.hint = "How the bag closes, e.g. Zipper, Magnetic, Snap, or Open Top.";
+      meta.defaultValue = meta.defaultValue || (isTote ? "Open Top" : "Zipper");
+      if (!meta.enumValues?.length) {
+        meta.enumValues = ["Zipper", "Magnetic", "Snap", "Flap", "Drawstring", "Open Top"];
+      }
+    }
+    if (name === "seasons" && !meta.defaultValue) {
+      meta.defaultValue = "Fall";
+    }
+    if (name === "import_designation" && !meta.defaultValue) {
+      meta.defaultValue = "Imported";
+    }
+    if (name === "age_range_description" && !meta.defaultValue) {
+      meta.defaultValue = "Adult";
+    }
+    if (name === "size_info") {
+      meta.label = "Size Display Name";
+      meta.placeholder = "Mini / Small";
+      meta.hint = "Customer-facing size label shown when shoppers only see the photo.";
+      meta.defaultValue = meta.defaultValue || "Mini / Small";
+      delete meta.composite;
+    }
+    if (name === "capacity" && !meta.defaultValue) {
+      meta.defaultValue = "1.5|liters";
+      meta.composite = "capacity";
+    }
+    if (name === "outer" && !meta.defaultValue) {
+      meta.defaultValue = isTote ? "Canvas" : "Faux Leather";
+    }
+    if (name === "inner" && !meta.defaultValue) {
+      meta.defaultValue = isTote ? "Unlined (canvas interior)" : "Polyester lining";
+    }
+    if (name === "strap_type" && !meta.defaultValue) {
+      meta.defaultValue = isTote ? "Hand-Carry" : "Shoulder";
+    }
+    if (name === "number_of_compartments" && !meta.defaultValue) {
+      meta.defaultValue = "1";
+    }
+    if (!isTote && name === "item_dimensions" && !meta.defaultValue) {
+      meta.defaultValue = "8 x 6 x 4 in";
+    }
+    if (isTote && name === "item_length_width_height") {
+      meta.label = "Item Length x Width x Height";
+      meta.placeholder = "8 x 6 x 4 in";
+      meta.hint = "Length x Width x Height with unit, e.g. 8 x 6 x 4 in";
+      meta.defaultValue = meta.defaultValue || "8 x 6 x 4 in";
+    }
+  }
+
+  if (name === "material" && pt === "APPAREL_PIN") {
+    meta.defaultValue = meta.defaultValue || "Metal";
+    if (!meta.enumValues?.length) {
+      meta.enumValues = ["Metal", "Enamel", "Zinc Alloy", "Brass", "Acrylic"];
+    }
+  }
+
+  if (pt === "APPAREL_BELT") {
+    if (name === "item_type_keyword") {
+      meta.defaultValue = meta.defaultValue || "apparel-belts";
+      meta.hint = "Browse-tree code. Fashion/western belts usually use apparel-belts.";
+    }
+    if (name === "fabric_type") {
+      meta.label = "Fabric Type";
+      meta.placeholder = "100% Faux Leather";
+      meta.hint = "Strap material description (e.g. 100% Faux Leather, PU Leather).";
+      meta.defaultValue = meta.defaultValue || "100% Faux Leather";
+    }
+    if (name === "title_differentiation") {
+      meta.label = "Item Highlight";
+      meta.placeholder = "Antique heart buckle";
+      meta.hint = "Short benefit phrase for Amazon Item Highlights (max 125 chars).";
+      meta.defaultValue = "";
+    }
+    if (name === "material") {
+      meta.defaultValue = meta.defaultValue || "Faux Leather";
+      if (!meta.enumValues?.length) {
+        meta.enumValues = ["Faux Leather", "PU Leather", "Leather", "Polyurethane"];
+      }
+    }
+    if (name === "department" && !meta.defaultValue) {
+      meta.defaultValue = "Unisex";
+    }
+    if (name === "size" && !meta.defaultValue) {
+      meta.placeholder = "One Size";
+      meta.hint = "Belt size customers select. Use One Size for adjustable belts.";
+      meta.defaultValue = "One Size";
+    }
+    if (name === "import_designation" && !meta.defaultValue) {
+      meta.defaultValue = "Imported";
+    }
+    if (name === "care_instructions" && !meta.defaultValue) {
+      meta.defaultValue = "Wipe Clean";
+    }
+    if (name === "age_range_description" && !meta.defaultValue) {
+      meta.defaultValue = "Adult";
+    }
+    if (name === "color") {
+      meta.placeholder = "Black";
+      meta.hint = "Primary strap or buckle color (e.g. Black, Brown).";
+      meta.defaultValue = meta.defaultValue || "Black";
+    }
+  }
+
+  if (pt === "APPAREL_PIN") {
+    if (name === "item_type_keyword") {
+      meta.defaultValue = meta.defaultValue || "brooches-and-pins";
+      meta.hint = "Browse-tree code. Enamel/lapel pins usually use brooches-and-pins.";
+    }
+    if (name === "metals" && !meta.defaultValue) {
+      meta.defaultValue = "Alloy|No Metal Stamp|1";
+    }
+    if (name === "metal_type" && !meta.defaultValue) {
+      meta.defaultValue = "alloy";
+    }
+    if (name === "stones" && !meta.defaultValue) {
+      meta.defaultValue = "No Gemstone|Not Treated|Unknown|1";
+    }
+    if (name === "gem_type" && !meta.defaultValue) {
+      meta.defaultValue = "No Gemstone";
+    }
+    if (name === "size" && !meta.defaultValue) {
+      meta.defaultValue = "Small";
+    }
+    if (name === "department" && !meta.defaultValue) {
+      meta.defaultValue = "Unisex";
+    }
+    if (name === "title_differentiation" && !meta.defaultValue) {
+      meta.defaultValue = "Enamel Pin";
     }
   }
 
@@ -785,6 +1426,27 @@ function normalizeAmazonEnumFieldValue(name, value) {
     if (folded === "plush_pillows") return "childrens-plush-toy-pillows";
     if (folded === "plush_figure") return "plush-figure-toys";
     if (folded === "keychain" || folded === "keychains") return "key-chains";
+    if (folded === "brooches_and_pins" || folded === "lapel_pins" || folded === "enamel_pins") {
+      return "brooches-and-pins";
+    }
+    if (folded === "apparel_belts" || folded === "belts" || folded === "fashion_belts") {
+      return "apparel-belts";
+    }
+    if (folded === "novelty_belts" || folded === "western_belts") {
+      return "novelty-apparel-belts";
+    }
+    if (folded === "mini_tote" || folded === "mini_totes" || folded === "handbag" || folded === "handbags") {
+      return "top-handle-handbags";
+    }
+    if (folded === "crossbody" || folded === "cross_body") {
+      return "cross-body-handbags";
+    }
+    if (folded === "reusable_grocery_bags" || folded === "reusable_grocery_bag" || folded === "grocery_tote") {
+      return "reusable-grocery-bags";
+    }
+    if (folded === "shopping_totes" || folded === "shopping_tote" || folded === "canvas_tote") {
+      return "shopping-totes";
+    }
   }
   if (name === "indoor_outdoor_usage") {
     if (folded === "indoor" || value === "Indoor") return "indoor";
@@ -793,6 +1455,24 @@ function normalizeAmazonEnumFieldValue(name, value) {
       return "indoor_outdoor";
     }
   }
+  if (name === "treatment_method" || name === "stones") {
+    if (folded === "not applicable" || folded === "not_applicable" || folded === "n/a") {
+      return "Not Treated";
+    }
+  }
+  if (name === "creation_method") {
+    if (folded === "not applicable" || folded === "not_applicable" || folded === "n/a") {
+      return "Unknown";
+    }
+  }
+  if (name === "metals" && value.includes("|")) {
+    const parts = value.split("|").map((part) => part.trim());
+    if (parts[0]?.toLowerCase() === "alloy") parts[0] = "Alloy";
+    if (parts[1]?.toLowerCase() === "no metal stamp" || parts[1]?.toLowerCase() === "no stamp") {
+      parts[1] = "No Metal Stamp";
+    }
+    return parts.join("|");
+  }
   if (name === "plant_or_animal_product_type") {
     if (value === "Artificial Plant" || value === "Artificial Flower") return value;
     return "Artificial Plant";
@@ -800,11 +1480,51 @@ function normalizeAmazonEnumFieldValue(name, value) {
   return value;
 }
 
-function isBlankAttributeValue(name, value) {
+function isBlankAttributeValue(name, value, productType = "") {
   const text = String(value || "").trim();
   if (!text) return true;
+  if (text.toLowerCase() === "default") return true;
   if (text === name) return true;
   if (text.replace(/_/g, " ").toLowerCase() === name.replace(/_/g, " ").toLowerCase()) return true;
+  return shouldReplaceAttributeValue(name, text, productType);
+}
+
+/** True when an existing value should be replaced by defaults or AI (wrong product-type placeholder). */
+export function shouldReplaceAttributeValue(name, value, productType = "") {
+  const text = String(value || "").trim();
+  if (!text) return false;
+  const pt = String(productType || "").trim().toUpperCase();
+  if (pt === "APPAREL_BELT") {
+    if (name === "fabric_type" && text.toLowerCase() === "plush") return true;
+    if (name === "material" && text.toLowerCase() === "polyester") return true;
+    if (name === "color" && text.toLowerCase() === "multicolor") return true;
+    if (name === "title_differentiation") {
+      const folded = text.toLowerCase();
+      if (folded === "default" || folded === "enamel pin" || folded === "lapel pin") return true;
+    }
+  }
+  if (pt === "HAT") {
+    if (name === "fabric_type" && text.toLowerCase() === "plush") return true;
+    if (name === "material" && text.toLowerCase() === "polyester") return true;
+    if (name === "color" && text.toLowerCase() === "multicolor") return true;
+    if (name === "special_size_type" && text.toLowerCase() === "special_size_type") return true;
+    if (name === "title_differentiation") {
+      const folded = text.toLowerCase();
+      if (folded === "default" || folded === "enamel pin" || folded === "lapel pin") return true;
+    }
+  }
+  if (isBagLikeProductType(pt)) {
+    if (name === "fabric_type" && text.toLowerCase() === "plush") return true;
+    if (name === "color" && text.toLowerCase() === "multicolor") return true;
+    if (name === "closure" && text.toLowerCase() === "lobster clasp") return true;
+    if (name === "capacity" && !/[\d.]/.test(text)) return true;
+    if (name === "title_differentiation") {
+      const folded = text.toLowerCase();
+      if (folded === "default" || folded === "enamel pin" || folded === "lapel pin") return true;
+    }
+    if (name === "package_level") return true;
+    if (name === "included_components") return true;
+  }
   return false;
 }
 
@@ -840,6 +1560,196 @@ function parseHeadwearSizeFormValue(value) {
 
 function serializeHeadwearSizeFormValue(sizeClass, sizeValue) {
   return `${sizeClass || "alpha"}|${sizeValue || "One Size"}`;
+}
+
+const SIZE_INFO_CLASS_OPTIONS = ["alpha", "numeric"];
+const SIZE_INFO_VALUE_OPTIONS = ["small", "medium", "large", "one_size"];
+const CAPACITY_UNIT_OPTIONS = ["liters", "cubic_inches", "cubic_centimeters", "fluid_ounces"];
+
+function parseSizeInfoFormValue(value) {
+  const raw = String(value || "").trim();
+  if (!raw || raw === "size_info") {
+    return { sizeClass: "alpha", size: "small", displayName: "Mini / Small" };
+  }
+  if (raw.includes("|")) {
+    const parts = raw.split("|").map((part) => part.trim());
+    if (parts.length >= 3) {
+      return {
+        sizeClass: parts[0] || "alpha",
+        size: parts[1] || "small",
+        displayName: parts[2] || "Mini / Small",
+      };
+    }
+    return {
+      sizeClass: "alpha",
+      size: parts[0] || "small",
+      displayName: parts[1] || parts[0] || "Mini / Small",
+    };
+  }
+  return { sizeClass: "alpha", size: "small", displayName: raw };
+}
+
+function serializeSizeInfoFormValue(sizeClass, size, displayName) {
+  return `${sizeClass || "alpha"}|${size || "small"}|${displayName || "Mini / Small"}`;
+}
+
+function parseCapacityFormValue(value) {
+  const raw = String(value || "").trim();
+  if (!raw || raw === "capacity") {
+    return { amount: "1.5", unit: "liters" };
+  }
+  if (raw.includes("|")) {
+    const [amount = "1.5", unit = "liters"] = raw.split("|").map((part) => part.trim());
+    return { amount, unit: unit || "liters" };
+  }
+  const numbers = raw.match(/[\d.]+/g);
+  return {
+    amount: numbers?.[0] || "1.5",
+    unit: "liters",
+  };
+}
+
+function serializeCapacityFormValue(amount, unit) {
+  return `${amount || "1.5"}|${unit || "liters"}`;
+}
+
+function renderSizeInfoControl(name, value, inputId) {
+  const parsed = parseSizeInfoFormValue(value);
+  const controlClass = "border-2 border-black px-3 py-2 min-h-[44px] w-full font-mono text-xs bg-white";
+  const classOptions = SIZE_INFO_CLASS_OPTIONS.map((option) => {
+    const selected = option === parsed.sizeClass ? " selected" : "";
+    return `<option value="${escapeHtml(option)}"${selected}>${escapeHtml(option)}</option>`;
+  }).join("");
+  const sizeOptions = SIZE_INFO_VALUE_OPTIONS.map((option) => {
+    const selected = option === parsed.size ? " selected" : "";
+    return `<option value="${escapeHtml(option)}"${selected}>${escapeHtml(option)}</option>`;
+  }).join("");
+  return `
+    <div
+      class="grid grid-cols-1 gap-2"
+      data-size-info-composite="true"
+      data-amazon-attr="${escapeHtml(name)}"
+    >
+      <select data-size-info-part="size_class" class="${controlClass}">${classOptions}</select>
+      <select data-size-info-part="size" class="${controlClass}">${sizeOptions}</select>
+      <input
+        id="${escapeHtml(inputId)}"
+        type="text"
+        data-size-info-part="display_name"
+        value="${escapeHtml(parsed.displayName)}"
+        placeholder="Mini / Small"
+        class="${controlClass}"
+      />
+    </div>
+  `;
+}
+
+function renderCapacityControl(name, value, inputId) {
+  const parsed = parseCapacityFormValue(value);
+  const controlClass = "border-2 border-black px-3 py-2 min-h-[44px] w-full font-mono text-xs bg-white";
+  const unitOptions = CAPACITY_UNIT_OPTIONS.map((option) => {
+    const selected = option === parsed.unit ? " selected" : "";
+    return `<option value="${escapeHtml(option)}"${selected}>${escapeHtml(option)}</option>`;
+  }).join("");
+  return `
+    <div
+      class="grid grid-cols-1 gap-2"
+      data-capacity-composite="true"
+      data-amazon-attr="${escapeHtml(name)}"
+    >
+      <input
+        id="${escapeHtml(inputId)}"
+        type="text"
+        data-capacity-part="amount"
+        value="${escapeHtml(parsed.amount)}"
+        placeholder="1.5"
+        class="${controlClass}"
+      />
+      <select data-capacity-part="unit" class="${controlClass}">${unitOptions}</select>
+    </div>
+  `;
+}
+
+const METALS_TYPE_OPTIONS = ["Alloy", "Brass", "Copper", "Stainless Steel", "Zinc"];
+const METALS_STAMP_OPTIONS = ["No Metal Stamp", "925 Silver", "14K", "18K"];
+const STONES_TYPE_OPTIONS = ["No Gemstone", "Crystal", "Glass", "Plastic", "Resin"];
+const STONES_TREATMENT_OPTIONS = [
+  "Not Treated",
+  "Coated",
+  "Dyed",
+  "Heat Treated",
+  "Irradiated",
+  "Bleached",
+];
+const STONES_CREATION_OPTIONS = ["Unknown", "Simulated", "Natural", "Lab-Created", "Compressed"];
+
+function parseStonesFormValue(value) {
+  const raw = String(value || "").trim();
+  if (!raw || raw === "stones") {
+    return {
+      stoneType: "No Gemstone",
+      treatmentMethod: "Not Treated",
+      creationMethod: "Unknown",
+      id: "1",
+    };
+  }
+  if (raw.includes("|")) {
+    const parts = raw.split("|").map((part) => part.trim());
+    if (parts.length >= 4) {
+      return {
+        stoneType: parts[0] || "No Gemstone",
+        treatmentMethod: parts[1] || "Not Treated",
+        creationMethod: parts[2] || "Unknown",
+        id: parts[3] || "1",
+      };
+    }
+    return {
+      stoneType: parts[0] || "No Gemstone",
+      treatmentMethod: "Not Treated",
+      creationMethod: "Unknown",
+      id: parts[1] || "1",
+    };
+  }
+  if (STONES_TYPE_OPTIONS.includes(raw)) {
+    return {
+      stoneType: raw,
+      treatmentMethod: "Not Treated",
+      creationMethod: "Unknown",
+      id: "1",
+    };
+  }
+  return {
+    stoneType: "No Gemstone",
+    treatmentMethod: "Not Treated",
+    creationMethod: "Unknown",
+    id: "1",
+  };
+}
+
+function serializeStonesFormValue(stoneType, treatmentMethod, creationMethod, id) {
+  return `${stoneType || "No Gemstone"}|${treatmentMethod || "Not Treated"}|${creationMethod || "Unknown"}|${id || "1"}`;
+}
+
+function parseMetalsFormValue(value) {
+  const raw = String(value || "").trim();
+  if (!raw || raw === "metals") {
+    return { metalType: "Alloy", metalStamp: "No Metal Stamp", id: "1" };
+  }
+  if (raw.includes("|")) {
+    const [metalType = "Alloy", metalStamp = "No Metal Stamp", id = "1"] = raw.split("|").map((part) => part.trim());
+    return { metalType, metalStamp, id: id || "1" };
+  }
+  if (METALS_TYPE_OPTIONS.includes(raw)) {
+    return { metalType: raw, metalStamp: "No Metal Stamp", id: "1" };
+  }
+  if (raw.toLowerCase() === "alloy") {
+    return { metalType: "Alloy", metalStamp: "No Metal Stamp", id: "1" };
+  }
+  return { metalType: "Alloy", metalStamp: "No Metal Stamp", id: "1" };
+}
+
+function serializeMetalsFormValue(metalType, metalStamp, id) {
+  return `${metalType || "Alloy"}|${metalStamp || "No Metal Stamp"}|${id || "1"}`;
 }
 
 function renderHeadwearSizeControl(name, value, inputId) {
@@ -879,9 +1789,141 @@ function renderHeadwearSizeControl(name, value, inputId) {
   `;
 }
 
-function renderAttributeControl(name, meta, value, inputId) {
+function renderMetalsCompositeControl(name, value, inputId) {
+  const parsed = parseMetalsFormValue(value);
+  const controlClass = "border-2 border-black px-3 py-2 min-h-[44px] w-full font-mono text-xs bg-white";
+  const typeValues = METALS_TYPE_OPTIONS.includes(parsed.metalType)
+    ? METALS_TYPE_OPTIONS
+    : [...METALS_TYPE_OPTIONS, parsed.metalType];
+  const stampValues = METALS_STAMP_OPTIONS.includes(parsed.metalStamp)
+    ? METALS_STAMP_OPTIONS
+    : [...METALS_STAMP_OPTIONS, parsed.metalStamp];
+  const typeOptions = typeValues.map((option) => {
+    const selected = option === parsed.metalType ? " selected" : "";
+    return `<option value="${escapeHtml(option)}"${selected}>${escapeHtml(option)}</option>`;
+  }).join("");
+  const stampOptions = stampValues.map((option) => {
+    const selected = option === parsed.metalStamp ? " selected" : "";
+    return `<option value="${escapeHtml(option)}"${selected}>${escapeHtml(option)}</option>`;
+  }).join("");
+
+  return `
+    <div
+      class="grid grid-cols-1 sm:grid-cols-3 gap-2"
+      data-amazon-attr="${escapeHtml(name)}"
+      data-metals-composite="true"
+      id="${escapeHtml(inputId)}"
+    >
+      <div class="flex flex-col gap-1">
+        <span class="text-[9px] font-bold uppercase text-gray-500">Metal type</span>
+        <select data-metals-part="metal_type" class="${controlClass}">${typeOptions}</select>
+      </div>
+      <div class="flex flex-col gap-1">
+        <span class="text-[9px] font-bold uppercase text-gray-500">Metal stamp</span>
+        <select data-metals-part="metal_stamp" class="${controlClass}">${stampOptions}</select>
+      </div>
+      <div class="flex flex-col gap-1">
+        <span class="text-[9px] font-bold uppercase text-gray-500">Metal ID</span>
+        <input
+          type="text"
+          data-metals-part="id"
+          value="${escapeHtml(parsed.id || "1")}"
+          placeholder="1"
+          class="${controlClass}"
+        />
+      </div>
+      <input
+        type="hidden"
+        data-metals-serialized
+        value="${escapeHtml(serializeMetalsFormValue(parsed.metalType, parsed.metalStamp, parsed.id))}"
+      />
+    </div>
+  `;
+}
+
+function renderStonesCompositeControl(name, value, inputId) {
+  const parsed = parseStonesFormValue(value);
+  const controlClass = "border-2 border-black px-3 py-2 min-h-[44px] w-full font-mono text-xs bg-white";
+  const typeValues = STONES_TYPE_OPTIONS.includes(parsed.stoneType)
+    ? STONES_TYPE_OPTIONS
+    : [...STONES_TYPE_OPTIONS, parsed.stoneType];
+  const treatmentValues = STONES_TREATMENT_OPTIONS.includes(parsed.treatmentMethod)
+    ? STONES_TREATMENT_OPTIONS
+    : [...STONES_TREATMENT_OPTIONS, parsed.treatmentMethod];
+  const creationValues = STONES_CREATION_OPTIONS.includes(parsed.creationMethod)
+    ? STONES_CREATION_OPTIONS
+    : [...STONES_CREATION_OPTIONS, parsed.creationMethod];
+  const typeOptions = typeValues.map((option) => {
+    const selected = option === parsed.stoneType ? " selected" : "";
+    return `<option value="${escapeHtml(option)}"${selected}>${escapeHtml(option)}</option>`;
+  }).join("");
+  const treatmentOptions = treatmentValues.map((option) => {
+    const selected = option === parsed.treatmentMethod ? " selected" : "";
+    return `<option value="${escapeHtml(option)}"${selected}>${escapeHtml(option)}</option>`;
+  }).join("");
+  const creationOptions = creationValues.map((option) => {
+    const selected = option === parsed.creationMethod ? " selected" : "";
+    return `<option value="${escapeHtml(option)}"${selected}>${escapeHtml(option)}</option>`;
+  }).join("");
+
+  return `
+    <div
+      class="grid grid-cols-1 sm:grid-cols-2 gap-2"
+      data-amazon-attr="${escapeHtml(name)}"
+      data-stones-composite="true"
+      id="${escapeHtml(inputId)}"
+    >
+      <div class="flex flex-col gap-1">
+        <span class="text-[9px] font-bold uppercase text-gray-500">Stone type</span>
+        <select data-stones-part="stone_type" class="${controlClass}">${typeOptions}</select>
+      </div>
+      <div class="flex flex-col gap-1">
+        <span class="text-[9px] font-bold uppercase text-gray-500">Treatment method</span>
+        <select data-stones-part="treatment_method" class="${controlClass}">${treatmentOptions}</select>
+      </div>
+      <div class="flex flex-col gap-1">
+        <span class="text-[9px] font-bold uppercase text-gray-500">Creation method</span>
+        <select data-stones-part="creation_method" class="${controlClass}">${creationOptions}</select>
+      </div>
+      <div class="flex flex-col gap-1">
+        <span class="text-[9px] font-bold uppercase text-gray-500">Stone ID</span>
+        <input
+          type="text"
+          data-stones-part="id"
+          value="${escapeHtml(parsed.id || "1")}"
+          placeholder="1"
+          class="${controlClass}"
+        />
+      </div>
+      <input
+        type="hidden"
+        data-stones-serialized
+        value="${escapeHtml(serializeStonesFormValue(parsed.stoneType, parsed.treatmentMethod, parsed.creationMethod, parsed.id))}"
+      />
+    </div>
+  `;
+}
+
+function formatSizeInfoDraftValue(value, productType = "") {
+  if (!isBagLikeProductType(productType)) return value;
+  return parseSizeInfoFormValue(value).displayName;
+}
+
+function renderAttributeControl(name, meta, value, inputId, productType = "") {
   if (meta.composite === "headwear_size" || name === "headwear_size") {
     return renderHeadwearSizeControl(name, value, inputId);
+  }
+  if (meta.composite === "size_info") {
+    return renderSizeInfoControl(name, value, inputId);
+  }
+  if (meta.composite === "capacity") {
+    return renderCapacityControl(name, value, inputId);
+  }
+  if (meta.composite === "metals" || name === "metals") {
+    return renderMetalsCompositeControl(name, value, inputId);
+  }
+  if (meta.composite === "stones" || name === "stones") {
+    return renderStonesCompositeControl(name, value, inputId);
   }
 
   const enumValues = meta.enumValues || [];
@@ -892,7 +1934,7 @@ function renderAttributeControl(name, meta, value, inputId) {
       const selected = option === value ? " selected" : "";
       return `<option value="${escapeHtml(option)}"${selected}>${escapeHtml(option)}</option>`;
     }).join("");
-    const blankSelected = isBlankAttributeValue(name, value) ? " selected" : "";
+    const blankSelected = isBlankAttributeValue(name, value, productType) ? " selected" : "";
     return `
       <select
         id="${escapeHtml(inputId)}"
@@ -910,7 +1952,7 @@ function renderAttributeControl(name, meta, value, inputId) {
       id="${escapeHtml(inputId)}"
       type="text"
       data-amazon-attr="${escapeHtml(name)}"
-      value="${escapeHtml(isBlankAttributeValue(name, value) ? "" : value)}"
+      value="${escapeHtml(isBlankAttributeValue(name, value, productType) ? "" : value)}"
       placeholder="${escapeHtml(meta.placeholder || name)}"
       class="${controlClass}"
     />
@@ -958,7 +2000,9 @@ export function renderExtraAttributeFields(requiredAttributes, draftPayload = {}
     const label = meta.label || formatAttributeLabel(name);
     const hint = meta.hint || "";
     const rawValue = readDraftValue(draftPayload, name) || meta.defaultValue || "";
-    const value = normalizeAmazonEnumFieldValue(name, rawValue);
+    const value = name === "size_info"
+      ? formatSizeInfoDraftValue(normalizeAmazonEnumFieldValue(name, rawValue), productType)
+      : normalizeAmazonEnumFieldValue(name, rawValue);
     const inputId = `amazonPushAttr_${name}`;
 
     return `
@@ -967,7 +2011,7 @@ export function renderExtraAttributeFields(requiredAttributes, draftPayload = {}
           ${escapeHtml(label)}
           <span class="font-mono normal-case text-gray-400">(${escapeHtml(name)})</span>
         </label>
-        ${renderAttributeControl(name, meta, value, inputId)}
+        ${renderAttributeControl(name, meta, value, inputId, productType)}
         ${hint ? `<p class="text-[10px] text-gray-500">${escapeHtml(hint)}</p>` : ""}
       </div>
     `;
@@ -982,6 +2026,8 @@ export function resetExtraAttributeFields() {
 export function readExtraAttributesFromForm() {
   const container = qs("#amazonPushExtraAttributes");
   if (!container) return {};
+  const productTypeEl = qs("#amazonPushProductType");
+  const productType = productTypeEl instanceof HTMLInputElement ? productTypeEl.value.trim() : "";
 
   /** @type {Record<string, string>} */
   const values = {};
@@ -998,12 +2044,84 @@ export function readExtraAttributesFromForm() {
     }
   });
 
+  container.querySelectorAll('[data-metals-composite="true"]').forEach((wrapper) => {
+    if (!(wrapper instanceof HTMLElement)) return;
+    const name = wrapper.dataset.amazonAttr || "metals";
+    const metalType = wrapper.querySelector('[data-metals-part="metal_type"]');
+    const metalStamp = wrapper.querySelector('[data-metals-part="metal_stamp"]');
+    const idPart = wrapper.querySelector('[data-metals-part="id"]');
+    const typeVal = metalType instanceof HTMLSelectElement ? metalType.value.trim() : "alloy";
+    const stampVal = metalStamp instanceof HTMLSelectElement ? metalStamp.value.trim() : "No Metal Stamp";
+    const idVal = idPart instanceof HTMLInputElement ? idPart.value.trim() : "1";
+    if (name && typeVal) {
+      values[name] = serializeMetalsFormValue(typeVal, stampVal, idVal || "1");
+    }
+  });
+
+  container.querySelectorAll('[data-stones-composite="true"]').forEach((wrapper) => {
+    if (!(wrapper instanceof HTMLElement)) return;
+    const name = wrapper.dataset.amazonAttr || "stones";
+    const stoneType = wrapper.querySelector('[data-stones-part="stone_type"]');
+    const treatmentMethod = wrapper.querySelector('[data-stones-part="treatment_method"]');
+    const creationMethod = wrapper.querySelector('[data-stones-part="creation_method"]');
+    const idPart = wrapper.querySelector('[data-stones-part="id"]');
+    const typeVal = stoneType instanceof HTMLSelectElement ? stoneType.value.trim() : "No Gemstone";
+    const treatmentVal = treatmentMethod instanceof HTMLSelectElement ? treatmentMethod.value.trim() : "Not Treated";
+    const creationVal = creationMethod instanceof HTMLSelectElement ? creationMethod.value.trim() : "Unknown";
+    const idVal = idPart instanceof HTMLInputElement ? idPart.value.trim() : "1";
+    if (name && typeVal) {
+      values[name] = serializeStonesFormValue(typeVal, treatmentVal, creationVal, idVal || "1");
+    }
+  });
+
+  container.querySelectorAll('[data-size-info-composite="true"]').forEach((wrapper) => {
+    if (!(wrapper instanceof HTMLElement)) return;
+    const name = wrapper.dataset.amazonAttr || "size_info";
+    const sizeClass = wrapper.querySelector('[data-size-info-part="size_class"]');
+    const size = wrapper.querySelector('[data-size-info-part="size"]');
+    const displayName = wrapper.querySelector('[data-size-info-part="display_name"]');
+    const classVal = sizeClass instanceof HTMLSelectElement ? sizeClass.value.trim() : "alpha";
+    const sizeVal = size instanceof HTMLSelectElement ? size.value.trim() : "small";
+    const displayVal = displayName instanceof HTMLInputElement ? displayName.value.trim() : "Mini / Small";
+    if (name && displayVal) {
+      values[name] = isBagLikeProductType(productType)
+        ? displayVal
+        : serializeSizeInfoFormValue(classVal, sizeVal, displayVal);
+    }
+  });
+
+  if (isBagLikeProductType(productType)) {
+    const sizeInfoInput = container.querySelector('[data-amazon-attr="size_info"]');
+    if (sizeInfoInput instanceof HTMLInputElement) {
+      const displayVal = sizeInfoInput.value.trim();
+      if (displayVal && !isBlankAttributeValue("size_info", displayVal, productType)) {
+        values.size_info = displayVal;
+      }
+    }
+  }
+
+  container.querySelectorAll('[data-capacity-composite="true"]').forEach((wrapper) => {
+    if (!(wrapper instanceof HTMLElement)) return;
+    const name = wrapper.dataset.amazonAttr || "capacity";
+    const amount = wrapper.querySelector('[data-capacity-part="amount"]');
+    const unit = wrapper.querySelector('[data-capacity-part="unit"]');
+    const amountVal = amount instanceof HTMLInputElement ? amount.value.trim() : "1.5";
+    const unitVal = unit instanceof HTMLSelectElement ? unit.value.trim() : "liters";
+    if (name && amountVal) {
+      values[name] = serializeCapacityFormValue(amountVal, unitVal);
+    }
+  });
+
   container.querySelectorAll("[data-amazon-attr]").forEach((el) => {
     if (el instanceof HTMLElement && el.dataset.headwearComposite === "true") return;
+    if (el instanceof HTMLElement && el.dataset.metalsComposite === "true") return;
+    if (el instanceof HTMLElement && el.dataset.stonesComposite === "true") return;
+    if (el instanceof HTMLElement && el.dataset.sizeInfoComposite === "true") return;
+    if (el instanceof HTMLElement && el.dataset.capacityComposite === "true") return;
     if (!(el instanceof HTMLInputElement) && !(el instanceof HTMLSelectElement)) return;
     const name = el.dataset.amazonAttr || "";
     const value = el.value.trim();
-    if (name && value && !isBlankAttributeValue(name, value)) values[name] = value;
+    if (name && value && !isBlankAttributeValue(name, value, productType)) values[name] = value;
   });
   return values;
 }
@@ -1020,21 +2138,32 @@ export function applyExtraAttributeDefaults(requiredAttributes, options = {}) {
 
   for (const name of requiredAttributes || []) {
     if (COVERED_BY_MAIN_FORM.has(name)) continue;
+    const meta = resolveFieldMeta(name, productType, attributeEnums);
     const control = queryAttributeControl(container, name);
-    if (!(control instanceof HTMLInputElement) && !(control instanceof HTMLSelectElement)) continue;
-
-    const current = control.value.trim();
-    const normalizedCurrent = normalizeAmazonEnumFieldValue(name, current);
-    if (normalizedCurrent !== current) {
-      control.value = normalizedCurrent;
-      continue;
+    let current = "";
+    if (!(control instanceof HTMLInputElement) && !(control instanceof HTMLSelectElement)) {
+      // Composite controls are handled below.
+      if (name !== "headwear_size" && name !== "metals" && name !== "stones"
+        && name !== "size_info" && name !== "capacity") continue;
     }
-    if (current && !isBlankAttributeValue(name, current)) continue;
-    if (isBlankAttributeValue(name, current)) control.value = "";
 
-    if ((name === "part_number" || name === "model_name" || name === "model_number") && sellerSku) {
-      control.value = sellerSku;
-      continue;
+    if (control instanceof HTMLInputElement || control instanceof HTMLSelectElement) {
+      current = control.value.trim();
+      const normalizedCurrent = normalizeAmazonEnumFieldValue(name, current);
+      if (normalizedCurrent !== current) {
+        control.value = normalizedCurrent;
+        continue;
+      }
+      if (current && !isBlankAttributeValue(name, current, productType)) continue;
+      if (isBlankAttributeValue(name, current, productType)) control.value = "";
+
+      if ((name === "part_number" || name === "model_name" || name === "model_number") && sellerSku) {
+        const currentModel = control.value.trim();
+        if (!currentModel || /-PARENT$/i.test(currentModel)) {
+          control.value = sellerSku;
+        }
+        continue;
+      }
     }
 
     if (productType.toUpperCase() === "ARTIFICIAL_PLANT") {
@@ -1094,55 +2223,521 @@ export function applyExtraAttributeDefaults(requiredAttributes, options = {}) {
       }
     }
 
-    if (productType.toUpperCase() === "HAT") {
-      if (name === "fabric_type" && !current) {
-        control.value = "100% Acrylic";
-        continue;
-      }
-      if (name === "department" && !current) {
-        control.value = "Unisex";
-        continue;
-      }
-      if (name === "import_designation" && !current) {
-        control.value = "Imported";
-        continue;
-      }
-      if (name === "care_instructions" && !current) {
-        control.value = "Hand Wash Only";
-        continue;
-      }
-      if (name === "seasons" && !current) {
-        control.value = "Fall";
-        continue;
-      }
-      if (name === "style" && !current) {
-        control.value = "Casual";
+    if (name === "metals") {
+      const wrapper = container.querySelector('[data-metals-composite="true"]');
+      if (wrapper instanceof HTMLElement) {
+        const hidden = wrapper.querySelector("[data-metals-serialized]");
+        const existing = hidden instanceof HTMLInputElement ? hidden.value.trim() : "";
+        if (existing && !isBlankAttributeValue(name, existing)) continue;
+        const parsed = parseMetalsFormValue(meta.defaultValue || "Alloy|No Metal Stamp|1");
+        const metalType = wrapper.querySelector('[data-metals-part="metal_type"]');
+        const metalStamp = wrapper.querySelector('[data-metals-part="metal_stamp"]');
+        const idPart = wrapper.querySelector('[data-metals-part="id"]');
+        if (metalType instanceof HTMLSelectElement) metalType.value = parsed.metalType;
+        if (metalStamp instanceof HTMLSelectElement) metalStamp.value = parsed.metalStamp;
+        if (idPart instanceof HTMLInputElement) idPart.value = parsed.id;
+        if (hidden instanceof HTMLInputElement) {
+          hidden.value = serializeMetalsFormValue(parsed.metalType, parsed.metalStamp, parsed.id);
+        }
         continue;
       }
     }
 
-    const meta = resolveFieldMeta(name, productType, attributeEnums);
-    if (meta.defaultValue) control.value = meta.defaultValue;
+    if (name === "stones") {
+      const wrapper = container.querySelector('[data-stones-composite="true"]');
+      if (wrapper instanceof HTMLElement) {
+        const hidden = wrapper.querySelector("[data-stones-serialized]");
+        const existing = hidden instanceof HTMLInputElement ? hidden.value.trim() : "";
+        if (existing && !isBlankAttributeValue(name, existing)) continue;
+        const parsed = parseStonesFormValue(meta.defaultValue || "No Gemstone|Not Treated|Unknown|1");
+        const stoneType = wrapper.querySelector('[data-stones-part="stone_type"]');
+        const treatmentMethod = wrapper.querySelector('[data-stones-part="treatment_method"]');
+        const creationMethod = wrapper.querySelector('[data-stones-part="creation_method"]');
+        const idPart = wrapper.querySelector('[data-stones-part="id"]');
+        if (stoneType instanceof HTMLSelectElement) stoneType.value = parsed.stoneType;
+        if (treatmentMethod instanceof HTMLSelectElement) treatmentMethod.value = parsed.treatmentMethod;
+        if (creationMethod instanceof HTMLSelectElement) creationMethod.value = parsed.creationMethod;
+        if (idPart instanceof HTMLInputElement) idPart.value = parsed.id;
+        if (hidden instanceof HTMLInputElement) {
+          hidden.value = serializeStonesFormValue(
+            parsed.stoneType,
+            parsed.treatmentMethod,
+            parsed.creationMethod,
+            parsed.id,
+          );
+        }
+        continue;
+      }
+    }
+
+    if (name === "size_info") {
+      const wrapper = container.querySelector('[data-size-info-composite="true"]');
+      if (wrapper instanceof HTMLElement) {
+        const parsed = parseSizeInfoFormValue(meta.defaultValue || "alpha|small|Mini / Small");
+        const sizeClass = wrapper.querySelector('[data-size-info-part="size_class"]');
+        const size = wrapper.querySelector('[data-size-info-part="size"]');
+        const displayName = wrapper.querySelector('[data-size-info-part="display_name"]');
+        const displayVal = displayName instanceof HTMLInputElement ? displayName.value.trim() : "";
+        if (displayVal && !isBlankAttributeValue(name, displayVal, productType)) continue;
+        if (sizeClass instanceof HTMLSelectElement) sizeClass.value = parsed.sizeClass;
+        if (size instanceof HTMLSelectElement) size.value = parsed.size;
+        if (displayName instanceof HTMLInputElement) displayName.value = parsed.displayName;
+        continue;
+      }
+    }
+
+    if (name === "capacity") {
+      const wrapper = container.querySelector('[data-capacity-composite="true"]');
+      if (wrapper instanceof HTMLElement) {
+        const parsed = parseCapacityFormValue(meta.defaultValue || "1.5|liters");
+        const amount = wrapper.querySelector('[data-capacity-part="amount"]');
+        const unit = wrapper.querySelector('[data-capacity-part="unit"]');
+        const amountVal = amount instanceof HTMLInputElement ? amount.value.trim() : "";
+        if (amountVal && !isBlankAttributeValue(name, amountVal, productType)) continue;
+        if (amount instanceof HTMLInputElement) amount.value = parsed.amount;
+        if (unit instanceof HTMLSelectElement) unit.value = parsed.unit;
+        continue;
+      }
+    }
+
+    if (productType.toUpperCase() === "HAT") {
+      if (name === "item_type_keyword" && control instanceof HTMLSelectElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = "cold-weather-hats";
+        continue;
+      }
+      if (name === "fabric_type" && control instanceof HTMLInputElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = "100% Acrylic";
+        continue;
+      }
+      if (name === "material" && control instanceof HTMLInputElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = "Acrylic";
+        continue;
+      }
+      if (name === "color" && control instanceof HTMLInputElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = "Black";
+        continue;
+      }
+      if (name === "special_size_type" && control instanceof HTMLSelectElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = "Standard";
+        continue;
+      }
+      if (name === "special_size_type" && control instanceof HTMLInputElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = "Standard";
+        continue;
+      }
+      if (name === "department" && control instanceof HTMLSelectElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = "Unisex";
+        continue;
+      }
+      if (name === "import_designation" && control instanceof HTMLInputElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = "Imported";
+        continue;
+      }
+      if (name === "care_instructions" && control instanceof HTMLSelectElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = "Hand Wash Only";
+        continue;
+      }
+      if (name === "age_range_description" && control instanceof HTMLSelectElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = "Adult";
+        continue;
+      }
+      if (name === "seasons" && control instanceof HTMLSelectElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = "Fall";
+        continue;
+      }
+      if (name === "style" && control instanceof HTMLSelectElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = "Casual";
+        continue;
+      }
+      if (name === "lifestyle" && control instanceof HTMLSelectElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = "Casual";
+        continue;
+      }
+      if (name === "pattern_type" && control instanceof HTMLSelectElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = "Graphic";
+        continue;
+      }
+      if (name === "number_of_items" && control instanceof HTMLInputElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = "1";
+        continue;
+      }
+      if (name === "target_gender" && control instanceof HTMLSelectElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = "unisex";
+        continue;
+      }
+      if (name === "batteries_required" && control instanceof HTMLSelectElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = "false";
+        continue;
+      }
+    }
+
+    if (isBagLikeProductType(productType)) {
+      const isTote = productType.toUpperCase() === "TOTE_BAG";
+      if (name === "item_type_keyword" && control instanceof HTMLSelectElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = isTote ? "reusable-grocery-bags" : "top-handle-handbags";
+        continue;
+      }
+      if (name === "fabric_type" && control instanceof HTMLInputElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = isTote ? "Canvas" : "Faux Leather";
+        continue;
+      }
+      if (name === "material" && control instanceof HTMLInputElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = isTote ? "Cotton" : "Faux Leather";
+        continue;
+      }
+      if (name === "title_differentiation" && control instanceof HTMLInputElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = "";
+        continue;
+      }
+      if (name === "lining_description" && control instanceof HTMLInputElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = isTote ? "Unlined" : "Polyester";
+        continue;
+      }
+      if (name === "target_audience" && control instanceof HTMLSelectElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = isTote ? "Unisex-Adults" : "Women";
+        continue;
+      }
+      if (name === "special_feature" && control instanceof HTMLSelectElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = isTote ? "Reusable" : "Detachable Strap";
+        continue;
+      }
+      if (!isTote && name === "included_components" && control instanceof HTMLInputElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = "Shoulder Strap";
+        continue;
+      }
+      if (name === "department" && control instanceof HTMLSelectElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = isTote ? "Unisex" : "Womens";
+        continue;
+      }
+      if (name === "style" && control instanceof HTMLSelectElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = "Casual";
+        continue;
+      }
+      if (name === "theme" && control instanceof HTMLSelectElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = "Love";
+        continue;
+      }
+      if (name === "age_range_description" && control instanceof HTMLSelectElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = "Adult";
+        continue;
+      }
+      if (name === "number_of_items" && control instanceof HTMLInputElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = "1";
+        continue;
+      }
+      if (name === "target_gender" && control instanceof HTMLSelectElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = "unisex";
+        continue;
+      }
+      if (name === "batteries_required" && control instanceof HTMLSelectElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = "false";
+        continue;
+      }
+      if (name === "size_info" && control instanceof HTMLInputElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = "Mini / Small";
+        continue;
+      }
+      if (isTote && name === "item_length_width_height" && control instanceof HTMLInputElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = "8 x 6 x 4 in";
+        continue;
+      }
+      if (name === "capacity") {
+        const wrapper = container.querySelector('[data-capacity-composite="true"]');
+        if (wrapper instanceof HTMLElement) {
+          const parsed = parseCapacityFormValue(meta.defaultValue || "1.5|liters");
+          const amount = wrapper.querySelector('[data-capacity-part="amount"]');
+          const unit = wrapper.querySelector('[data-capacity-part="unit"]');
+          const amountVal = amount instanceof HTMLInputElement ? amount.value.trim() : "";
+          if (!amountVal || isBlankAttributeValue(name, amountVal, productType)) {
+            if (amount instanceof HTMLInputElement) amount.value = parsed.amount;
+            if (unit instanceof HTMLSelectElement) unit.value = parsed.unit;
+          }
+          continue;
+        }
+      }
+      if (name === "closure" && control instanceof HTMLSelectElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = isTote ? "Open Top" : "Zipper";
+        continue;
+      }
+      if (name === "outer" && control instanceof HTMLInputElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = isTote ? "Canvas" : "Faux Leather";
+        continue;
+      }
+      if (name === "inner" && control instanceof HTMLInputElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = isTote ? "Unlined (canvas interior)" : "Polyester lining";
+        continue;
+      }
+      if (isTote && name === "outer" && control instanceof HTMLInputElement
+        && (!control.value.trim() || /faux leather/i.test(control.value))) {
+        control.value = "Canvas";
+        continue;
+      }
+      if (isTote && name === "inner" && control instanceof HTMLInputElement
+        && (!control.value.trim() || /polyester/i.test(control.value))) {
+        control.value = "Unlined (canvas interior)";
+        continue;
+      }
+      if (isTote && name === "material" && control instanceof HTMLInputElement
+        && (!control.value.trim() || /polyester/i.test(control.value))) {
+        control.value = "Cotton";
+        continue;
+      }
+      if (isTote && name === "closure" && control instanceof HTMLSelectElement
+        && (!control.value.trim() || control.value === "Clasp")) {
+        control.value = "Open Top";
+        continue;
+      }
+    }
+
+    if (productType.toUpperCase() === "APPAREL_BELT") {
+      if (name === "item_type_keyword" && control instanceof HTMLSelectElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = "apparel-belts";
+        continue;
+      }
+      if (name === "fabric_type" && control instanceof HTMLInputElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = "100% Faux Leather";
+        continue;
+      }
+      if (name === "material" && control instanceof HTMLInputElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = "Faux Leather";
+        continue;
+      }
+      if (name === "color" && control instanceof HTMLInputElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = "Black";
+        continue;
+      }
+      if (name === "department" && control instanceof HTMLSelectElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = "Unisex";
+        continue;
+      }
+      if (name === "size" && control instanceof HTMLInputElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = "One Size";
+        continue;
+      }
+      if (name === "import_designation" && control instanceof HTMLInputElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = "Imported";
+        continue;
+      }
+      if (name === "care_instructions" && control instanceof HTMLSelectElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = "Wipe Clean";
+        continue;
+      }
+      if (name === "age_range_description" && control instanceof HTMLSelectElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = "Adult";
+        continue;
+      }
+      if (name === "target_gender" && control instanceof HTMLSelectElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = "unisex";
+        continue;
+      }
+      if (name === "number_of_items" && control instanceof HTMLInputElement
+        && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = "1";
+        continue;
+      }
+    }
+
+    if (productType.toUpperCase() === "APPAREL_PIN") {
+      if (name === "department" && control instanceof HTMLSelectElement && !control.value.trim()) {
+        control.value = "Unisex";
+        continue;
+      }
+      if (name === "size" && control instanceof HTMLSelectElement && !control.value.trim()) {
+        control.value = "Small";
+        continue;
+      }
+      if (name === "gem_type" && control instanceof HTMLSelectElement && !control.value.trim()) {
+        control.value = "No Gemstone";
+        continue;
+      }
+      if (name === "metal_type" && control instanceof HTMLSelectElement && !control.value.trim()) {
+        control.value = "alloy";
+        continue;
+      }
+      if (name === "material" && control instanceof HTMLInputElement && !control.value.trim()) {
+        control.value = "Metal";
+        continue;
+      }
+      if (name === "title_differentiation" && control instanceof HTMLInputElement && !control.value.trim()) {
+        control.value = "Enamel Pin";
+        continue;
+      }
+    }
+
+    if (control instanceof HTMLInputElement || control instanceof HTMLSelectElement) {
+      if (meta.defaultValue && isBlankAttributeValue(name, control.value, productType)) {
+        control.value = meta.defaultValue;
+      }
+    }
   }
 }
 
-/** @param {Array<{ name?: string, value?: string }>} attributes @param {{ overwrite?: boolean }} [options] */
+/** @param {Array<{ name?: string, value?: string }>} attributes @param {{ overwrite?: boolean, productType?: string }} [options] */
 export function applyAiAttributesToForm(attributes, options = {}) {
   if (!Array.isArray(attributes)) return;
   const container = qs("#amazonPushExtraAttributes");
   if (!container) return;
   const overwrite = options.overwrite === true;
+  const productType = options.productType || "";
+
+  function applyCompositeValue(name, value) {
+    if (name === "headwear_size") {
+      const wrapper = container.querySelector('[data-headwear-composite="true"]');
+      if (!(wrapper instanceof HTMLElement)) return false;
+      const parsed = parseHeadwearSizeFormValue(value);
+      const sizeClass = wrapper.querySelector('[data-headwear-part="size_class"]');
+      const sizeValue = wrapper.querySelector('[data-headwear-part="size_value"]');
+      if (sizeClass instanceof HTMLSelectElement) sizeClass.value = parsed.sizeClass;
+      if (sizeValue instanceof HTMLSelectElement) sizeValue.value = parsed.sizeValue;
+      const hidden = wrapper.querySelector("[data-headwear-serialized]");
+      if (hidden instanceof HTMLInputElement) {
+        hidden.value = serializeHeadwearSizeFormValue(parsed.sizeClass, parsed.sizeValue);
+      }
+      return true;
+    }
+    if (name === "metals") {
+      const wrapper = container.querySelector('[data-metals-composite="true"]');
+      if (!(wrapper instanceof HTMLElement)) return false;
+      const parsed = parseMetalsFormValue(value);
+      const metalType = wrapper.querySelector('[data-metals-part="metal_type"]');
+      const metalStamp = wrapper.querySelector('[data-metals-part="metal_stamp"]');
+      const idPart = wrapper.querySelector('[data-metals-part="id"]');
+      if (metalType instanceof HTMLSelectElement) metalType.value = parsed.metalType;
+      if (metalStamp instanceof HTMLSelectElement) metalStamp.value = parsed.metalStamp;
+      if (idPart instanceof HTMLInputElement) idPart.value = parsed.id;
+      const hidden = wrapper.querySelector("[data-metals-serialized]");
+      if (hidden instanceof HTMLInputElement) {
+        hidden.value = serializeMetalsFormValue(parsed.metalType, parsed.metalStamp, parsed.id);
+      }
+      return true;
+    }
+    if (name === "stones") {
+      const wrapper = container.querySelector('[data-stones-composite="true"]');
+      if (!(wrapper instanceof HTMLElement)) return false;
+      const parsed = parseStonesFormValue(value);
+      const stoneType = wrapper.querySelector('[data-stones-part="stone_type"]');
+      const treatmentMethod = wrapper.querySelector('[data-stones-part="treatment_method"]');
+      const creationMethod = wrapper.querySelector('[data-stones-part="creation_method"]');
+      const idPart = wrapper.querySelector('[data-stones-part="id"]');
+      if (stoneType instanceof HTMLSelectElement) stoneType.value = parsed.stoneType;
+      if (treatmentMethod instanceof HTMLSelectElement) treatmentMethod.value = parsed.treatmentMethod;
+      if (creationMethod instanceof HTMLSelectElement) creationMethod.value = parsed.creationMethod;
+      if (idPart instanceof HTMLInputElement) idPart.value = parsed.id;
+      const hidden = wrapper.querySelector("[data-stones-serialized]");
+      if (hidden instanceof HTMLInputElement) {
+        hidden.value = serializeStonesFormValue(
+          parsed.stoneType,
+          parsed.treatmentMethod,
+          parsed.creationMethod,
+          parsed.id,
+        );
+      }
+      return true;
+    }
+    if (name === "size_info") {
+      const wrapper = container.querySelector('[data-size-info-composite="true"]');
+      if (!(wrapper instanceof HTMLElement)) return false;
+      const parsed = parseSizeInfoFormValue(value);
+      const sizeClass = wrapper.querySelector('[data-size-info-part="size_class"]');
+      const size = wrapper.querySelector('[data-size-info-part="size"]');
+      const displayName = wrapper.querySelector('[data-size-info-part="display_name"]');
+      if (sizeClass instanceof HTMLSelectElement) sizeClass.value = parsed.sizeClass;
+      if (size instanceof HTMLSelectElement) size.value = parsed.size;
+      if (displayName instanceof HTMLInputElement) displayName.value = parsed.displayName;
+      return true;
+    }
+    if (name === "capacity") {
+      const wrapper = container.querySelector('[data-capacity-composite="true"]');
+      if (!(wrapper instanceof HTMLElement)) return false;
+      const parsed = parseCapacityFormValue(value);
+      const amount = wrapper.querySelector('[data-capacity-part="amount"]');
+      const unit = wrapper.querySelector('[data-capacity-part="unit"]');
+      if (amount instanceof HTMLInputElement) amount.value = parsed.amount;
+      if (unit instanceof HTMLSelectElement) unit.value = parsed.unit;
+      return true;
+    }
+    return false;
+  }
 
   for (const entry of attributes) {
     const name = typeof entry?.name === "string" ? entry.name.trim() : "";
     const rawValue = typeof entry?.value === "string" ? entry.value.trim() : "";
     const value = normalizeAmazonEnumFieldValue(name, rawValue);
-    if (!name || !value || isBlankAttributeValue(name, value)) continue;
+    if (!name || !value || isBlankAttributeValue(name, value, productType)) continue;
     if (PUSH_EXTRA_ATTRIBUTE_DENYLIST.has(name)) continue;
+
+    if (name === "headwear_size" || name === "metals" || name === "stones"
+      || name === "size_info" || name === "capacity") {
+      if (name === "size_info" && isBagLikeProductType(productType)) {
+        const control = queryAttributeControl(container, name);
+        if (control instanceof HTMLInputElement) {
+          const current = control.value.trim();
+          if (!overwrite && current && !isBlankAttributeValue(name, current, productType)) continue;
+          control.value = formatSizeInfoDraftValue(value, productType);
+          continue;
+        }
+      }
+      const wrapper = container.querySelector(`[data-amazon-attr="${name}"]`);
+      if (wrapper instanceof HTMLElement) {
+        const hidden = wrapper.querySelector("[data-headwear-serialized], [data-metals-serialized], [data-stones-serialized]");
+        const current = hidden instanceof HTMLInputElement ? hidden.value.trim() : "";
+        if (!overwrite && current && !isBlankAttributeValue(name, current, productType)) continue;
+        if (applyCompositeValue(name, value)) continue;
+      }
+      if (applyCompositeValue(name, value)) continue;
+    }
+
     const control = queryAttributeControl(container, name);
     if (!(control instanceof HTMLInputElement) && !(control instanceof HTMLSelectElement)) continue;
     const current = control.value.trim();
-    if (!overwrite && current && !isBlankAttributeValue(name, current)) continue;
+    if (!overwrite && current && !isBlankAttributeValue(name, current, productType)) continue;
     control.value = value;
   }
 }

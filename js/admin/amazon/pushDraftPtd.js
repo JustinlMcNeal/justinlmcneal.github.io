@@ -17,8 +17,11 @@ import {
   resetExtraAttributeFields,
   resolveFieldMeta,
   filterFormAttributeNames,
+  filterAttributesForVariationRole,
+  readExtraAttributesFromForm,
   stripInvalidPushPayloadAttributes,
 } from "./pushDraftAttributes.js";
+import { readVariationRole } from "./variationFamily.js";
 
 /** @type {boolean} */
 let loadingPtd = false;
@@ -57,6 +60,8 @@ const PTD_ERROR_MESSAGES = {
   parent_cannot_have_variant: "Parent listings cannot include a variant ID.",
   parent_draft_not_found: "Parent draft link not found. Re-open the push modal or clear parent draft ID.",
   parent_draft_not_parent_role: "Linked draft is not a variation parent. Use KK-XXXX-PARENT as parent SKU.",
+  parent_draft_self_reference: "Parent draft link pointed at this child draft. Hard refresh and save again.",
+  parent_cannot_have_variant: "Parent listings cannot include a variant ID. Use Push Parent from Ready to Push.",
   draft_not_found: "Draft not found. Save the draft and try again.",
   rate_limited: "Amazon rate limited this request. Wait a moment and try again.",
   sp_api_unavailable: "Amazon SP-API is temporarily unavailable. Try again shortly.",
@@ -121,14 +126,17 @@ function extractAmazonIssueFields(issues = []) {
 
 function buildAttributeFormNames() {
   const productType = readCurrentProductType();
-  return filterFormAttributeNames(
-    mergeAttributeNames(
-      loadedRequiredAttributes,
-      loadedRecommendedAttributes,
-      discoveredAmazonAttributes,
-      extendedAttributeHints(),
+  return filterAttributesForVariationRole(
+    filterFormAttributeNames(
+      mergeAttributeNames(
+        loadedRequiredAttributes,
+        loadedRecommendedAttributes,
+        discoveredAmazonAttributes,
+        extendedAttributeHints(),
+      ),
+      productType,
     ),
-    productType,
+    readVariationRole(),
   );
 }
 
@@ -164,14 +172,20 @@ function renderMissingAmazonAttributes(issues) {
     return;
   }
 
+  const productType = readCurrentProductType();
   const fields = issues
     .filter((issue) => issue?.severity === "error")
     .map((issue) => issue.field || issue.message)
     .filter(Boolean);
 
+  const displayFields = filterFormAttributeNames(
+    fields.length ? fields : issues.map((issue) => issue.field || issue.message).filter(Boolean),
+    productType,
+  );
+
   renderAttributeList(
     "#amazonPushMissingAttributes",
-    fields.length ? fields : issues.map((issue) => issue.field || issue.message),
+    displayFields,
     "No Amazon preview issues returned.",
   );
 }
@@ -325,6 +339,12 @@ export function hydratePtdFromDraft(row) {
   if (lastResult?.amazonIssues?.length) {
     discoveredAmazonAttributes = extractAmazonIssueFields(lastResult.amazonIssues);
   }
+  if (lastResult?.missingRequiredAttributes?.length) {
+    discoveredAmazonAttributes = mergeAttributeNames(
+      discoveredAmazonAttributes,
+      lastResult.missingRequiredAttributes,
+    );
+  }
 
   renderRequiredAttributesPanel();
 
@@ -344,11 +364,16 @@ export function hydratePtdFromDraft(row) {
     );
   }
 
-  const attributeNames = mergeAttributeNames(
-    lastResult?.requiredAttributes,
-    lastResult?.recommendedAttributes,
-    lastResult?.amazonIssues?.map((issue) => issue.field),
-    extendedAttributeHints(),
+  const attributeNames = filterFormAttributeNames(
+    mergeAttributeNames(
+      lastResult?.requiredAttributes,
+      lastResult?.recommendedAttributes,
+      lastResult?.missingRequiredAttributes,
+      lastResult?.amazonIssues?.map((issue) => issue.field),
+      discoveredAmazonAttributes,
+      extendedAttributeHints(),
+    ),
+    readCurrentProductType(),
   );
   if (attributeNames.length) {
     const basePayload = row.draft_payload && typeof row.draft_payload === "object"
@@ -497,10 +522,16 @@ export function initPushDraftPtd(deps) {
       if (result.recommendedAttributes?.length) {
         loadedRecommendedAttributes = result.recommendedAttributes;
       }
+      if (result.missingRequiredAttributes?.length) {
+        discoveredAmazonAttributes = mergeAttributeNames(
+          discoveredAmazonAttributes,
+          result.missingRequiredAttributes,
+        );
+      }
       renderRequiredAttributesPanel();
       renderAttributeList(
         "#amazonPushMissingAttributes",
-        result.missingRequiredAttributes || [],
+        filterFormAttributeNames(result.missingRequiredAttributes || [], readCurrentProductType()),
         "All required Amazon attributes are present in this draft.",
       );
       syncExtraAttributeFields(deps.collectPayload().draftPayload);
@@ -790,7 +821,10 @@ export function initPushDraftPtd(deps) {
     }
 
     const attributeNames = buildAttributeFormNames();
-    renderExtraAttributeFields(attributeNames, deps.collectPayload().draftPayload, readAttributeRenderOptions());
+    const basePayload = deps.collectPayload().draftPayload || {};
+    const formExtras = readExtraAttributesFromForm();
+    const mergedPayload = { ...basePayload, ...formExtras };
+    renderExtraAttributeFields(attributeNames, mergedPayload, readAttributeRenderOptions());
     applyExtraAttributeDefaults(attributeNames, readAttributeRenderOptions());
 
     if (!productType) {

@@ -283,6 +283,7 @@ export function applyVariationAttributes(extraAttributes, role, opts = {}) {
 
   if (role === VARIATION_ROLES.PARENT) {
     extraAttributes.parentage_level = "parent";
+    delete extraAttributes.color;
     return;
   }
 

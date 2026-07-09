@@ -342,6 +342,7 @@ Deno.serve(async (req) => {
       productType,
       submissionId: previewResult.submissionId,
       submissionStatus: normalizedSubmissionStatus,
+      lastAmazonPreviewStatus: normalizedSubmissionStatus,
       amazonIssues,
       validationErrors,
     };

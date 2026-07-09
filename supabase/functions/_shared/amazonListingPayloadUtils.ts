@@ -129,6 +129,9 @@ const LANGUAGE_TAG_ATTRIBUTES = new Set([
   "product_description",
   "bullet_point",
   "target_audience_keyword",
+  "target_audience",
+  "lining_description",
+  "special_feature",
   "age_range_description",
   "material",
   "included_components",
@@ -142,8 +145,16 @@ const LANGUAGE_TAG_ATTRIBUTES = new Set([
   "department",
   "import_designation",
   "size",
+  "care_instructions",
+  "fabric_type",
+  "title_differentiation",
+  "special_size_type",
+  "lifestyle",
+  "pattern_type",
+  "gem_type",
   "special_feature",
   "style",
+  "strap_type",
 ]);
 
 /** Browse-tree codes and similar attrs use marketplace_id only (no language_tag). */
@@ -162,6 +173,10 @@ const ITEM_TYPE_KEYWORD_ALIASES: Record<string, string> = {
   "plush-figure": "plush-figure-toys",
   keychain: "key-chains",
   keychains: "key-chains",
+  "brooches-and-pins": "brooches-and-pins",
+  "brooches_and_pins": "brooches-and-pins",
+  "lapel-pins": "brooches-and-pins",
+  "enamel-pins": "brooches-and-pins",
 };
 
 const MARKETPLACE_ENUM_ATTRIBUTES = new Set([
@@ -176,6 +191,7 @@ const NUMERIC_ATTRIBUTES = new Set([
   "manufacturer_minimum_age",
   "manufacturer_maximum_age",
   "number_of_items",
+  "number_of_compartments",
 ]);
 
 const PRODUCT_TYPE_EXCLUDED_ATTRIBUTES: Record<string, Set<string>> = {
@@ -217,6 +233,110 @@ const PRODUCT_TYPE_EXCLUDED_ATTRIBUTES: Record<string, Set<string>> = {
     "item_dimensions",
     "package_level",
   ]),
+  APPAREL_PIN: new Set([
+    "package_level",
+    "included_components",
+    "theme",
+    "variation_role",
+    "closure",
+    "special_feature",
+    "fabric_type",
+    "cpsia_cautionary_statement",
+    "safety_warning",
+    "toy_figure_type",
+    "subject_character",
+    "educational_objective",
+    "plant_or_animal_product_type",
+  ]),
+  APPAREL_BELT: new Set([
+    "package_level",
+    "included_components",
+    "theme",
+    "variation_role",
+    "parentage_level",
+    "child_parent_sku_relationship",
+    "variation_theme",
+    "closure",
+    "special_feature",
+    "headwear_size",
+    "seasons",
+    "style",
+    "metals",
+    "metal_type",
+    "stones",
+    "gem_type",
+    "cpsia_cautionary_statement",
+    "safety_warning",
+    "toy_figure_type",
+    "subject_character",
+    "educational_objective",
+    "plant_or_animal_product_type",
+    "specific_uses_for_product",
+    "indoor_outdoor_usage",
+    "item_shape",
+    "container",
+    "is_refurbished",
+    "item_depth_width_height",
+  ]),
+  HANDBAG: new Set([
+    "package_level",
+    "variation_role",
+    "parentage_level",
+    "child_parent_sku_relationship",
+    "variation_theme",
+    "headwear_size",
+    "special_size_type",
+    "care_instructions",
+    "metals",
+    "metal_type",
+    "stones",
+    "gem_type",
+    "size",
+    "cpsia_cautionary_statement",
+    "safety_warning",
+    "toy_figure_type",
+    "subject_character",
+    "educational_objective",
+    "plant_or_animal_product_type",
+    "specific_uses_for_product",
+    "indoor_outdoor_usage",
+    "item_shape",
+    "container",
+    "is_refurbished",
+    "item_depth_width_height",
+    "target_audience_keyword",
+  ]),
+  TOTE_BAG: new Set([
+    "package_level",
+    "included_components",
+    "variation_role",
+    "parentage_level",
+    "child_parent_sku_relationship",
+    "variation_theme",
+    "headwear_size",
+    "special_size_type",
+    "care_instructions",
+    "metals",
+    "metal_type",
+    "stones",
+    "gem_type",
+    "size",
+    "cpsia_cautionary_statement",
+    "safety_warning",
+    "toy_figure_type",
+    "subject_character",
+    "educational_objective",
+    "plant_or_animal_product_type",
+    "specific_uses_for_product",
+    "indoor_outdoor_usage",
+    "item_shape",
+    "container",
+    "is_refurbished",
+    "item_depth_width_height",
+    "item_dimensions",
+    "target_audience_keyword",
+    "target_audience",
+  ]),
 };
 
 const VARIATION_ATTRIBUTES = new Set([
@@ -224,6 +344,12 @@ const VARIATION_ATTRIBUTES = new Set([
   "child_parent_sku_relationship",
   "variation_theme",
 ]);
+
+const BAG_LIKE_PRODUCT_TYPES = new Set(["HANDBAG", "TOTE_BAG"]);
+
+function isBagLikeProductType(productType = ""): boolean {
+  return BAG_LIKE_PRODUCT_TYPES.has(String(productType || "").trim().toUpperCase());
+}
 
 function readParentSkuFromPayload(draftPayload: Record<string, unknown>): string | null {
   const rel = draftPayload.child_parent_sku_relationship;
@@ -511,6 +637,134 @@ function buildClosureAttribute(
   }];
 }
 
+function normalizeSizeInfoToken(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "small";
+  const folded = trimmed.toLowerCase().replace(/[\s/]+/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
+  if (folded === "mini" || folded === "mini_small" || folded === "small") return "small";
+  if (folded.includes("mini") && folded.includes("small")) return "small";
+  if (folded === "one_size" || folded === "one size") return "one_size";
+  if (folded === "medium" || folded === "med") return "medium";
+  if (folded === "large") return "large";
+  return folded;
+}
+
+function buildSizeInfoAttribute(
+  text: string,
+  marketplaceId: string,
+  productType = "",
+): Record<string, unknown>[] | null {
+  const cleaned = text.trim();
+  if (!cleaned || cleaned === "size_info") return null;
+
+  let displayName = cleaned;
+  if (cleaned.includes("|")) {
+    const parts = cleaned.split("|").map((part) => part.trim());
+    displayName = parts[2] || parts[1] || parts[0] || cleaned;
+  }
+
+  if (isBagLikeProductType(productType)) {
+    return [{
+      marketplace_id: marketplaceId,
+      display_name: [{
+        value: displayName,
+        language_tag: "en_US",
+      }],
+    }];
+  }
+
+  let sizeClass = "alpha";
+  let size = "small";
+
+  if (cleaned.includes("|")) {
+    const parts = cleaned.split("|").map((part) => part.trim());
+    sizeClass = normalizeHeadwearSizeToken(parts[0] || "alpha") || "alpha";
+    size = normalizeSizeInfoToken(parts[1] || "small");
+    displayName = parts[2] || parts[1] || cleaned;
+  } else if (cleaned.includes("/")) {
+    displayName = cleaned;
+    size = normalizeSizeInfoToken(cleaned);
+  } else {
+    size = normalizeSizeInfoToken(cleaned);
+    displayName = cleaned;
+  }
+
+  if (sizeClass === "size_info") sizeClass = "alpha";
+
+  return [{
+    marketplace_id: marketplaceId,
+    size_system: "as1",
+    size_class: sizeClass,
+    size,
+    size_display_name: [{
+      value: displayName,
+      language_tag: "en_US",
+    }],
+  }];
+}
+
+function normalizeCapacityUnit(raw: string): string {
+  const folded = raw.trim().toLowerCase().replace(/\s+/g, "_");
+  if (!folded) return "liters";
+  if (folded.includes("cubic") && folded.includes("inch")) return "cubic_inches";
+  if (folded.includes("cubic") && (folded.includes("centimeter") || folded.includes("cm"))) {
+    return "cubic_centimeters";
+  }
+  if (folded.includes("liter") || folded === "l") return "liters";
+  if (folded.includes("ounce") || folded === "oz") return "fluid_ounces";
+  return folded;
+}
+
+function buildCapacityAttribute(
+  text: string,
+  marketplaceId: string,
+): Record<string, unknown>[] | null {
+  const cleaned = text.trim();
+  if (!cleaned || cleaned === "capacity") return null;
+
+  let value: number | null = null;
+  let unit = "liters";
+
+  if (cleaned.includes("|")) {
+    const [rawValue, rawUnit = "liters"] = cleaned.split("|").map((part) => part.trim());
+    value = numericValue(rawValue);
+    unit = normalizeCapacityUnit(rawUnit);
+  } else {
+    const numbers = cleaned.match(/[\d.]+/g);
+    value = numbers?.length ? Number(numbers[0]) : null;
+    unit = normalizeCapacityUnit(cleaned);
+    if (!numbers?.length) {
+      value = 1.5;
+      unit = "liters";
+    }
+  }
+
+  if (value === null || !Number.isFinite(value) || value <= 0) return null;
+
+  return [{
+    marketplace_id: marketplaceId,
+    value,
+    unit,
+  }];
+}
+
+function buildMaterialLayerAttribute(
+  text: string,
+  marketplaceId: string,
+  attributeName: "outer" | "inner",
+): Record<string, unknown>[] | null {
+  const cleaned = text.trim();
+  if (!cleaned || cleaned === attributeName) return null;
+
+  return [{
+    marketplace_id: marketplaceId,
+    material: [{
+      value: cleaned,
+      language_tag: "en_US",
+    }],
+  }];
+}
+
 function normalizeHeadwearSizeToken(value: string): string {
   const trimmed = value.trim();
   if (!trimmed) return "";
@@ -544,6 +798,127 @@ function buildHeadwearSizeAttribute(
     size_class: sizeClass,
     headwear_size_class: sizeClass,
     size: sizeValue,
+  }];
+}
+
+function normalizeMetalsCompositeType(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "Alloy";
+  if (trimmed.toLowerCase() === "alloy") return "Alloy";
+  if (trimmed.toLowerCase() === "stainless-steel" || trimmed.toLowerCase() === "stainless steel") {
+    return "Stainless Steel";
+  }
+  return trimmed;
+}
+
+function normalizeMetalStampValue(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "No Metal Stamp";
+  const folded = trimmed.toLowerCase();
+  if (folded === "no stamp" || folded === "no metal stamp" || folded === "no-metal-stamp") {
+    return "No Metal Stamp";
+  }
+  return trimmed;
+}
+
+function parseCompositeId(value: string): number {
+  const num = Number.parseInt(value.trim(), 10);
+  return Number.isFinite(num) && num > 0 ? num : 1;
+}
+
+function jewelryLanguageValue(value: string, fallback: string): Record<string, string> {
+  const cleaned = value.trim() || fallback;
+  return { value: cleaned, language_tag: "en_US" };
+}
+
+function normalizeStoneTreatmentValue(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "Not Treated";
+  const folded = trimmed.toLowerCase();
+  if (folded === "not applicable" || folded === "not_applicable" || folded === "n/a") {
+    return "Not Treated";
+  }
+  return trimmed;
+}
+
+function normalizeStoneCreationValue(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "Unknown";
+  const folded = trimmed.toLowerCase();
+  if (folded === "not applicable" || folded === "not_applicable" || folded === "n/a") {
+    return "Unknown";
+  }
+  return trimmed;
+}
+
+function buildMetalsAttribute(
+  text: string,
+  marketplaceId: string,
+): Record<string, unknown>[] | null {
+  const cleaned = text.trim();
+  if (!cleaned || cleaned === "metals") return null;
+
+  let metalType = "Alloy";
+  let metalStamp = "No Metal Stamp";
+  let id = 1;
+
+  if (cleaned.includes("|")) {
+    const parts = cleaned.split("|").map((part) => part.trim());
+    metalType = normalizeMetalsCompositeType(parts[0] || "Alloy");
+    metalStamp = normalizeMetalStampValue(parts[1] || "No Metal Stamp");
+    id = parseCompositeId(parts[2] || "1");
+  } else {
+    metalType = normalizeMetalsCompositeType(cleaned);
+  }
+
+  return [{
+    marketplace_id: marketplaceId,
+    id,
+    metal_type: jewelryLanguageValue(metalType, "Alloy"),
+    metal_stamp: jewelryLanguageValue(metalStamp, "No Metal Stamp"),
+  }];
+}
+
+function normalizeStoneTypeToken(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "No Gemstone";
+  const folded = trimmed.toLowerCase().replace(/[\s_-]+/g, " ");
+  if (folded === "no gemstone" || folded === "none" || folded === "no stone") return "No Gemstone";
+  return trimmed;
+}
+
+function buildStonesAttribute(
+  text: string,
+  marketplaceId: string,
+): Record<string, unknown>[] | null {
+  const cleaned = text.trim();
+  if (!cleaned || cleaned === "stones") return null;
+
+  let stoneType = "No Gemstone";
+  let treatmentMethod = "Not Treated";
+  let creationMethod = "Unknown";
+  let id = 1;
+
+  if (cleaned.includes("|")) {
+    const parts = cleaned.split("|").map((part) => part.trim());
+    stoneType = normalizeStoneTypeToken(parts[0] || "No Gemstone");
+    if (parts.length >= 4) {
+      treatmentMethod = normalizeStoneTreatmentValue(parts[1] || "Not Treated");
+      creationMethod = normalizeStoneCreationValue(parts[2] || "Unknown");
+      id = parseCompositeId(parts[3] || "1");
+    } else {
+      id = parseCompositeId(parts[1] || "1");
+    }
+  } else {
+    stoneType = normalizeStoneTypeToken(cleaned);
+  }
+
+  return [{
+    marketplace_id: marketplaceId,
+    id,
+    type: jewelryLanguageValue(stoneType, "No Gemstone"),
+    treatment_method: jewelryLanguageValue(treatmentMethod, "Not Treated"),
+    creation_method: jewelryLanguageValue(creationMethod, "Unknown"),
   }];
 }
 
@@ -673,7 +1048,6 @@ function appendGenericPtdAttributes(
     ) {
       continue;
     }
-    if (attributes[key]) continue;
     if (key === "item_dimensions") {
       const dimensions = typeof rawValue === "string"
         ? buildItemDimensionsFromText(rawValue, marketplaceId)
@@ -723,11 +1097,53 @@ function appendGenericPtdAttributes(
       if (closure) attributes.closure = closure;
       continue;
     }
+    if (key === "size_info") {
+      const sizeInfo = typeof rawValue === "string"
+        ? buildSizeInfoAttribute(rawValue, marketplaceId, productType)
+        : null;
+      if (sizeInfo) attributes.size_info = sizeInfo;
+      continue;
+    }
+    if (key === "capacity") {
+      const capacity = typeof rawValue === "string"
+        ? buildCapacityAttribute(rawValue, marketplaceId)
+        : null;
+      if (capacity) attributes.capacity = capacity;
+      continue;
+    }
+    if (key === "outer") {
+      const outer = typeof rawValue === "string"
+        ? buildMaterialLayerAttribute(rawValue, marketplaceId, "outer")
+        : null;
+      if (outer) attributes.outer = outer;
+      continue;
+    }
+    if (key === "inner") {
+      const inner = typeof rawValue === "string"
+        ? buildMaterialLayerAttribute(rawValue, marketplaceId, "inner")
+        : null;
+      if (inner) attributes.inner = inner;
+      continue;
+    }
     if (key === "headwear_size") {
       const headwearSize = typeof rawValue === "string"
         ? buildHeadwearSizeAttribute(rawValue, marketplaceId)
         : null;
       if (headwearSize) attributes.headwear_size = headwearSize;
+      continue;
+    }
+    if (key === "metals") {
+      const metals = typeof rawValue === "string"
+        ? buildMetalsAttribute(rawValue, marketplaceId)
+        : null;
+      if (metals) attributes.metals = metals;
+      continue;
+    }
+    if (key === "stones") {
+      const stones = typeof rawValue === "string"
+        ? buildStonesAttribute(rawValue, marketplaceId)
+        : null;
+      if (stones) attributes.stones = stones;
       continue;
     }
     if (key === "container") {
@@ -761,6 +1177,7 @@ function appendGenericPtdAttributes(
       attributes[key] = [{ value: boolValue, marketplace_id: marketplaceId }];
       continue;
     }
+    if (attributes[key]) continue;
     if (NUMERIC_ATTRIBUTES.has(key)) {
       const num = numericValue(rawValue);
       if (num === null) continue;
@@ -985,6 +1402,7 @@ export function buildListingsItemRequestBody(
     delete attributes.purchasable_offer;
     delete attributes.list_price;
     delete attributes.fulfillment_availability;
+    delete attributes.color;
   }
 
   const dimensionsRaw = textValue(draftPayload.item_length_width_height) ||
@@ -1044,6 +1462,44 @@ export function buildListingsItemRequestBody(
     if (refurbished !== null) {
       attributes.is_refurbished = [{ value: refurbished, marketplace_id: marketplaceId }];
     }
+  } else if (productType.toUpperCase() === "HAT" || isBagLikeProductType(productType)) {
+    if (!attributes.batteries_required) {
+      const batteriesRaw = textValue(draftPayload.batteries_required);
+      const batteries = parseBooleanValue(batteriesRaw);
+      attributes.batteries_required = [{
+        value: batteries ?? false,
+        marketplace_id: marketplaceId,
+      }];
+    }
+    if (productType.toUpperCase() === "HANDBAG") {
+      if (dimensionsRaw && !attributes.item_dimensions) {
+        const dimensions = buildItemDimensionsFromText(dimensionsRaw, marketplaceId);
+        if (dimensions) attributes.item_dimensions = dimensions;
+      }
+    }
+    if (productType.toUpperCase() === "TOTE_BAG") {
+      if (dimensionsRaw && !attributes.item_length_width_height) {
+        const dimensions = buildItemLengthWidthHeightFromText(dimensionsRaw, marketplaceId);
+        if (dimensions) attributes.item_length_width_height = dimensions;
+      }
+    }
+    if (isBagLikeProductType(productType)) {
+      const packageDimensionsRaw = textValue(draftPayload.item_package_dimensions) || dimensionsRaw;
+      if (packageDimensionsRaw && !attributes.item_package_dimensions) {
+        const packageDimensions = buildItemPackageDimensionsFromText(packageDimensionsRaw, marketplaceId);
+        if (packageDimensions) attributes.item_package_dimensions = packageDimensions;
+      }
+      const packageWeightRaw = textValue(draftPayload.item_package_weight);
+      if (packageWeightRaw && !attributes.item_package_weight) {
+        const packageWeight = buildItemPackageWeightFromText(packageWeightRaw, marketplaceId);
+        if (packageWeight) attributes.item_package_weight = packageWeight;
+      }
+      const sizeInfoRaw = textValue(draftPayload.size_info);
+      if (sizeInfoRaw) {
+        const sizeInfo = buildSizeInfoAttribute(sizeInfoRaw, marketplaceId, productType);
+        if (sizeInfo) attributes.size_info = sizeInfo;
+      }
+    }
   } else if (productType.toUpperCase() === "KEYCHAIN") {
     if (!attributes.batteries_required) {
       const batteriesRaw = textValue(draftPayload.batteries_required);
@@ -1072,6 +1528,22 @@ export function buildListingsItemRequestBody(
 
   appendProductImages(attributes, draftPayload, marketplaceId);
   stripIncompleteVariationAttributes(attributes, draftPayload);
+
+  if (productType.toUpperCase() === "TOTE_BAG") {
+    const sizeInfoRaw = textValue(draftPayload.size_info);
+    if (sizeInfoRaw) {
+      const sizeInfo = buildSizeInfoAttribute(sizeInfoRaw, marketplaceId, productType);
+      if (sizeInfo) attributes.size_info = sizeInfo;
+    }
+    if (dimensionsRaw) {
+      const dimensions = buildItemLengthWidthHeightFromText(dimensionsRaw, marketplaceId);
+      if (dimensions) attributes.item_length_width_height = dimensions;
+    }
+    delete attributes.target_audience;
+    delete attributes.item_dimensions;
+    delete attributes.package_level;
+    delete attributes.included_components;
+  }
 
   if (Object.keys(attributes).length === 0) {
     return { ok: false, error: "listing_payload_error" };
@@ -1194,14 +1666,31 @@ export function isPtdPreviewCurrent(draft: Record<string, unknown>): boolean {
   return updatedAt <= freshnessAnchor;
 }
 
+/** Draft reached ready_to_submit after a successful Amazon validation preview. */
+export function hasValidatedAmazonPreview(draft: Record<string, unknown>): boolean {
+  if (String(draft.draft_status || "") !== "ready_to_submit") return false;
+
+  const submissionStatus = String(draft.submission_status || "").toUpperCase();
+  if (submissionStatus !== "VALID" && submissionStatus !== "ACCEPTED") return false;
+
+  const lastResponse = asRecord(draft.last_submission_response);
+  if (lastResponse?.mode !== "VALIDATION_PREVIEW") return false;
+
+  const lastResult = asRecord(draft.last_validation_result);
+  const stored = String(lastResult?.lastAmazonPreviewStatus || "").toUpperCase();
+  return stored === "VALID" || stored === "ACCEPTED";
+}
+
 export function evaluateDraftLiveSubmitReadiness(
   draft: Record<string, unknown>,
   openIssues: Array<{ source?: string; severity?: string }>,
 ): { ready: boolean; reasons: LiveSubmitBlockReason[] } {
   const reasons: LiveSubmitBlockReason[] = [];
   const amazonPreviewFresh = hasRecentValidationPreview(draft);
+  const validatedPreview = hasValidatedAmazonPreview(draft);
+  const previewGateSatisfied = amazonPreviewFresh || validatedPreview;
 
-  if (String(draft.draft_status) !== "ready_to_submit" && !amazonPreviewFresh) {
+  if (String(draft.draft_status) !== "ready_to_submit" && !previewGateSatisfied) {
     reasons.push("draft_status_not_ready");
   }
   if (!textValue(draft.product_type)) {
@@ -1212,10 +1701,10 @@ export function evaluateDraftLiveSubmitReadiness(
   if (!lastResult || Object.keys(lastResult).length === 0) {
     reasons.push("missing_last_validation_result");
   }
-  if (!amazonPreviewFresh && !isPtdPreviewCurrent(draft)) {
+  if (!previewGateSatisfied && !isPtdPreviewCurrent(draft)) {
     reasons.push("ptd_preview_required");
   }
-  if (!amazonPreviewFresh) {
+  if (!previewGateSatisfied) {
     reasons.push("amazon_validation_preview_required");
   }
 
@@ -1230,10 +1719,28 @@ export function evaluateDraftLiveSubmitReadiness(
 }
 
 export function hasRecentValidationPreview(draft: Record<string, unknown>): boolean {
+  const lastResult = asRecord(draft.last_validation_result);
+  const amazonPreviewAt = parseIsoMs(lastResult?.amazonPreviewAt);
+  const storedPreviewStatus = String(lastResult?.lastAmazonPreviewStatus || "").toUpperCase();
+
+  if (
+    amazonPreviewAt !== null
+    && (storedPreviewStatus === "VALID" || storedPreviewStatus === "ACCEPTED")
+  ) {
+    const updatedAt = parseIsoMs(draft.updated_at);
+    if (updatedAt === null) return true;
+    return updatedAt <= amazonPreviewAt;
+  }
+
   const lastResponse = asRecord(draft.last_submission_response);
   if (!lastResponse || lastResponse.mode !== "VALIDATION_PREVIEW") return false;
-  const status = String(draft.submission_status || lastResponse.status || "").toUpperCase();
-  return status === "VALID" || status === "ACCEPTED";
+  const status = String(lastResponse.status || draft.submission_status || "").toUpperCase();
+  if (status !== "VALID" && status !== "ACCEPTED") return false;
+
+  const previewedAt = parseIsoMs(lastResult?.previewedAt);
+  const updatedAt = parseIsoMs(draft.updated_at);
+  if (previewedAt === null || updatedAt === null) return true;
+  return updatedAt <= previewedAt;
 }
 
 async function putListingsItemRequest(params: {

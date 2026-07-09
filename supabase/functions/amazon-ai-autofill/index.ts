@@ -5,6 +5,18 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeadersJson, json, requireAdminJson } from "../_shared/amazonAuthUtils.ts";
 
 const LOG_PREFIX = "[amazon-ai-autofill]";
+const AMAZON_ITEM_NAME_MAX_LENGTH = 75;
+
+function clampAmazonItemName(title: string, maxLength = AMAZON_ITEM_NAME_MAX_LENGTH): string {
+  const trimmed = title.trim().replace(/\s+/g, " ");
+  if (!trimmed || trimmed.length <= maxLength) return trimmed;
+  let cut = trimmed.slice(0, maxLength);
+  const lastSpace = cut.lastIndexOf(" ");
+  if (lastSpace > Math.floor(maxLength * 0.6)) {
+    cut = cut.slice(0, lastSpace);
+  }
+  return cut.trim();
+}
 
 type AiField = {
   value: string;
@@ -107,13 +119,110 @@ KEYCHAIN-SPECIFIC (product type is KEYCHAIN — follow exactly):
     return `
 HAT-SPECIFIC (product type is HAT — follow exactly):
 - item_type_keyword: cold-weather-hats for beanies/earflap hats (from enumValues).
-- headwear_size: use size_class alpha and size one_size for stretch beanies unless numeric sizing is shown.
+- headwear_size: use size_class alpha and size One Size for stretch beanies unless numeric sizing is shown.
+- special_size_type → Standard for regular one-size beanies (from enumValues). Required when Amazon asks for Special Size.
 - department → Unisex unless clearly mens/womens.
-- care_instructions, style, seasons → pick from enumValues (e.g. Hand Wash Only, Casual, Fall/Winter).
-- fabric_type → 100% Acrylic (or exact fiber content visible on label/tags).
-- material → Acrylic or Polyester for knit beanies when visible.
+- care_instructions, style, seasons, lifestyle, pattern_type → pick from enumValues (e.g. Hand Wash Only, Casual, Fall, Casual, Graphic).
+- fabric_type → 100% Acrylic (or exact fiber content visible on label/tags). Never Plush.
+- material → Acrylic for knit beanies (not generic Polyester unless label shows polyester blend).
+- title_differentiation → Item Highlight: short feature phrase (max 125 chars), e.g. Faux fur cat ears. Not the field name.
+- color → primary hat color (Black, Gray, etc.) — not Multicolor unless truly multi-color.
+- theme → Animal for cat/animal ear hats; pick from enumValues.
+- number_of_items → 1.
+- batteries_required → false (required for HAT — always include in attributes[]).
 - DO NOT return: package_level, included_components, variation_role, closure, size, special_feature, toy fields, plant fields, or any image_locator fields (images are uploaded separately).
-- generic_keyword → beanie, winter hat, earflap hat terms only.`;
+- generic_keyword → beanie, winter hat, cat ear beanie search terms.`;
+  }
+  if (pt === "APPAREL_PIN") {
+    return `
+APPAREL_PIN-SPECIFIC (product type is APPAREL_PIN — follow exactly):
+- item_type_keyword must be brooches-and-pins (from enumValues).
+- material → Metal (or Enamel when visible).
+- metal_type → alloy (standalone enum, must match metals composite type).
+- metals → pipe-delimited composite: Alloy|No Metal Stamp|1 (metal_type|metal_stamp|id). Use Alloy for enamel pins.
+- stones → pipe-delimited composite: No Gemstone|Not Treated|Unknown|1 (type|treatment_method|creation_method|id).
+- gem_type → No Gemstone for enamel-only pins (must match stones type).
+- department → Unisex; size → Small for typical lapel pins.
+- title_differentiation → short differentiator such as Enamel Pin or Lapel Pin.
+- color → primary pin color (e.g. Black, Multicolor).
+- generic_keyword → enamel pin, lapel pin, brooch search terms.
+- DO NOT return: package_level, included_components, theme, toy fields, plant fields, or image_locator fields.`;
+  }
+  if (pt === "APPAREL_BELT") {
+    return `
+APPAREL_BELT-SPECIFIC (product type is APPAREL_BELT — follow exactly):
+- item_type_keyword must be apparel-belts or novelty-apparel-belts (from enumValues). Use apparel-belts for fashion/western belts.
+- fabric_type → strap material text such as 100% Faux Leather or PU Leather (required — never Plush or plant fabric terms).
+- material → Faux Leather, PU Leather, or Leather when visible (not Metal, alloy, or Polyester unless clearly a fabric belt).
+- title_differentiation → Item Highlight: short benefit phrase about the buckle/strap (max 125 chars). Never "Default", "Enamel Pin", or the field name.
+- department → Unisex or Womens from enumValues.
+- size → One Size for adjustable belts with multiple holes.
+- care_instructions → Wipe Clean or Hand Wash Only from enumValues.
+- import_designation → Imported unless label says otherwise.
+- age_range_description → Adult for fashion belts.
+- color → primary strap/buckle color (e.g. Black, Brown — not Multicolor unless clearly multi-color).
+- target_gender → unisex unless clearly womens/mens belt.
+- generic_keyword → belt, western belt, faux leather belt, heart buckle search terms.
+- item_package_dimensions / item_package_weight → reasonable shipping box size/weight for a belt.
+- DO NOT return: metals, stones, gem_type, metal_type, headwear_size, theme, package_level, included_components, toy fields, plant fields, pin dimensions, or image_locator fields.`;
+  }
+  if (pt === "HANDBAG") {
+    return `
+HANDBAG-SPECIFIC (product type is HANDBAG — follow exactly):
+- item_type_keyword → top-handle-handbags, cross-body-handbags, or shoulder-handbags (from enumValues) for mini totes and purses.
+- fabric_type → Faux Leather or PU Leather (exterior). Never Plush or plant fabric terms.
+- material → Faux Leather, PU Leather, or Polyurethane when visible.
+- lining_description → Polyester or interior lining material when visible.
+- title_differentiation → Item Highlight: short benefit phrase (max 125 chars). Never "Enamel Pin", "Default", or the field name.
+- special_feature → Detachable Strap or Convertible from enumValues when applicable.
+- target_audience → Women or Unisex-Adults for fashion mini bags.
+- department → Womens or Unisex.
+- style → Casual or Fashion from enumValues.
+- theme → Love for heart-themed bags; pick from enumValues.
+- included_components → Shoulder Strap or Detachable Strap when a strap is included.
+- batteries_required → false (required when Amazon asks — always include in attributes[]).
+- number_of_items → 1.
+- size_info → Mini / Small (display name only — not size class codes).
+- capacity → 1.5|liters (numeric amount | unit). Never free-text descriptions.
+- outer → exterior material phrase, e.g. Faux Leather with heart embossing.
+- inner → interior lining phrase, e.g. Polyester lining with slip pocket.
+- item_dimensions → 8 x 6 x 4 in (height x width x length with unit).
+- closure → Zipper or Magnetic from enumValues. Never Lobster Clasp (keychain value).
+- strap_type → Shoulder or Cross-Body from enumValues.
+- number_of_compartments → 1, 2, or 3.
+- seasons → Fall or All Seasons from enumValues.
+- import_designation → Imported.
+- age_range_description → Adult.
+- DO NOT return: package_level, parentage_level, color on variation parents, headwear_size, hat fields, toy fields, plant fields, pin fields, or image_locator fields.
+- generic_keyword → mini bag, crossbody purse, heart tote search terms.`;
+  }
+  if (pt === "TOTE_BAG") {
+    return `
+TOTE_BAG-SPECIFIC (product type is TOTE_BAG — follow exactly):
+- item_type_keyword → reusable-grocery-bags or shopping-totes (from enumValues) for canvas mini totes.
+- fabric_type → Canvas or 100% Cotton (exterior). Never Plush, Faux Leather, or plant fabric terms.
+- material → Cotton or Canvas when visible.
+- lining_description → Unlined when the bag has no separate lining.
+- title_differentiation → Item Highlight: short benefit phrase (max 125 chars). Never "Enamel Pin", "Default", or the field name.
+- special_feature → Reusable or Lightweight from enumValues when applicable.
+- target_audience → Unisex-Adults or Women.
+- department → Unisex or Womens.
+- style → Casual from enumValues.
+- batteries_required → false.
+- number_of_items → 1.
+- size_info → Mini / Small (display name only — not size class codes).
+- capacity → 1.5|liters (numeric amount | unit). Never free-text descriptions like "Small - fits daily essentials".
+- outer → Canvas or Cotton canvas.
+- inner → Unlined (canvas interior) when there is no separate lining.
+- item_length_width_height → 8 x 6 x 4 in (length x width x height with unit).
+- closure → Open Top for open canvas totes without a zipper. Never Lobster Clasp or Clasp unless clearly present.
+- strap_type → Hand-Carry or Shoulder from enumValues.
+- number_of_compartments → 1.
+- import_designation → Imported.
+- age_range_description → Adult.
+- model_number / part_number → use the child seller SKU (e.g. KK-0033-BLUE), never the parent SKU.
+- DO NOT return: package_level, included_components, parentage_level, item_dimensions, headwear_size, hat fields, toy fields, plant fields, pin fields, or image_locator fields.
+- generic_keyword → mini tote, canvas bag, reusable bag, pastel tote search terms.`;
   }
   if (pt === "TOY_FIGURE") {
     return `
@@ -215,7 +324,7 @@ Deno.serve(async (req) => {
 Generate Amazon listing content from product data and images.
 
 STRICT RULES:
-1. TITLE (item_name): SEO-optimized Amazon title, max 200 characters. Include key search terms buyers use. Do NOT stuff brand name unless helpful.
+1. TITLE (item_name): SEO-optimized Amazon title, HARD MAX ${AMAZON_ITEM_NAME_MAX_LENGTH} characters (required for Amazon Item Highlights). Prioritize the most important keywords in the first 75 characters. Do NOT exceed 75 characters under any circumstance. Do NOT stuff brand name unless helpful.
 2. BULLET POINTS: Return exactly 5 concise bullet points, each max 500 characters. Focus on benefits and features visible from images/data.
 3. DESCRIPTION (product_description): Plain text product description, 2-4 short paragraphs, max 2000 characters. No HTML. Warm, on-brand tone.
 4. BRAND: Default to "${brandDefault}" unless product data clearly indicates otherwise.
@@ -369,6 +478,16 @@ Respond with ONLY valid JSON:
     const bulletPoints = parseBulletPoints(parsed.bullet_points);
     const attributes = parseAttributes(parsed.attributes);
     const notes = parseStringArray(parsed.notes, 8);
+
+    if (title?.value) {
+      const original = title.value;
+      title.value = clampAmazonItemName(title.value);
+      if (title.value.length !== original.length) {
+        notes.unshift(
+          `Title trimmed to ${title.value.length} characters (Amazon Item Highlights max ${AMAZON_ITEM_NAME_MAX_LENGTH}).`,
+        );
+      }
+    }
 
     if (!title && !description && !bulletPoints.length) {
       return json({ ok: false, error: "openai_no_usable_content" }, 502);

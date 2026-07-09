@@ -31,7 +31,9 @@ import { initAmazonMapping } from "./mapping.js";
 import { initAmazonDraftsIssues } from "./draftsIssues.js";
 
 import { initAmazonReadyToPush } from "./readyToPush.js";
+import { isParentShellRow } from "./readyToPushNormalize.js";
 import {
+  buildProductGroupSummary,
   listingRowAsPushTrigger,
   readyRowAsTrigger,
   startPushQueue,
@@ -253,10 +255,24 @@ async function boot() {
       openProductPicker: (trigger) => pickerBridge.open?.(trigger),
 
       startPushRemaining: (productId) => {
-        const rows = readyToPush.getRowsForProduct(productId).filter(
-          (row) => String(row.ready_row_kind || "variant") !== "parent_shell",
-        );
-        const queue = startPushQueue(rows);
+        const allRows = readyToPush.getRowsForProduct(productId);
+        const parentShell = allRows.find(isParentShellRow);
+        const summary = buildProductGroupSummary(allRows);
+        const variantRows = allRows.filter((row) => !isParentShellRow(row));
+        const queue = startPushQueue(variantRows);
+
+        if (summary.parentNeedsAttention && parentShell) {
+          showAmazonNotification(
+            "Start with the variation parent (KK-XXXX-PARENT) — child SKUs must link to it on Amazon.",
+            { tone: "info" },
+          );
+          modals.openPush(readyRowAsTrigger(parentShell), {
+            draftMode: true,
+            fromQueue: queue.length > 0,
+          }).catch(() => {});
+          return;
+        }
+
         if (!queue.length) {
           showAmazonNotification("No pushable variants remaining for this product.", { tone: "warning" });
           return;

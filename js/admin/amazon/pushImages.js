@@ -117,11 +117,45 @@ export function buildAmazonProductImageUrls(product) {
   return buildImageUrls(product).slice(0, AMAZON_MAX_IMAGES);
 }
 
+/** Full KK image pool for Amazon gallery picker (includes variant previews). */
+export function buildAmazonGalleryImageUrls(product) {
+  if (!product) return [];
+
+  const urls = [];
+  const seen = new Set();
+  function add(url) {
+    const trimmed = String(url || "").trim();
+    if (!trimmed.startsWith("http") || seen.has(trimmed)) return;
+    seen.add(trimmed);
+    urls.push(trimmed);
+  }
+
+  for (const url of buildImageUrls(product)) add(url);
+
+  const variants = Array.isArray(product.product_variants) ? product.product_variants : [];
+  for (const variant of variants) {
+    if (variant?.is_active === false) continue;
+    add(variant.preview_image_url);
+  }
+
+  return urls;
+}
+
+const AMAZON_GALLERY_PICKER_OPTIONS = {
+  showAll: true,
+  buildAvailableUrls: buildAmazonGalleryImageUrls,
+};
+
 /** Amazon CDN URLs cannot be re-submitted as media_location — use KK-hosted URLs instead. */
 export function isAmazonHostedImageUrl(url) {
   try {
     const host = new URL(String(url || "").trim()).hostname.toLowerCase();
-    return host === "m.media-amazon.com" || host.endsWith(".media-amazon.com");
+    return (
+      host === "m.media-amazon.com"
+      || host.endsWith(".media-amazon.com")
+      || host.endsWith(".ssl-images-amazon.com")
+      || host.endsWith(".images-amazon.com")
+    );
   } catch {
     return false;
   }
@@ -153,7 +187,14 @@ export function renderAmazonImageStrip(stripId, stateArr) {
  */
 export function showAmazonGalleryPicker(stripId, pickerId, stateArr, product) {
   if (!product) return;
-  showGalleryPicker(pickerId, stripId, stateArr, product, AMAZON_MAX_IMAGES);
+  showGalleryPicker(
+    pickerId,
+    stripId,
+    stateArr,
+    product,
+    AMAZON_MAX_IMAGES,
+    AMAZON_GALLERY_PICKER_OPTIONS,
+  );
 }
 
 /** @param {string} pickerId */

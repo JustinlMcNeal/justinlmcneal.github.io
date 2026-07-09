@@ -23,6 +23,10 @@ import {
   filterFormAttributeNames,
   ARTIFICIAL_PLANT_FORM_DENYLIST,
   HAT_FORM_DENYLIST,
+  APPAREL_PIN_FORM_DENYLIST,
+  APPAREL_BELT_FORM_DENYLIST,
+  HANDBAG_FORM_DENYLIST,
+  TOTE_BAG_FORM_EXTRA_DENYLIST,
   stripInvalidPushPayloadAttributes,
 } from "./pushDraftAttributes.js";
 import { resolvePushWorkflowFromSuggestedAsin, shouldHydrateSuggestedAsin } from "./pushDraftWorkflow.js";
@@ -73,6 +77,7 @@ import {
   readyRowAsTrigger,
 } from "./readyToPushQueue.js";
 import {
+  clampAmazonItemName,
   draftSaveValidationMessage,
   validateAmazonDraftSavePayload,
 } from "./pushDraftSaveValidation.js";
@@ -376,7 +381,7 @@ async function handleAmazonAiAutofill() {
     });
 
     const ai = result.data || {};
-    if (ai.title?.value) setInput("#amazonPushAmazonTitle", ai.title.value);
+    if (ai.title?.value) setInput("#amazonPushAmazonTitle", clampAmazonItemName(ai.title.value));
     if (ai.brand?.value) setInput("#amazonPushBrand", ai.brand.value);
     if (ai.description?.value) setInput("#amazonPushDescription", ai.description.value);
     if (Array.isArray(ai.bulletPoints) && ai.bulletPoints.length) {
@@ -385,7 +390,7 @@ async function handleAmazonAiAutofill() {
         ai.bulletPoints.map((entry) => entry.value).filter(Boolean).join("\n"),
       );
     }
-    applyAiAttributesToForm(ai.attributes);
+    applyAiAttributesToForm(ai.attributes, { productType });
     applyExtraAttributeDefaults(requiredAttributes, {
       productType,
       attributeEnums,
@@ -571,7 +576,7 @@ function hydrateFromDraftRow(row) {
   setInput("#amazonPushSellerSku", String(row.seller_sku || row.kk_sku || ""));
   setInput("#amazonPushMarketplaceId", String(row.marketplace_id || "ATVPDKIKX0DER"));
   setInput("#amazonPushProductType", String(row.product_type || payload.productType || ""));
-  setInput("#amazonPushAmazonTitle", String(payload.title || row.kk_product_title || ""));
+  setInput("#amazonPushAmazonTitle", clampAmazonItemName(String(payload.title || row.kk_product_title || "")));
   setInput("#amazonPushBrand", String(payload.brand || "Generic"));
   setInput("#amazonPushPrice", payload.price != null ? String(payload.price) : "");
   setInput("#amazonPushQuantity", payload.quantity != null ? String(payload.quantity) : "");
@@ -733,6 +738,18 @@ export function initAmazonPushDraft(deps = {}) {
   }
 
   wireAmazonVariationFamilyPanel((role) => {
+    const draftId = readInput("#amazonPushDraftId");
+    const kkVariantId = readInput("#amazonPushKkVariantId");
+    if (role === VARIATION_ROLES.PARENT) {
+      setInput("#amazonPushParentDraftId", "");
+    }
+    if (draftId && role === VARIATION_ROLES.PARENT && kkVariantId) {
+      setInput("#amazonPushDraftId", "");
+      showAmazonNotification(
+        "This draft is tied to a color variant. Draft link cleared — use Push Parent and save again to create KK-XXXX-PARENT.",
+        { tone: "warning" },
+      );
+    }
     syncPushFormForVariationRole(role);
   });
 
@@ -987,7 +1004,11 @@ export function initAmazonPushDraft(deps = {}) {
       ? bulletRaw.split("\n").map((line) => line.trim()).filter(Boolean)
       : [];
     const recommendationMeta = getRecommendationMeta();
-    const extraAttributes = stripInvalidPushPayloadAttributes(readExtraAttributesFromForm());
+    const productType = readInput("#amazonPushProductType");
+    const extraAttributes = stripInvalidPushPayloadAttributes(
+      readExtraAttributesFromForm(),
+      productType,
+    );
     const { suggestedAsin, offerOnExistingAsin, requirements, pushWorkflow } =
       resolvePushWorkflowFromSuggestedAsin(extraAttributes.merchant_suggested_asin);
     if (offerOnExistingAsin) {
@@ -995,7 +1016,6 @@ export function initAmazonPushDraft(deps = {}) {
     } else {
       delete extraAttributes.merchant_suggested_asin;
     }
-    const productType = readInput("#amazonPushProductType");
     if (productType.toUpperCase() === "TOY_FIGURE") {
       delete extraAttributes.educational_objective;
       delete extraAttributes.item_dimensions;
@@ -1017,6 +1037,29 @@ export function initAmazonPushDraft(deps = {}) {
     }
     if (productType.toUpperCase() === "HAT") {
       for (const name of HAT_FORM_DENYLIST) {
+        delete extraAttributes[name];
+      }
+    }
+    if (productType.toUpperCase() === "APPAREL_PIN") {
+      for (const name of APPAREL_PIN_FORM_DENYLIST) {
+        delete extraAttributes[name];
+      }
+    }
+    if (productType.toUpperCase() === "APPAREL_BELT") {
+      for (const name of APPAREL_BELT_FORM_DENYLIST) {
+        delete extraAttributes[name];
+      }
+    }
+    if (productType.toUpperCase() === "HANDBAG") {
+      for (const name of HANDBAG_FORM_DENYLIST) {
+        delete extraAttributes[name];
+      }
+    }
+    if (productType.toUpperCase() === "TOTE_BAG") {
+      for (const name of HANDBAG_FORM_DENYLIST) {
+        delete extraAttributes[name];
+      }
+      for (const name of TOTE_BAG_FORM_EXTRA_DENYLIST) {
         delete extraAttributes[name];
       }
     }
@@ -1091,7 +1134,7 @@ export function initAmazonPushDraft(deps = {}) {
       productType: readInput("#amazonPushProductType"),
       imageUrls,
       ...safeExtras,
-      title: readInput("#amazonPushAmazonTitle"),
+      title: clampAmazonItemName(readInput("#amazonPushAmazonTitle")),
       ...(recommendationMeta ? { amazonProductTypeRecommendation: recommendationMeta } : {}),
     };
 
@@ -1118,7 +1161,9 @@ export function initAmazonPushDraft(deps = {}) {
       requirementsEnforced: "ENFORCED",
       pushWorkflow,
       variationRole,
-      parentDraftId: resolvedParentDraftId || undefined,
+      parentDraftId: variationRole === VARIATION_ROLES.CHILD && resolvedParentDraftId
+        ? resolvedParentDraftId
+        : undefined,
       parentSellerSku: variationRole === VARIATION_ROLES.CHILD ? parentSellerSku : undefined,
       variationTheme: variationRole !== VARIATION_ROLES.STANDALONE ? variationTheme : undefined,
       draftPayload,
@@ -1185,15 +1230,23 @@ export function initAmazonPushDraft(deps = {}) {
       }
     } catch (err) {
       const code = err?.code || "request_failed";
+      const reason = err?.reason || "";
       const messages = {
         product_not_found: "KK product not found.",
         marketplace_not_found: "Marketplace not found.",
         draft_not_found: "Draft not found.",
         invalid_request: "Invalid draft request.",
+        missing_title: "Amazon title is required.",
+        missing_kk_product_id: "KK product is missing. Re-open Push to Amazon from Ready to Push.",
+        missing_marketplace_id: "Marketplace is missing.",
+        parent_draft_not_found: "Parent draft link not found. Re-open the push modal or clear parent draft ID.",
+        parent_draft_not_parent_role: "Linked draft is not a variation parent. Use Push Parent to create KK-XXXX-PARENT.",
+        parent_draft_self_reference: "Parent draft link pointed at this child draft. Save again after a hard refresh.",
+        parent_cannot_have_variant: "Parent listings cannot include a variant ID. Use Push Parent from Ready to Push.",
         unauthorized: "Please sign in as an admin.",
         database_error: "Could not save draft.",
       };
-      showAmazonNotification(messages[code] || "Could not save draft.", { tone: "error" });
+      showAmazonNotification(messages[reason] || messages[code] || "Could not save draft.", { tone: "error" });
     } finally {
       saving = false;
     }

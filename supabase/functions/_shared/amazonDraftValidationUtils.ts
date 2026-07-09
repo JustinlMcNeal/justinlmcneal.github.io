@@ -8,6 +8,7 @@ export type ValidationIssue = {
 
 export type DraftValidationOptions = {
   variationRole?: string | null;
+  productType?: string | null;
 };
 
 const DRAFT_ATTRIBUTE_ALIASES: Record<string, string[]> = {
@@ -91,7 +92,57 @@ function readParentSkuFromDraft(
   return typeof parentSellerSku === "string" ? parentSellerSku.trim() : "";
 }
 
-function draftHasAttribute(attributeName: string, draftPayload: Record<string, unknown>): boolean {
+function isInvalidDraftAttributeValue(
+  attributeName: string,
+  value: string,
+  productType?: string | null,
+): boolean {
+  const text = value.trim();
+  if (!text) return true;
+  if (text.toLowerCase() === "default") return true;
+  if (text.replace(/_/g, " ").toLowerCase() === attributeName.replace(/_/g, " ").toLowerCase()) {
+    return true;
+  }
+  const pt = String(productType || "").trim().toUpperCase();
+  if (pt === "APPAREL_BELT") {
+    if (attributeName === "fabric_type" && text.toLowerCase() === "plush") return true;
+    if (attributeName === "material" && text.toLowerCase() === "polyester") return true;
+    if (attributeName === "color" && text.toLowerCase() === "multicolor") return true;
+    if (attributeName === "title_differentiation") {
+      const folded = text.toLowerCase();
+      if (folded === "default" || folded === "enamel pin" || folded === "lapel pin") return true;
+    }
+  }
+  if (pt === "HAT") {
+    if (attributeName === "fabric_type" && text.toLowerCase() === "plush") return true;
+    if (attributeName === "material" && text.toLowerCase() === "polyester") return true;
+    if (attributeName === "color" && text.toLowerCase() === "multicolor") return true;
+    if (attributeName === "special_size_type" && text.toLowerCase() === "special_size_type") return true;
+    if (attributeName === "title_differentiation") {
+      const folded = text.toLowerCase();
+      if (folded === "default" || folded === "enamel pin" || folded === "lapel pin") return true;
+    }
+  }
+  if (pt === "HANDBAG" || pt === "TOTE_BAG") {
+    if (attributeName === "fabric_type" && text.toLowerCase() === "plush") return true;
+    if (attributeName === "color" && text.toLowerCase() === "multicolor") return true;
+    if (attributeName === "closure" && text.toLowerCase() === "lobster clasp") return true;
+    if (attributeName === "capacity" && !/[\d.]/.test(text)) return true;
+    if (attributeName === "title_differentiation") {
+      const folded = text.toLowerCase();
+      if (folded === "default" || folded === "enamel pin" || folded === "lapel pin") return true;
+    }
+    if (attributeName === "package_level") return true;
+    if (attributeName === "included_components") return true;
+  }
+  return false;
+}
+
+function draftHasAttribute(
+  attributeName: string,
+  draftPayload: Record<string, unknown>,
+  productType?: string | null,
+): boolean {
   const aliases = DRAFT_ATTRIBUTE_ALIASES[attributeName] || [attributeName];
   for (const key of aliases) {
     const value = draftPayload[key];
@@ -100,6 +151,7 @@ function draftHasAttribute(attributeName: string, draftPayload: Record<string, u
     if (typeof value === "string") {
       const trimmed = value.trim();
       if (!trimmed) continue;
+      if (isInvalidDraftAttributeValue(attributeName, trimmed, productType)) continue;
       if (trimmed.toLowerCase() === "true" || trimmed.toLowerCase() === "false") return true;
       return true;
     }
@@ -188,10 +240,12 @@ export function validateDraftAgainstPtd(
 ): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   const isParent = isParentVariationDraft(draftPayload, options);
+  const productType = options.productType
+    || (typeof draftPayload.productType === "string" ? draftPayload.productType : null);
 
   for (const attribute of requiredAttributes) {
     if (isParent && PARENT_SKIP_REQUIRED.has(attribute)) continue;
-    if (draftHasAttribute(attribute, draftPayload)) continue;
+    if (draftHasAttribute(attribute, draftPayload, productType)) continue;
     issues.push({
       field: attribute,
       severity: "error",
@@ -201,7 +255,7 @@ export function validateDraftAgainstPtd(
 
   for (const attribute of recommendedAttributes) {
     if (isParent && PARENT_SKIP_RECOMMENDED.has(attribute)) continue;
-    if (draftHasAttribute(attribute, draftPayload)) continue;
+    if (draftHasAttribute(attribute, draftPayload, productType)) continue;
     issues.push({
       field: attribute,
       severity: "warning",
@@ -224,9 +278,11 @@ export function computeMissingRequiredAttributes(
   options: DraftValidationOptions = {},
 ): string[] {
   const isParent = isParentVariationDraft(draftPayload, options);
+  const productType = options.productType
+    || (typeof draftPayload.productType === "string" ? draftPayload.productType : null);
   return requiredAttributes.filter((attribute) => {
     if (isParent && PARENT_SKIP_REQUIRED.has(attribute)) return false;
-    return !draftHasAttribute(attribute, draftPayload);
+    return !draftHasAttribute(attribute, draftPayload, productType);
   });
 }
 

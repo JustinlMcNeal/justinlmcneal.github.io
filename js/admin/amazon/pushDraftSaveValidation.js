@@ -1,5 +1,20 @@
 import { VARIATION_ROLES } from "./variationFamily.js";
 
+/** Amazon Item Highlights requires item_name ≤ 75 characters. */
+export const AMAZON_ITEM_NAME_MAX_LENGTH = 75;
+
+/** @param {unknown} title @param {number} [maxLength] */
+export function clampAmazonItemName(title, maxLength = AMAZON_ITEM_NAME_MAX_LENGTH) {
+  const trimmed = String(title || "").trim().replace(/\s+/g, " ");
+  if (!trimmed || trimmed.length <= maxLength) return trimmed;
+  let cut = trimmed.slice(0, maxLength);
+  const lastSpace = cut.lastIndexOf(" ");
+  if (lastSpace > Math.floor(maxLength * 0.6)) {
+    cut = cut.slice(0, lastSpace);
+  }
+  return cut.trim();
+}
+
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -38,6 +53,11 @@ export function validateAmazonDraftSavePayload(payload, context = {}) {
     issues.push({
       field: "title",
       message: "Amazon title is required before preview submit.",
+    });
+  } else if (title.length > AMAZON_ITEM_NAME_MAX_LENGTH) {
+    issues.push({
+      field: "title",
+      message: `Amazon title must be ${AMAZON_ITEM_NAME_MAX_LENGTH} characters or less for Item Highlights (currently ${title.length}).`,
     });
   }
 

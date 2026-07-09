@@ -35,6 +35,9 @@ const CHILD_INHERIT_SKIP = new Set([
   "kk_variant_id",
   "kkVariantId",
   "amazonProductTypeRecommendation",
+  "model_number",
+  "model_name",
+  "part_number",
 ]);
 
 function readInput(id) {

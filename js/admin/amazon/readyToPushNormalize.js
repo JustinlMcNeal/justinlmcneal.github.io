@@ -66,14 +66,21 @@ function sortReadyRows(rows) {
  */
 function expandLegacyProductGroup(group) {
   const variants = group.filter((row) => row.kk_variant_id);
-  if (variants.length <= 1) return group;
+  const seed = variants[0] || group[0];
+  if (!seed) return group;
 
-  const first = variants[0] || {};
-  const variantsTotal = Number(first.variants_total || variants.length);
+  const variantsTotal = Number(seed.variants_total || variants.length);
   if (variantsTotal <= 1) return group;
 
-  if (Boolean(first.parent_listing_ready)) {
+  // Siblings may be hidden after submit; one visible variant still needs a parent shell row.
+  if (!variants.length) return group;
+
+  if (Boolean(seed.parent_listing_ready)) {
     return stripLegacyParentDraftFromVariants(variants);
+  }
+
+  if (group.some(isParentShellRow)) {
+    return group;
   }
 
   let parentDraftId = "";
@@ -89,7 +96,7 @@ function expandLegacyProductGroup(group) {
   }
 
   const cleanedVariants = stripLegacyParentDraftFromVariants(variants);
-  const parentShell = buildParentShellRow(first, {
+  const parentShell = buildParentShellRow(seed, {
     draftId: parentDraftId,
     draftStatus: parentDraftStatus,
     lastDraftUpdated: parentDraftUpdated,

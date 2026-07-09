@@ -198,7 +198,7 @@ Deno.serve(async (req) => {
         merchant_suggested_asin: draftPayload.merchant_suggested_asin || matchedAsin || draftAsin,
       }
       : draftPayload;
-    const validationOptions = { variationRole };
+    const validationOptions = { variationRole, productType: productType || summary.productType };
     const localIssues = validateLocalDraft(sellerSku, offerDraftPayload, productType, validationOptions);
     const ptdIssues = validateDraftAgainstPtd(
       offerDraftPayload,

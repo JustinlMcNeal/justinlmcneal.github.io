@@ -372,6 +372,7 @@ Deno.serve(async (req) => {
         : {}),
       liveSubmittedAt: now,
       submissionId: submitResult.submissionId,
+      liveSubmissionStatus: submitResult.submissionStatus,
       submissionStatus: submitResult.submissionStatus,
       amazonIssues,
     };
