@@ -7,6 +7,7 @@ import { relistEbayFromProduct } from "../api/ebayRelistFromProductApi.js";
 import { runAdjustEbayCacheRefreshChain } from "./adjustChannelEbayCache.js";
 import { resolveEbayChannelStep } from "./adjustChannelNextSteps.js";
 import { resolveEbayVariationBranch } from "./adjustChannelEbayVariationBranch.js";
+import { isEbayVariationListing } from "./adjustChannelVariationPreview.js";
 import { kkEbayListingsAdminUrl } from "../api/ebayRelistAssistApi.js";
 import { EBAY_LISTINGS_PAGE } from "../constants/channelLinks.js";
 import {
@@ -37,6 +38,16 @@ function skippedChannel(message, action = null) {
 }
 
 /**
+ * Stale eBay cache can keep ended_needs_relist after a successful relist already marked the product active.
+ * @param {import('../api/channelSyncCandidateApi.js').ChannelSyncCandidateRow|null} candidate
+ */
+export function isStaleEndedRelistCandidate(candidate) {
+  if (!candidate || candidate.ebay_sync_action !== "ended_needs_relist") return false;
+  const localStatus = String(candidate.ebay_local_status || "").toLowerCase();
+  return localStatus === "active" && Boolean(candidate.ebay_listing_id);
+}
+
+/**
  * @param {import('../api/channelSyncCandidateApi.js').ChannelSyncCandidateRow|null} candidate
  * @param {string} variantId
  * @param {string[]} warnings
@@ -45,24 +56,13 @@ function skippedChannel(message, action = null) {
  */
 export async function runEbayUpdateQty(candidate, variantId, warnings, errors, syncContext) {
   const action = "update_qty";
-  const available = Number(candidate?.available_qty ?? 0);
-  if (available <= 0) {
-    return {
-      status: "skipped",
-      action,
-      message: "eBay qty push skipped — available quantity is zero.",
-      nextStepUrl: null,
-      runId: null,
-    };
-  }
-
   try {
     const data = await pushEbayInventoryQuantity({
       variantIds: [variantId],
       limit: 1,
       syncContext,
     });
-    const succeeded = Number(data.succeeded ?? data.success_count ?? 0);
+    const succeeded = Number(data.succeeded ?? data.success_count ?? data.summary?.succeeded ?? 0);
     const runId = data.runId ?? data.run_id ?? null;
     if (succeeded > 0) {
       return {
@@ -370,7 +370,27 @@ export async function resolveEbayBranch(
   );
   const action = candidate?.ebay_sync_action ?? null;
 
-  if (action === "update_qty") {
+  if (isEbayVariationListing(candidate)) {
+    const variationResult = await resolveEbayVariationBranch({
+      candidate,
+      relist,
+      variantId,
+      productCodeHint,
+      availableQty,
+      warnings,
+      errors,
+      syncContext,
+    });
+    if (variationResult) return variationResult;
+    if (action === "update_qty" || action === "qty_cache_missing") {
+      const next = resolveEbayChannelStep("unsupported_variation", productCodeHint);
+      return next
+        ? { ...next, runId: null }
+        : skippedChannel("eBay variation sync requires manual review.", action);
+    }
+  }
+
+  if (action === "update_qty" || isStaleEndedRelistCandidate(candidate)) {
     return runEbayUpdateQty(candidate, variantId, warnings, errors, syncContext);
   }
   if (action === "qty_cache_missing") {

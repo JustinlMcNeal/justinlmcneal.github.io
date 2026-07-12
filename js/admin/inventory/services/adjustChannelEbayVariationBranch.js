@@ -212,15 +212,6 @@ export async function runEbayVariationQtySync({
   syncContext,
 }) {
   const action = "variation_update_qty";
-  if (availableQty <= 0) {
-    return {
-      status: "skipped",
-      action,
-      message: EBAY_VARIATION_QTY_SKIPPED_COPY,
-      nextStepUrl: null,
-      runId: null,
-    };
-  }
   if (!variationCandidate || variationCandidate.candidate_state !== "variation_update_qty") {
     return null;
   }
@@ -327,8 +318,6 @@ export async function resolveEbayVariationBranch({
   errors,
   syncContext,
 }) {
-  if (availableQty <= 0) return null;
-
   const productId = String(candidate?.product_id || "").trim();
   if (!productId) return null;
 
@@ -341,6 +330,8 @@ export async function resolveEbayVariationBranch({
   if (shouldFetchVariationRelistCandidate(candidate, relist)) {
     variationRelist = await fetchEbayVariationRelistCandidate({ productId });
   }
+
+  if (availableQty < 0) return null;
 
   if (variationRelist && isGroupRelistRunnable(variationRelist)) {
     const groupResult = await runEbayVariationGroupRelist({

@@ -62,10 +62,10 @@ const MANUAL_STATES = new Set([
   "variation_qty_cache_missing",
 ]);
 
-function positiveInt(value: number): number | null {
+function nonNegativeInt(value: number): number | null {
   if (!Number.isFinite(value)) return null;
   const n = Math.trunc(value);
-  return n > 0 ? n : null;
+  return n >= 0 ? n : null;
 }
 
 function resolveChildSku(candidate: EbayVariationChildCandidate): string | null {
@@ -156,7 +156,7 @@ export async function syncEbayVariationChildQuantity({
 }): Promise<EbayVariationQtySyncResult> {
   const productId = String(request.productId || "").trim();
   const variantId = String(request.variantId || "").trim();
-  const requestedQty = positiveInt(request.quantity);
+  const requestedQty = nonNegativeInt(request.quantity);
   const preview = request.preview === true || !liveEnabled;
   const syncCtx = request.syncContext ?? {};
 
@@ -170,10 +170,10 @@ export async function syncEbayVariationChildQuantity({
   if (!productId || !variantId) {
     return manualResult(base, "variation_manual", "missing_ids", "productId and variantId are required.");
   }
-  if (!requestedQty) {
+  if (requestedQty === null) {
     return {
       status: "skipped",
-      message: "Quantity must be greater than zero.",
+      message: "Quantity must be a non-negative integer.",
       productId,
       variantId,
       childSku: null,
@@ -184,7 +184,7 @@ export async function syncEbayVariationChildQuantity({
       qtyDelta: null,
       candidateState: null,
       runId: null,
-      errorCode: "quantity_required",
+      errorCode: "quantity_invalid",
     };
   }
 

@@ -21,9 +21,9 @@ function requireUuid(value, label) {
 }
 
 /** @param {number} value */
-function requirePositiveQty(value) {
+function requireNonNegativeQty(value) {
   const n = Number(value);
-  if (!Number.isFinite(n) || n <= 0) throw new Error("quantity must be a positive number.");
+  if (!Number.isFinite(n) || n < 0) throw new Error("quantity must be a non-negative number.");
   return Math.floor(n);
 }
 
@@ -45,7 +45,7 @@ export async function syncEbayVariationChildQuantity({
 } = {}) {
   const pid = requireUuid(productId, "productId");
   const vid = requireUuid(variantId, "variantId");
-  const qty = requirePositiveQty(quantity);
+  const qty = requireNonNegativeQty(quantity);
 
   const token = await getAccessToken();
   const resp = await fetch(`${SUPABASE_URL}/functions/v1/sync-ebay-inventory-quantity`, {
