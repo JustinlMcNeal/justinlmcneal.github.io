@@ -44,11 +44,61 @@ const VARIATION_GROUP_RELIST = new Set([
 
 /**
  * @param {ChannelSyncCandidateRow|null} candidate
+ */
+export function isEbayVariationListing(candidate) {
+  return Boolean(
+    candidate?.ebay_item_group_key &&
+    Number(candidate?.product_active_variant_count || 0) > 1,
+  );
+}
+
+/**
+ * Recompute variation child candidate_state using projected KK available qty.
+ * @param {EbayVariationChildCandidateRow|null} child
+ * @param {number} projectedAvailable
+ */
+export function resolveProjectedVariationChildState(child, projectedAvailable) {
+  if (!child?.candidate_state) return null;
+  const state = child.candidate_state;
+  const projected = Number(projectedAvailable);
+  if (!Number.isFinite(projected)) return state;
+
+  if (VARIATION_CHILD_MANUAL.has(state)) {
+    if (state !== "variation_manual" || projected <= 0) return state;
+    if (!child.child_offer_id || child.ebay_child_qty == null) return state;
+    const qty = Number(child.ebay_child_qty);
+    if (!Number.isFinite(qty)) return state;
+    return qty !== projected ? "variation_update_qty" : "variation_no_change";
+  }
+
+  if (state === "variation_qty_cache_missing") return state;
+
+  const ebayQty = child.ebay_child_qty;
+  if (ebayQty == null) return state;
+
+  const qty = Number(ebayQty);
+  if (!Number.isFinite(qty)) return state;
+
+  if (state === "variation_update_qty" || state === "variation_no_change") {
+    return qty !== projected ? "variation_update_qty" : "variation_no_change";
+  }
+
+  return state;
+}
+
+/** @param {number} projectedAvailable */
+export function isMarketplaceSyncQtyEligible(projectedAvailable) {
+  return Number.isFinite(projectedAvailable) && projectedAvailable >= 0;
+}
+
+/**
+ * @param {ChannelSyncCandidateRow|null} candidate
  * @param {EbayRelistCandidateRow|null} relist
  * @param {number} projectedAvailable
  */
 export function isSingleSkuEbayActionable(candidate, relist, projectedAvailable) {
-  if (!candidate || projectedAvailable <= 0) return false;
+  if (!candidate || !isMarketplaceSyncQtyEligible(projectedAvailable)) return false;
+  if (isEbayVariationListing(candidate)) return false;
   const action = candidate.ebay_sync_action;
   if (action === "update_qty" || action === "qty_cache_missing") return true;
   if (action !== "ended_needs_relist") return false;
@@ -64,6 +114,16 @@ export function isSingleSkuEbayActionable(candidate, relist, projectedAvailable)
 export function shouldFetchVariationChildCandidate(candidate, relist) {
   if (!candidate?.product_id) return false;
   const action = candidate.ebay_sync_action;
+  if (isEbayVariationListing(candidate)) {
+    if (
+      action === "update_qty" ||
+      action === "qty_cache_missing" ||
+      action === "unsupported_variation" ||
+      action === "no_change"
+    ) {
+      return true;
+    }
+  }
   if (action === "update_qty" || action === "qty_cache_missing") return false;
   if (action === "unsupported_variation") return true;
   if (action === "ended_needs_relist" && relist?.relist_action === "unsupported_variation") return true;
@@ -104,8 +164,9 @@ export function isVariationGroupRelistPreviewRelevant(group) {
  * @param {number} projectedAvailable
  */
 export function isVariationChildToggleSafe(child, projectedAvailable) {
-  if (!child || projectedAvailable <= 0) return false;
-  const state = child.candidate_state;
+  if (!child || !isMarketplaceSyncQtyEligible(projectedAvailable)) return false;
+  const state =
+    resolveProjectedVariationChildState(child, projectedAvailable) ?? child.candidate_state;
   return state === "variation_update_qty" || state === "variation_qty_cache_missing";
 }
 
@@ -183,26 +244,28 @@ export function mapVariationChildPreviewStatus(child, opts = {}) {
 
   switch (state) {
     case "variation_update_qty":
-      if (projectedAvailable <= 0) {
+      if (projectedAvailable < 0) {
         return card(
           "eBay",
           "eBay variation quantity can update.",
-          "Projected available quantity is not positive after adjust.",
+          "Projected available quantity is negative after adjust.",
           "muted",
         );
       }
       return card(
         "eBay",
-        "eBay variation quantity can update.",
-        detail || "Child variation qty can sync after KK stock is saved when marketplace sync is on.",
+        projectedAvailable === 0 ? "eBay variation quantity will zero" : "eBay variation quantity can update.",
+        projectedAvailable === 0
+          ? (detail || "Child variation qty can sync to zero after KK stock is saved when marketplace sync is on.")
+          : (detail || "Child variation qty can sync after KK stock is saved when marketplace sync is on."),
         "success",
       );
     case "variation_qty_cache_missing":
-      if (projectedAvailable <= 0) {
+      if (projectedAvailable < 0) {
         return card(
           "eBay",
           "eBay variation cache will refresh before sync.",
-          "Projected available quantity is not positive after adjust.",
+          "Projected available quantity is negative after adjust.",
           "muted",
         );
       }
@@ -263,7 +326,7 @@ export function mapVariationGroupRelistPreviewStatus(group, opts = {}) {
         return card(
           "eBay",
           "eBay variation group can be relisted.",
-          "Projected available quantity is not positive after adjust.",
+          "Projected available quantity is negative after adjust.",
           "muted",
         );
       }
@@ -278,7 +341,7 @@ export function mapVariationGroupRelistPreviewStatus(group, opts = {}) {
         return card(
           "eBay",
           "eBay variation group relist can be previewed.",
-          "Projected available quantity is not positive after adjust.",
+          "Projected available quantity is negative after adjust.",
           "muted",
         );
       }
@@ -304,7 +367,7 @@ export function mapVariationGroupRelistPreviewStatus(group, opts = {}) {
  * @param {number} projectedAvailable
  */
 export function computeVariationSyncToggleContribution(child, group, projectedAvailable) {
-  if (projectedAvailable <= 0) return false;
+  if (!isMarketplaceSyncQtyEligible(projectedAvailable)) return false;
   if (group?.candidate_state === "variation_group_active") {
     return isVariationChildToggleSafe(child, projectedAvailable);
   }
@@ -324,7 +387,7 @@ function formatVariationChildDetail(child, projectedAvailable) {
   const sku = child.cache_ebay_sku || child.expected_ebay_sku;
   if (sku) parts.push(`Child SKU ${sku}`);
   if (child.ebay_child_qty != null) parts.push(`eBay qty ${child.ebay_child_qty}`);
-  if (projectedAvailable > 0) parts.push(`projected KK available ${projectedAvailable}`);
+  if (projectedAvailable >= 0) parts.push(`projected KK available ${projectedAvailable}`);
   if (child.requires_cache_refresh || child.candidate_state === "variation_qty_cache_missing") {
     parts.push("cache refresh required");
   }
