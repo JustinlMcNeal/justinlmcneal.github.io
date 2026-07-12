@@ -47,13 +47,19 @@ function updatePreview(row) {
   const form = mount.querySelector("#inventoryAdjustForm");
   if (!form) return;
 
+  // Refresh marketplace preview first — it may auto-enable the sync toggle.
+  refreshAdjustChannelPreview(mount, row);
+
   const mode = /** @type {'add'|'remove'|'set'} */ (
     form.querySelector('input[name="adjustMode"]:checked')?.value || "add"
   );
   const qtyRaw = /** @type {HTMLInputElement|null} */ (form.querySelector("#inventoryAdjustQty"))?.value;
   const quantity = qtyRaw === "" ? NaN : Number(qtyRaw);
+  const syncChannelsEnabled = isAdjustSyncChannelsEnabled(mount);
 
-  const result = computeAdjustment(mode, row.onHand, quantity);
+  const result = computeAdjustment(mode, row.onHand, quantity, {
+    allowUnchangedSet: syncChannelsEnabled,
+  });
   const deltaEl = mount.querySelector("[data-preview-delta]");
   const newEl = mount.querySelector("[data-preview-new]");
   const warnEl = mount.querySelector("[data-adjust-negative-warning]");
@@ -88,9 +94,12 @@ function updatePreview(row) {
 
   if (submitBtn) {
     submitBtn.disabled = submitting || !result.valid;
+    if (!submitting) {
+      submitBtn.textContent = result.unchanged
+        ? "Sync marketplaces"
+        : "Confirm adjustment";
+    }
   }
-
-  refreshAdjustChannelPreview(mount, row);
 }
 
 function wireModalEvents(row) {
@@ -105,7 +114,10 @@ function wireModalEvents(row) {
   form?.addEventListener("input", () => updatePreview(row));
   form?.addEventListener("change", () => updatePreview(row));
 
-  wireAdjustChannelPreview(mount, markAdjustSyncToggleUserSet);
+  wireAdjustChannelPreview(mount, (ev) => {
+    markAdjustSyncToggleUserSet(ev);
+    updatePreview(row);
+  });
 
   form?.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -124,7 +136,9 @@ function wireModalEvents(row) {
       /** @type {HTMLTextAreaElement} */ (form.querySelector("#inventoryAdjustNote")).value,
     ).trim();
 
-    const calc = computeAdjustment(mode, activeRow.onHand, quantity);
+    const calc = computeAdjustment(mode, activeRow.onHand, quantity, {
+      allowUnchangedSet: isAdjustSyncChannelsEnabled(mount),
+    });
     if (!calc.valid) {
       showInventoryToast(calc.error || "Invalid adjustment.", { variant: "error" });
       updatePreview(activeRow);
@@ -137,7 +151,12 @@ function wireModalEvents(row) {
     }
 
     if (!note) {
-      showInventoryToast("Note is required for manual adjustments.", { variant: "error" });
+      showInventoryToast(
+        calc.unchanged
+          ? "Note is required (e.g. why you are re-syncing marketplaces)."
+          : "Note is required for manual adjustments.",
+        { variant: "error" },
+      );
       return;
     }
 
@@ -145,7 +164,7 @@ function wireModalEvents(row) {
     updatePreview(activeRow);
 
     const submitBtn = form.querySelector("[data-adjust-submit]");
-    if (submitBtn) submitBtn.textContent = "Saving…";
+    if (submitBtn) submitBtn.textContent = calc.unchanged ? "Syncing…" : "Saving…";
 
     try {
       const idempotencyKey =

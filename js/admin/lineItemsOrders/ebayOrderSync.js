@@ -51,7 +51,9 @@ export function wireEbayOrderSync({ buttonEl, setStatus, onSynced } = {}) {
         ? ` · ${result.matched ?? 0} matched, ${result.unmatched ?? 0} unmatched`
         : "";
       setStatus?.(
-        `eBay sync done: ${result.synced ?? 0} new orders (${result.skipped ?? 0} already existed).${matchNote} Cron still runs every 2h.`,
+        `eBay sync done: ${result.synced ?? 0} new, ${result.updated ?? 0} updated` +
+          (result.variantsRepaired ? `, ${result.variantsRepaired} variants fixed` : "") +
+          ` (${result.skipped ?? 0} skipped).${matchNote} Cron still runs every 2h.`,
       );
       onSynced?.(result);
     } catch (err) {

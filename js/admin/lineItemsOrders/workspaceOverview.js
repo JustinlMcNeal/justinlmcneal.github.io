@@ -156,7 +156,7 @@ export function renderOverview(order, lineItems, opts = {}) {
                     ? `<a href="/pages/product.html?slug=${encodeURIComponent(li.product_slug)}" target="_blank" class="font-black text-sm line-clamp-2 text-kkpink hover:underline cursor-pointer">${esc(li.product_name || li.product_id || "Unknown Product")}</a>`
                     : `<span class="font-black text-sm line-clamp-2">${esc(li.product_name || li.product_id || "Unknown Product")}</span>`
                 }
-                ${li.variant ? `<div class="text-xs text-gray-500 mt-1">Variant: ${esc(li.variant)}</div>` : ""}
+                ${li.variant_title || li.variant ? `<div class="text-xs text-gray-500 mt-1">Variant: ${esc(li.variant_title || li.variant)}</div>` : ""}
                 <div class="flex flex-wrap items-center gap-x-3 sm:gap-x-4 gap-y-1 mt-2 text-xs sm:text-sm">
                   <span>Qty: <strong>${qty}</strong></span>
                   <span>Price: <strong>${moneyFromCents(unitCents)}</strong></span>

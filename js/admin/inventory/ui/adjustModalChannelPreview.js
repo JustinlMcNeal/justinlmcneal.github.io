@@ -101,7 +101,10 @@ export function refreshAdjustChannelPreview(mount, row) {
   );
   const qtyRaw = /** @type {HTMLInputElement|null} */ (form?.querySelector("#inventoryAdjustQty"))?.value;
   const quantity = qtyRaw === "" ? NaN : Number(qtyRaw);
-  const adjustment = computeAdjustment(mode, row.onHand, quantity);
+  const syncChannelsEnabled = isAdjustSyncChannelsEnabled(mount);
+  const adjustment = computeAdjustment(mode, row.onHand, quantity, {
+    allowUnchangedSet: syncChannelsEnabled,
+  });
 
   const state = buildAdjustChannelPreviewState({
     candidate: channelBundle?.candidate ?? null,
@@ -149,7 +152,9 @@ function applySyncToggleState(mount, toggle) {
  */
 export function wireAdjustChannelPreview(mount, onUserToggle) {
   const toggle = mount.querySelector("[data-adjust-sync-toggle]");
-  toggle?.addEventListener("change", onUserToggle);
+  toggle?.addEventListener("change", (ev) => {
+    onUserToggle?.(ev);
+  });
 }
 
 /** @param {Event} _ev */

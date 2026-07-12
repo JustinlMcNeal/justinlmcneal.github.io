@@ -57,7 +57,7 @@ export async function fetchOrderDetails(stripe_checkout_session_id) {
       .from("products")
       .select(`
         id, code, slug, name, unit_cost, weight_g, primary_image_url, catalog_image_url,
-        product_variants (id, option_value, preview_image_url, unit_cost_override_cents)
+        product_variants (id, option_value, sku, preview_image_url, unit_cost_override_cents)
       `)
       .in("code", productCodes);
     
@@ -69,8 +69,12 @@ export async function fetchOrderDetails(stripe_checkout_session_id) {
       const supplierShipPerUnit = shipDetails.perUnitUSD || 0;
       productsMap.set(p.code, { ...p, _supplierShipPerUnit: supplierShipPerUnit });
       for (const v of p.product_variants || []) {
-        if (!v.option_value) continue;
-        variantsMap.set(`${p.code}|${normalizeVariantKey(v.option_value)}`, v);
+        if (v.option_value) {
+          variantsMap.set(`${p.code}|${normalizeVariantKey(v.option_value)}`, v);
+        }
+        if (v.sku) {
+          variantsMap.set(`${p.code}|sku:${normalizeVariantKey(v.sku)}`, v);
+        }
       }
     }
   }
@@ -80,7 +84,11 @@ export async function fetchOrderDetails(stripe_checkout_session_id) {
     const product = productsMap.get(li.product_id);
     const qty = Number(li.quantity ?? 1);
     const variantKey = `${li.product_id}|${normalizeVariantKey(li.variant)}`;
-    const variant = variantsMap.get(variantKey) || null;
+    const variant =
+      variantsMap.get(variantKey) ||
+      variantsMap.get(`${li.product_id}|sku:${normalizeVariantKey(li.variant_sku)}`) ||
+      variantsMap.get(`${li.product_id}|sku:${normalizeVariantKey(li.variant)}`) ||
+      null;
 
     const cost = resolveOrderLineItemCost({
       productUnitCost: product?.unit_cost,
@@ -92,12 +100,18 @@ export async function fetchOrderDetails(stripe_checkout_session_id) {
 
     const variantImage = variant?.preview_image_url || null;
     const imageUrl = variantImage || product?.primary_image_url || product?.catalog_image_url || null;
+    const displayVariant =
+      li.variant_title ||
+      variant?.option_value ||
+      li.variant ||
+      null;
     
     return {
       ...li,
+      variant: displayVariant,
       product_slug: product?.slug || null,
       product_image_url: imageUrl,
-      product_variant_id: variant?.id || null,
+      product_variant_id: variant?.id || li.variant_id || null,
       unit_cost_cents: cost.unitCostCents,
       supplier_ship_cents: cost.supplierShipCents,
       cpi_cents: cost.cpiCents,
@@ -561,65 +575,92 @@ function applyDateRange(qb, dateFrom, dateTo) {
   return qb;
 }
 
+/** @param {import("@supabase/supabase-js").PostgrestFilterBuilder} qb */
+function applyPlatformFilter(qb, platform) {
+  const p = String(platform || "").trim().toLowerCase();
+  if (!p || p === "all") return qb;
+  if (p === "amazon") return qb.like("stripe_checkout_session_id", "amazon_%");
+  if (p === "ebay") return qb.like("stripe_checkout_session_id", "ebay_%");
+  if (p === "kk") {
+    return qb.or(
+      "stripe_checkout_session_id.like.cs_live_%,stripe_checkout_session_id.like.cs_test_%",
+    );
+  }
+  return qb;
+}
+
+async function resolveListFilterContext({
+  q = "",
+  status = "",
+  dateFrom = "",
+  dateTo = "",
+  reviewStatus = "",
+} = {}) {
+  let statusSessionIds = null;
+  if (status) {
+    statusSessionIds = await getSessionIdsByStatus(status);
+    if (!statusSessionIds.length) return { empty: true, statusSessionIds, reviewSessionIds: null };
+  }
+
+  let reviewSessionIds = null;
+  if (reviewStatus === "reviewed" || reviewStatus === "no_reviews") {
+    const reviewedSet = await getReviewedSessionIds();
+    reviewSessionIds = { set: reviewedSet, mode: reviewStatus };
+    if (reviewSessionIds.mode === "reviewed" && reviewedSet.size === 0) {
+      return { empty: true, statusSessionIds, reviewSessionIds };
+    }
+  }
+
+  return { empty: false, statusSessionIds, reviewSessionIds, q: (q || "").trim() };
+}
+
+/** @param {import("@supabase/supabase-js").PostgrestFilterBuilder} qb */
+function applyListFilters(qb, filters, ctx) {
+  const { q, statusSessionIds, reviewSessionIds } = ctx;
+
+  if (q) qb = qb.or(buildSearchOr(q));
+  qb = applyDateRange(qb, filters.dateFrom, filters.dateTo);
+  qb = applyPlatformFilter(qb, filters.platform);
+
+  if (statusSessionIds) {
+    qb = qb.in("stripe_checkout_session_id", statusSessionIds);
+  }
+
+  if (reviewSessionIds?.mode === "reviewed") {
+    const ids = [...reviewSessionIds.set];
+    qb = qb.in("stripe_checkout_session_id", ids);
+  } else if (reviewSessionIds?.mode === "no_reviews") {
+    const ids = [...reviewSessionIds.set];
+    if (ids.length > 0) {
+      qb = qb.not("stripe_checkout_session_id", "in", `(${ids.join(",")})`);
+    }
+  }
+
+  return qb;
+}
+
 export async function fetchOrderSummaryPage({
   q = "",
   status = "",
   dateFrom = "",
   dateTo = "",
   reviewStatus = "",
+  platform = "",
   limit = 25,
   offset = 0,
 } = {}) {
-  const Q = (q || "").trim();
   const L = Math.min(200, Math.max(5, Number(limit || 25)));
   const O = Math.max(0, Number(offset || 0));
 
-  let statusSessionIds = null;
-  if (status) {
-    statusSessionIds = await getSessionIdsByStatus(status);
-    if (!statusSessionIds.length) return { rows: [], totalCount: 0, hasMore: false };
-  }
+  const ctx = await resolveListFilterContext({ q, status, dateFrom, dateTo, reviewStatus });
+  if (ctx.empty) return { rows: [], totalCount: 0, hasMore: false };
 
-  // Review filter: get session IDs that have reviews
-  let reviewSessionIds = null;
-  if (reviewStatus === "reviewed" || reviewStatus === "no_reviews") {
-    const reviewedSet = await getReviewedSessionIds();
-    reviewSessionIds = { set: reviewedSet, mode: reviewStatus };
-  }
-
+  const filters = { dateFrom, dateTo, platform };
   let countQ = supabase.from(SUMMARY).select("*", { count: "exact", head: true });
   let dataQ = supabase.from(SUMMARY).select("*");
 
-  if (Q) {
-    const or = buildSearchOr(Q);
-    countQ = countQ.or(or);
-    dataQ = dataQ.or(or);
-  }
-
-  countQ = applyDateRange(countQ, dateFrom, dateTo);
-  dataQ = applyDateRange(dataQ, dateFrom, dateTo);
-
-  if (statusSessionIds) {
-    countQ = countQ.in("stripe_checkout_session_id", statusSessionIds);
-    dataQ = dataQ.in("stripe_checkout_session_id", statusSessionIds);
-  }
-
-  // Apply review filter at the query level
-  if (reviewSessionIds) {
-    const ids = [...reviewSessionIds.set];
-    if (reviewSessionIds.mode === "reviewed") {
-      if (ids.length === 0) return { rows: [], totalCount: 0, hasMore: false };
-      countQ = countQ.in("stripe_checkout_session_id", ids);
-      dataQ = dataQ.in("stripe_checkout_session_id", ids);
-    } else if (reviewSessionIds.mode === "no_reviews") {
-      // Supabase doesn't have a NOT IN direct method, use .not + .in
-      if (ids.length > 0) {
-        countQ = countQ.not("stripe_checkout_session_id", "in", `(${ids.join(",")})`);
-        dataQ = dataQ.not("stripe_checkout_session_id", "in", `(${ids.join(",")})`);
-      }
-      // If ids.length === 0 => all orders have no reviews, no filter needed
-    }
-  }
+  countQ = applyListFilters(countQ, filters, ctx);
+  dataQ = applyListFilters(dataQ, filters, ctx);
 
   dataQ = dataQ.order("order_date", { ascending: false }).range(O, O + L - 1);
 
@@ -756,55 +797,122 @@ export async function finalizeKkOrderReservations({
   return data;
 }
 
-export async function fetchOrderKpis({ q = "", status = "", dateFrom = "", dateTo = "" } = {}) {
-  // Get base KPIs from RPC (orders count, revenue, unfulfilled)
-  const { data, error } = await supabase.rpc("rpc_order_kpis", {
-    p_q: (q || "").trim() || null,
-    p_status: (status || "").trim() || null,
-    p_date_from: (dateFrom || "").trim() || null,
-    p_date_to: (dateTo || "").trim() || null,
-  });
+export async function fetchOrderKpis({
+  q = "",
+  status = "",
+  dateFrom = "",
+  dateTo = "",
+  reviewStatus = "",
+  platform = "",
+} = {}) {
+  const platformVal = String(platform || "").trim().toLowerCase();
+  const usePlatformScopedKpis = platformVal && platformVal !== "all";
 
-  if (error) throw error;
+  if (!usePlatformScopedKpis) {
+    const { data, error } = await supabase.rpc("rpc_order_kpis", {
+      p_q: (q || "").trim() || null,
+      p_status: (status || "").trim() || null,
+      p_date_from: (dateFrom || "").trim() || null,
+      p_date_to: (dateTo || "").trim() || null,
+    });
 
-  const row = Array.isArray(data) ? data[0] : data;
-  const baseKpis = row || { orders_count: 0, revenue_cents: 0, profit_cents: 0, unfulfilled_count: 0, refunded_count: 0, refunded_cents: 0 };
+    if (error) throw error;
 
-  // Profit from v_order_summary_plus (landed CPI views). Sum for filtered orders.
-  let profitQ = supabase
-    .from(SUMMARY)
-    .select("profit_cents")
-    .order("order_date", { ascending: false })
-    .limit(500);
+    const row = Array.isArray(data) ? data[0] : data;
+    const baseKpis = row || {
+      orders_count: 0,
+      revenue_cents: 0,
+      profit_cents: 0,
+      unfulfilled_count: 0,
+      refunded_count: 0,
+      refunded_cents: 0,
+    };
 
-  const Q = (q || "").trim();
-  if (Q) {
-    const or = buildSearchOr(Q);
-    profitQ = profitQ.or(or);
+    let profitQ = supabase
+      .from(SUMMARY)
+      .select("profit_cents")
+      .order("order_date", { ascending: false })
+      .limit(500);
+
+    const ctx = await resolveListFilterContext({ q, status, dateFrom, dateTo, reviewStatus });
+    if (ctx.empty) return { ...baseKpis, profit_cents: 0 };
+
+    profitQ = applyListFilters(
+      profitQ,
+      { dateFrom, dateTo, platform: "" },
+      ctx,
+    );
+
+    const { data: profitRows, error: profitErr } = await profitQ;
+    if (profitErr) throw profitErr;
+
+    let totalProfit = 0;
+    for (const r of profitRows || []) {
+      totalProfit += Number(r.profit_cents || 0);
+    }
+
+    return {
+      ...baseKpis,
+      profit_cents: totalProfit,
+    };
   }
 
-  profitQ = applyDateRange(profitQ, dateFrom, dateTo);
+  const ctx = await resolveListFilterContext({ q, status, dateFrom, dateTo, reviewStatus });
+  if (ctx.empty) {
+    return {
+      orders_count: 0,
+      revenue_cents: 0,
+      profit_cents: 0,
+      unfulfilled_count: 0,
+      refunded_count: 0,
+      refunded_cents: 0,
+    };
+  }
 
-  if (status) {
-    const statusSessionIds = await getSessionIdsByStatus(status);
-    if (statusSessionIds && statusSessionIds.length > 0) {
-      profitQ = profitQ.in("stripe_checkout_session_id", statusSessionIds);
-    } else if (status) {
-      return { ...baseKpis, profit_cents: 0 };
+  let kpiQ = supabase
+    .from(SUMMARY)
+    .select(
+      "total_paid_cents, refund_amount_cents, refund_status, profit_cents, label_status",
+    )
+    .order("order_date", { ascending: false })
+    .limit(10000);
+
+  kpiQ = applyListFilters(kpiQ, { dateFrom, dateTo, platform: platformVal }, ctx);
+
+  let countQ = supabase.from(SUMMARY).select("*", { count: "exact", head: true });
+  countQ = applyListFilters(countQ, { dateFrom, dateTo, platform: platformVal }, ctx);
+
+  const [{ data: kpiRows, error: kpiErr }, { count, error: countErr }] = await Promise.all([
+    kpiQ,
+    countQ,
+  ]);
+  if (kpiErr) throw kpiErr;
+  if (countErr) throw countErr;
+
+  let revenueCents = 0;
+  let profitCents = 0;
+  let unfulfilledCount = 0;
+  let refundedCount = 0;
+  let refundedCents = 0;
+
+  for (const r of kpiRows || []) {
+    revenueCents +=
+      Number(r.total_paid_cents || 0) - Number(r.refund_amount_cents || 0);
+    profitCents += Number(r.profit_cents || 0);
+    if ((r.label_status || "pending") === "pending") unfulfilledCount += 1;
+    if (r.refund_status) {
+      refundedCount += 1;
+      refundedCents += Number(r.refund_amount_cents || 0);
     }
   }
 
-  const { data: profitRows, error: profitErr } = await profitQ;
-  if (profitErr) throw profitErr;
-
-  let totalProfit = 0;
-  for (const r of profitRows || []) {
-    totalProfit += Number(r.profit_cents || 0);
-  }
-
   return {
-    ...baseKpis,
-    profit_cents: totalProfit,
+    orders_count: Number(count ?? (kpiRows || []).length),
+    revenue_cents: revenueCents,
+    profit_cents: profitCents,
+    unfulfilled_count: unfulfilledCount,
+    refunded_count: refundedCount,
+    refunded_cents: refundedCents,
   };
 }
 

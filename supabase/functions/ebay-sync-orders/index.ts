@@ -12,6 +12,11 @@ import {
 import { upsertEbayCancelObservations } from "../_shared/marketplaceObservationSync.ts";
 import { isEbayOrderCanceled, updateExistingEbayOrderFromApi } from "../_shared/ebayOrderCancelAware.ts";
 import { refreshMarketplaceObservationsAfterSync } from "../_shared/marketplaceObservationRefresh.ts";
+import { applyEbaySaleHoldsAfterIngest } from "../_shared/marketplaceSaleHold.ts";
+import {
+  loadEbayVariantHints,
+  resolveEbayLineItemVariant,
+} from "../_shared/ebayOrderVariantResolve.ts";
 
 /** Fetch orders from eBay Fulfillment API */
 async function fetchEbayOrders(
@@ -134,12 +139,16 @@ serve(async (req) => {
       );
     }
 
-    // Load all products for fuzzy matching
+    // Load all products for fuzzy matching + variants for SKU → option labels
     const { data: allProducts } = await supabase
       .from("products")
       .select("code, name");
     const products: KKProduct[] = (allProducts || []) as KKProduct[];
-    console.log(`[ebay-sync] Loaded ${products.length} products for matching`);
+    const variantHints = await loadEbayVariantHints(supabase);
+    const resolveProductCode = (title: string) => matchProduct(title, products);
+    console.log(
+      `[ebay-sync] Loaded ${products.length} products, ${variantHints.length} variants for matching`,
+    );
 
     let synced = 0;
     let skipped = 0;
@@ -147,6 +156,7 @@ serve(async (req) => {
     let canceledUpdated = 0;
     let matched = 0;
     let unmatched = 0;
+    let variantsRepaired = 0;
 
     for (const order of ebayOrders as Record<string, unknown>[]) {
       const orderId = order.orderId as string;
@@ -162,7 +172,10 @@ serve(async (req) => {
       if (existing) {
         const updateResult = await updateExistingEbayOrderFromApi(supabase, order, {
           syncSource: "order_sync",
+          resolveProductCode,
+          variantHints,
         });
+        variantsRepaired += updateResult.variantsRepaired || 0;
         if (updateResult.canceled) canceledUpdated++;
         else updated++;
         continue;
@@ -237,12 +250,22 @@ serve(async (req) => {
           ? products.find(p => p.code === productCode)
           : null;
 
+        const resolvedVariant = resolveEbayLineItemVariant(
+          item,
+          productCode,
+          variantHints,
+        );
+
         const lineItemRow = {
           stripe_checkout_session_id: sessionId,
           stripe_line_item_id: `ebay_li_${item.lineItemId}`,
           product_id: productCode || null,
           product_name: matchedProduct?.name || ebayTitle,
-          variant: (item.legacyVariationId as string) || null,
+          variant: resolvedVariant.variant,
+          variant_sku: resolvedVariant.variant_sku,
+          variant_title: resolvedVariant.variant_title,
+          variant_id: resolvedVariant.variant_id,
+          selected_options: resolvedVariant.selected_options,
           quantity: (item.quantity as number) || 1,
           unit_price_cents: toCents((item.lineItemCost as Record<string, unknown>)?.value as string),
           post_discount_unit_price_cents: toCents(
@@ -313,6 +336,19 @@ serve(async (req) => {
         console.error(`[ebay-sync] Shipment upsert error for ${orderId}:`, shipErr.message);
       }
 
+      if (!isCanceled) {
+        const holdResult = await applyEbaySaleHoldsAfterIngest(
+          supabase,
+          order,
+          sessionId,
+          isCanceled,
+          (title) => matchProduct(title, products),
+        );
+        console.log(
+          `[ebay-sync] Sale hold ${orderId}: attempted=${holdResult.attempted} reserved=${holdResult.reserved} skipped=${holdResult.skipped}`,
+        );
+      }
+
       if (isCanceled) {
         const lineItems = (order.lineItems as Record<string, unknown>[]) || [];
         await upsertEbayCancelObservations(supabase, {
@@ -328,7 +364,7 @@ serve(async (req) => {
     }
 
     console.log(
-      `[ebay-sync] Done: synced=${synced}, updated=${updated}, canceledUpdated=${canceledUpdated}, skipped=${skipped}, matched=${matched}, unmatched=${unmatched}`,
+      `[ebay-sync] Done: synced=${synced}, updated=${updated}, canceledUpdated=${canceledUpdated}, skipped=${skipped}, matched=${matched}, unmatched=${unmatched}, variantsRepaired=${variantsRepaired}`,
     );
 
     const obsRefresh = await refreshMarketplaceObservationsAfterSync(supabase, {
@@ -346,6 +382,7 @@ serve(async (req) => {
         skipped,
         matched,
         unmatched,
+        variantsRepaired,
         total: ebayOrders.length,
         observation_refresh: obsRefresh,
       }),

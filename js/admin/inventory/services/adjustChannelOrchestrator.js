@@ -13,6 +13,7 @@ import { buildAdjustSyncContext } from "./adjustSyncContext.js";
 import { resolveEbayBranch } from "./adjustChannelEbayBranch.js";
 import {
   ADJUST_KK_SUCCESS_COPY,
+  ADJUST_KK_UNCHANGED_SYNC_COPY,
   AMAZON_DRY_RUN_COPY,
   AMAZON_SYNC_FAILED_COPY,
 } from "./adjustOrchestratorSummary.js";
@@ -61,7 +62,7 @@ async function runAmazonUpdateQty(variantId, warnings, errors, syncContext) {
       limit: 1,
       syncContext,
     });
-    const succeeded = Number(data.succeeded ?? data.success_count ?? 0);
+    const succeeded = Number(data.succeeded ?? data.success_count ?? data.summary?.succeeded ?? 0);
     const runId = data.runId ?? data.run_id ?? null;
     if (succeeded > 0) {
       return {
@@ -229,25 +230,55 @@ export async function runAdjustChannelOrchestration({
   };
 
   let kkResult;
-  try {
-    kkResult = await adjustInventory(adjustParams);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    base.kk = {
-      status: "failed",
-      message,
-      ledgerId: "",
-      stockAfter: row.onHand,
+  const deltaQty = Number(adjustParams.deltaQty) || 0;
+
+  if (deltaQty === 0) {
+    if (!syncChannelsEnabled) {
+      const message =
+        "KK stock is already at this quantity. Turn on marketplace sync to push channels without changing stock.";
+      base.kk = {
+        status: "failed",
+        message,
+        ledgerId: "",
+        stockAfter: row.onHand,
+        delta: 0,
+        stockBefore: row.onHand,
+      };
+      base.errors.push(message);
+      return base;
+    }
+
+    kkResult = {
+      variantId: adjustParams.variantId,
+      productId: "",
       delta: 0,
       stockBefore: row.onHand,
+      stockAfter: row.onHand,
+      ledgerId: "",
+      createdAt: new Date().toISOString(),
+      idempotentReplay: false,
     };
-    base.errors.push(message);
-    return base;
+  } else {
+    try {
+      kkResult = await adjustInventory(adjustParams);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      base.kk = {
+        status: "failed",
+        message,
+        ledgerId: "",
+        stockAfter: row.onHand,
+        delta: 0,
+        stockBefore: row.onHand,
+      };
+      base.errors.push(message);
+      return base;
+    }
   }
 
   base.kk = {
     status: "success",
-    message: ADJUST_KK_SUCCESS_COPY,
+    message: deltaQty === 0 ? ADJUST_KK_UNCHANGED_SYNC_COPY : ADJUST_KK_SUCCESS_COPY,
     ledgerId: kkResult.ledgerId,
     stockAfter: kkResult.stockAfter,
     delta: kkResult.delta,
@@ -264,8 +295,8 @@ export async function runAdjustChannelOrchestration({
     return base;
   }
 
-  if (projectedAvailable <= 0) {
-    const msg = "Marketplace sync skipped — projected available quantity is not positive.";
+  if (projectedAvailable < 0) {
+    const msg = "Marketplace sync skipped — projected available quantity is negative.";
     warnings.push(msg);
     base.amazon = skippedChannel(msg);
     base.ebay = skippedChannel(msg);

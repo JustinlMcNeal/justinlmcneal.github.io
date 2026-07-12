@@ -17,6 +17,12 @@ import {
 } from "../_shared/ebayOrderCancelAware.ts";
 import { upsertEbayCancelObservations } from "../_shared/marketplaceObservationSync.ts";
 import { refreshMarketplaceObservationsAfterSync } from "../_shared/marketplaceObservationRefresh.ts";
+import { applyEbaySaleHoldsAfterIngest } from "../_shared/marketplaceSaleHold.ts";
+import {
+  loadEbayVariantHints,
+  ProductVariantHint,
+  resolveEbayLineItemVariant,
+} from "../_shared/ebayOrderVariantResolve.ts";
 
 const ORDER_INGEST_TOPICS = new Set([
   "ORDER_CONFIRMATION",
@@ -92,6 +98,7 @@ async function insertEbayOrder(
   supabase: ReturnType<typeof createServiceClient>,
   order: Record<string, unknown>,
   products: KKProduct[],
+  variantHints: ProductVariantHint[] = [],
 ): Promise<{ inserted: boolean; matched: number; unmatched: number }> {
   const orderId = order.orderId as string;
   const sessionId = `ebay_api_${orderId}`;
@@ -179,12 +186,22 @@ async function insertEbayOrder(
       ? products.find(p => p.code === productCode)
       : null;
 
+    const resolvedVariant = resolveEbayLineItemVariant(
+      item,
+      productCode,
+      variantHints,
+    );
+
     const lineItemRow = {
       stripe_checkout_session_id: sessionId,
       stripe_line_item_id: `ebay_li_${item.lineItemId}`,
       product_id: productCode || null,
       product_name: matchedProduct?.name || ebayTitle,
-      variant: (item.legacyVariationId as string) || null,
+      variant: resolvedVariant.variant,
+      variant_sku: resolvedVariant.variant_sku,
+      variant_title: resolvedVariant.variant_title,
+      variant_id: resolvedVariant.variant_id,
+      selected_options: resolvedVariant.selected_options,
       quantity: (item.quantity as number) || 1,
       unit_price_cents: toCents((item.lineItemCost as Record<string, unknown>)?.value as string),
       post_discount_unit_price_cents: toCents(
@@ -223,6 +240,17 @@ async function insertEbayOrder(
     console.error(`[ebay-webhook] Shipment upsert error for ${orderId}:`, shipErr.message);
   }
 
+  const holdResult = await applyEbaySaleHoldsAfterIngest(
+    supabase,
+    order,
+    sessionId,
+    false,
+    (title) => matchProduct(title, products),
+  );
+  console.log(
+    `[ebay-webhook] Sale hold ${orderId}: attempted=${holdResult.attempted} reserved=${holdResult.reserved} skipped=${holdResult.skipped}`,
+  );
+
   return { inserted: true, matched, unmatched };
 }
 
@@ -233,14 +261,18 @@ async function processEbayOrderNotification(
   orderId: string,
   products: KKProduct[],
   topic: string,
+  variantHints: ProductVariantHint[] = [],
 ): Promise<Record<string, unknown>> {
   const order = await fetchEbayOrder(accessToken, orderId);
   if (!order) {
     return { success: false, error: "order_fetch_failed" };
   }
 
+  const resolveProductCode = (title: string) => matchProduct(title, products);
   const existingUpdate = await updateExistingEbayOrderFromApi(supabase, order, {
     syncSource: "webhook",
+    resolveProductCode,
+    variantHints,
   });
 
   if (existingUpdate.found) {
@@ -253,6 +285,7 @@ async function processEbayOrderNotification(
       success: true,
       action: existingUpdate.canceled ? "canceled_updated" : "updated",
       sessionId: existingUpdate.sessionId,
+      variantsRepaired: existingUpdate.variantsRepaired,
       observation_refresh: obsRefresh,
     };
   }
@@ -290,7 +323,7 @@ async function processEbayOrderNotification(
     return { success: true, action: "observation_refresh_only", observation_refresh: obsRefresh };
   }
 
-  const result = await insertEbayOrder(supabase, order, products);
+  const result = await insertEbayOrder(supabase, order, products, variantHints);
   const obsRefresh = await refreshMarketplaceObservationsAfterSync(supabase, {
     channel: "ebay",
     sourceOrderId: `ebay_api_${orderId}`,
@@ -399,6 +432,7 @@ serve(async (req) => {
           .from("products")
           .select("code, name");
         const products: KKProduct[] = (allProducts || []) as KKProduct[];
+        const variantHints = await loadEbayVariantHints(supabase);
 
         const result = await processEbayOrderNotification(
           supabase,
@@ -406,6 +440,7 @@ serve(async (req) => {
           resourceId,
           products,
           topic,
+          variantHints,
         );
         console.log(`[ebay-webhook] Order ${resourceId}:`, JSON.stringify(result));
 

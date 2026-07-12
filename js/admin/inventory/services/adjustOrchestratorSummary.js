@@ -10,6 +10,9 @@
 
 export const ADJUST_KK_SUCCESS_COPY = "KK stock was adjusted successfully.";
 
+export const ADJUST_KK_UNCHANGED_SYNC_COPY =
+  "KK stock unchanged — syncing marketplaces only.";
+
 
 
 export const ADJUST_PARTIAL_BANNER_TITLE =
@@ -145,9 +148,12 @@ export function formatAdjustOrchestratorToast(result) {
 
   const parts = [];
 
-  const sign = result.kk.delta > 0 ? "+" : "";
-
-  parts.push(`KK: ${sign}${result.kk.delta} → ${result.kk.stockAfter} on hand`);
+  if (result.kk.delta === 0) {
+    parts.push("KK: unchanged (marketplace sync only)");
+  } else {
+    const sign = result.kk.delta > 0 ? "+" : "";
+    parts.push(`KK: ${sign}${result.kk.delta} → ${result.kk.stockAfter} on hand`);
+  }
 
 
 

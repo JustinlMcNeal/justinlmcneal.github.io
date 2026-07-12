@@ -1,6 +1,12 @@
-// Phase 10O/10P — eBay cancel-aware fulfillment + observation updates (no inventory mutations).
+// Phase 10O/10P — eBay cancel-aware fulfillment + observation updates + 061C.1 sale release.
 
 import { upsertEbayCancelObservations } from "./marketplaceObservationSync.ts";
+import { applyEbaySaleReleasesAfterCancel } from "./marketplaceSaleRelease.ts";
+import {
+  loadEbayVariantHints,
+  ProductVariantHint,
+  repairEbayLineItemVariants,
+} from "./ebayOrderVariantResolve.ts";
 
 // deno-lint-ignore no-explicit-any
 type DbClient = any;
@@ -17,15 +23,21 @@ export type EbayExistingOrderUpdateResult = {
   sessionId: string;
   canceled: boolean;
   fulfillmentUpdated: boolean;
+  variantsRepaired: number;
 };
 
 /**
  * When an eBay order already exists, align fulfillment status + cancel observations (10O rules).
+ * Also repairs line variant labels when rows still store legacyVariationId.
  */
 export async function updateExistingEbayOrderFromApi(
   supabase: DbClient,
   order: Record<string, unknown>,
-  opts?: { syncSource?: "order_sync" | "webhook" | "finance_sync" | "admin_backfill" },
+  opts?: {
+    syncSource?: "order_sync" | "webhook" | "finance_sync" | "admin_backfill";
+    resolveProductCode?: (title: string) => string | null;
+    variantHints?: ProductVariantHint[];
+  },
 ): Promise<EbayExistingOrderUpdateResult> {
   const orderId = String(order.orderId || "");
   const defaultSessionId = `ebay_api_${orderId}`;
@@ -38,7 +50,13 @@ export async function updateExistingEbayOrderFromApi(
     .maybeSingle();
 
   if (!existing) {
-    return { found: false, sessionId: defaultSessionId, canceled: isCanceled, fulfillmentUpdated: false };
+    return {
+      found: false,
+      sessionId: defaultSessionId,
+      canceled: isCanceled,
+      fulfillmentUpdated: false,
+      variantsRepaired: 0,
+    };
   }
 
   const sessionId = String(existing.stripe_checkout_session_id || defaultSessionId);
@@ -57,6 +75,21 @@ export async function updateExistingEbayOrderFromApi(
       : `eBay order ${orderId}, fulfillment status: ${orderFulfillmentStatus || "UNKNOWN"}`,
   }, { onConflict: "stripe_checkout_session_id" });
 
+  let variantsRepaired = 0;
+  try {
+    const hints = opts?.variantHints ?? await loadEbayVariantHints(supabase);
+    const resolveProductCode = opts?.resolveProductCode ?? (() => null);
+    variantsRepaired = await repairEbayLineItemVariants(
+      supabase,
+      sessionId,
+      order,
+      resolveProductCode,
+      hints,
+    );
+  } catch (err) {
+    console.error("[ebay-order-update] Variant repair failed:", err);
+  }
+
   if (isCanceled) {
     const lineItems = (order.lineItems as Record<string, unknown>[]) || [];
     await upsertEbayCancelObservations(supabase, {
@@ -66,7 +99,14 @@ export async function updateExistingEbayOrderFromApi(
       lineItemIds: lineItems.map((item) => String(item.lineItemId || "")).filter(Boolean),
       syncSource: opts?.syncSource ?? "order_sync",
     });
+    await applyEbaySaleReleasesAfterCancel(supabase, order, sessionId, isCanceled);
   }
 
-  return { found: true, sessionId, canceled: isCanceled, fulfillmentUpdated: true };
+  return {
+    found: true,
+    sessionId,
+    canceled: isCanceled,
+    fulfillmentUpdated: true,
+    variantsRepaired,
+  };
 }

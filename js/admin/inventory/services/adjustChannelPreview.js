@@ -4,10 +4,12 @@
 
 import {
   computeVariationSyncToggleContribution,
+  isMarketplaceSyncQtyEligible,
   isSingleSkuEbayActionable,
   mapVariationChildPreviewStatus,
   mapVariationGroupRelistPreviewStatus,
   resolveEbayPreviewPath,
+  resolveProjectedVariationChildState,
 } from "./adjustChannelVariationPreview.js";
 
 /** @typedef {'success'|'warn'|'muted'|'danger'} PreviewTone */
@@ -31,11 +33,81 @@ import {
  * @property {number} reservedQty
  */
 
+/** @typedef {import('../api/channelSyncCandidateApi.js').ChannelSyncCandidateRow} ChannelSyncCandidateRow */
+
+/**
+ * Recompute amazon_sync_action as if available_qty were projectedAvailable.
+ * @param {ChannelSyncCandidateRow|null} candidate
+ * @param {number} projectedAvailable
+ */
+export function resolveProjectedAmazonSyncAction(candidate, projectedAvailable) {
+  if (!candidate) return null;
+  const base = candidate.amazon_sync_action;
+  if (base === "afn_skip" || base === "missing_mapping") return base;
+
+  const amazonQty = candidate.amazon_current_qty;
+  if (amazonQty == null) return base;
+
+  const qty = Number(amazonQty);
+  const projected = Number(projectedAvailable);
+  if (!Number.isFinite(qty) || !Number.isFinite(projected)) return base;
+
+  if (qty !== projected) {
+    if (base === "inactive_can_update") return "inactive_can_update";
+    if (base === "no_change" || base === "update_qty") return "update_qty";
+  } else if (base === "update_qty") {
+    return "no_change";
+  }
+  return base;
+}
+
+/**
+ * Recompute ebay_sync_action as if available_qty were projectedAvailable.
+ * @param {ChannelSyncCandidateRow|null} candidate
+ * @param {number} projectedAvailable
+ */
+export function resolveProjectedEbaySyncAction(candidate, projectedAvailable) {
+  if (!candidate) return null;
+  const base = candidate.ebay_sync_action;
+  const locked = new Set([
+    "ended_needs_relist",
+    "unsupported_variation",
+    "missing_mapping",
+    "no_active_listing",
+    "unavailable",
+  ]);
+  if (locked.has(base)) return base;
+
+  const ebayQty = candidate.ebay_current_qty;
+  if (ebayQty == null) return base;
+
+  const qty = Number(ebayQty);
+  const projected = Number(projectedAvailable);
+  if (!Number.isFinite(qty) || !Number.isFinite(projected)) return base;
+
+  if (qty !== projected) {
+    if (base === "no_change" || base === "update_qty") return "update_qty";
+  } else if (base === "update_qty") {
+    return "no_change";
+  }
+  return base;
+}
+
 /** @param {string|null|undefined} action @param {{ projectedAvailable?: number }} [opts] */
 export function mapAmazonPreviewStatus(action, opts = {}) {
   switch (action) {
-    case "update_qty":
+    case "update_qty": {
+      const avail = Number(opts.projectedAvailable ?? 0);
+      if (avail === 0) {
+        return card(
+          "Amazon",
+          "Amazon quantity will zero",
+          "Active FBM listing can sync to zero after KK stock is saved.",
+          "success",
+        );
+      }
       return card("Amazon", "Amazon quantity will update", "Active FBM listing can sync after KK stock is saved.", "success");
+    }
     case "inactive_can_update": {
       const avail = Number(opts.projectedAvailable ?? 0);
       if (avail > 0) {
@@ -167,6 +239,15 @@ export function mapKkPreviewStatus(currentOnHand, reservedQty, projectedOnHand, 
     );
   }
 
+  if (onHand === currentOnHand) {
+    return card(
+      "KK",
+      "KK stock unchanged",
+      `On hand stays ${onHand}, available ${available} (reserved ${reserved}). Marketplace sync can still run.`,
+      "success",
+    );
+  }
+
   if (available > 0) {
     return card(
       "KK",
@@ -196,13 +277,26 @@ export function computeSyncToggleDefault(
   variationChild = null,
   variationRelist = null,
 ) {
-  if (!candidate || projectedAvailable <= 0) return false;
-  const amazonSafe =
-    candidate.amazon_sync_action === "update_qty" ||
-    candidate.amazon_sync_action === "inactive_can_update";
-  const ebaySafe = isSingleSkuEbayActionable(candidate, relist, projectedAvailable);
+  if (!candidate || !isMarketplaceSyncQtyEligible(projectedAvailable)) return false;
+  const amazonAction =
+    resolveProjectedAmazonSyncAction(candidate, projectedAvailable) ?? candidate.amazon_sync_action;
+  const amazonSafe = amazonAction === "update_qty" || amazonAction === "inactive_can_update";
+  const projectedCandidate = {
+    ...candidate,
+    ebay_sync_action:
+      resolveProjectedEbaySyncAction(candidate, projectedAvailable) ?? candidate.ebay_sync_action,
+  };
+  const ebaySafe = isSingleSkuEbayActionable(projectedCandidate, relist, projectedAvailable);
+  const projectedChild = variationChild
+    ? {
+        ...variationChild,
+        candidate_state:
+          resolveProjectedVariationChildState(variationChild, projectedAvailable) ??
+          variationChild.candidate_state,
+      }
+    : null;
   const variationSafe = computeVariationSyncToggleContribution(
-    variationChild,
+    projectedChild,
     variationRelist,
     projectedAvailable,
   );
@@ -233,11 +327,28 @@ export function buildAdjustChannelPreviewState({
   const reservedQty = Number(candidate?.reserved_qty ?? fallbackReserved ?? 0);
   const projectedOnHand = adjustment.valid ? adjustment.newStock : currentOnHand;
   const projectedAvailable = projectedOnHand - reservedQty;
+  const projectedAmazonAction =
+    resolveProjectedAmazonSyncAction(candidate, projectedAvailable) ?? candidate?.amazon_sync_action ?? null;
+  const projectedCandidate = candidate
+    ? {
+        ...candidate,
+        ebay_sync_action:
+          resolveProjectedEbaySyncAction(candidate, projectedAvailable) ?? candidate.ebay_sync_action,
+      }
+    : null;
+  const projectedVariationChild = variationChild
+    ? {
+        ...variationChild,
+        candidate_state:
+          resolveProjectedVariationChildState(variationChild, projectedAvailable) ??
+          variationChild.candidate_state,
+      }
+    : null;
 
   const ebayPath = resolveEbayPreviewPath({
-    candidate,
+    candidate: projectedCandidate,
     relist,
-    variationChild,
+    variationChild: projectedVariationChild,
     variationRelist,
     projectedAvailable,
   });
@@ -246,7 +357,7 @@ export function buildAdjustChannelPreviewState({
   let ebay;
   switch (ebayPath) {
     case "variation_child":
-      ebay = mapVariationChildPreviewStatus(variationChild, { projectedAvailable });
+      ebay = mapVariationChildPreviewStatus(projectedVariationChild, { projectedAvailable });
       break;
     case "variation_group_relist":
       ebay = mapVariationGroupRelistPreviewStatus(variationRelist, { projectedAvailable });
@@ -254,7 +365,7 @@ export function buildAdjustChannelPreviewState({
     case "single_sku":
     case "channel_fallback":
     default:
-      ebay = mapEbayPreviewStatus(candidate?.ebay_sync_action, {
+      ebay = mapEbayPreviewStatus(projectedCandidate?.ebay_sync_action, {
         relistAction: relist?.relist_action,
         projectedAvailable,
         suppressEndedRelist:
@@ -268,7 +379,7 @@ export function buildAdjustChannelPreviewState({
 
   return {
     kk: mapKkPreviewStatus(currentOnHand, reservedQty, projectedOnHand, adjustment.valid),
-    amazon: mapAmazonPreviewStatus(candidate?.amazon_sync_action, { projectedAvailable }),
+    amazon: mapAmazonPreviewStatus(projectedAmazonAction, { projectedAvailable }),
     ebay,
     syncToggleDefault: computeSyncToggleDefault(
       candidate,
