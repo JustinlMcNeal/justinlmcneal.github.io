@@ -127,17 +127,9 @@ export async function fetchCategories() {
  * If categoryId is null => “All”
  */
 export async function fetchHomeProducts({ categoryId = null, limit = 10 }) {
-  // ✅ Special case: Best Seller chip
+  // Legacy bestseller category id — use shared bestseller fetch
   if (categoryId === "__bestseller__") {
-    const { data, error } = await supabase
-      .from("v_products_with_tags")
-      .select("id,slug,name,price,catalog_image_url,catalog_hover_url,primary_image_url,category_id,is_active,tags")
-      .eq("is_active", true)
-      .contains("tags", ["bestseller"])
-      .limit(limit);
-
-    if (error) throw error;
-    return data || [];
+    return fetchHomeBestSellers({ limit });
   }
 
   // ✅ Normal category filtering
@@ -282,33 +274,36 @@ function resolveImageUrl(pathOrUrl, bucket) {
 
 // /js/home/api.js
 export async function fetchHomeBestSellers({ limit = 10 } = {}) {
-  // 1) Find the tag id (support both "bestseller" and "best seller")
+  // Match common spellings/casing used in admin tags
+  // (catalog already allows "Best Seller"; home previously only matched lowercase).
   const { data: tagRows, error: tagErr } = await supabase
     .from("tags")
     .select("id,name")
-    .in("name", ["bestseller", "best seller"]); // if your tag is lowercase
-
-  // If your tags are not stored lowercase, use this instead:
-  // .or("name.ilike.%bestseller%,name.ilike.%best seller%")
+    .or("name.ilike.%bestseller%,name.ilike.%best seller%");
 
   if (tagErr) throw tagErr;
 
-  const tagId = tagRows?.[0]?.id || null;
-  if (!tagId) return []; // no such tag in tags table
+  const tagIds = [...new Set((tagRows || []).map((r) => r.id).filter(Boolean))];
+  if (!tagIds.length) {
+    console.warn("[home] No bestseller tag found in tags table");
+    return [];
+  }
 
-  // 2) Get product_ids for that tag (limit a bit higher, then fetch products)
+  // Collect products for any matching tag id
   const { data: ptRows, error: ptErr } = await supabase
     .from("product_tags")
     .select("product_id")
-    .eq("tag_id", tagId)
-    .limit(limit * 3);
+    .in("tag_id", tagIds)
+    .limit(limit * 5);
 
   if (ptErr) throw ptErr;
 
-  const productIds = (ptRows || []).map(r => r.product_id).filter(Boolean);
-  if (!productIds.length) return [];
+  const productIds = [...new Set((ptRows || []).map((r) => r.product_id).filter(Boolean))];
+  if (!productIds.length) {
+    console.warn("[home] Bestseller tag(s) exist but no product_tags rows", tagIds);
+    return [];
+  }
 
-  // 3) Fetch the products (keep only active)
   const { data: products, error: prodErr } = await supabase
     .from("products")
     .select("id,slug,name,price,catalog_image_url,catalog_hover_url,primary_image_url,category_id,is_active,shipping_status,created_at, product_tags(tag_id)")
@@ -319,7 +314,6 @@ export async function fetchHomeBestSellers({ limit = 10 } = {}) {
 
   if (prodErr) throw prodErr;
 
-  // 4) Preserve the tag order (optional)
   const order = new Map(productIds.map((id, idx) => [id, idx]));
   return (products || []).sort((a, b) => (order.get(a.id) ?? 9999) - (order.get(b.id) ?? 9999));
 }
