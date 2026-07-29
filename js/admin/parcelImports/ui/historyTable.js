@@ -285,9 +285,14 @@ function updateHistoryControls(overrides = {}) {
 function renderHistoryRow(row) {
   const importedAt = formatDate(row.imported_at);
   const items = row.xls_total_items ?? "—";
-  const charge = formatCny(row.actual_total_charge_cny);
-  const usd = formatUsd(row.usd_equivalent);
-  const weight = formatGrams(row.xls_charged_weight_grams);
+  // Prefer saved overrides; Baestao XLS often omits charged weight / USD.
+  const charge = formatCny(
+    firstNumber(row.actual_total_charge_cny, row.xls_total_parcel_charge_cny),
+  );
+  const usd = formatUsd(resolveHistoryUsd(row));
+  const weight = formatGrams(
+    firstNumber(row.actual_charged_weight_grams, row.xls_charged_weight_grams),
+  );
   const products =
     row.products_affected_count > 0
       ? `${row.products_affected_count} affected`
@@ -434,6 +439,32 @@ function statusBadge(status) {
 function formatDate(value) {
   if (!value) return "—";
   return String(value).slice(0, 10);
+}
+
+/** @param {...unknown} values */
+function firstNumber(...values) {
+  for (const value of values) {
+    if (value == null || value === "") continue;
+    const n = Number(value);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
+/** Prefer stored USD; else derive from total CNY ÷ FX (CNY per USD). */
+function resolveHistoryUsd(row) {
+  const stored = firstNumber(row.usd_equivalent);
+  if (stored != null) return stored;
+
+  const charge = firstNumber(
+    row.actual_total_charge_cny,
+    row.xls_total_parcel_charge_cny,
+  );
+  const fx = firstNumber(row.effective_fx_rate);
+  if (charge != null && charge > 0 && fx != null && fx > 0) {
+    return charge / fx;
+  }
+  return null;
 }
 
 function formatCny(value) {

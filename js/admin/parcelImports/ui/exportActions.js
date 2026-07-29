@@ -18,6 +18,7 @@ const HISTORY_HEADERS = [
   "imported_at",
   "source_file_name",
   "xls_total_items",
+  "charged_weight_grams",
   "actual_total_charge_cny",
   "effective_fx_rate",
   "usd_equivalent",
@@ -154,6 +155,14 @@ export async function handleExportAllocations() {
 
 /** @param {object} row */
 function historyRowToCsv(row) {
+  const charge = firstCsvNumber(row.actual_total_charge_cny, row.xls_total_parcel_charge_cny);
+  const weight = firstCsvNumber(row.actual_charged_weight_grams, row.xls_charged_weight_grams);
+  const usdStored = firstCsvNumber(row.usd_equivalent);
+  const fx = firstCsvNumber(row.effective_fx_rate);
+  const usd =
+    usdStored ??
+    (charge != null && charge > 0 && fx != null && fx > 0 ? charge / fx : null);
+
   return {
     import_id: row.id,
     parcel_id: row.parcel_id ?? "",
@@ -161,9 +170,10 @@ function historyRowToCsv(row) {
     imported_at: formatIsoDate(row.imported_at),
     source_file_name: row.source_file_name ?? "",
     xls_total_items: row.xls_total_items ?? "",
-    actual_total_charge_cny: row.actual_total_charge_cny ?? "",
-    effective_fx_rate: row.effective_fx_rate ?? "",
-    usd_equivalent: row.usd_equivalent ?? "",
+    charged_weight_grams: weight ?? "",
+    actual_total_charge_cny: charge ?? "",
+    effective_fx_rate: fx ?? "",
+    usd_equivalent: usd ?? "",
     products_affected_count: row.products_affected_count ?? "",
     rows_needing_mapping_count: row.rows_needing_mapping_count ?? "",
     expense_linked: row.expense_id ? "yes" : "no",
@@ -171,6 +181,16 @@ function historyRowToCsv(row) {
     approved_at: formatIsoDate(row.approved_at),
     inventory_received_at: formatIsoDate(row.inventory_received_at),
   };
+}
+
+/** @param {...unknown} values */
+function firstCsvNumber(...values) {
+  for (const value of values) {
+    if (value == null || value === "") continue;
+    const n = Number(value);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
 }
 
 /** @param {object} state */

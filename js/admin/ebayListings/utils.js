@@ -181,6 +181,46 @@ export function isEffectiveGroupListing(product) {
   return Boolean(product?.ebay_item_group_key) && activeVariantCount(product) > 1;
 }
 
+/**
+ * Parse offer/listing price into integer cents.
+ * @param {string|number|null|undefined} value
+ * @returns {number|null}
+ */
+export function moneyValueToCents(value) {
+  if (value == null || value === "") return null;
+  const n = Math.round(parseFloat(String(value)) * 100);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Baseline cents for an edit-session offer (live offer price, else local ebay_price_cents).
+ * @param {object|null|undefined} product
+ * @param {object|null|undefined} offerRow
+ * @returns {number|null}
+ */
+export function baselineOfferPriceCents(product, offerRow = null) {
+  const fromOffer = moneyValueToCents(offerRow?.pricingSummary?.price?.value);
+  if (fromOffer != null) return fromOffer;
+  if (product?.ebay_price_cents != null && product.ebay_price_cents !== "") {
+    const n = Number(product.ebay_price_cents);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+/**
+ * Return priceCents only when it differs from baseline so sale listings
+ * are not sent a no-op price revise (eBay 25019).
+ * @param {number} priceCents
+ * @param {number|null} baselineCents
+ * @returns {number|undefined}
+ */
+export function priceCentsIfChanged(priceCents, baselineCents) {
+  if (baselineCents == null) return priceCents;
+  if (Number(priceCents) === Number(baselineCents)) return undefined;
+  return priceCents;
+}
+
 // ── Shared UI helpers ────────────────────────────────────────
 
 /**
@@ -192,10 +232,10 @@ export function enableBtn(id, enabled) {
   btn.disabled = !enabled;
   if (enabled) {
     btn.classList.remove("border-gray-300", "bg-gray-100", "text-gray-400");
-    btn.classList.add("border-black", "bg-black", "text-white", "hover:bg-kkpink", "hover:border-kkpink", "hover:text-black");
+    btn.classList.add("border-black", "bg-black", "text-white", "hover:bg-gray-900");
   } else {
     btn.classList.add("border-gray-300", "bg-gray-100", "text-gray-400");
-    btn.classList.remove("border-black", "bg-black", "text-white", "hover:bg-kkpink", "hover:border-kkpink", "hover:text-black");
+    btn.classList.remove("border-black", "bg-black", "text-white", "hover:bg-gray-900");
   }
 }
 

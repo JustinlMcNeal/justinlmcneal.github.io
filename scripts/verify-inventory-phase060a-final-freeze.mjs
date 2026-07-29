@@ -194,7 +194,7 @@ function verifyStaticFreeze() {
   if (!index.includes("variation_child_update_qty") || !index.includes('"update_qty"')) {
     errors.push("Edge must support variation_child_update_qty with update_qty default");
   }
-  if (!index.includes("productId is required") || !index.includes("one variant only") || !index.includes("positive integer")) {
+  if (!index.includes("productId is required") || !index.includes("one variant only") || !index.includes("non-negative integer")) {
     errors.push("Edge variation contract incomplete");
   }
   if (!utils.includes('candidate.candidate_state !== "variation_update_qty"')) {

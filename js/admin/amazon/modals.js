@@ -30,6 +30,10 @@ function unlockBodyScroll() {
   document.body.style.overflow = "";
 }
 
+function modalAllowsBackdropClose(modal) {
+  return modal?.dataset.closeOnBackdrop !== "false";
+}
+
 export function closeAmazonModals() {
   /** @type {Array<HTMLElement | null>} */
   const modals = [
@@ -221,6 +225,8 @@ export function initAmazonModals(hydration = {}, options = {}) {
 
   qsa("[data-modal-backdrop]").forEach((backdrop) => {
     backdrop.addEventListener("click", () => {
+      const modal = backdrop.closest("[data-modal], [id$='Modal']");
+      if (!modalAllowsBackdropClose(/** @type {HTMLElement} */ (modal))) return;
       closeAmazonModals();
     });
   });
@@ -237,6 +243,7 @@ export function initAmazonModals(hydration = {}, options = {}) {
         || dialog.contains(/** @type {Node} */ (event.target));
 
       if (!clickedInsideDialog) {
+        if (!modalAllowsBackdropClose(modal)) return;
         closeAmazonModals();
       }
     });

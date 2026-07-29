@@ -118,16 +118,17 @@ function verifyFreezeStatic() {
   notes.push("Sync Channels does not default to inactive restore");
 
   const orch = readText("js/admin/inventory/services/adjustChannelOrchestrator.js");
+  const amazonHelper = readText("js/admin/inventory/services/channelSyncForVariant.js");
   const fnBody = orch.slice(orch.indexOf("export async function runAdjustChannelOrchestration"));
   const adjustIdx = fnBody.indexOf("await adjustInventory(");
   const amazonIdx = fnBody.indexOf("await resolveAmazonBranch(");
   if (adjustIdx < 0 || amazonIdx < 0 || amazonIdx < adjustIdx) {
     errors.push("Inactive restock must run only after successful adjust_inventory");
   }
-  if (!orch.includes('mode: "inactive_restock"') || !orch.includes("syncContext")) {
+  if (!amazonHelper.includes('mode: "inactive_restock"') || !orch.includes("syncContext")) {
     errors.push("Orchestrator must call inactive_restock with syncContext");
   }
-  if (!orch.includes("variantIds: [variantId]") || !orch.includes("limit: 1")) {
+  if (!amazonHelper.includes("variantIds: [variantId]") || !amazonHelper.includes("limit: 1")) {
     errors.push("Orchestrator must enforce single variant / limit 1");
   }
   notes.push("Orchestrator: post-adjust inactive_restock, syncContext, single variant");

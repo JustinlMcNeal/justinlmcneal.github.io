@@ -30,6 +30,8 @@ import {
   logOfferPriceCents,
   readVariantQtyInput,
   resolveVariantOfferQuantity,
+  baselineOfferPriceCents,
+  priceCentsIfChanged,
 } from "./utils.js";
 
 import { quillToolbar, descState, resetQuillEditorMount, toggleDescMode, getDescriptionHtml } from "./editor.js";
@@ -1151,11 +1153,11 @@ document.getElementById("btnSaveEdit").addEventListener("click", async () => {
       }
 
       status.textContent = "Updating variant offers...";
-      logOfferPriceCents({ flow: "edit", step: "update_offer", sku: editProduct.code, group: true }, priceCents);
       const editStoreCat = document.getElementById("editStoreCategory").value;
       const editCategoryId = document.getElementById("editCategoryId").value.trim();
       const offerLookupFailures = [];
       const variantOfferRows = [];
+      let saleFieldSkipMessage = "";
       for (const vSku of variantSKUs) {
         const offersResp = offerCache.get(vSku) || { success: false, offers: [], cached: true };
         if (!offersResp.success) {
@@ -1175,22 +1177,33 @@ document.getElementById("btnSaveEdit").addEventListener("click", async () => {
           overrides: editVariantQtyOverrides,
           fallback:  quantity,
         });
+        const sendPriceCents = priceCentsIfChanged(
+          priceCents,
+          baselineOfferPriceCents(editProduct, offerRow),
+        );
+        if (sendPriceCents !== undefined) {
+          logOfferPriceCents({ flow: "edit", step: "update_offer", sku: editProduct.code, group: true, vSku }, sendPriceCents);
+        }
         const offerPayload = {
           action:           "update_offer",
           offerId:          offerRow.offerId,
           sku:              editProduct.code,
           expectedSku:      vSku,
           listingId:        editProduct.ebay_listing_id,
-          priceCents,
           categoryId:       editCategoryId || undefined,
           policies:         getSelectedPolicies("edit"),
           // Best Offer not permitted on group (variant) listings (eBay error 25737)
           storeCategoryNames: editStoreCat ? [editStoreCat] : [],
         };
+        if (sendPriceCents !== undefined) offerPayload.priceCents = sendPriceCents;
         if (offerQty !== null) offerPayload.quantity = offerQty;
         const offerResult = await callEdge("ebay-manage-listing", offerPayload);
         if (!offerResult.success) throw new Error(offerUpdateErrorMessage(offerResult, `Offer update failed for ${vSku}`));
+        if (offerResult.priceUpdateSkipped || offerResult.bestOfferUpdateSkipped) {
+          saleFieldSkipMessage = offerResult.message || saleFieldSkipMessage || "Some money fields were skipped due to an active eBay sale.";
+        }
       }
+      if (saleFieldSkipMessage) editProduct._saleFieldSkipMessage = saleFieldSkipMessage;
     } else {
       status.textContent = "Updating item...";
       const editProductPayload = { title, description, condition, quantity, imageUrls, aspects };
@@ -1206,25 +1219,53 @@ document.getElementById("btnSaveEdit").addEventListener("click", async () => {
 
       if (editProduct.ebay_offer_id) {
         status.textContent = "Updating offer...";
-        logOfferPriceCents({ flow: "edit", step: "update_offer", sku }, priceCents);
         const editStoreCat = document.getElementById("editStoreCategory").value;
         const editCategoryId = document.getElementById("editCategoryId").value.trim();
-        const offerResult  = await callEdge("ebay-manage-listing", {
+        const sendPriceCents = priceCentsIfChanged(
+          priceCents,
+          baselineOfferPriceCents(editProduct),
+        );
+        if (sendPriceCents !== undefined) {
+          logOfferPriceCents({ flow: "edit", step: "update_offer", sku }, sendPriceCents);
+        }
+        const offerPayload = {
           action:           "update_offer",
           offerId:          editProduct.ebay_offer_id,
-          sku, expectedSku: sku, listingId: editProduct.ebay_listing_id, priceCents, quantity,
+          sku, expectedSku: sku, listingId: editProduct.ebay_listing_id, quantity,
           categoryId:       editCategoryId || undefined,
           policies:         getSelectedPolicies("edit"),
-          bestOfferTerms:   getBestOfferTerms("edit"),
           storeCategoryNames: editStoreCat ? [editStoreCat] : [],
-        });
-        if (!offerResult.success) throw new Error(offerUpdateErrorMessage(offerResult, "Offer update failed"));
+        };
+        // Only send Best Offer when enabling/configuring it. Sending
+        // bestOfferEnabled:false still revises offer policies and is unnecessary
+        // when the box is unchecked (and sale listings are already fragile).
+        if (document.getElementById("editBestOffer")?.checked) {
+          offerPayload.bestOfferTerms = getBestOfferTerms("edit");
+        }
+        if (sendPriceCents !== undefined) offerPayload.priceCents = sendPriceCents;
+        const offerResult  = await callEdge("ebay-manage-listing", offerPayload);
+        if (!offerResult.success) {
+          const msg = offerUpdateErrorMessage(offerResult, "Offer update failed");
+          if (offerResult.code === "PRICE_LOCKED_BY_SALE") {
+            // update_item above may already have applied title/aspects/images
+            throw new Error(`${msg} Title/images/item specifics may already be updated; category still needs the sale removed first.`);
+          }
+          throw new Error(msg);
+        }
+        if (offerResult.priceUpdateSkipped || offerResult.bestOfferUpdateSkipped) {
+          editProduct._saleFieldSkipMessage = offerResult.message
+            || "Some money fields were skipped due to an active eBay sale.";
+        }
       }
     }
 
-    // Persist store category to local DB
+    // Persist store category + category id to local DB (edge also writes category on update_offer)
     const savedStoreCat = document.getElementById("editStoreCategory").value;
-    await supabase.from("products").update({ ebay_store_category: savedStoreCat || null }).eq("id", editProduct.id);
+    const savedCategoryId = document.getElementById("editCategoryId").value.trim();
+    await supabase.from("products").update({
+      ebay_store_category: savedStoreCat || null,
+      ...(savedCategoryId ? { ebay_category_id: savedCategoryId } : {}),
+    }).eq("id", editProduct.id);
 
     // Volume Pricing
     const volEnabled     = document.getElementById("editVolEnabled").checked;
@@ -1247,12 +1288,15 @@ document.getElementById("btnSaveEdit").addEventListener("click", async () => {
       if (!volResult.success) console.warn("Volume pricing delete failed:", volResult.error);
     }
 
-    status.textContent = "✅ Listing updated successfully";
+    status.textContent = editProduct._saleFieldSkipMessage
+      ? `✅ ${editProduct._saleFieldSkipMessage}`
+      : "✅ Listing updated successfully";
+    const closeDelay = editProduct._saleFieldSkipMessage ? 2800 : 1200;
     setTimeout(() => {
       document.getElementById("editModal").classList.add("hidden");
       editProduct = null;
       loadProducts();
-    }, 1200);
+    }, closeDelay);
   } catch (e) {
     status.textContent = "❌ " + e.message;
   } finally {

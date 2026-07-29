@@ -243,5 +243,9 @@ export function offerUpdateErrorMessage(result, fallback) {
   if (result?.code === "OFFER_LOCATION_RELINK_REQUIRED") {
     return result.message || "Location data for this eBay offer is missing or invalid. Rebuild/relink the offer from the current eBay state before editing.";
   }
+  if (result?.code === "PRICE_LOCKED_BY_SALE") {
+    return result.message
+      || "eBay blocked offer updates because this listing is in an active markdown/sale. End or remove that sale in Seller Hub → Marketing, then Save again to change category/policies/price.";
+  }
   return result?.message || result?.error || fallback;
 }

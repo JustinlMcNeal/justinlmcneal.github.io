@@ -87,7 +87,11 @@ export function resolveEbayOrderVariant(
 ): EbayVariantResolveResult {
   const sellerSku = trimOrNull(input.sellerSku);
   const legacyId = trimOrNull(input.legacyVariationId);
-  const productCode = trimOrNull(input.productCode);
+  // Prefer product code encoded in seller SKU (KK-0016-BLACK → KK-0016) over title match.
+  const skuProductCode = sellerSku
+    ? (sellerSku.toUpperCase().match(/^(KK-\d+)/)?.[1] || null)
+    : null;
+  const productCode = skuProductCode || trimOrNull(input.productCode);
 
   const forProduct = productCode
     ? variants.filter((v) => v.product_code === productCode)
@@ -200,7 +204,7 @@ export async function repairEbayLineItemVariants(
   supabase: DbClient,
   sessionId: string,
   order: Record<string, unknown>,
-  resolveProductCode: (title: string) => string | null,
+  resolveProductCode: (title: string, sellerSku?: string | null) => string | null,
   variants: ProductVariantHint[],
 ): Promise<number> {
   const lineItems = (order.lineItems as Record<string, unknown>[]) || [];
@@ -222,8 +226,9 @@ export async function repairEbayLineItemVariants(
     if (!existing) continue;
 
     const ebayTitle = String(item.title || "Unknown");
+    const sellerSku = (item.sku as string) || null;
     const productCode =
-      resolveProductCode(ebayTitle) ||
+      resolveProductCode(ebayTitle, sellerSku) ||
       (typeof existing.product_id === "string" ? existing.product_id : null);
 
     const resolved = resolveEbayLineItemVariant(item, productCode, variants);

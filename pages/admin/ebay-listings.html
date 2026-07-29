@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -7,13 +7,23 @@
   <link rel="manifest" href="/manifest.json" />
   <link rel="apple-touch-icon" href="/imgs/icons/apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="32x32" href="/imgs/icons/favicon-32x32.png" />
-  <title>Admin · eBay Listings</title>
+  <title>Admin ? eBay Listings</title>
 
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
-      theme: { extend: { colors: { kkpink: '#ff69b4' } } }
-    }
+      theme: {
+        extend: {
+          colors: {
+            kkpink: '#f58f86',
+            kkpeach: '#f6dcc6',
+          },
+          borderWidth: {
+            '4': '4px',
+          },
+        },
+      },
+    };
   </script>
 
   <link rel="stylesheet" href="/css/theme/base.css">
@@ -28,51 +38,51 @@
 
   <div id="kkAdminNavMount"></div>
 
-  <main class="max-w-7xl mx-auto px-2 sm:px-6 py-4 sm:py-8">
+  <main class="max-w-[88rem] mx-auto px-3 sm:px-6 py-4 sm:py-8 overflow-x-hidden">
 
     <!-- Header -->
     <header class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6">
-      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
           <div class="inline-block bg-black text-white px-2 py-1 text-[10px] font-black uppercase tracking-[.25em] mb-2">Admin Panel</div>
           <h1 class="text-2xl sm:text-4xl font-black tracking-tight">eBay Listings</h1>
-          <p class="text-xs sm:text-sm text-gray-500 mt-1">Manage eBay inventory from one place</p>
+          <p class="text-xs sm:text-sm text-gray-500 mt-1 max-w-xl">Manage eBay inventory, pricing, and listing health from one place.</p>
         </div>
-        <div class="flex flex-wrap gap-2">
+        <div class="flex flex-wrap gap-2 w-full sm:w-auto sm:justify-end">
           <button id="btnSetup" type="button"
-            class="border-4 border-black bg-white text-black px-3 py-2 font-black uppercase tracking-[.12em] text-[10px] sm:text-xs hover:bg-kkpink hover:border-kkpink transition-all">
-            ⚙️ Setup
+            class="inline-flex items-center justify-center border-4 border-black bg-white text-black px-3 sm:px-4 py-2.5 font-black uppercase tracking-[.12em] text-[10px] sm:text-xs min-h-[44px] hover:bg-gray-50 flex-1 sm:flex-none">
+            Setup
           </button>
           <button id="btnMigrate" type="button"
-            class="border-4 border-black bg-white text-black px-3 py-2 font-black uppercase tracking-[.12em] text-[10px] sm:text-xs hover:bg-kkpink hover:border-kkpink transition-all">
-            🔥 Import Existing
+            class="inline-flex items-center justify-center border-4 border-black bg-white text-black px-3 sm:px-4 py-2.5 font-black uppercase tracking-[.12em] text-[10px] sm:text-xs min-h-[44px] hover:bg-gray-50 flex-1 sm:flex-none">
+            Import Existing
           </button>
           <button id="btnRefresh" type="button"
-            class="border-4 border-black bg-black text-white px-3 py-2 font-black uppercase tracking-[.12em] text-[10px] sm:text-xs hover:bg-kkpink hover:border-kkpink hover:text-black transition-all">
-            🔄 Refresh
+            class="inline-flex items-center justify-center border-4 border-black bg-black text-white px-3 sm:px-4 py-2.5 font-black uppercase tracking-[.12em] text-[10px] sm:text-xs min-h-[44px] hover:bg-gray-900 flex-1 sm:flex-none">
+            Refresh
           </button>
         </div>
       </div>
-      <div id="statusBar" class="mt-3 text-xs text-gray-400 hidden"></div>
+      <div id="statusBar" class="mt-3 text-xs text-gray-500 hidden"></div>
     </header>
 
     <!-- Stats Row -->
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4 sm:mb-6">
-      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-3 text-center">
-        <div id="statTotal" class="text-xl font-black">—</div>
-        <div class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Total Products</div>
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-4 mb-4 sm:mb-6">
+      <div class="bg-white border-4 border-black p-3 sm:p-4 text-center">
+        <div id="statTotal" class="text-xl sm:text-2xl font-black">?</div>
+        <div class="text-[9px] sm:text-[10px] font-black uppercase tracking-[.14em] text-gray-500 mt-1">Total Products</div>
       </div>
-      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-3 text-center">
-        <div id="statActive" class="text-xl font-black text-green-600">—</div>
-        <div class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Active on eBay</div>
+      <div class="bg-white border-4 border-black p-3 sm:p-4 text-center">
+        <div id="statActive" class="text-xl sm:text-2xl font-black text-green-700">?</div>
+        <div class="text-[9px] sm:text-[10px] font-black uppercase tracking-[.14em] text-gray-500 mt-1">Active on eBay</div>
       </div>
-      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-3 text-center">
-        <div id="statDraft" class="text-xl font-black text-yellow-600">—</div>
-        <div class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Draft</div>
+      <div class="bg-white border-4 border-black p-3 sm:p-4 text-center">
+        <div id="statDraft" class="text-xl sm:text-2xl font-black text-amber-700">?</div>
+        <div class="text-[9px] sm:text-[10px] font-black uppercase tracking-[.14em] text-gray-500 mt-1">Draft</div>
       </div>
-      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-3 text-center">
-        <div id="statNotListed" class="text-xl font-black text-gray-400">—</div>
-        <div class="text-[10px] font-bold uppercase tracking-wider text-gray-500">Not Listed</div>
+      <div class="bg-white border-4 border-black p-3 sm:p-4 text-center">
+        <div id="statNotListed" class="text-xl sm:text-2xl font-black text-gray-500">?</div>
+        <div class="text-[9px] sm:text-[10px] font-black uppercase tracking-[.14em] text-gray-500 mt-1">Not Listed</div>
       </div>
     </div>
 
@@ -81,10 +91,10 @@
       <div class="flex flex-col sm:flex-row gap-3 sm:gap-4 items-stretch sm:items-end">
         <!-- Search -->
         <div class="flex-1">
-          <label for="searchInput" class="block text-[9px] sm:text-[10px] font-black uppercase tracking-[.18em] mb-1 sm:mb-2 text-gray-500">Search Listings</label>
+          <label for="searchInput" class="block text-[9px] sm:text-[10px] font-black uppercase tracking-[.14em] mb-1 sm:mb-2 text-gray-500">Search Listings</label>
           <div class="relative">
             <input id="searchInput" type="text" placeholder="Search by name, code, or SKU..."
-              class="w-full border-4 border-black px-3 sm:px-4 py-2 sm:py-3 text-sm outline-none pr-10 focus:border-kkpink transition-colors" />
+              class="w-full border-4 border-black px-3 sm:px-4 py-2.5 sm:py-3 text-sm outline-none pr-10 bg-white focus-visible:outline focus-visible:outline-4 focus-visible:outline-kkpink focus-visible:outline-offset-2" />
             <svg id="searchIcon" class="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
             </svg>
@@ -94,15 +104,15 @@
         </div>
 
         <!-- Status Filter + Count + View Toggle -->
-        <div class="flex items-center justify-between sm:justify-end gap-3 flex-wrap">
-          <select id="statusFilter" class="border-2 border-black px-2 py-1 text-xs font-bold bg-white">
+        <div class="flex items-center justify-between sm:justify-end gap-2 sm:gap-3 flex-wrap">
+          <select id="statusFilter" class="border-4 border-black px-2 py-2 text-xs font-black uppercase tracking-[.08em] bg-white min-h-[44px]">
             <option value="">All Statuses</option>
             <option value="active">Active</option>
             <option value="draft">Draft</option>
             <option value="ended">Ended</option>
             <option value="not_listed">Not Listed</option>
           </select>
-          <select id="quickFilter" class="border-2 border-black px-2 py-1 text-xs font-bold bg-white">
+          <select id="quickFilter" class="border-4 border-black px-2 py-2 text-xs font-black uppercase tracking-[.08em] bg-white min-h-[44px]">
             <option value="">Quick Filter</option>
             <option value="needs_work">Has Issues</option>
             <option value="low_score">Low Score (&lt;60)</option>
@@ -111,22 +121,22 @@
             <option value="no_sales_30d">No Sales 30d</option>
             <option value="has_promo">Has Promo</option>
           </select>
-          <select id="adRateFilter" class="border-2 border-black px-2 py-1 text-xs font-bold bg-white" title="Assumed promoted listing ad rate for Est Profit column">
+          <select id="adRateFilter" class="border-4 border-black px-2 py-2 text-xs font-black uppercase tracking-[.08em] bg-white min-h-[44px]" title="Assumed promoted listing ad rate for Est Profit column">
             <option value="0">Ad 0%</option>
             <option value="2">Ad 2%</option>
             <option value="5">Ad 5%</option>
             <option value="8">Ad 8%</option>
             <option value="10">Ad 10%</option>
           </select>
-          <div class="text-xs sm:text-sm font-bold uppercase tracking-wider text-gray-500" id="countLabel">0 items</div>
+          <div class="text-[10px] sm:text-xs font-black uppercase tracking-[.14em] text-gray-500" id="countLabel">0 items</div>
           <!-- View Toggle -->
-          <div id="viewToggle" class="flex border-2 border-black rounded overflow-hidden">
-            <button type="button" data-view="table" class="view-toggle-btn px-2 py-1 text-xs font-bold bg-black text-white" title="Table View">
+          <div id="viewToggle" class="flex border-4 border-black overflow-hidden">
+            <button type="button" data-view="table" class="view-toggle-btn px-3 py-2 text-xs font-black bg-black text-white min-h-[44px]" title="Table View">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
               </svg>
             </button>
-            <button type="button" data-view="cards" class="view-toggle-btn px-2 py-1 text-xs font-bold bg-white text-black" title="Card View">
+            <button type="button" data-view="cards" class="view-toggle-btn px-3 py-2 text-xs font-black bg-white text-black min-h-[44px]" title="Card View">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/>
               </svg>
@@ -137,20 +147,20 @@
     </section>
 
     <!-- Products Table -->
-    <section id="tableSection" class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6 mb-6">
-      <div class="flex items-center justify-between mb-4">
-        <h2 class="text-lg font-black">Products</h2>
-        <div id="bulkBar" class="hidden flex items-center gap-2">
-          <span id="bulkCount" class="text-xs font-bold text-gray-600">0 selected</span>
+    <section id="tableSection" class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6">
+      <div class="flex items-center justify-between mb-4 gap-3 flex-wrap">
+        <h2 class="font-black text-lg sm:text-2xl uppercase tracking-tighter">Products</h2>
+        <div id="bulkBar" class="hidden flex items-center gap-2 flex-wrap">
+          <span id="bulkCount" class="text-[10px] font-black uppercase tracking-[.12em] text-gray-600">0 selected</span>
           <button id="btnBulkPrice" type="button"
-            class="bg-black text-white px-3 py-1.5 rounded text-[10px] font-bold uppercase hover:bg-kkpink hover:text-black transition-all">
+            class="border-4 border-black bg-black text-white px-3 py-2 text-[10px] font-black uppercase tracking-[.12em] min-h-[44px] hover:bg-gray-900">
             Update Price
           </button>
           <button id="btnBulkQty" type="button"
-            class="bg-black text-white px-3 py-1.5 rounded text-[10px] font-bold uppercase hover:bg-kkpink hover:text-black transition-all">
+            class="border-4 border-black bg-white text-black px-3 py-2 text-[10px] font-black uppercase tracking-[.12em] min-h-[44px] hover:bg-gray-50">
             Update Qty
           </button>
-          <button id="btnBulkCancel" type="button" class="text-gray-400 hover:text-black text-sm ml-1">&times;</button>
+          <button id="btnBulkCancel" type="button" class="border-2 border-black bg-white text-black px-2 py-2 text-sm font-black min-h-[44px] min-w-[44px] hover:bg-gray-50" aria-label="Cancel bulk selection">&times;</button>
         </div>
       </div>
       <div class="overflow-x-auto custom-scrollbar">
@@ -191,29 +201,29 @@
 
           <div class="space-y-4">
             <!-- Product Info (read-only) -->
-            <div class="bg-gray-50 rounded-lg p-3">
-              <div id="modalProductName" class="font-bold"></div>
-              <div id="modalProductCode" class="text-xs text-gray-500"></div>
+            <div class="border-4 border-black bg-white p-3">
+              <div id="modalProductName" class="font-black uppercase tracking-tight"></div>
+              <div id="modalProductCode" class="text-xs text-gray-500 font-mono mt-0.5"></div>
             </div>
 
             <!-- AI Auto-Fill -->
             <button id="btnAiFill" type="button"
-              class="w-full border-2 border-dashed border-purple-400 bg-purple-50 text-purple-700 px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-purple-100 hover:border-purple-500 transition-all flex items-center justify-center gap-2">
-              <span>✨</span> AI Auto-Fill
+              class="w-full border-4 border-dashed border-black bg-kkpeach/40 text-black px-4 py-2.5 text-[10px] font-black uppercase tracking-[.12em] min-h-[44px] hover:bg-kkpeach flex items-center justify-center gap-2">
+              <span>?</span> AI Auto-Fill
             </button>
             <div id="aiFillStatus" class="text-[10px] text-gray-400 text-center hidden"></div>
 
             <!-- SKU -->
             <div>
               <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">eBay SKU</label>
-              <input id="modalSku" type="text" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors" />
+              <input id="modalSku" type="text" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus-visible:outline focus-visible:outline-4 focus-visible:outline-kkpink focus-visible:outline-offset-2" />
               <p class="text-[10px] text-gray-400 mt-1">Usually the KK code (e.g. HW-001)</p>
             </div>
 
             <!-- Title -->
             <div>
               <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">eBay Title</label>
-              <input id="modalTitle" type="text" maxlength="80" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors" />
+              <input id="modalTitle" type="text" maxlength="80" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus-visible:outline focus-visible:outline-4 focus-visible:outline-kkpink focus-visible:outline-offset-2" />
             </div>
 
             <!-- Description -->
@@ -237,7 +247,7 @@
               <p class="text-[10px] text-gray-500 mb-1">Shared gallery for the overall listing. Variant-specific images use separate controls when variants are present.</p>
               <div id="modalImageStrip" class="img-strip"></div>
               <div class="flex items-center gap-2 mt-1">
-                <button type="button" id="btnAddImgPush" class="text-[10px] font-bold text-blue-600 hover:text-kkpink">+ Add from Gallery</button>
+                <button type="button" id="btnAddImgPush" class="text-[10px] font-bold text-blue-600 hover:text-black">+ Add from Gallery</button>
                 <span class="text-[10px] text-gray-400">Drag to reorder. First = main photo. Max 24.</span>
               </div>
               <div id="modalImagePicker" class="img-strip mt-1 hidden"></div>
@@ -247,10 +257,10 @@
             <div>
               <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">eBay Category</label>
               <div class="flex gap-2">
-                <input id="modalCatSearch" type="text" placeholder="Search for category..." class="flex-1 border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors" />
-                <button id="btnSearchCat" type="button" class="bg-black text-white px-3 py-2 text-xs font-bold uppercase hover:bg-kkpink hover:text-black transition-all">Search</button>
+                <input id="modalCatSearch" type="text" placeholder="Search for category..." class="flex-1 border-[4px] border-black px-3 py-2 text-sm outline-none focus-visible:outline focus-visible:outline-4 focus-visible:outline-kkpink focus-visible:outline-offset-2" />
+                <button id="btnSearchCat" type="button" class="bg-black text-white px-3 py-2 text-xs font-bold uppercase hover:bg-gray-900">Search</button>
               </div>
-              <select id="modalCatSelect" class="w-full mt-2 border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors hidden" size="4"></select>
+              <select id="modalCatSelect" class="w-full mt-2 border-[4px] border-black px-3 py-2 text-sm outline-none focus-visible:outline focus-visible:outline-4 focus-visible:outline-kkpink focus-visible:outline-offset-2 hidden" size="4"></select>
               <div id="modalCatSelected" class="mt-1 text-xs text-green-700 hidden"></div>
             </div>
 
@@ -269,39 +279,39 @@
             <div class="grid grid-cols-2 gap-3">
               <div>
                 <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">eBay Price ($)</label>
-                <input id="modalPrice" type="number" step="0.01" min="0" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors" />
+                <input id="modalPrice" type="number" step="0.01" min="0" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus-visible:outline focus-visible:outline-4 focus-visible:outline-kkpink focus-visible:outline-offset-2" />
               </div>
               <div>
                 <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">Quantity</label>
-                <input id="modalQuantity" type="number" min="0" value="1" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors" />
+                <input id="modalQuantity" type="number" min="0" value="1" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus-visible:outline focus-visible:outline-4 focus-visible:outline-kkpink focus-visible:outline-offset-2" />
               </div>
             </div>
 
             <!-- Variant Panel (shown when product has color variants) -->
             <div id="variantPanel" class="hidden">
-              <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-2 text-black/70">🎨 Variant Images + Quantities</label>
+              <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-2 text-black/70">Variant Images + Quantities</label>
               <p class="text-[10px] text-gray-500 mb-2">Assign image sets and quantity to each variant. The first assigned image is that variant's main image. These are separate from the shared listing gallery above.</p>
               <div id="variantList" class="space-y-2 max-h-[200px] overflow-y-auto"></div>
               <div class="mt-2 text-[10px] text-gray-400">
-                <span id="variantCount">0</span> variant(s) · SKU pattern: <code id="variantSkuPattern" class="bg-gray-100 px-1 rounded"></code>
+                <span id="variantCount">0</span> variant(s) ? SKU pattern: <code id="variantSkuPattern" class="bg-gray-100 px-1 rounded"></code>
               </div>
             </div>
 
             <!-- Best Offer -->
             <div>
               <label class="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" id="modalBestOffer" class="accent-pink-500" />
+                <input type="checkbox" id="modalBestOffer" class="accent-kkpink" />
                 <span class="text-[11px] font-black uppercase tracking-[.12em] text-black/70">Allow Offers</span>
               </label>
               <div id="modalBestOfferFields" class="hidden grid grid-cols-2 gap-3 mt-2">
                 <div>
                   <label class="block text-[9px] font-bold uppercase text-gray-500 mb-0.5">Auto Accept ($)</label>
-                  <input id="modalAutoAccept" type="number" step="0.01" min="0" class="w-full border-2 border-gray-300 px-2 py-1.5 text-xs outline-none focus:border-kkpink transition-colors" />
+                  <input id="modalAutoAccept" type="number" step="0.01" min="0" class="w-full border-2 border-black px-2 py-1.5 text-xs outline-none focus-visible:outline focus-visible:outline-4 focus-visible:outline-kkpink focus-visible:outline-offset-2" />
                   <p class="text-[9px] text-gray-400 mt-0.5">Offers at or above auto-accepted</p>
                 </div>
                 <div>
                   <label class="block text-[9px] font-bold uppercase text-gray-500 mb-0.5">Auto Decline ($)</label>
-                  <input id="modalAutoDecline" type="number" step="0.01" min="0" class="w-full border-2 border-gray-300 px-2 py-1.5 text-xs outline-none focus:border-kkpink transition-colors" />
+                  <input id="modalAutoDecline" type="number" step="0.01" min="0" class="w-full border-2 border-black px-2 py-1.5 text-xs outline-none focus-visible:outline focus-visible:outline-4 focus-visible:outline-kkpink focus-visible:outline-offset-2" />
                   <p class="text-[9px] text-gray-400 mt-0.5">Offers below auto-declined</p>
                 </div>
               </div>
@@ -310,24 +320,24 @@
             <!-- Condition -->
             <div>
               <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">Condition</label>
-              <select id="modalCondition" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors">
+              <select id="modalCondition" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus-visible:outline focus-visible:outline-4 focus-visible:outline-kkpink focus-visible:outline-offset-2">
                 <option value="NEW">New</option>
                 <option value="LIKE_NEW">Like New</option>
-                <option value="USED_EXCELLENT">Used — Excellent</option>
-                <option value="USED_GOOD">Used — Good</option>
+                <option value="USED_EXCELLENT">Used ? Excellent</option>
+                <option value="USED_GOOD">Used ? Good</option>
               </select>
             </div>
 
             <!-- Sell as Lot -->
             <div>
               <label class="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" id="modalLotEnabled" class="accent-pink-500" />
+                <input type="checkbox" id="modalLotEnabled" class="accent-kkpink" />
                 <span class="text-[11px] font-black uppercase tracking-[.12em] text-black/70">Sell as Lot</span>
               </label>
               <div id="modalLotFields" class="hidden mt-2">
                 <div class="flex items-center gap-2">
                   <label class="block text-[9px] font-bold uppercase text-gray-500">Items per lot</label>
-                  <input id="modalLotSize" type="number" min="2" value="2" class="w-20 border-2 border-gray-300 px-2 py-1.5 text-xs outline-none focus:border-kkpink transition-colors" />
+                  <input id="modalLotSize" type="number" min="2" value="2" class="w-20 border-2 border-black px-2 py-1.5 text-xs outline-none focus-visible:outline focus-visible:outline-4 focus-visible:outline-kkpink focus-visible:outline-offset-2" />
                 </div>
                 <p class="text-[9px] text-gray-400 mt-1">Group identical items into one lot. Quantity = number of lots available.</p>
               </div>
@@ -336,54 +346,54 @@
             <!-- Volume Pricing -->
             <div>
               <label class="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" id="modalVolEnabled" class="accent-pink-500" />
+                <input type="checkbox" id="modalVolEnabled" class="accent-kkpink" />
                 <span class="text-[11px] font-black uppercase tracking-[.12em] text-black/70">Volume Pricing</span>
               </label>
               <div id="modalVolFields" class="hidden mt-2 space-y-2">
                 <p class="text-[9px] text-gray-400">Offer discounts when buyers purchase multiple items. Applied after publish.</p>
                 <div id="modalVolTiers"></div>
-                <button type="button" id="modalAddTier" class="text-[10px] text-pink-500 font-bold hover:underline">+ Add tier</button>
+                <button type="button" id="modalAddTier" class="text-[10px] text-kkpink font-black uppercase tracking-[.08em] hover:underline">+ Add tier</button>
               </div>
             </div>
 
             <!-- Package Weight & Dimensions -->
             <details>
-              <summary class="text-[11px] font-bold uppercase tracking-wider text-gray-500 cursor-pointer hover:text-black">📦 Package Weight & Dimensions</summary>
+              <summary class="text-[11px] font-black uppercase tracking-[.12em] text-gray-500 cursor-pointer hover:text-black">Package Weight & Dimensions</summary>
               <div class="grid grid-cols-4 gap-2 mt-2">
                 <div>
                   <label class="block text-[9px] font-bold uppercase text-gray-500 mb-0.5">Weight (oz)</label>
-                  <input id="modalWeightOz" type="number" step="0.1" min="0" value="4" class="w-full border-2 border-gray-300 px-2 py-1.5 text-xs outline-none focus:border-kkpink transition-colors" />
+                  <input id="modalWeightOz" type="number" step="0.1" min="0" value="4" class="w-full border-2 border-black px-2 py-1.5 text-xs outline-none focus-visible:outline focus-visible:outline-4 focus-visible:outline-kkpink focus-visible:outline-offset-2" />
                 </div>
                 <div>
                   <label class="block text-[9px] font-bold uppercase text-gray-500 mb-0.5">Length (in)</label>
-                  <input id="modalDimL" type="number" step="0.1" min="0" value="6" class="w-full border-2 border-gray-300 px-2 py-1.5 text-xs outline-none focus:border-kkpink transition-colors" />
+                  <input id="modalDimL" type="number" step="0.1" min="0" value="6" class="w-full border-2 border-black px-2 py-1.5 text-xs outline-none focus-visible:outline focus-visible:outline-4 focus-visible:outline-kkpink focus-visible:outline-offset-2" />
                 </div>
                 <div>
                   <label class="block text-[9px] font-bold uppercase text-gray-500 mb-0.5">Width (in)</label>
-                  <input id="modalDimW" type="number" step="0.1" min="0" value="4" class="w-full border-2 border-gray-300 px-2 py-1.5 text-xs outline-none focus:border-kkpink transition-colors" />
+                  <input id="modalDimW" type="number" step="0.1" min="0" value="4" class="w-full border-2 border-black px-2 py-1.5 text-xs outline-none focus-visible:outline focus-visible:outline-4 focus-visible:outline-kkpink focus-visible:outline-offset-2" />
                 </div>
                 <div>
                   <label class="block text-[9px] font-bold uppercase text-gray-500 mb-0.5">Height (in)</label>
-                  <input id="modalDimH" type="number" step="0.1" min="0" value="1" class="w-full border-2 border-gray-300 px-2 py-1.5 text-xs outline-none focus:border-kkpink transition-colors" />
+                  <input id="modalDimH" type="number" step="0.1" min="0" value="1" class="w-full border-2 border-black px-2 py-1.5 text-xs outline-none focus-visible:outline focus-visible:outline-4 focus-visible:outline-kkpink focus-visible:outline-offset-2" />
                 </div>
               </div>
             </details>
 
             <!-- Listing Policies -->
             <details>
-              <summary class="text-[11px] font-bold uppercase tracking-wider text-gray-500 cursor-pointer hover:text-black">📋 Listing Policies</summary>
+              <summary class="text-[11px] font-black uppercase tracking-[.12em] text-gray-500 cursor-pointer hover:text-black">Listing Policies</summary>
               <div class="space-y-2 mt-2">
                 <div>
                   <label class="block text-[9px] font-bold uppercase text-gray-500 mb-0.5">Shipping</label>
-                  <select id="modalFulfillmentPolicy" class="w-full border-2 border-gray-300 px-2 py-1.5 text-xs outline-none focus:border-kkpink transition-colors"><option value="">Loading...</option></select>
+                  <select id="modalFulfillmentPolicy" class="w-full border-2 border-black px-2 py-1.5 text-xs outline-none focus-visible:outline focus-visible:outline-4 focus-visible:outline-kkpink focus-visible:outline-offset-2"><option value="">Loading...</option></select>
                 </div>
                 <div>
                   <label class="block text-[9px] font-bold uppercase text-gray-500 mb-0.5">Returns</label>
-                  <select id="modalReturnPolicy" class="w-full border-2 border-gray-300 px-2 py-1.5 text-xs outline-none focus:border-kkpink transition-colors"><option value="">Loading...</option></select>
+                  <select id="modalReturnPolicy" class="w-full border-2 border-black px-2 py-1.5 text-xs outline-none focus-visible:outline focus-visible:outline-4 focus-visible:outline-kkpink focus-visible:outline-offset-2"><option value="">Loading...</option></select>
                 </div>
                 <div>
                   <label class="block text-[9px] font-bold uppercase text-gray-500 mb-0.5">Payment</label>
-                  <select id="modalPaymentPolicy" class="w-full border-2 border-gray-300 px-2 py-1.5 text-xs outline-none focus:border-kkpink transition-colors"><option value="">Loading...</option></select>
+                  <select id="modalPaymentPolicy" class="w-full border-2 border-black px-2 py-1.5 text-xs outline-none focus-visible:outline focus-visible:outline-4 focus-visible:outline-kkpink focus-visible:outline-offset-2"><option value="">Loading...</option></select>
                 </div>
               </div>
             </details>
@@ -391,8 +401,8 @@
             <!-- Store Category -->
             <div>
               <label class="block text-[9px] font-bold uppercase text-gray-500 mb-0.5">Store Category</label>
-              <select id="modalStoreCategory" class="w-full border-2 border-gray-300 px-2 py-1.5 text-xs outline-none focus:border-kkpink transition-colors">
-                <option value="">— None —</option>
+              <select id="modalStoreCategory" class="w-full border-2 border-black px-2 py-1.5 text-xs outline-none focus-visible:outline focus-visible:outline-4 focus-visible:outline-kkpink focus-visible:outline-offset-2">
+                <option value="">? None ?</option>
                 <option value="Headwear">Headwear</option>
                 <option value="Jewelry">Jewelry</option>
                 <option value="Bags">Bags</option>
@@ -402,29 +412,29 @@
               </select>
             </div>
 
-            <!-- Internal Price Reference (Phase 5 — read-only internal guidance, does not affect listing) -->
+            <!-- Internal Price Reference (Phase 5 ? read-only internal guidance, does not affect listing) -->
             <div id="modalPriceRef" class="price-ref hidden"></div>
 
-            <!-- Assumed Ad Rate for Estimate (Phase 6 — does not affect listing) -->
+            <!-- Assumed Ad Rate for Estimate (Phase 6 ? does not affect listing) -->
             <div class="flex items-center gap-2 flex-wrap mt-1">
               <span class="text-[9px] font-bold uppercase tracking-wider text-gray-500">Assumed promo ad rate:</span>
-              <select id="modalAdRate" class="border border-gray-300 rounded px-1.5 py-0.5 text-[10px] bg-white">
+              <select id="modalAdRate" class="border-2 border-black px-1.5 py-1 text-[10px] font-black bg-white">
                 <option value="0">0% (none)</option>
                 <option value="2">2%</option>
                 <option value="5">5%</option>
                 <option value="8">8%</option>
                 <option value="10">10%</option>
               </select>
-              <span class="text-[9px] text-gray-400 italic">est. only — not actual</span>
+              <span class="text-[9px] text-gray-400 italic">est. only ? not actual</span>
             </div>
 
-            <!-- Profit Preview (Phase 2 — estimates only, does not affect listing) -->
+            <!-- Profit Preview (Phase 2 ? estimates only, does not affect listing) -->
             <div id="modalProfitPreview" class="profit-preview hidden"></div>
 
             <!-- Action Buttons -->
             <div class="flex flex-wrap gap-2 pt-2">
               <button id="btnCreateItem" type="button"
-                class="flex-1 border-4 border-black bg-black text-white px-4 py-3 font-black uppercase tracking-[.12em] text-xs hover:bg-kkpink hover:border-kkpink hover:text-black transition-all">
+                class="flex-1 border-4 border-black bg-black text-white px-4 py-3 font-black uppercase tracking-[.12em] text-xs hover:bg-gray-900">
                 1. Create Item
               </button>
               <button id="btnCreateOffer" type="button" disabled
@@ -456,14 +466,14 @@
 
           <div id="editForm" class="space-y-4 hidden">
             <!-- Product Info (read-only) -->
-            <div class="bg-gray-50 rounded-lg p-3">
-              <div id="editProductName" class="font-bold"></div>
+            <div class="border-4 border-black bg-white p-3">
+              <div id="editProductName" class="font-black uppercase tracking-tight"></div>
               <div class="flex gap-2 text-xs text-gray-500 mt-1">
                 <span id="editProductCode"></span>
-                <span>·</span>
-                <a id="editEbayLink" href="#" target="_blank" class="text-blue-600 hover:underline">View on eBay ↗</a>
+                <span>?</span>
+                <a id="editEbayLink" href="#" target="_blank" class="text-blue-600 hover:underline">View on eBay ?</a>
               </div>
-              <div id="editLinkWarning" class="hidden mt-2 rounded-lg border border-amber-300 bg-amber-50 p-2 text-[11px] text-amber-800">
+              <div id="editLinkWarning" class="hidden mt-2 border-4 border-amber-600 bg-amber-50 p-2 text-[11px] text-amber-900">
                 <div id="editLinkWarningText" class="font-bold"></div>
                 <div id="editLinkWarningMeta" class="mt-1 text-[10px]"></div>
                 <button id="btnEditRelink" type="button" class="hidden mt-2 border-2 border-amber-500 bg-white px-2 py-1 text-[10px] font-black uppercase tracking-wider text-amber-800 hover:bg-amber-100">
@@ -474,15 +484,15 @@
 
             <!-- AI Auto-Fill -->
             <button id="btnEditAiFill" type="button"
-              class="w-full border-2 border-dashed border-purple-400 bg-purple-50 text-purple-700 px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-purple-100 hover:border-purple-500 transition-all flex items-center justify-center gap-2">
-              <span>✨</span> AI Auto-Fill
+              class="w-full border-4 border-dashed border-black bg-kkpeach/40 text-black px-4 py-2.5 text-[10px] font-black uppercase tracking-[.12em] min-h-[44px] hover:bg-kkpeach flex items-center justify-center gap-2">
+              <span>?</span> AI Auto-Fill
             </button>
             <div id="editAiFillStatus" class="text-[10px] text-gray-400 text-center hidden"></div>
 
             <!-- Title -->
             <div>
               <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">eBay Title</label>
-              <input id="editTitle" type="text" maxlength="80" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors" />
+              <input id="editTitle" type="text" maxlength="80" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus-visible:outline focus-visible:outline-4 focus-visible:outline-kkpink focus-visible:outline-offset-2" />
             </div>
 
             <!-- Description -->
@@ -506,16 +516,32 @@
               <p class="text-[10px] text-gray-500 mb-1">Shared gallery for the overall listing. Variant-specific images use separate controls when variants are present.</p>
               <div id="editImageStrip" class="img-strip"></div>
               <div class="flex items-center gap-2 mt-1">
-                <button type="button" id="btnAddImgEdit" class="text-[10px] font-bold text-blue-600 hover:text-kkpink">+ Add from Gallery</button>
+                <button type="button" id="btnAddImgEdit" class="text-[10px] font-bold text-blue-600 hover:text-black">+ Add from Gallery</button>
                 <span class="text-[10px] text-gray-400">Drag to reorder. First = main photo. Max 24.</span>
               </div>
               <div id="editImagePicker" class="img-strip mt-1 hidden"></div>
             </div>
 
-            <div id="editVariantImagesSection" class="hidden border border-gray-200 rounded-lg p-3 bg-gray-50">
+            <div id="editVariantImagesSection" class="hidden border-4 border-black p-3 bg-white">
               <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-2 text-black/70">Variant Images + Quantities</label>
               <div id="editVariantImagesList" class="space-y-2"></div>
               <p class="text-[9px] text-gray-500 mt-2">Assign an image set and quantity per color variant. The first assigned image is that variant's main image. Shared listing images remain separate unless you choose them for a variant.</p>
+            </div>
+
+            <!-- eBay Category (editable for pushed listings) -->
+            <div>
+              <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">eBay Category</label>
+              <input id="editCategoryId" type="hidden" value="" />
+              <div id="editCatSelected" class="mb-2 text-xs text-green-700 hidden"></div>
+              <div class="flex gap-2">
+                <input id="editCatSearch" type="text" placeholder="Search to change category..."
+                  class="flex-1 border-[4px] border-black px-3 py-2 text-sm outline-none focus-visible:outline focus-visible:outline-4 focus-visible:outline-kkpink focus-visible:outline-offset-2" />
+                <button id="btnEditSearchCat" type="button"
+                  class="bg-black text-white px-3 py-2 text-xs font-bold uppercase hover:bg-gray-900">Search</button>
+              </div>
+              <select id="editCatSelect" class="w-full mt-2 border-[4px] border-black px-3 py-2 text-sm outline-none focus-visible:outline focus-visible:outline-4 focus-visible:outline-kkpink focus-visible:outline-offset-2 hidden" size="4"></select>
+              <p class="text-[9px] text-gray-400 mt-1">Changing category reloads item specifics. Fill any new required fields before saving. Multi-variant listings may be rejected if the new category does not support variations.</p>
+              <p class="text-[9px] text-amber-700 mt-1 font-bold">If this listing is in an eBay markdown/sale (e.g. 15% off), eBay blocks category and other offer edits until you end/remove that sale in Seller Hub ? Marketing.</p>
             </div>
 
             <!-- Item Specifics -->
@@ -526,17 +552,18 @@
                 <summary class="text-[11px] font-bold uppercase tracking-wider text-gray-500 cursor-pointer hover:text-black">+ Optional Fields</summary>
                 <div id="editAspectsOptional" class="space-y-2 mt-2"></div>
               </details>
+              <div id="editAspectsLoading" class="text-xs text-gray-400 mt-1 hidden">Loading item specifics...</div>
             </div>
 
             <!-- Price + Qty -->
             <div id="editPriceQtyGrid" class="grid grid-cols-2 gap-3">
               <div>
                 <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">eBay Price ($)</label>
-                <input id="editPrice" type="number" step="0.01" min="0" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors" />
+                <input id="editPrice" type="number" step="0.01" min="0" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus-visible:outline focus-visible:outline-4 focus-visible:outline-kkpink focus-visible:outline-offset-2" />
               </div>
               <div id="editQuantityField">
                 <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">Quantity</label>
-                <input id="editQuantity" type="number" min="0" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors" />
+                <input id="editQuantity" type="number" min="0" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus-visible:outline focus-visible:outline-4 focus-visible:outline-kkpink focus-visible:outline-offset-2" />
               </div>
             </div>
             <p id="editVariantQtyNote" class="hidden text-[10px] text-gray-500 -mt-2">Quantity is managed per variant for this listing.</p>
@@ -544,18 +571,18 @@
             <!-- Best Offer -->
             <div>
               <label class="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" id="editBestOffer" class="accent-pink-500" />
+                <input type="checkbox" id="editBestOffer" class="accent-kkpink" />
                 <span class="text-[11px] font-black uppercase tracking-[.12em] text-black/70">Allow Offers</span>
               </label>
               <div id="editBestOfferFields" class="hidden grid grid-cols-2 gap-3 mt-2">
                 <div>
                   <label class="block text-[9px] font-bold uppercase text-gray-500 mb-0.5">Auto Accept ($)</label>
-                  <input id="editAutoAccept" type="number" step="0.01" min="0" class="w-full border-2 border-gray-300 px-2 py-1.5 text-xs outline-none focus:border-kkpink transition-colors" />
+                  <input id="editAutoAccept" type="number" step="0.01" min="0" class="w-full border-2 border-black px-2 py-1.5 text-xs outline-none focus-visible:outline focus-visible:outline-4 focus-visible:outline-kkpink focus-visible:outline-offset-2" />
                   <p class="text-[9px] text-gray-400 mt-0.5">Offers at or above auto-accepted</p>
                 </div>
                 <div>
                   <label class="block text-[9px] font-bold uppercase text-gray-500 mb-0.5">Auto Decline ($)</label>
-                  <input id="editAutoDecline" type="number" step="0.01" min="0" class="w-full border-2 border-gray-300 px-2 py-1.5 text-xs outline-none focus:border-kkpink transition-colors" />
+                  <input id="editAutoDecline" type="number" step="0.01" min="0" class="w-full border-2 border-black px-2 py-1.5 text-xs outline-none focus-visible:outline focus-visible:outline-4 focus-visible:outline-kkpink focus-visible:outline-offset-2" />
                   <p class="text-[9px] text-gray-400 mt-0.5">Offers below auto-declined</p>
                 </div>
               </div>
@@ -564,24 +591,24 @@
             <!-- Condition -->
             <div>
               <label class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">Condition</label>
-              <select id="editCondition" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors">
+              <select id="editCondition" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus-visible:outline focus-visible:outline-4 focus-visible:outline-kkpink focus-visible:outline-offset-2">
                 <option value="NEW">New</option>
                 <option value="LIKE_NEW">Like New</option>
-                <option value="USED_EXCELLENT">Used — Excellent</option>
-                <option value="USED_GOOD">Used — Good</option>
+                <option value="USED_EXCELLENT">Used ? Excellent</option>
+                <option value="USED_GOOD">Used ? Good</option>
               </select>
             </div>
 
             <!-- Sell as Lot -->
             <div>
               <label class="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" id="editLotEnabled" class="accent-pink-500" />
+                <input type="checkbox" id="editLotEnabled" class="accent-kkpink" />
                 <span class="text-[11px] font-black uppercase tracking-[.12em] text-black/70">Sell as Lot</span>
               </label>
               <div id="editLotFields" class="hidden mt-2">
                 <div class="flex items-center gap-2">
                   <label class="block text-[9px] font-bold uppercase text-gray-500">Items per lot</label>
-                  <input id="editLotSize" type="number" min="2" value="2" class="w-20 border-2 border-gray-300 px-2 py-1.5 text-xs outline-none focus:border-kkpink transition-colors" />
+                  <input id="editLotSize" type="number" min="2" value="2" class="w-20 border-2 border-black px-2 py-1.5 text-xs outline-none focus-visible:outline focus-visible:outline-4 focus-visible:outline-kkpink focus-visible:outline-offset-2" />
                 </div>
                 <p class="text-[9px] text-gray-400 mt-1">Group identical items into one lot. Quantity = number of lots available.</p>
               </div>
@@ -590,71 +617,63 @@
             <!-- Volume Pricing -->
             <div>
               <label class="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" id="editVolEnabled" class="accent-pink-500" />
+                <input type="checkbox" id="editVolEnabled" class="accent-kkpink" />
                 <span class="text-[11px] font-black uppercase tracking-[.12em] text-black/70">Volume Pricing</span>
               </label>
               <div id="editVolFields" class="hidden mt-2 space-y-2">
                 <p class="text-[9px] text-gray-400">Offer discounts when buyers purchase multiple items.</p>
                 <div id="editVolTiers"></div>
-                <button type="button" id="editAddTier" class="text-[10px] text-pink-500 font-bold hover:underline">+ Add tier</button>
+                <button type="button" id="editAddTier" class="text-[10px] text-kkpink font-black uppercase tracking-[.08em] hover:underline">+ Add tier</button>
               </div>
             </div>
 
             <!-- Package Weight & Dimensions -->
             <details>
-              <summary class="text-[11px] font-bold uppercase tracking-wider text-gray-500 cursor-pointer hover:text-black">📦 Package Weight & Dimensions</summary>
+              <summary class="text-[11px] font-black uppercase tracking-[.12em] text-gray-500 cursor-pointer hover:text-black">Package Weight & Dimensions</summary>
               <div class="grid grid-cols-4 gap-2 mt-2">
                 <div>
                   <label class="block text-[9px] font-bold uppercase text-gray-500 mb-0.5">Weight (oz)</label>
-                  <input id="editWeightOz" type="number" step="0.1" min="0" class="w-full border-2 border-gray-300 px-2 py-1.5 text-xs outline-none focus:border-kkpink transition-colors" />
+                  <input id="editWeightOz" type="number" step="0.1" min="0" class="w-full border-2 border-black px-2 py-1.5 text-xs outline-none focus-visible:outline focus-visible:outline-4 focus-visible:outline-kkpink focus-visible:outline-offset-2" />
                 </div>
                 <div>
                   <label class="block text-[9px] font-bold uppercase text-gray-500 mb-0.5">Length (in)</label>
-                  <input id="editDimL" type="number" step="0.1" min="0" class="w-full border-2 border-gray-300 px-2 py-1.5 text-xs outline-none focus:border-kkpink transition-colors" />
+                  <input id="editDimL" type="number" step="0.1" min="0" class="w-full border-2 border-black px-2 py-1.5 text-xs outline-none focus-visible:outline focus-visible:outline-4 focus-visible:outline-kkpink focus-visible:outline-offset-2" />
                 </div>
                 <div>
                   <label class="block text-[9px] font-bold uppercase text-gray-500 mb-0.5">Width (in)</label>
-                  <input id="editDimW" type="number" step="0.1" min="0" class="w-full border-2 border-gray-300 px-2 py-1.5 text-xs outline-none focus:border-kkpink transition-colors" />
+                  <input id="editDimW" type="number" step="0.1" min="0" class="w-full border-2 border-black px-2 py-1.5 text-xs outline-none focus-visible:outline focus-visible:outline-4 focus-visible:outline-kkpink focus-visible:outline-offset-2" />
                 </div>
                 <div>
                   <label class="block text-[9px] font-bold uppercase text-gray-500 mb-0.5">Height (in)</label>
-                  <input id="editDimH" type="number" step="0.1" min="0" class="w-full border-2 border-gray-300 px-2 py-1.5 text-xs outline-none focus:border-kkpink transition-colors" />
+                  <input id="editDimH" type="number" step="0.1" min="0" class="w-full border-2 border-black px-2 py-1.5 text-xs outline-none focus-visible:outline focus-visible:outline-4 focus-visible:outline-kkpink focus-visible:outline-offset-2" />
                 </div>
               </div>
             </details>
 
             <!-- Listing Policies -->
             <details>
-              <summary class="text-[11px] font-bold uppercase tracking-wider text-gray-500 cursor-pointer hover:text-black">📋 Listing Policies</summary>
+              <summary class="text-[11px] font-black uppercase tracking-[.12em] text-gray-500 cursor-pointer hover:text-black">Listing Policies</summary>
               <div class="space-y-2 mt-2">
                 <div>
                   <label class="block text-[9px] font-bold uppercase text-gray-500 mb-0.5">Shipping</label>
-                  <select id="editFulfillmentPolicy" class="w-full border-2 border-gray-300 px-2 py-1.5 text-xs outline-none focus:border-kkpink transition-colors"><option value="">Loading...</option></select>
+                  <select id="editFulfillmentPolicy" class="w-full border-2 border-black px-2 py-1.5 text-xs outline-none focus-visible:outline focus-visible:outline-4 focus-visible:outline-kkpink focus-visible:outline-offset-2"><option value="">Loading...</option></select>
                 </div>
                 <div>
                   <label class="block text-[9px] font-bold uppercase text-gray-500 mb-0.5">Returns</label>
-                  <select id="editReturnPolicy" class="w-full border-2 border-gray-300 px-2 py-1.5 text-xs outline-none focus:border-kkpink transition-colors"><option value="">Loading...</option></select>
+                  <select id="editReturnPolicy" class="w-full border-2 border-black px-2 py-1.5 text-xs outline-none focus-visible:outline focus-visible:outline-4 focus-visible:outline-kkpink focus-visible:outline-offset-2"><option value="">Loading...</option></select>
                 </div>
                 <div>
                   <label class="block text-[9px] font-bold uppercase text-gray-500 mb-0.5">Payment</label>
-                  <select id="editPaymentPolicy" class="w-full border-2 border-gray-300 px-2 py-1.5 text-xs outline-none focus:border-kkpink transition-colors"><option value="">Loading...</option></select>
+                  <select id="editPaymentPolicy" class="w-full border-2 border-black px-2 py-1.5 text-xs outline-none focus-visible:outline focus-visible:outline-4 focus-visible:outline-kkpink focus-visible:outline-offset-2"><option value="">Loading...</option></select>
                 </div>
               </div>
             </details>
 
             <!-- Store Category -->
             <div>
-              <label class="block text-[9px] font-bold uppercase text-gray-500 mb-0.5">eBay Category ID</label>
-              <input id="editCategoryId" type="text" readonly
-                class="w-full border-2 border-gray-300 px-2 py-1.5 text-xs bg-gray-50 text-gray-700" />
-              <p class="text-[9px] text-gray-400 mt-1">If this is empty, use Resume Push from the products list to select a category and create an offer.</p>
-            </div>
-
-            <!-- Store Category -->
-            <div>
               <label class="block text-[9px] font-bold uppercase text-gray-500 mb-0.5">Store Category</label>
-              <select id="editStoreCategory" class="w-full border-2 border-gray-300 px-2 py-1.5 text-xs outline-none focus:border-kkpink transition-colors">
-                <option value="">— None —</option>
+              <select id="editStoreCategory" class="w-full border-2 border-black px-2 py-1.5 text-xs outline-none focus-visible:outline focus-visible:outline-4 focus-visible:outline-kkpink focus-visible:outline-offset-2">
+                <option value="">? None ?</option>
                 <option value="Headwear">Headwear</option>
                 <option value="Jewelry">Jewelry</option>
                 <option value="Bags">Bags</option>
@@ -664,29 +683,29 @@
               </select>
             </div>
 
-            <!-- Internal Price Reference (Phase 5 — read-only internal guidance, does not affect listing) -->
+            <!-- Internal Price Reference (Phase 5 ? read-only internal guidance, does not affect listing) -->
             <div id="editPriceRef" class="price-ref hidden"></div>
 
-            <!-- Assumed Ad Rate for Estimate (Phase 6 — does not affect listing) -->
+            <!-- Assumed Ad Rate for Estimate (Phase 6 ? does not affect listing) -->
             <div class="flex items-center gap-2 flex-wrap mt-1">
               <span class="text-[9px] font-bold uppercase tracking-wider text-gray-500">Assumed promo ad rate:</span>
-              <select id="editAdRate" class="border border-gray-300 rounded px-1.5 py-0.5 text-[10px] bg-white">
+              <select id="editAdRate" class="border-2 border-black px-1.5 py-1 text-[10px] font-black bg-white">
                 <option value="0">0% (none)</option>
                 <option value="2">2%</option>
                 <option value="5">5%</option>
                 <option value="8">8%</option>
                 <option value="10">10%</option>
               </select>
-              <span class="text-[9px] text-gray-400 italic">est. only — not actual</span>
+              <span class="text-[9px] text-gray-400 italic">est. only ? not actual</span>
             </div>
 
-            <!-- Profit Preview (Phase 2 — estimates only, does not affect listing) -->
+            <!-- Profit Preview (Phase 2 ? estimates only, does not affect listing) -->
             <div id="editProfitPreview" class="profit-preview hidden"></div>
 
             <!-- Save -->
             <div class="flex gap-2 pt-2">
               <button id="btnSaveEdit" type="button"
-                class="flex-1 border-4 border-black bg-black text-white px-4 py-3 font-black uppercase tracking-[.12em] text-xs hover:bg-kkpink hover:border-kkpink hover:text-black transition-all">
+                class="flex-1 border-4 border-black bg-black text-white px-4 py-3 font-black uppercase tracking-[.12em] text-xs hover:bg-gray-900">
                 Save Changes
               </button>
             </div>
@@ -707,11 +726,11 @@
           <div class="space-y-4">
             <div>
               <label id="bulkModalLabel" class="block text-[11px] font-black uppercase tracking-[.12em] mb-1 text-black/70">New Value</label>
-              <input id="bulkModalValue" type="number" step="0.01" min="0" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus:border-kkpink transition-colors" />
+              <input id="bulkModalValue" type="number" step="0.01" min="0" class="w-full border-[4px] border-black px-3 py-2 text-sm outline-none focus-visible:outline focus-visible:outline-4 focus-visible:outline-kkpink focus-visible:outline-offset-2" />
             </div>
             <div id="bulkModalItems" class="text-xs text-gray-500 max-h-32 overflow-y-auto"></div>
             <button id="btnBulkApply" type="button"
-              class="w-full border-4 border-black bg-black text-white px-4 py-3 font-black uppercase tracking-[.12em] text-xs hover:bg-kkpink hover:border-kkpink hover:text-black transition-all">
+              class="w-full border-4 border-black bg-black text-white px-4 py-3 font-black uppercase tracking-[.12em] text-xs hover:bg-gray-900">
               Apply to All Selected
             </button>
             <div id="bulkModalStatus" class="text-xs text-gray-400"></div>
@@ -722,20 +741,20 @@
 
     <!-- Policies Info Panel (shown by Setup) -->
     <div id="policiesPanel" class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6 mb-6 hidden">
-      <h2 class="text-lg font-black mb-4">⚙️ eBay Account Setup</h2>
+      <h2 class="font-black text-lg sm:text-2xl uppercase tracking-tighter mb-4">eBay Account Setup</h2>
       <div class="space-y-4">
         <div>
-          <h3 class="font-bold text-sm mb-2">Business Policies</h3>
+          <h3 class="text-[10px] font-black uppercase tracking-[.14em] text-gray-500 mb-2">Business Policies</h3>
           <div id="policiesContent" class="text-xs text-gray-500">Loading...</div>
         </div>
         <div>
-          <h3 class="font-bold text-sm mb-2">Inventory Location</h3>
-          <div class="flex gap-2">
+          <h3 class="text-[10px] font-black uppercase tracking-[.14em] text-gray-500 mb-2">Inventory Location</h3>
+          <div class="flex gap-2 flex-wrap">
             <button id="btnSetupLocation" type="button"
-              class="bg-black text-white px-4 py-2 rounded text-xs font-bold uppercase tracking-wider hover:bg-kkpink hover:text-black transition-all">
+              class="border-4 border-black bg-black text-white px-4 py-2.5 text-[10px] font-black uppercase tracking-[.12em] min-h-[44px] hover:bg-gray-900">
               Create/Verify Location
             </button>
-            <span id="locationStatus" class="text-xs text-gray-400 self-center"></span>
+            <span id="locationStatus" class="text-xs text-gray-500 self-center"></span>
           </div>
         </div>
       </div>
@@ -743,16 +762,16 @@
 
     <!-- Migration Panel (shown by Import) -->
     <div id="migratePanel" class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6 mb-6 hidden">
-      <h2 class="text-lg font-black mb-4">🔥 Import Existing eBay Listings</h2>
+      <h2 class="font-black text-lg sm:text-2xl uppercase tracking-tighter mb-4">Import Existing eBay Listings</h2>
       <p class="text-xs text-gray-500 mb-4">Scan your eBay inventory and link items to KK products.</p>
-      <div class="flex gap-2 mb-4">
+      <div class="flex gap-2 mb-4 flex-wrap">
         <button id="btnScanEbay" type="button"
-          class="bg-black text-white px-4 py-2 rounded text-xs font-bold uppercase tracking-wider hover:bg-kkpink hover:text-black transition-all">
-          🔍 Scan eBay Inventory
+          class="border-4 border-black bg-black text-white px-4 py-2.5 text-[10px] font-black uppercase tracking-[.12em] min-h-[44px] hover:bg-gray-900">
+          Scan eBay Inventory
         </button>
         <button id="btnAutoLink" type="button"
-          class="border-2 border-black text-black px-4 py-2 rounded text-xs font-bold uppercase tracking-wider hover:bg-black hover:text-white transition-all">
-          ⚡ Auto-Link All
+          class="border-4 border-black bg-white text-black px-4 py-2.5 text-[10px] font-black uppercase tracking-[.12em] min-h-[44px] hover:bg-gray-50">
+          Auto-Link All
         </button>
       </div>
       <div id="migrateStatus" class="text-xs text-gray-400 mb-3"></div>
@@ -771,7 +790,7 @@
       </div>
     </div>
 
-    <!-- Sales History Modal (Phase 4 — read-only, no eBay mutations) -->
+    <!-- Sales History Modal (Phase 4 ? read-only, no eBay mutations) -->
     <div id="salesModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center hidden">
       <div class="bg-white rounded-2xl shadow-xl border-4 border-black w-full max-w-md mx-4 max-h-[80vh] overflow-y-auto">
         <div class="p-5">
@@ -784,7 +803,7 @@
           </div>
           <div id="salesModalSummary"></div>
           <div id="salesModalBody">
-            <p class="text-xs text-gray-400 text-center py-6">Loading sales history…</p>
+            <p class="text-xs text-gray-400 text-center py-6">Loading sales history?</p>
           </div>
         </div>
       </div>
@@ -794,7 +813,7 @@
 
   <div id="kkFooterMount"></div>
 
-  <script type="module" src="/js/admin/ebayListings/index.js?v=20260518b"></script>
+  <script type="module" src="/js/admin/ebayListings/index.js?v=20260713f"></script>
   <script type="module" src="/js/shared/pwa.js"></script>
 </body>
 </html>

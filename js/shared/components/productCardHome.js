@@ -38,6 +38,11 @@ export function renderHomeCard(product, variants = [], opts = {}) {
   const href = slug ? `/pages/product.html?slug=${encodeURIComponent(slug)}` : "#";
 
   const defaultImg = product?.catalog_image_url || product?.primary_image_url || "";
+  const hoverImg = product?.catalog_hover_url || "";
+  const hasHoverSwap = Boolean(hoverImg && hoverImg !== defaultImg);
+  const hoverAttrs = hasHoverSwap
+    ? `data-hover="${esc(hoverImg)}" data-default="${esc(defaultImg)}"`
+    : "";
   const name = product?.name || "Product";
   const price = money(product?.price);
 
@@ -125,11 +130,12 @@ export function renderHomeCard(product, variants = [], opts = {}) {
 
   return `
     <article class="product-card block group relative flex flex-col h-full animate-fade-in-up" ${opts.style || ""}>
-      <a href="${href}" class="block w-full aspect-square bg-neutral-100 overflow-hidden border border-black/5 relative">
+      <a href="${href}" class="product-card-image block w-full aspect-square bg-neutral-100 overflow-hidden border border-black/5 relative">
         ${saleBadge}
         ${quickAddBtn}
         <img 
            data-main-img 
+           ${hoverAttrs}
            loading="lazy"
            decoding="async"
            src="${esc(defaultImg)}" 

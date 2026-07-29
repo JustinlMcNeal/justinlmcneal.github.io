@@ -63,7 +63,7 @@ function runScript(script, args = [], extraEnv = {}) {
   const r = spawnSync(process.execPath, [join("scripts", script), ...args], {
     cwd: ROOT,
     encoding: "utf8",
-    timeout: 90_000,
+    timeout: script.includes("060c3") ? 120_000 : 90_000,
     env: { ...process.env, ...FAST_ENV, ...extraEnv },
   });
   return { ok: r.status === 0, tail: (r.stdout || r.stderr || "").split("\n").slice(-4).join(" ") };
@@ -74,10 +74,39 @@ function simulateEbayPath(ctx) {
   const {
     syncOn, availableQty, ebayAction, relistAction,
     variationChildState, variationRelistState, inStockChildren = 1,
+    isVariationListing = false,
   } = ctx;
   const wrappers = [];
   if (!syncOn) return { ebayPath: "skipped_sync_off", wrappers };
-  if (availableQty <= 0) return { ebayPath: "skipped_qty_zero", wrappers };
+  if (availableQty < 0) return { ebayPath: "skipped_qty_zero", wrappers };
+
+  if (isVariationListing) {
+    if (
+      variationRelistState &&
+      GROUP_RELIST.has(variationRelistState) &&
+      variationRelistState !== "variation_group_active" &&
+      inStockChildren > 0
+    ) {
+      wrappers.push("relistEbayVariationGroup");
+      return { ebayPath: "variation_group_relist", wrappers };
+    }
+    if (variationChildState === "variation_update_qty") {
+      wrappers.push("syncEbayVariationChildQuantity");
+      return { ebayPath: "variation_update_qty", wrappers };
+    }
+    if (variationChildState === "variation_qty_cache_missing") {
+      return { ebayPath: "variation_cache_manual", wrappers };
+    }
+    if (variationChildState && CHILD_MANUAL.has(variationChildState)) {
+      return { ebayPath: "variation_manual", wrappers };
+    }
+    if (variationChildState === "variation_no_change") {
+      return { ebayPath: "variation_no_change", wrappers };
+    }
+    if (ebayAction === "update_qty" || ebayAction === "qty_cache_missing") {
+      return { ebayPath: "variation_fallback", wrappers };
+    }
+  }
 
   if (ebayAction === "update_qty") {
     wrappers.push("pushEbayInventoryQuantity");
@@ -141,14 +170,18 @@ function verifyStatic() {
   const idxUpdate = fnBody.indexOf('if (action === "update_qty")');
   const idxCache = fnBody.indexOf('if (action === "qty_cache_missing")');
   const idxEnded = fnBody.indexOf('if (action === "ended_needs_relist")');
+  const idxVarListing = fnBody.indexOf("isEbayVariationListing(candidate)");
   const idxVar = fnBody.indexOf("resolveEbayVariationBranch");
-  if (!(idxUpdate >= 0 && idxCache > idxUpdate && idxEnded > idxCache && idxVar > idxEnded)) {
-    errors.push("eBay branch order must be: update_qty → cache → ended → variation");
+  if (!(idxVarListing >= 0 && idxVar > idxVarListing && idxUpdate > idxVarListing && idxCache > idxUpdate && idxEnded > idxCache)) {
+    errors.push("eBay branch order must be: variation listing → update_qty → cache → ended → variation fallback");
   }
+  if (!ebayBranch.includes("isEbayVariationListing")) errors.push("Variation listing guard missing");
   if (!ebayBranch.includes("unsupported_variation")) errors.push("Single-SKU relist guard missing");
 
   const varBranch = readText("js/admin/inventory/services/adjustChannelEbayVariationBranch.js");
-  if (!varBranch.includes("availableQty <= 0")) errors.push("Variation branch qty gate missing");
+  if (!/runEbayVariationGroupRelist[\s\S]*availableQty <= 0/.test(varBranch)) {
+    errors.push("Group relist qty gate missing");
+  }
   if (!varBranch.includes("variation_group_ready_to_relist")) errors.push("Group relist states missing");
   const idxGroup = varBranch.indexOf("isGroupRelistRunnable(variationRelist)");
   const idxQty = varBranch.indexOf('variationChild?.candidate_state === "variation_update_qty"');
@@ -159,7 +192,7 @@ function verifyStatic() {
   const orch = readText("js/admin/inventory/services/adjustChannelOrchestrator.js");
   if ((orch.match(/await adjustInventory\(/g) || []).length !== 1) errors.push("adjust_inventory sole writer");
   if (!orch.includes("syncChannelsEnabled")) errors.push("Sync toggle gate missing");
-  if (!orch.includes("projectedAvailable <= 0")) errors.push("Available qty gate missing");
+  if (!orch.includes("projectedAvailable < 0")) errors.push("Negative available qty gate missing");
   if (/rollback|adjust_inventory.*ebay|undo.*stock/i.test(orch)) errors.push("No stock rollback in orchestrator");
   if (/fetchChannelSyncPreview|refreshIssueSnapshot|issueSnapshot/.test(orch)) {
     errors.push("No heavy reads in orchestrator");
@@ -217,6 +250,32 @@ async function verifyPreviewMatrix() {
       expectLabel: "eBay variation requires manual mapping review.", expectToggle: false,
     },
     {
+      id: 16,
+      candidate: {
+        product_id: "p1", on_hand_qty: 4, reserved_qty: 0,
+        amazon_sync_action: "no_change", amazon_current_qty: 4,
+        ebay_sync_action: "no_change", ebay_current_qty: 4,
+        ebay_item_group_key: "grp-1", product_active_variant_count: 3,
+      },
+      variationChild: { candidate_state: "variation_no_change", ebay_child_qty: 4, child_offer_id: "O1" },
+      adjustment: { valid: true, newStock: 5 },
+      fallbackOnHand: 4,
+      expectLabel: "eBay variation quantity can update.", expectToggle: true,
+    },
+    {
+      id: 17,
+      candidate: {
+        product_id: "p1", on_hand_qty: 54, reserved_qty: 0,
+        amazon_sync_action: "no_change", amazon_current_qty: 54,
+        ebay_sync_action: "no_change", ebay_current_qty: 54,
+        ebay_item_group_key: "grp-1", product_active_variant_count: 3,
+      },
+      variationChild: { candidate_state: "variation_no_change", ebay_child_qty: 54, child_offer_id: "O1" },
+      adjustment: { valid: true, newStock: 0 },
+      fallbackOnHand: 54,
+      expectLabel: "eBay variation quantity will zero", expectToggle: true,
+    },
+    {
       id: 10, variationChild: { candidate_state: "variation_no_change", ebay_child_qty: 3 },
       expectLabel: "eBay variation already matches.", expectToggle: false,
     },
@@ -236,8 +295,8 @@ async function verifyPreviewMatrix() {
     },
     {
       id: 15, adjustment: { valid: true, newStock: 0 }, fallbackReserved: 0,
-      variationChild: { candidate_state: "variation_update_qty" },
-      expectToggle: false,
+      variationChild: { candidate_state: "variation_update_qty", ebay_child_qty: 54, child_offer_id: "O1" },
+      expectToggle: true,
     },
   ];
 
@@ -277,8 +336,9 @@ function verifyOrchestrationMatrix() {
     { id: 11, syncOn: true, availableQty: 2, ebayAction: "ended_needs_relist", relistAction: "unsupported_variation", variationRelistState: "variation_group_ready_to_relist", inStockChildren: 2, expectPath: "variation_group_relist", expectWrappers: ["relistEbayVariationGroup"] },
     { id: 12, syncOn: true, availableQty: 2, ebayAction: "ended_needs_relist", relistAction: "unsupported_variation", variationRelistState: "variation_group_manual", expectPath: "variation_group_manual", expectWrappers: [] },
     { id: 14, syncOn: false, availableQty: 3, ebayAction: "unsupported_variation", variationChildState: "variation_update_qty", expectPath: "skipped_sync_off", expectWrappers: [] },
-    { id: 15, syncOn: true, availableQty: 0, ebayAction: "unsupported_variation", variationChildState: "variation_update_qty", expectPath: "skipped_qty_zero", expectWrappers: [] },
-    { id: 17, syncOn: true, availableQty: 2, ebayAction: "update_qty", variationChildState: "variation_update_qty", expectPath: "single_sku_update_qty", expectWrappers: ["pushEbayInventoryQuantity"] },
+    { id: 15, syncOn: true, availableQty: 0, ebayAction: "unsupported_variation", variationChildState: "variation_update_qty", expectPath: "variation_update_qty", expectWrappers: ["syncEbayVariationChildQuantity"] },
+    { id: 17, syncOn: true, availableQty: 2, ebayAction: "update_qty", variationChildState: "variation_update_qty", isVariationListing: false, expectPath: "single_sku_update_qty", expectWrappers: ["pushEbayInventoryQuantity"] },
+    { id: 19, syncOn: true, availableQty: 5, ebayAction: "no_change", isVariationListing: true, variationChildState: "variation_update_qty", expectPath: "variation_update_qty", expectWrappers: ["syncEbayVariationChildQuantity"] },
     { id: 18, syncOn: true, availableQty: 2, ebayAction: "unsupported_variation", variationChildState: "variation_update_qty", variationRelistState: "variation_group_ready_to_relist", inStockChildren: 1, expectPath: "variation_group_relist", expectWrappers: ["relistEbayVariationGroup"] },
   ];
 

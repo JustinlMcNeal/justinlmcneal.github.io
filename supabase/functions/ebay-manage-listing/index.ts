@@ -335,6 +335,24 @@ function isLocationInfoNotFoundError(data: unknown): boolean {
     || /location information not found/i.test(JSON.stringify(data || {}));
 }
 
+/** eBay 25019 — price revise blocked while listing is in a markdown/sale. */
+function isSalePriceLockedError(data: unknown): boolean {
+  const errors = getEbayErrors(data);
+  return errors.some((e) =>
+    e?.errorId === 25019
+    || /part of a sale|cannot be updated since it is a part of a sale/i.test(e?.message || "")
+  );
+}
+
+function offerPriceCentsFromOffer(offer: Record<string, unknown>): number | null {
+  const pricing = offer.pricingSummary;
+  if (!isRecord(pricing)) return null;
+  const price = pricing.price;
+  if (!isRecord(price) || price.value == null || price.value === "") return null;
+  const n = Math.round(parseFloat(String(price.value)) * 100);
+  return Number.isFinite(n) ? n : null;
+}
+
 function getOfferListingId(offer: Record<string, unknown>): string | null {
   const listing = offer.listing;
   if (!isRecord(listing)) return null;
@@ -1279,13 +1297,20 @@ serve(async (req) => {
       const EBAY_OFFER_READONLY = ["offerId", "listing", "statusEnum", "auditInfo", "format", "marketplaceId"];
       EBAY_OFFER_READONLY.forEach((k) => delete updatedOffer[k]);
 
-      if (priceCents !== undefined) {
-        updatedOffer.pricingSummary = {
-          price: {
-            value: (priceCents / 100).toFixed(2),
-            currency: "USD",
-          },
-        };
+      // Only rewrite price when it actually changes. Sale/markdown listings
+      // reject price revises (eBay 25019) even when other fields are valid.
+      const existingPriceCents = offerPriceCentsFromOffer(existing);
+      let appliedPriceUpdate = false;
+      if (priceCents !== undefined && priceCents !== null) {
+        if (existingPriceCents === null || Number(priceCents) !== existingPriceCents) {
+          updatedOffer.pricingSummary = {
+            price: {
+              value: (Number(priceCents) / 100).toFixed(2),
+              currency: "USD",
+            },
+          };
+          appliedPriceUpdate = true;
+        }
       }
 
       if (policies) {
@@ -1342,12 +1367,78 @@ serve(async (req) => {
         repairedLocation = true;
       }
 
-      const result = await ebayFetch(
+      const existingListingPolicies = isRecord(existing.listingPolicies)
+        ? existing.listingPolicies
+        : null;
+      const appliedBestOfferUpdate = bestOfferTerms !== undefined;
+
+      let result = await ebayFetch(
         accessToken,
         "PUT",
         `${INV_API}/offer/${offerId}`,
         updatedOffer
       );
+
+      let priceUpdateSkipped = false;
+      let bestOfferUpdateSkipped = false;
+
+      // Sale/markdown listings reject offer revises that touch buy-it-now price OR
+      // Best Offer money thresholds (auto-accept / auto-decline). Retry progressively.
+      if (!result.ok && result.status !== 204 && isSalePriceLockedError(result.data)) {
+        // 1) Force original pricingSummary (covers no-op rewrite / float formatting).
+        updatedOffer.pricingSummary = existing.pricingSummary;
+        if (appliedPriceUpdate) {
+          appliedPriceUpdate = false;
+          priceUpdateSkipped = true;
+        }
+        result = await ebayFetch(
+          accessToken,
+          "PUT",
+          `${INV_API}/offer/${offerId}`,
+          updatedOffer
+        );
+      }
+
+      if (!result.ok && result.status !== 204 && isSalePriceLockedError(result.data) && appliedBestOfferUpdate) {
+        // 2) Best Offer auto-accept/decline counts as a price revise during sales.
+        //    Retry with Best Offer enabled only (no money thresholds), else restore prior terms.
+        const lp = {
+          ...(isRecord(updatedOffer.listingPolicies) ? updatedOffer.listingPolicies : {}),
+        } as Record<string, unknown>;
+        if (bestOfferTerms?.bestOfferEnabled) {
+          lp.bestOfferTerms = { bestOfferEnabled: true };
+          updatedOffer.listingPolicies = lp;
+        } else if (existingListingPolicies) {
+          updatedOffer.listingPolicies = {
+            ...lp,
+            bestOfferTerms: existingListingPolicies.bestOfferTerms,
+          };
+        }
+        bestOfferUpdateSkipped = true;
+        result = await ebayFetch(
+          accessToken,
+          "PUT",
+          `${INV_API}/offer/${offerId}`,
+          updatedOffer
+        );
+      }
+
+      if (!result.ok && result.status !== 204 && isSalePriceLockedError(result.data) && appliedBestOfferUpdate) {
+        // 3) Last resort: restore original listingPolicies Best Offer block entirely.
+        if (existingListingPolicies) {
+          const lp = {
+            ...(isRecord(updatedOffer.listingPolicies) ? updatedOffer.listingPolicies : {}),
+            bestOfferTerms: existingListingPolicies.bestOfferTerms,
+          };
+          updatedOffer.listingPolicies = lp;
+        }
+        result = await ebayFetch(
+          accessToken,
+          "PUT",
+          `${INV_API}/offer/${offerId}`,
+          updatedOffer
+        );
+      }
 
       if (!result.ok && result.status !== 204) {
         if (isLocationInfoNotFoundError(result.data)) {
@@ -1355,6 +1446,13 @@ serve(async (req) => {
             "STALE_OFFER_RELINK_REQUIRED",
             "eBay rejected this offer update because its location-backed offer state is missing or stale. Refresh/relink this listing before editing; the same offer update should not be retried blindly.",
             { offerId, sku, expectedSku: expectedLiveSku, listingId, liveListingId, merchantLocationKey: updatedOffer.merchantLocationKey || null, repairedLocation, locationCheck, upstreamStatus: result.status, upstream: result.data },
+          );
+        }
+        if (isSalePriceLockedError(result.data)) {
+          return structuredOfferFailure(
+            "PRICE_LOCKED_BY_SALE",
+            "eBay is blocking offer updates on this listing because it is in an active markdown/sale (for example your 15% off). This is an eBay platform rule — category, policies, price, and Best Offer cannot be revised via updateOffer until that sale ends or this listing is removed from it. End/remove the sale in Seller Hub → Marketing → Discounts, then Save again here. (Promoted listings ads alone do not cause this; the markdown/sale does.)",
+            { offerId, sku, expectedSku: expectedLiveSku, listingId, liveListingId, upstreamStatus: result.status, upstream: result.data },
           );
         }
         throw new Error(`Update offer failed (${result.status}): ${JSON.stringify(result.data)}`);
@@ -1365,13 +1463,33 @@ serve(async (req) => {
         const updates: Record<string, unknown> = {
           updated_at: new Date().toISOString(),
         };
-        if (priceCents !== undefined) updates.ebay_price_cents = priceCents;
+        if (appliedPriceUpdate && priceCents !== undefined) updates.ebay_price_cents = priceCents;
         if (categoryId) updates.ebay_category_id = categoryId;
         await supabase.from("products").update(updates).eq("code", sku);
       }
 
+      const skipNotes: string[] = [];
+      if (priceUpdateSkipped) skipNotes.push("price left unchanged (sale/markdown lock)");
+      if (bestOfferUpdateSkipped) {
+        skipNotes.push(
+          bestOfferTerms?.bestOfferEnabled
+            ? "Best Offer enabled without auto-accept/decline amounts (sale lock)"
+            : "Best Offer money terms left unchanged (sale lock)",
+        );
+      }
+
       return new Response(
-        JSON.stringify({ success: true, offerId, repairedLocation }),
+        JSON.stringify({
+          success: true,
+          offerId,
+          repairedLocation,
+          priceUpdateSkipped,
+          bestOfferUpdateSkipped,
+          ...(skipNotes.length ? {
+            code: "SALE_FIELD_UPDATES_SKIPPED",
+            message: `Listing updated, but eBay blocked some money-related changes while this item is in a sale/markdown: ${skipNotes.join("; ")}. End the sale to change those.`,
+          } : {}),
+        }),
         { headers: corsHeaders }
       );
     }

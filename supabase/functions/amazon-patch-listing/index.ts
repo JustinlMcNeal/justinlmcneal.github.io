@@ -7,7 +7,6 @@ import {
   buildListingImagePatchOperations,
   buildListingPatchOperations,
   buildOfferRestorePutBody,
-  countAmazonListingSecondaryImages,
   isFbaManagedListing,
   listingNeedsOfferPut,
   mapPatchIssues,
@@ -217,7 +216,6 @@ Deno.serve(async (req) => {
         ? buildListingImagePatchOperations(
           marketplaceId,
           parsedPatch.imageUrls,
-          countAmazonListingSecondaryImages(row.raw_listing, marketplaceId),
         )
         : []),
     ];
@@ -275,11 +273,13 @@ Deno.serve(async (req) => {
 
     if (!patchResult.ok) {
       console.log(`${LOG_PREFIX} patch_failed error=${patchResult.error}`);
+      const amazonIssues = mapPatchIssues(patchResult.issues || []);
       return json({
         ok: false,
         error: patchResult.error,
         hint: patchResult.hint ?? null,
         preview: wantsPreview,
+        issues: amazonIssues,
       }, patchResult.httpStatus && patchResult.httpStatus >= 400 ? patchResult.httpStatus : 502);
     }
 

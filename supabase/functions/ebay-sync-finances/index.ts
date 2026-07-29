@@ -228,12 +228,12 @@ serve(async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
     const supabase = createClient(supabaseUrl, serviceKey);
 
-    // Accept optional daysBack parameter (default: 30)
+    // Accept optional daysBack / days_back parameter (default: 30)
     let daysBack = 30;
     try {
       const body = await req.json();
-      if (body?.days_back)
-        daysBack = Math.min(365, Math.max(1, body.days_back));
+      const rawDays = body?.days_back ?? body?.daysBack;
+      if (rawDays != null) daysBack = Math.min(365, Math.max(1, Number(rawDays) || 30));
     } catch {
       /* no body is fine */
     }

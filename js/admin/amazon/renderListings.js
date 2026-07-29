@@ -1,6 +1,11 @@
 import { qs } from "./dom.js";
 import { applyAmazonTableSettings } from "./tableSettings.js";
 import {
+  linkListingAsin,
+  linkListingSku,
+  linkListingTitle,
+} from "./listingLinks.js";
+import {
   feeColumnMarkup,
   profitColumnMarkup,
 } from "./listingProfit.js";
@@ -169,9 +174,14 @@ export function buildListingTableRow(row) {
   const title = escapeHtml(rowTitle(row));
   const titleRaw = rowTitle(row);
   const meta = escapeHtml(productMetaLine(row));
-  const asin = escapeHtml(row.asin || "—");
-  const sku = escapeHtml(rowSku(row));
-  const idsLine = `${sku} · ${asin}`;
+  const asinRaw = String(row.asin || "").trim() || "—";
+  const skuRaw = rowSku(row);
+  const asin = escapeHtml(asinRaw);
+  const sku = escapeHtml(skuRaw);
+  const titleLinked = linkListingTitle(row, title, titleRaw);
+  const skuLinked = linkListingSku(row, sku, skuRaw);
+  const asinLinked = linkListingAsin(row, asin, asinRaw);
+  const idsLine = `${skuRaw} · ${asinRaw}`;
   const price = priceColumnMarkup(row, escapeHtml, { compact: true });
   const fulfillment = fulfillmentMarkup(row);
   const synced = escapeHtml(formatSyncedDate(row.last_synced_at));
@@ -188,9 +198,9 @@ export function buildListingTableRow(row) {
         <div class="flex items-center gap-2 min-w-0">
           ${productThumbMarkup(row, "w-9 h-9")}
           <div class="min-w-0 flex-1">
-            <p class="font-bold text-sm leading-tight truncate" title="${title}">${title}</p>
+            <p class="font-bold text-sm leading-tight truncate" title="${title}">${titleLinked}</p>
             ${meta ? `<p class="text-[10px] text-gray-400 truncate" title="${meta}">${meta}</p>` : ""}
-            <p class="text-[10px] font-mono text-gray-500 truncate" title="${escapeHtml(idsLine)}">${sku} · ${asin}</p>
+            <p class="text-[10px] font-mono text-gray-500 truncate" title="${escapeHtml(idsLine)}">${skuLinked} · ${asinLinked}</p>
           </div>
           ${rowMenuButtonMarkup(row, titleRaw)}
         </div>
@@ -221,9 +231,15 @@ export function buildListingMobileCard(row) {
   const status = String(row.listing_status || "unknown");
   const badge = statusBadge(status);
   const title = escapeHtml(rowTitle(row));
+  const titleRaw = rowTitle(row);
   const subtitle = escapeHtml(row.product_type || row.fulfillment_channel || "Amazon listing");
-  const asin = escapeHtml(row.asin || "—");
-  const sku = escapeHtml(rowSku(row));
+  const asinRaw = String(row.asin || "").trim() || "—";
+  const skuRaw = rowSku(row);
+  const asin = escapeHtml(asinRaw);
+  const sku = escapeHtml(skuRaw);
+  const titleLinked = linkListingTitle(row, title, titleRaw);
+  const skuLinked = linkListingSku(row, sku, skuRaw);
+  const asinLinked = linkListingAsin(row, asin, asinRaw);
   const variant = escapeHtml(row.kk_variant_label || "—");
   const price = priceColumnMarkup(row, escapeHtml);
   const fulfillment = fulfillmentMarkup(row);
@@ -242,13 +258,13 @@ export function buildListingMobileCard(row) {
         ${productThumbMarkup(row, "w-14 h-14")}
         <div class="flex-1 min-w-0">
           <div class="flex items-start justify-between gap-2">
-            <h3 class="font-bold text-sm leading-tight">${title}</h3>
+            <h3 class="font-bold text-sm leading-tight">${titleLinked}</h3>
             <span class="inline-flex px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${badge.className} flex-shrink-0">${escapeHtml(badge.label)}</span>
           </div>
           <p class="text-[11px] text-gray-400 mt-0.5">${subtitle}</p>
           <dl class="grid grid-cols-2 gap-x-3 gap-y-1 mt-3 text-xs">
-            <div data-amazon-mobile-col="asin"><dt class="text-gray-400">ASIN</dt><dd class="font-mono font-medium">${asin}</dd></div>
-            <div data-amazon-mobile-col="sku"><dt class="text-gray-400">SKU</dt><dd class="font-mono font-medium">${sku}</dd></div>
+            <div data-amazon-mobile-col="asin"><dt class="text-gray-400">ASIN</dt><dd class="font-mono font-medium">${asinLinked}</dd></div>
+            <div data-amazon-mobile-col="sku"><dt class="text-gray-400">SKU</dt><dd class="font-mono font-medium">${skuLinked}</dd></div>
             <div data-amazon-mobile-col="variant"><dt class="text-gray-400">Variant</dt><dd>${variant}</dd></div>
             <div data-amazon-mobile-col="price"><dt class="text-gray-400">Price</dt><dd>${price}</dd></div>
             <div data-amazon-mobile-col="fulfillment"><dt class="text-gray-400">Fulfillment</dt><dd>${fulfillment}</dd></div>

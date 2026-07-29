@@ -1,11 +1,7 @@
 // /js/admin/customers/api.js
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from "/js/config/env.js";
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+import { getSupabaseClient } from "/js/shared/supabaseClient.js";
 
 function normalizeSort(sortBy) {
-  // Maps UI values to view columns
   switch (sortBy) {
     case "total_spent": return { col: "total_spent_cents", asc: false };
     case "order_count": return { col: "order_count", asc: false };
@@ -16,13 +12,13 @@ function normalizeSort(sortBy) {
 }
 
 export async function getCustomersList({ q = "", sortBy = "last_order", limit = 25, offset = 0 } = {}) {
+  const supabase = getSupabaseClient();
   const sort = normalizeSort(sortBy);
 
   let query = supabase
     .from("v_customers_summary")
     .select("*", { count: "exact" });
 
-  // Search across common fields
   if (q) {
     const like = `%${q}%`;
     query = query.or([
@@ -48,21 +44,18 @@ export async function getCustomersList({ q = "", sortBy = "last_order", limit = 
 }
 
 export async function upsertCustomerProfile(payload) {
-  // Only allow columns in customers table
+  const supabase = getSupabaseClient();
   const row = {
     email: payload.email?.trim() || null,
     stripe_customer_id: payload.stripe_customer_id || null,
-
     first_name: payload.first_name || null,
     last_name: payload.last_name || null,
     phone: payload.phone || null,
-
     street_address: payload.street_address || null,
     city: payload.city || null,
     state: payload.state || null,
     zip: payload.zip || null,
     country: payload.country || null,
-
     notes: payload.notes || null
   };
 
@@ -76,11 +69,10 @@ export async function upsertCustomerProfile(payload) {
 }
 
 export async function getCustomerOrderHistory(email) {
+  const supabase = getSupabaseClient();
   const key = (email || "").trim().toLowerCase();
   if (!key) return [];
 
-  // Try richer history view first
-  // If it doesn't exist, fall back.
   const tryView = async (viewName) => {
     const { data, error } = await supabase
       .from(viewName)
@@ -95,8 +87,7 @@ export async function getCustomerOrderHistory(email) {
 
   try {
     return await tryView("v_order_summary_with_ship");
-  } catch (err) {
-    // If view doesn't exist or selection fails, fallback
+  } catch {
     const { data, error } = await supabase
       .from("v_order_summary")
       .select("stripe_checkout_session_id,kk_order_id,order_date,total_items,total_paid_cents")
@@ -105,12 +96,12 @@ export async function getCustomerOrderHistory(email) {
       .limit(200);
 
     if (error) throw error;
-    return (data || []).map(r => ({
+    return (data || []).map((r) => ({
       ...r,
       label_status: null,
       tracking_number: null,
       carrier: null,
-      service: null
+      service: null,
     }));
   }
 }

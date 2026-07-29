@@ -235,8 +235,8 @@ async function initProductPage() {
   // Note: details.html is now inlined in product.html to avoid Live Server corruption
   await loadInsert("productGalleryMount", "/page_inserts/product/gallery.html");
 
-  // ✅ pairs insert mount sits under Details in product.html:
-  // <div id="productPairsMount" class="mt-10"></div>
+  // Pairs mount sits above reviews in product.html:
+  // <div id="productPairsMount" class="mb-12"></div>
   await loadInsert("productPairsMount", "/page_inserts/product/pairs.html");
 
   // ✅ now that DOM exists, wire soft dock + collect els

@@ -1,7 +1,7 @@
 /** Single-SKU eBay listing publish helpers (Phase 059D.2 — extracted for relist). */
 
 import { EBAY_API } from "./ebayUtils.ts";
-import { ebayInventoryFetch } from "./inventoryEbayCacheUtils.ts";
+import { ebayInventoryFetch, formatEbayInventoryError } from "./inventoryEbayCacheUtils.ts";
 
 const INV_API = `${EBAY_API}/sell/inventory/v1`;
 
@@ -82,12 +82,63 @@ function missingItemSpecificNames(data: unknown): string[] {
 }
 
 function isEbayProductNotFoundPublishError(data: unknown): boolean {
-  const payload = data as { errors?: Array<{ errorId?: number }> } | null;
-  return Boolean(payload?.errors?.some((e) => e?.errorId === 25604 || e?.errorId === 25709));
+  const payload = data as { errors?: Array<{ errorId?: number; message?: string }> } | null;
+  if (!payload?.errors?.length) return false;
+  return payload.errors.some((e) => {
+    if (e?.errorId === 25604 || e?.errorId === 25709) return true;
+    const message = typeof e?.message === "string" ? e.message.toLowerCase() : "";
+    return message.includes("product not found");
+  });
 }
 
 async function delay(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+const EBAY_PRODUCT_NOT_FOUND_RETRY_MS = [1500, 3000, 5000];
+const EBAY_INVENTORY_READY_RETRY_MS = [500, 1000, 1500, 2000, 3000, 5000];
+
+export async function waitForEbayInventoryItem(
+  accessToken: string,
+  sku: string,
+): Promise<{ ok: boolean; error?: string }> {
+  let lastStatus = 0;
+  let lastData: unknown = null;
+
+  for (let attempt = 0; attempt <= EBAY_INVENTORY_READY_RETRY_MS.length; attempt++) {
+    const result = await ebayInventoryFetch(
+      accessToken,
+      "GET",
+      `${INV_API}/inventory_item/${encodeURIComponent(sku)}`,
+    );
+    if (result.ok && isRecord(result.data)) return { ok: true };
+    lastStatus = result.status;
+    lastData = result.data;
+    if (attempt < EBAY_INVENTORY_READY_RETRY_MS.length) {
+      await delay(EBAY_INVENTORY_READY_RETRY_MS[attempt]);
+    }
+  }
+
+  return {
+    ok: false,
+    error: formatEbayInventoryError(lastData, `Inventory item not available after create (${lastStatus})`),
+  };
+}
+
+export async function fetchPublishedEbayOffer(
+  accessToken: string,
+  offerId: string,
+): Promise<{ listingId: string } | null> {
+  const result = await ebayInventoryFetch(accessToken, "GET", `${INV_API}/offer/${offerId}`);
+  if (!result.ok || !isRecord(result.data)) return null;
+
+  const status = String(result.data.status || result.data.statusEnum || "").toUpperCase();
+  const listing = isRecord(result.data.listing) ? result.data.listing : {};
+  const listingStatus = String(listing.listingStatus || "").toUpperCase();
+  const listingId = typeof listing.listingId === "string" ? listing.listingId.trim() : "";
+  const published = status === "PUBLISHED" || listingStatus === "ACTIVE";
+  if (!published || !listingId) return null;
+  return { listingId };
 }
 
 export async function fetchInventoryItemAspects(
@@ -129,7 +180,61 @@ export async function createEbayInventoryItem(
     invItem,
   );
   if (!result.ok && result.status !== 204) {
-    return { ok: false, error: `Create inventory item failed (${result.status})` };
+    return {
+      ok: false,
+      error: formatEbayInventoryError(result.data, `Create inventory item failed (${result.status})`),
+    };
+  }
+  return { ok: true };
+}
+
+const EBAY_OFFER_READONLY = ["offerId", "listing", "status", "statusEnum", "auditInfo", "format", "marketplaceId"];
+
+function buildRelistOfferUpdate(
+  existing: Record<string, unknown>,
+  params: { quantity: number; priceCents: number; categoryId?: string },
+): Record<string, unknown> {
+  const updated: Record<string, unknown> = { ...existing };
+  updated.availableQuantity = params.quantity;
+  updated.pricingSummary = {
+    price: { value: (params.priceCents / 100).toFixed(2), currency: "USD" },
+  };
+  if (params.categoryId) updated.categoryId = params.categoryId;
+  EBAY_OFFER_READONLY.forEach((key) => delete updated[key]);
+  return updated;
+}
+
+/** Refresh quantity/price on an existing unpublished or ended offer before relist publish. */
+export async function syncEbayOfferForRelist(
+  accessToken: string,
+  offerId: string,
+  params: { quantity: number; priceCents: number; categoryId?: string },
+): Promise<{ ok: boolean; error?: string }> {
+  const current = await ebayInventoryFetch(accessToken, "GET", `${INV_API}/offer/${offerId}`);
+  if (!current.ok || !isRecord(current.data)) {
+    return {
+      ok: false,
+      error: formatEbayInventoryError(current.data, `Get offer failed (${current.status})`),
+    };
+  }
+
+  const updated = buildRelistOfferUpdate(current.data, params);
+  let result = await ebayInventoryFetch(accessToken, "PUT", `${INV_API}/offer/${offerId}`, updated);
+
+  if (!result.ok && result.status !== 204 && isEbayProductNotFoundPublishError(result.data)) {
+    for (const waitMs of EBAY_PRODUCT_NOT_FOUND_RETRY_MS) {
+      await delay(waitMs);
+      result = await ebayInventoryFetch(accessToken, "PUT", `${INV_API}/offer/${offerId}`, updated);
+      if (result.ok || result.status === 204) break;
+      if (!isEbayProductNotFoundPublishError(result.data)) break;
+    }
+  }
+
+  if (!result.ok && result.status !== 204) {
+    return {
+      ok: false,
+      error: formatEbayInventoryError(result.data, `Update offer failed (${result.status})`),
+    };
   }
   return { ok: true };
 }
@@ -166,8 +271,15 @@ export async function createEbayOffer(
     const errData = result.data as { errors?: Array<{ errorId?: number; parameters?: Array<{ name: string; value: string }> }> };
     const dup = errData?.errors?.find((e) => e.errorId === 25002);
     const existingOfferId = dup?.parameters?.find((p) => p.name === "offerId")?.value;
-    if (existingOfferId) return { ok: true, offerId: existingOfferId };
-    return { ok: false, error: `Create offer failed (${result.status})` };
+    if (existingOfferId) {
+      const sync = await syncEbayOfferForRelist(accessToken, existingOfferId, { quantity, priceCents, categoryId });
+      if (!sync.ok) return { ok: false, error: sync.error };
+      return { ok: true, offerId: existingOfferId };
+    }
+    return {
+      ok: false,
+      error: formatEbayInventoryError(result.data, `Create offer failed (${result.status})`),
+    };
   }
   const offerId = isRecord(result.data) && typeof result.data.offerId === "string"
     ? result.data.offerId
@@ -189,11 +301,12 @@ export async function publishEbayOffer(
     {},
   );
 
-  if (!result.ok && result.status === 500 && isEbayProductNotFoundPublishError(result.data)) {
-    for (const waitMs of [1500, 3000]) {
+  if (!result.ok && isEbayProductNotFoundPublishError(result.data)) {
+    for (const waitMs of EBAY_PRODUCT_NOT_FOUND_RETRY_MS) {
       await delay(waitMs);
       result = await ebayInventoryFetch(accessToken, "POST", `${INV_API}/offer/${offerId}/publish`, {});
       if (result.ok) break;
+      if (!isEbayProductNotFoundPublishError(result.data)) break;
     }
   }
 
@@ -206,7 +319,10 @@ export async function publishEbayOffer(
         missingAspects: missing,
       };
     }
-    return { ok: false, error: `Publish failed (${result.status})` };
+    return {
+      ok: false,
+      error: formatEbayInventoryError(result.data, `Publish failed (${result.status})`),
+    };
   }
 
   const listingId = isRecord(result.data) && typeof result.data.listingId === "string"

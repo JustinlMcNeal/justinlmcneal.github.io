@@ -329,6 +329,16 @@ const PTD_CONDITIONAL_NOISE_ATTRIBUTES = new Set([
   "child_parent_sku_relationship",
   "externally_assigned_product_identifier",
   "merchant_suggested_asin",
+  "main_product_image_locator",
+  "swatch_product_image_locator",
+  "other_product_image_locator_1",
+  "other_product_image_locator_2",
+  "other_product_image_locator_3",
+  "other_product_image_locator_4",
+  "other_product_image_locator_5",
+  "other_product_image_locator_6",
+  "other_product_image_locator_7",
+  "other_product_image_locator_8",
 ]);
 
 export function extractRequiredAttributes(

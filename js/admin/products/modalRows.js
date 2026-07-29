@@ -1,6 +1,7 @@
 import { escapeAttr } from "./dom.js";
 import { uploadProductImage } from "./api.js";
 import {
+  CPI_SOURCE,
   cpiSourceLabel,
   formatLandedCpiUsd,
   formatMarginBadgeHtml,
@@ -34,12 +35,15 @@ export function addVariantRow(
     unitCost: v._productUnitCost,
     unitCostOverrideCents: v.unit_cost_override_cents,
   });
-  const cpiLabel = cpiSourceLabel(variantCpi.source);
+  const cpiLabel =
+    variantCpi.source === CPI_SOURCE.PRODUCT
+      ? "Product Cost"
+      : cpiSourceLabel(variantCpi.source);
   const cpiDisplay = formatLandedCpiUsd(variantCpi.landedCpiUsd);
   const cpiTitle =
     variantCpi.source === "variant"
       ? "Parcel-import landed CPI for this variant"
-      : "Falls back to product CPI when no variant override";
+      : "Falls back to product cost when no variant override";
 
   const variantMargin = computeVariantMargin({
     price: v._productPrice,

@@ -48,36 +48,45 @@ export function renderImageStrip(containerId, urls, stateArr, maxImages = 24) {
 }
 
 /**
- * Show (or refresh) a gallery of unused product images the user can click
- * to add to the image strip.
+ * Show (or refresh) a gallery of product images the user can click to add to the strip.
  *
  * @param {string}   pickerId  - ID of the gallery container element
  * @param {string}   stripId   - ID of the image strip container element
  * @param {string[]} stateArr  - Live mutable image URL array
  * @param {object}   product   - Product row (used by buildImageUrls)
  * @param {number}   [maxImages] - Max images allowed (default 24)
+ * @param {object}   [options]
+ * @param {boolean}  [options.showAll=false] - List every available image, not just unused
+ * @param {(product: object) => string[]} [options.buildAvailableUrls=buildImageUrls]
  */
-export function showGalleryPicker(pickerId, stripId, stateArr, product, maxImages = 24) {
-  const picker       = document.getElementById(pickerId);
-  const allAvailable = buildImageUrls(product);
-  const unused       = allAvailable.filter(url => !stateArr.includes(url));
+export function showGalleryPicker(pickerId, stripId, stateArr, product, maxImages = 24, options = {}) {
+  const {
+    showAll = false,
+    buildAvailableUrls = buildImageUrls,
+  } = options;
+  const picker = document.getElementById(pickerId);
+  const allAvailable = buildAvailableUrls(product);
+  const displayUrls = showAll
+    ? allAvailable
+    : allAvailable.filter((url) => !stateArr.includes(url));
 
-  if (!unused.length) {
-    picker.innerHTML = '<span class="text-[10px] text-gray-400">No additional images available</span>';
+  if (!displayUrls.length) {
+    picker.innerHTML = '<span class="text-[10px] text-gray-400">No images available</span>';
     picker.classList.remove("hidden");
     return;
   }
 
   picker.innerHTML = "";
-  unused.forEach(url => {
+  displayUrls.forEach((url) => {
+    const selected = stateArr.includes(url);
     const thumb = document.createElement("div");
-    thumb.className = "img-thumb picker";
+    thumb.className = "img-thumb picker" + (selected ? " selected" : "");
     thumb.innerHTML = `<img src="${esc(url)}" alt="add" />`;
     thumb.addEventListener("click", () => {
-      if (stateArr.length >= maxImages) return;
+      if (selected || stateArr.length >= maxImages) return;
       stateArr.push(url);
       renderImageStrip(stripId, stateArr, stateArr, maxImages);
-      showGalleryPicker(pickerId, stripId, stateArr, product, maxImages);
+      showGalleryPicker(pickerId, stripId, stateArr, product, maxImages, options);
     });
     picker.appendChild(thumb);
   });

@@ -3,6 +3,8 @@
 import type { AmazonCredentials } from "./amazonPtdAuthUtils.ts";
 import { createRestrictedDataToken, parsePayload, spApiGet } from "./amazonSpApiRequestUtils.ts";
 import { upsertAmazonCancelObservations } from "./marketplaceObservationSync.ts";
+import { applyAmazonSaleHoldsAfterIngest } from "./marketplaceSaleHold.ts";
+import { applyAmazonSaleReleasesAfterCancel } from "./marketplaceSaleRelease.ts";
 
 export type ServiceClient = {
   from: (table: string) => {
@@ -571,6 +573,24 @@ export async function syncAmazonOrdersToDb(
       console.warn(`[amazon-order-sync] shipment upsert failed ${amazonOrderId}:`, shipErr.message);
     }
 
+    const sellerSkus = itemsResult.items.map((item) =>
+      String(item.SellerSKU || item.sellerSKU || "").trim()
+    );
+
+    if (!built.isCanceled) {
+      const holdResult = await applyAmazonSaleHoldsAfterIngest(
+        client,
+        order,
+        sessionId,
+        built.isCanceled,
+        built.lineItemRows,
+        sellerSkus,
+      );
+      console.log(
+        `[amazon-order-sync] Sale hold ${amazonOrderId}: attempted=${holdResult.attempted} reserved=${holdResult.reserved} skipped=${holdResult.skipped}`,
+      );
+    }
+
     const fulfillmentChannel = String(order.FulfillmentChannel || "").toUpperCase();
 
     if (built.isCanceled) {
@@ -583,6 +603,16 @@ export async function syncAmazonOrdersToDb(
           stripe_line_item_id: String(row.stripe_line_item_id),
         })),
       });
+      const releaseResult = await applyAmazonSaleReleasesAfterCancel(
+        client,
+        order,
+        sessionId,
+        built.isCanceled,
+        built.lineItemRows,
+      );
+      console.log(
+        `[amazon-order-sync] Sale release ${amazonOrderId}: attempted=${releaseResult.attempted} released=${releaseResult.released} skipped=${releaseResult.skipped}`,
+      );
       continue;
     }
 

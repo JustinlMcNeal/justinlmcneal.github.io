@@ -1,36 +1,23 @@
 /**
  * Adjust + safe channel sync orchestrator (Phase 059A.3).
  * adjust_inventory is the only stock writer; channel APIs run after KK success.
+ * Amazon/eBay branches live in channelSyncForVariant.js (shared with parcel receive).
  */
 
 import { adjustInventory } from "../api/adjustInventoryApi.js";
 import { fetchChannelSyncCandidateForVariant } from "../api/channelSyncCandidateApi.js";
-import { pushAmazonFbmInventory } from "../api/amazonSyncPushApi.js";
-import {
-  resolveAmazonChannelStep,
-} from "./adjustChannelNextSteps.js";
 import { buildAdjustSyncContext } from "./adjustSyncContext.js";
 import { resolveEbayBranch } from "./adjustChannelEbayBranch.js";
 import {
+  resolveAmazonBranch,
+  skippedChannel,
+} from "./channelSyncForVariant.js";
+import {
   ADJUST_KK_SUCCESS_COPY,
   ADJUST_KK_UNCHANGED_SYNC_COPY,
-  AMAZON_DRY_RUN_COPY,
-  AMAZON_SYNC_FAILED_COPY,
 } from "./adjustOrchestratorSummary.js";
 
-/** @typedef {'skipped'|'success'|'failed'|'next_step'|'pending'|'manual'|'dry_run'} ChannelStepStatus */
-
-/**
- * @typedef {Object} ChannelStepResult
- * @property {ChannelStepStatus} status
- * @property {string|null} action
- * @property {string} message
- * @property {string|null} [nextStepUrl]
- * @property {string|null} [runId]
- * @property {string|null} [detail]
- * @property {string|null} [listingId]
- * @property {string|null} [offerId]
- */
+/** @typedef {import('./channelSyncForVariant.js').ChannelStepResult} ChannelStepResult */
 
 /**
  * @typedef {Object} AdjustOrchestrationResult
@@ -42,155 +29,6 @@ import {
  * @property {string[]} warnings
  * @property {string[]} errors
  */
-
-/** @returns {ChannelStepResult} */
-function skippedChannel(message, action = null) {
-  return { status: "skipped", action, message, nextStepUrl: null, runId: null };
-}
-
-/**
- * @param {string} variantId
- * @param {string[]} warnings
- * @param {string[]} errors
- * @param {Record<string, string>|null} syncContext
- */
-async function runAmazonUpdateQty(variantId, warnings, errors, syncContext) {
-  const action = "update_qty";
-  try {
-    const data = await pushAmazonFbmInventory({
-      variantIds: [variantId],
-      limit: 1,
-      syncContext,
-    });
-    const succeeded = Number(data.succeeded ?? data.success_count ?? data.summary?.succeeded ?? 0);
-    const runId = data.runId ?? data.run_id ?? null;
-    if (succeeded > 0) {
-      return {
-        status: "success",
-        action,
-        message: "Amazon FBM quantity sync requested.",
-        nextStepUrl: null,
-        runId,
-      };
-    }
-    const failMsg = data.message || "Amazon sync returned no successful updates.";
-    warnings.push(failMsg);
-    errors.push(`Amazon: ${failMsg}`);
-    return {
-      status: "failed",
-      action,
-      message: AMAZON_SYNC_FAILED_COPY,
-      nextStepUrl: "/pages/admin/inventory.html",
-      runId,
-    };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    errors.push(`Amazon: ${message}`);
-    return {
-      status: "failed",
-      action,
-      message: AMAZON_SYNC_FAILED_COPY,
-      nextStepUrl: "/pages/admin/inventory.html",
-      runId: null,
-    };
-  }
-}
-
-/**
- * @param {string} variantId
- * @param {string[]} warnings
- * @param {string[]} errors
- * @param {Record<string, string>|null} syncContext
- */
-async function runAmazonInactiveRestock(variantId, warnings, errors, syncContext) {
-  const action = "inactive_can_update";
-  try {
-    const data = await pushAmazonFbmInventory({
-      mode: "inactive_restock",
-      variantIds: [variantId],
-      limit: 1,
-      syncContext,
-    });
-    const runId = data.runId ?? data.run_id ?? null;
-    const row = Array.isArray(data.results) ? data.results[0] : null;
-    const innerStatus = row?.status ?? null;
-    const succeeded = Number(data.summary?.succeeded ?? 0);
-
-    if (innerStatus === "success" || succeeded > 0) {
-      return {
-        status: "success",
-        action,
-        message: "Amazon inactive offer restore requested.",
-        nextStepUrl: null,
-        runId,
-      };
-    }
-
-    if (innerStatus === "dry_run") {
-      const msg = row?.message || AMAZON_DRY_RUN_COPY;
-      warnings.push(msg);
-      return {
-        status: "dry_run",
-        action,
-        message: AMAZON_DRY_RUN_COPY,
-        nextStepUrl: "/pages/admin/inventory.html",
-        runId,
-      };
-    }
-
-    if (innerStatus === "skipped") {
-      return {
-        status: "skipped",
-        action,
-        message: row?.message || "Amazon inactive restore skipped.",
-        nextStepUrl: null,
-        runId,
-      };
-    }
-
-    const failMsg =
-      row?.message || data.message || AMAZON_SYNC_FAILED_COPY;
-    warnings.push(failMsg);
-    errors.push(`Amazon: ${failMsg}`);
-    return {
-      status: "failed",
-      action,
-      message: AMAZON_SYNC_FAILED_COPY,
-      nextStepUrl: "/pages/admin/inventory.html",
-      runId,
-    };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    errors.push(`Amazon: ${message}`);
-    return {
-      status: "failed",
-      action,
-      message: AMAZON_SYNC_FAILED_COPY,
-      nextStepUrl: "/pages/admin/inventory.html",
-      runId: null,
-    };
-  }
-}
-
-/**
- * @param {import('../api/channelSyncCandidateApi.js').ChannelSyncCandidateRow|null} candidate
- * @param {string} variantId
- * @param {string} productCodeHint
- * @param {string[]} warnings
- * @param {string[]} errors
- * @param {Record<string, string>|null} syncContext
- */
-async function resolveAmazonBranch(candidate, variantId, productCodeHint, warnings, errors, syncContext) {
-  const action = candidate?.amazon_sync_action ?? null;
-  if (action === "update_qty") {
-    return runAmazonUpdateQty(variantId, warnings, errors, syncContext);
-  }
-  if (action === "inactive_can_update") {
-    return runAmazonInactiveRestock(variantId, warnings, errors, syncContext);
-  }
-  const next = resolveAmazonChannelStep(action, productCodeHint);
-  return next ? { ...next, runId: null } : skippedChannel("Amazon sync not applicable.", action);
-}
 
 /**
  * @param {Object} params

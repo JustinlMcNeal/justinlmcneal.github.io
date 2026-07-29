@@ -59,11 +59,11 @@ function parseMode(value: unknown): SyncMode {
   return value === "variation_child_update_qty" ? "variation_child_update_qty" : "update_qty";
 }
 
-function parsePositiveQty(value: unknown): number | null {
+function parseNonNegativeQty(value: unknown): number | null {
   const n = Number(value);
   if (!Number.isFinite(n)) return null;
   const qty = Math.trunc(n);
-  return qty > 0 ? qty : null;
+  return qty >= 0 ? qty : null;
 }
 
 function resolveVariationRequest(body: Payload): {
@@ -86,9 +86,9 @@ function resolveVariationRequest(body: Payload): {
     return { productId: null, variantId: singleVariantId, quantity: null, error: "productId is required for variation_child_update_qty" };
   }
 
-  const quantity = parsePositiveQty(body.quantity);
-  if (!quantity) {
-    return { productId, variantId: singleVariantId, quantity: null, error: "quantity must be a positive integer" };
+  const quantity = parseNonNegativeQty(body.quantity);
+  if (quantity === null) {
+    return { productId, variantId: singleVariantId, quantity: null, error: "quantity must be a non-negative integer" };
   }
 
   return { productId, variantId: singleVariantId, quantity };
@@ -139,7 +139,7 @@ Deno.serve(async (req) => {
 
   if (mode === "variation_child_update_qty") {
     const resolved = resolveVariationRequest(body);
-    if (resolved.error || !resolved.productId || !resolved.variantId || !resolved.quantity) {
+    if (resolved.error || !resolved.productId || !resolved.variantId || resolved.quantity === null) {
       return json({ ok: false, error: resolved.error || "invalid_variation_request" }, 400);
     }
 

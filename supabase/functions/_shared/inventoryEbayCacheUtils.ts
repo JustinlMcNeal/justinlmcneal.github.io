@@ -63,18 +63,31 @@ export function variantSkuFromOption(baseCode: string, optionValue: string): str
   return `${baseCode}-${suffix}`;
 }
 
+function normalizeVariantSkuList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.map((sku) => typeof sku === "string" ? sku.trim() : "").filter(Boolean))];
+}
+
 export async function ebayInventoryFetch(
   token: string,
   method: string,
   url: string,
+  body?: unknown,
 ): Promise<{ ok: boolean; status: number; data: unknown }> {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${token}`,
+    Accept: "application/json",
+    "Accept-Language": "en-US",
+  };
+  if (body !== undefined) {
+    headers["Content-Type"] = "application/json";
+    headers["Content-Language"] = "en-US";
+  }
+
   const resp = await fetch(url, {
     method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/json",
-      "Accept-Language": "en-US",
-    },
+    headers,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   if (resp.status === 204) return { ok: true, status: 204, data: null };
   const text = await resp.text();
@@ -84,7 +97,26 @@ export async function ebayInventoryFetch(
   } catch {
     data = { rawResponse: text.slice(0, 500) };
   }
+  if (!resp.ok) {
+    console.error(`[ebayInventoryFetch] ${method} ${url} → ${resp.status}:`, text.slice(0, 500));
+  }
   return { ok: resp.ok, status: resp.status, data };
+}
+
+export function formatEbayInventoryError(data: unknown, fallback: string): string {
+  if (!data || typeof data !== "object") return fallback;
+  const record = data as Record<string, unknown>;
+  const errors = Array.isArray(record.errors) ? record.errors : [];
+  const messages = errors
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return "";
+      const err = entry as Record<string, unknown>;
+      return String(err.message || err.longMessage || "").trim();
+    })
+    .filter(Boolean);
+  if (messages.length) return messages.slice(0, 2).join(" ");
+  const raw = typeof record.rawResponse === "string" ? record.rawResponse.trim() : "";
+  return raw || fallback;
 }
 
 export type EbayCacheRowInput = {
@@ -197,20 +229,32 @@ export async function refreshProductEbayCache(
   }
 
   if (product.ebay_item_group_key) {
-    const groupRes = await ebayInventoryFetch(
+    const groupKey = product.ebay_item_group_key.trim();
+    const groupMeta = await ebayInventoryFetch(
       accessToken,
       "GET",
-      `${INV_API}/offer?inventory_item_group_key=${encodeURIComponent(product.ebay_item_group_key)}`,
+      `${INV_API}/inventory_item_group/${encodeURIComponent(groupKey)}`,
     );
-    if (!groupRes.ok) {
-      errors.push(`group_offer_lookup_failed_${groupRes.status}`);
+
+    let childSkus: string[] = [];
+    if (groupMeta.ok && isRecord(groupMeta.data)) {
+      childSkus = normalizeVariantSkuList(groupMeta.data.variantSKUs);
+    }
+    if (!childSkus.length) {
+      childSkus = [
+        ...new Set(
+          variants
+            .map((v) => String(v.sku || "").trim() || variantSkuFromOption(product.code, v.option_value || ""))
+            .filter(Boolean),
+        ),
+      ];
+    }
+    if (!childSkus.length) {
+      errors.push(groupMeta.ok ? "group_variant_skus_missing" : `group_metadata_lookup_failed_${groupMeta.status}`);
       return { rows, errors };
     }
-    const payload = isRecord(groupRes.data) ? groupRes.data : {};
-    const offers = Array.isArray(payload.offers) ? payload.offers.filter(isRecord) : [];
-    for (const offer of offers) {
-      const sku = typeof offer.sku === "string" ? offer.sku.trim() : "";
-      if (!sku) continue;
+
+    for (const sku of childSkus) {
       const variant = variants.find((v) => {
         const generated = variantSkuFromOption(product.code, v.option_value || "");
         return sku === generated || sku === String(v.sku || "").trim();
@@ -256,6 +300,32 @@ export async function upsertEbayCacheRows(
     .from("ebay_listing_inventory_cache")
     .upsert(payload, { onConflict: "product_id,ebay_sku" });
   if (error) throw new Error(error.message || "cache_upsert_failed");
+}
+
+/** Backfill missing products.ebay_offer_id / ebay_listing_id from fresh cache rows. */
+export async function reconcileProductEbayMappingFromCache(
+  // deno-lint-ignore no-explicit-any
+  client: any,
+  product: ProductRefreshTarget,
+  rows: EbayCacheRowInput[],
+  now: string,
+): Promise<void> {
+  const primary = rows.find((row) => row.ebay_sku === String(product.ebay_sku || product.code || "").trim()) || rows[0];
+  if (!primary) return;
+
+  const payload = isRecord(primary.raw_payload_json) ? primary.raw_payload_json : {};
+  const offerId = typeof payload.offerId === "string" ? payload.offerId.trim() : "";
+  const listingId = String(primary.ebay_item_id || product.ebay_listing_id || "").trim();
+  const updates: Record<string, unknown> = {};
+
+  if (!String(product.ebay_offer_id || "").trim() && offerId) updates.ebay_offer_id = offerId;
+  if (!String(product.ebay_listing_id || "").trim() && listingId) updates.ebay_listing_id = listingId;
+  if (primary.listing_status === "active" && product.ebay_status !== "active") updates.ebay_status = "active";
+  if (!Object.keys(updates).length) return;
+
+  updates.updated_at = now;
+  const { error } = await client.from("products").update(updates).eq("id", product.id);
+  if (error) console.warn("[inventoryEbayCache] product mapping reconcile failed:", error.message);
 }
 
 function sleep(ms: number): Promise<void> {

@@ -1,5 +1,6 @@
 import { qs } from "./dom.js";
 import { escapeHtml } from "./renderListings.js";
+import { clampAmazonItemHighlight } from "./pushDraftSaveValidation.js";
 
 const BAG_LIKE_PRODUCT_TYPES = new Set(["HANDBAG", "TOTE_BAG"]);
 
@@ -406,10 +407,10 @@ export const ATTRIBUTE_FIELD_META = {
     ],
   },
   title_differentiation: {
-    label: "Title Differentiation",
-    placeholder: "Enamel Pin",
-    hint: "Short differentiator Amazon uses for similar titles (e.g. Enamel Pin, Lapel Pin).",
-    defaultValue: "Enamel Pin",
+    label: "Item Highlight",
+    placeholder: "Soft acrylic knit · everyday streetwear",
+    hint: "Amazon Item Highlights (max 125 chars). Materials / use cases under the title. Only shows when title ≤ 75.",
+    defaultValue: "",
   },
   fabric_type: {
     label: "Fabric Type",
@@ -1148,7 +1149,7 @@ export function resolveFieldMeta(name, productType = "", attributeEnums = {}) {
     if (name === "title_differentiation") {
       meta.label = "Item Highlight";
       meta.placeholder = "Faux fur cat ears";
-      meta.hint = "Short benefit phrase for Amazon Item Highlights (max 125 chars).";
+      meta.hint = "Amazon Item Highlights (max 125 chars). Materials / use cases under the title. Only shows when title ≤ 75.";
       meta.defaultValue = "";
     }
     if (name === "special_size_type") {
@@ -1198,7 +1199,7 @@ export function resolveFieldMeta(name, productType = "", attributeEnums = {}) {
     if (name === "title_differentiation") {
       meta.label = "Item Highlight";
       meta.placeholder = isTote ? "Mini pastel canvas tote" : "Heart-quilted faux leather";
-      meta.hint = "Short benefit phrase for Amazon Item Highlights (max 125 chars).";
+      meta.hint = "Amazon Item Highlights (max 125 chars). Materials / use cases under the title. Only shows when title ≤ 75.";
       meta.defaultValue = "";
     }
     if (name === "material") {
@@ -1311,7 +1312,7 @@ export function resolveFieldMeta(name, productType = "", attributeEnums = {}) {
     if (name === "title_differentiation") {
       meta.label = "Item Highlight";
       meta.placeholder = "Antique heart buckle";
-      meta.hint = "Short benefit phrase for Amazon Item Highlights (max 125 chars).";
+      meta.hint = "Amazon Item Highlights (max 125 chars). Materials / use cases under the title. Only shows when title ≤ 75.";
       meta.defaultValue = "";
     }
     if (name === "material") {
@@ -1954,6 +1955,7 @@ function renderAttributeControl(name, meta, value, inputId, productType = "") {
       data-amazon-attr="${escapeHtml(name)}"
       value="${escapeHtml(isBlankAttributeValue(name, value, productType) ? "" : value)}"
       placeholder="${escapeHtml(meta.placeholder || name)}"
+      ${name === "title_differentiation" ? 'maxlength="125"' : ""}
       class="${controlClass}"
     />
   `;
@@ -2006,7 +2008,7 @@ export function renderExtraAttributeFields(requiredAttributes, draftPayload = {}
     const inputId = `amazonPushAttr_${name}`;
 
     return `
-      <div class="flex flex-col gap-1 sm:col-span-1">
+      <div class="flex flex-col gap-1 sm:col-span-1" data-amazon-attr-field="${escapeHtml(name)}">
         <label for="${escapeHtml(inputId)}" class="text-gray-400 font-bold uppercase tracking-wide text-[10px]">
           ${escapeHtml(label)}
           <span class="font-mono normal-case text-gray-400">(${escapeHtml(name)})</span>
@@ -2738,6 +2740,6 @@ export function applyAiAttributesToForm(attributes, options = {}) {
     if (!(control instanceof HTMLInputElement) && !(control instanceof HTMLSelectElement)) continue;
     const current = control.value.trim();
     if (!overwrite && current && !isBlankAttributeValue(name, current, productType)) continue;
-    control.value = value;
+    control.value = name === "title_differentiation" ? clampAmazonItemHighlight(value) : value;
   }
 }

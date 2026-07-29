@@ -75,6 +75,7 @@
 | **058** | **eBay column cache patch (post-freeze)** | ✅ Complete | [058_ebay_inventory_column_cache_patch.md](./058_ebay_inventory_column_cache_patch.md) |
 | **059** | **Adjust → unified channel restock** | ✅ Complete / Frozen | [059_adjust_stock_unified_channel_restock_plan.md](./059_adjust_stock_unified_channel_restock_plan.md) |
 | **060** | **eBay variation group automation** | ✅ Complete / Frozen / Production-ready | [060_ebay_variation_group_automation_plan.md](./060_ebay_variation_group_automation_plan.md) |
+| **061** | **Sale-triggered channel sync (oversell prevention)** | ✅ Complete / Frozen / Production-ready | [061_sale_triggered_channel_sync_plan.md](./061_sale_triggered_channel_sync_plan.md) |
 
 ### Phase 059 subphases (5 × 5 — complete at 059E.5)
 
@@ -99,6 +100,18 @@
 **Phase 060:** ✅ **Complete / Frozen / Production-ready** (2026-06-09). Verified by `scripts/verify-inventory-phase060-final-freeze.mjs`.
 
 **060 complete when:** `060C.5` — variation qty + relist + Adjust integration frozen. **Achieved.**
+
+### Phase 061 — Sale-triggered channel sync (3 × 3 at 061C.3)
+
+| Major | Name | Subphases | Status |
+|-------|------|-----------|--------|
+| **061A** | Sale → KK inventory hold | A.1 audit · A.2 RPC + wire · A.3 verify + freeze | **061A ✅ Complete / Frozen** |
+| **061B** | Hold → cross-channel qty push | B.1 design · B.2 queue + worker · B.3 wire + freeze | **061B ✅ Complete / Frozen** |
+| **061C** | Cancel/restore + final freeze | C.1 release · C.2 re-push + visibility · C.3 final freeze | **061C ✅ Complete / Frozen** |
+
+**Phase 061:** ✅ **Complete / Frozen / Production-ready** (2026-06-09). Verified by `scripts/verify-inventory-phase061-final-freeze.mjs`. See [061 plan](./061_sale_triggered_channel_sync_plan.md).
+
+**061 complete when:** `061C.3` — sale on any mapped channel reduces KK available immediately and auto-pushes qty to other channels (including zero).
 
 **JS organization:** Phase 059 modules must stay under 500 lines where practical; split by feature/responsibility (see [059 plan](./059_adjust_stock_unified_channel_restock_plan.md#javascript-structure-guardrails-all-subphases)).
 
@@ -169,11 +182,9 @@ Remove `mockData.js` after Phase 3 read wiring is stable.
 
 ## Next action
 
-**Phase 060 is frozen.** No new inventory marketplace automation until a new phase is opened. Recommended next work outside Phase 060:
+**Phase 061 is complete/frozen/production-ready.** Deploy using the 061C.3 checklist in [061 plan](./061_sale_triggered_channel_sync_plan.md). Pilot SKU: KK-0001 Black. Keep `SALE_CHANNEL_SYNC_ENABLED=false` until staging preview passes.
 
-- Production apply of Phase 060 migrations + edge functions if not yet live (see [060 deployment checklist](./060_ebay_variation_group_automation_plan.md#production-deployment-checklist-phase-060))
-- Optional live dry-run on test products only (explicit flags required)
-- Parcel import / CPI / products margin work (separate tracks in repo)
+Before production **live** sale push: resolve Phase 060 `verify-inventory-phase060-final-freeze.mjs` nested compose failures if running full 060 regression.
 
 For Returns/Restock baseline: run `node scripts/verify-inventory-phase10y-final-stabilization.mjs`. See [056_phase_10y_final_stabilization_pool_safety.md](./056_phase_10y_final_stabilization_pool_safety.md).
 
@@ -183,6 +194,14 @@ For Returns/Restock baseline: run `node scripts/verify-inventory-phase10y-final-
 
 | Date | Phase | Notes |
 |------|-------|-------|
+| 2026-06-09 | 061 | Phase 061 complete/frozen/production-ready — sale hold + push + release + re-push |
+| 2026-06-09 | 061C.3 | Final freeze script + deployment checklist |
+| 2026-06-09 | 061C.1 | Sale reservation release on cancel/refund before ship |
+| 2026-06-09 | 061B.3 | Sale trigger wiring — enqueue after hold on KK/eBay/Amazon; 061B frozen |
+| 2026-06-09 | 061B.2 | Sale sync queue + orchestrator runtime + worker edge (no trigger wiring) |
+| 2026-06-09 | 061B.1 | Sale sync orchestrator design complete — Option B queue, no runtime push |
+| 2026-06-09 | 061A | Complete/frozen — sale hold RPC + eBay/Amazon wiring; no channel push |
+| 2026-06-09 | 061 | Planned — sale-triggered KK hold + cross-channel qty push (3×3 structure, oversell prevention) |
 | 2026-06-09 | 060 | eBay variation group automation complete/frozen — Adjust integration for active child qty + ended group relist |
 | 2026-06-12 | 10Y-Pool | Supabase pool exhaustion fix: 10AA snapshot issues, 10AB missing-SKU, browser snapshot RPC removed, verification + runbook |
 | 2026-06-09 | 10Y | Feature freeze, deployment checklist, regression guard, UI polish |

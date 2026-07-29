@@ -16,9 +16,13 @@
       theme: {
         extend: {
           colors: {
-            kkpink: '#ff69b4',
+            kkpink: '#f58f86',
+            kkpeach: '#f6dcc6',
             instagram: '#E1306C',
             pinterest: '#E60023',
+          },
+          borderWidth: {
+            '4': '4px',
           }
         }
       }
@@ -426,22 +430,31 @@
         </div>
       </div>
 
-      <!-- Boards View -->
+      <!-- Boards View — KK theme (Amazon icon patterns) -->
       <div id="tab-boards" class="tab-panel hidden">
-        <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
-          <div class="p-4 border-b flex items-center justify-between">
-            <h2 class="font-bold">Pinterest Board Strategy</h2>
-            <p class="text-xs text-gray-500 hidden sm:block">Search-intent routing · Pinterest only</p>
-            <div class="flex gap-2">
-              <button id="btnSyncBoards" class="text-sm font-medium bg-red-600 text-white px-3 py-1.5 rounded-lg hover:bg-red-700 transition-colors">Sync from Pinterest</button>
-              <button id="btnAddBoard" class="text-sm font-medium text-black hover:underline">+ Add Board</button>
+        <div class="boards-tab space-y-4">
+          <header class="boards-tab__header">
+            <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+              <div>
+                <div class="boards-tab__kicker">Pinterest</div>
+                <h2 class="boards-tab__title">Board Strategy</h2>
+                <p class="boards-tab__subtitle">Search-intent routing for karrykraze.com pins. Mark one board as the default fallback.</p>
+              </div>
+              <div class="boards-tab__actions w-full sm:w-auto sm:justify-end">
+                <button id="btnSyncBoards" type="button" class="boards-tab__btn boards-tab__btn--sync flex-1 sm:flex-none">
+                  Sync from Pinterest
+                </button>
+                <button id="btnAddBoard" type="button" class="boards-tab__btn boards-tab__btn--add flex-1 sm:flex-none">
+                  + Add Board
+                </button>
+              </div>
             </div>
-          </div>
-          <p id="boardStrategyWarning" class="hidden mx-4 mt-2 text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2"></p>
-          <div id="boardList" class="divide-y">
-            <div class="p-8 text-center text-gray-400">
-              <p>Connect Pinterest to load boards</p>
-              <p class="text-xs mt-1">Mark one board as default fallback for unmapped pins</p>
+          </header>
+          <p id="boardStrategyWarning" class="boards-tab__warning hidden"></p>
+          <div id="boardList" class="boards-tab__list">
+            <div class="boards-tab__empty">
+              <p class="boards-tab__empty-title">Connect Pinterest to load boards</p>
+              <p class="boards-tab__empty-sub">Connect Pinterest on this page, then sync boards. Mark one as default for unmapped pins.</p>
             </div>
           </div>
         </div>

@@ -223,10 +223,10 @@ export function renderModalProductProfitPanel({
         <div class="text-xs font-black uppercase tracking-wider text-gray-700">Default product estimate</div>
         ${marginBadge?.hasData ? marginBadge.html : ""}
       </div>
-      <div class="text-[10px] text-gray-500">Free-shipping margin using product CPI + estimated inbound/outbound ship. Does not apply when variant landed CPI overrides exist.</div>
+      <div class="text-[10px] text-gray-500">Free-shipping margin using product cost + estimated inbound/outbound ship. Does not apply when variant landed CPI overrides exist.</div>
       <div class="grid grid-cols-2 gap-2 text-xs">
         <div class="rounded-lg bg-gray-50 px-3 py-2">
-          <div class="text-[10px] font-bold uppercase text-gray-500">Product CPI</div>
+          <div class="text-[10px] font-bold uppercase text-gray-500">Product Cost</div>
           <div class="font-mono font-bold">${fmt(unitCostN || null)}</div>
         </div>
         <div class="rounded-lg bg-gray-50 px-3 py-2">
@@ -248,7 +248,7 @@ export function renderModalProductProfitPanel({
               <span class="text-gray-600">Profit @ ${fmt(priceN)}</span>
               <span class="font-bold ${margin.profitUsd >= 0 ? "text-green-700" : "text-red-700"}">${fmt(margin.profitUsd)}</span>
             </div>`
-          : `<div class="text-xs text-gray-500">Add price and CPI/weight for margin estimate.</div>`
+          : `<div class="text-xs text-gray-500">Add price and product cost/weight for margin estimate.</div>`
       }
       ${variantNote}
     </div>`;

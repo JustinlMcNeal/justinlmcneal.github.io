@@ -21,6 +21,7 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
 
 const PHASE_FILES = [
   "js/admin/inventory/services/adjustChannelOrchestrator.js",
+  "js/admin/inventory/services/channelSyncForVariant.js",
   "js/admin/inventory/services/adjustChannelPreview.js",
   "js/admin/inventory/services/adjustChannelNextSteps.js",
   "js/admin/inventory/services/adjustOrchestratorSummary.js",
@@ -76,16 +77,17 @@ function verifyStatic() {
   notes.push("059B.3 JS modules present and under 500 lines");
 
   const orch = readText("js/admin/inventory/services/adjustChannelOrchestrator.js");
+  const amazonHelper = readText("js/admin/inventory/services/channelSyncForVariant.js");
   const fnBody = orch.slice(orch.indexOf("export async function runAdjustChannelOrchestration"));
 
-  if (!orch.includes("runAmazonInactiveRestock")) {
-    errors.push("Orchestrator missing runAmazonInactiveRestock");
+  if (!amazonHelper.includes("runAmazonInactiveRestock")) {
+    errors.push("Amazon helper missing runAmazonInactiveRestock");
   }
-  if (!orch.includes('mode: "inactive_restock"')) {
-    errors.push("Orchestrator must call pushAmazonFbmInventory with mode inactive_restock");
+  if (!amazonHelper.includes('mode: "inactive_restock"')) {
+    errors.push("Amazon helper must call pushAmazonFbmInventory with mode inactive_restock");
   }
-  if (!orch.includes('action === "inactive_can_update"')) {
-    errors.push("Orchestrator must branch on inactive_can_update");
+  if (!amazonHelper.includes('action === "inactive_can_update"')) {
+    errors.push("Amazon helper must branch on inactive_can_update");
   }
 
   const adjustIdx = fnBody.indexOf("await adjustInventory(");
@@ -93,12 +95,15 @@ function verifyStatic() {
   if (adjustIdx < 0 || amazonIdx < 0 || amazonIdx < adjustIdx) {
     errors.push("Amazon branch must run after adjust_inventory");
   }
+  if (!orch.includes("resolveAmazonBranch")) {
+    errors.push("Orchestrator must delegate Amazon to channelSyncForVariant");
+  }
   notes.push("Orchestrator calls inactive restock after adjust success");
 
-  if (!orch.includes("variantIds: [variantId]") || !orch.includes("limit: 1")) {
+  if (!amazonHelper.includes("variantIds: [variantId]") || !amazonHelper.includes("limit: 1")) {
     errors.push("Inactive restock must pass single variantId and limit 1");
   }
-  if (!orch.includes("syncContext")) {
+  if (!orch.includes("syncContext") || !amazonHelper.includes("syncContext")) {
     errors.push("Orchestrator must pass syncContext to Amazon push");
   }
   if (!orch.includes("fetchChannelSyncCandidateForVariant")) {
@@ -106,11 +111,11 @@ function verifyStatic() {
   }
   notes.push("Single variant, syncContext, post-adjust candidate refresh");
 
-  if (!orch.includes("projectedAvailable <= 0")) {
-    errors.push("Orchestrator must skip marketplace sync when projected available <= 0");
+  if (!/projectedAvailable\s*<=?\s*0/.test(orch)) {
+    errors.push("Orchestrator must skip marketplace sync when projected available is negative");
   }
 
-  const updateQtyBlock = orch.slice(0, orch.indexOf("runAmazonInactiveRestock"));
+  const updateQtyBlock = amazonHelper.slice(0, amazonHelper.indexOf("runAmazonInactiveRestock"));
   if (updateQtyBlock.includes('mode: "inactive_restock"')) {
     errors.push("update_qty path must not use inactive_restock mode");
   }
@@ -129,11 +134,14 @@ function verifyStatic() {
   for (const token of ["dry_run", "failed", "success"]) {
     if (!panel.includes(token)) errors.push(`Result panel missing status ${token}`);
   }
-  if (!orch.includes("Amazon inactive offer restore requested")) {
-    errors.push("Orchestrator missing inactive success message");
+  if (!amazonHelper.includes("Amazon inactive offer restore requested")) {
+    errors.push("Amazon helper missing inactive success message");
   }
-  if (!orch.includes("Live Amazon patching is disabled") && !orch.includes("AMAZON_DRY_RUN_COPY")) {
-    errors.push("Orchestrator missing inactive dry_run message");
+  if (
+    !amazonHelper.includes("Live Amazon patching is disabled") &&
+    !amazonHelper.includes("AMAZON_DRY_RUN_COPY")
+  ) {
+    errors.push("Amazon helper missing inactive dry_run message");
   }
   notes.push("Result panel and orchestrator inactive restore copy");
 

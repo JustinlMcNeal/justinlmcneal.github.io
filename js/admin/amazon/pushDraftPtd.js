@@ -21,6 +21,10 @@ import {
   readExtraAttributesFromForm,
   stripInvalidPushPayloadAttributes,
 } from "./pushDraftAttributes.js";
+import {
+  clearMissingAttributeHighlights,
+  highlightMissingAttributes,
+} from "./pushDraftMissingHighlight.js";
 import { readVariationRole } from "./variationFamily.js";
 
 /** @type {boolean} */
@@ -163,31 +167,44 @@ function renderRequiredAttributesPanel() {
 }
 
 function renderMissingAmazonAttributes(issues) {
+  const el = qs("#amazonPushMissingAttributes");
+  if (!el) return;
+
   if (!issues?.length) {
-    renderAttributeList(
-      "#amazonPushMissingAttributes",
-      [],
-      "Preview Amazon requirements to see gaps.",
-    );
+    clearMissingAttributeHighlights();
+    el.innerHTML = `<li class="text-gray-400">Preview Amazon requirements to see gaps.</li>`;
     return;
   }
 
   const productType = readCurrentProductType();
   const fields = issues
     .filter((issue) => issue?.severity === "error")
-    .map((issue) => issue.field || issue.message)
+    .map((issue) => issue.field)
     .filter(Boolean);
 
   const displayFields = filterFormAttributeNames(
-    fields.length ? fields : issues.map((issue) => issue.field || issue.message).filter(Boolean),
+    fields.length
+      ? fields
+      : issues.map((issue) => issue.field).filter(Boolean),
     productType,
   );
 
-  renderAttributeList(
-    "#amazonPushMissingAttributes",
-    displayFields,
-    "No Amazon preview issues returned.",
-  );
+  if (!displayFields.length) {
+    clearMissingAttributeHighlights();
+    el.innerHTML = `<li class="text-gray-400">No Amazon preview issues returned.</li>`;
+    return;
+  }
+
+  el.innerHTML = displayFields.map((item) => `
+    <li>
+      <button
+        type="button"
+        data-action="jump-missing-attr"
+        data-attr="${escapeHtml(item)}"
+        class="text-left font-mono text-[11px] text-amber-950 underline decoration-kkpink underline-offset-2 hover:text-black"
+      >${escapeHtml(item)}</button>
+    </li>
+  `).join("");
 }
 
 function renderAttributeList(id, items, emptyText) {
@@ -219,6 +236,7 @@ export function resetPtdPanels() {
   resetProductTypeSearchResults();
   resetProductTypeRecommendation();
   resetExtraAttributeFields();
+  clearMissingAttributeHighlights();
   renderAttributeList(
     "#amazonPushRequiredAttributes",
     [],
@@ -390,6 +408,17 @@ export function hydratePtdFromDraft(row) {
     renderExtraAttributeFields(attributeNames, draftPayload, readAttributeRenderOptions());
     applyExtraAttributeDefaults(attributeNames, readAttributeRenderOptions());
   }
+
+  if (lastResult?.amazonIssues?.length) {
+    highlightMissingAttributes(extractAmazonIssueFields(lastResult.amazonIssues), { scroll: false });
+  } else if (lastResult?.missingRequiredAttributes?.length) {
+    highlightMissingAttributes(
+      filterFormAttributeNames(lastResult.missingRequiredAttributes, readCurrentProductType()),
+      { scroll: false },
+    );
+  } else {
+    clearMissingAttributeHighlights();
+  }
 }
 
 /**
@@ -535,6 +564,15 @@ export function initPushDraftPtd(deps) {
         "All required Amazon attributes are present in this draft.",
       );
       syncExtraAttributeFields(deps.collectPayload().draftPayload);
+      const missingNames = filterFormAttributeNames(
+        result.missingRequiredAttributes || [],
+        readCurrentProductType(),
+      );
+      if (missingNames.length) {
+        highlightMissingAttributes(missingNames);
+      } else {
+        clearMissingAttributeHighlights();
+      }
       deps.renderValidationPanel(result.validationErrors || []);
 
       const statusEl = qs('[data-hydrate="push-review-status"]');
@@ -595,12 +633,14 @@ export function initPushDraftPtd(deps) {
         renderRequiredAttributesPanel();
         renderMissingAmazonAttributes(result.amazonIssues);
         syncExtraAttributeFields(deps.collectPayload().draftPayload);
+        highlightMissingAttributes(issueFields);
       } else {
         renderAttributeList(
           "#amazonPushMissingAttributes",
           [],
           "All required Amazon attributes are present in this draft.",
         );
+        clearMissingAttributeHighlights();
       }
 
       const statusEl = qs('[data-hydrate="push-review-status"]');
@@ -646,6 +686,7 @@ export function initPushDraftPtd(deps) {
       if (Array.isArray(err?.validationErrors) && err.validationErrors.length) {
         deps.renderValidationPanel(err.validationErrors, { showAll: true });
         renderMissingAmazonAttributes(err.validationErrors);
+        highlightMissingAttributes(extractAmazonIssueFields(err.validationErrors));
       }
       const blocking = Array.isArray(err?.validationErrors)
         ? err.validationErrors.filter((issue) => issue?.severity === "error")

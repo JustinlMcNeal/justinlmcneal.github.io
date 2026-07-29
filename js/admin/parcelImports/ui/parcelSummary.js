@@ -1,6 +1,7 @@
 /** Render parsed parcel into summary data-field hooks. */
 
 import { querySummaryField } from "../dom.js";
+import { getState } from "../state.js";
 import {
   formatCny,
   formatGrams,
@@ -23,6 +24,7 @@ const SUMMARY_KEYS = [
   "totalItemFeeCny",
   "shipmentFeeCny",
   "insurance",
+  "totalParcelChargeCny",
 ];
 
 export function clearParcelSummary() {
@@ -30,6 +32,37 @@ export function clearParcelSummary() {
   setField("status", "");
   const badges = document.getElementById("parcelSummaryStatusBadges");
   if (badges) badges.classList.add("hidden");
+}
+
+/**
+ * Merge charge overrides into the Upload-tab summary so edits show immediately
+ * (not only after Save Draft / reload).
+ */
+export function syncParcelSummaryFromOverrides() {
+  const { parcel, overrides, currentFile } = getState();
+  if (!parcel) return;
+
+  const effective = {
+    ...parcel,
+    parcelWeightGrams:
+      overrides?.parcelWeightGrams ?? parcel.parcelWeightGrams,
+    chargedWeightGrams:
+      overrides?.chargedWeightGrams ?? parcel.chargedWeightGrams,
+    shipmentFeeCny: overrides?.shipmentFeeCny ?? parcel.shipmentFeeCny,
+    insuranceYes:
+      overrides?.insuranceYes !== undefined && overrides?.insuranceYes !== null
+        ? overrides.insuranceYes
+        : parcel.insuranceYes,
+    insuranceCny: overrides?.insuranceCny ?? parcel.insuranceCny,
+    totalParcelChargeCny:
+      overrides?.totalParcelChargeCny ??
+      parcel.totalParcelChargeCny ??
+      (parcel.shipmentFeeCny != null ? parcel.shipmentFeeCny : null),
+  };
+
+  renderParcelSummary(effective, {
+    name: parcel.sourceFileName || currentFile?.name,
+  });
 }
 
 export function renderParcelSummary(parcel, fileMeta = {}) {
@@ -51,10 +84,19 @@ export function renderParcelSummary(parcel, fileMeta = {}) {
     "insurance",
     parcel.insuranceYes
       ? "Yes"
-      : parcel.insuranceCny != null
-        ? formatCny(parcel.insuranceCny)
-        : parcel.insuranceLabel || "—",
+      : parcel.insuranceYes === false
+        ? "No"
+        : parcel.insuranceCny != null
+          ? formatCny(parcel.insuranceCny)
+          : parcel.insuranceLabel || "—",
   );
+  const totalCharge =
+    parcel.totalParcelChargeCny != null
+      ? parcel.totalParcelChargeCny
+      : parcel.shipmentFeeCny != null
+        ? parcel.shipmentFeeCny
+        : null;
+  setField("totalParcelChargeCny", formatCny(totalCharge));
   const status = parcel.status
     ? String(parcel.status).replace(/_/g, " ")
     : "Needs Review";

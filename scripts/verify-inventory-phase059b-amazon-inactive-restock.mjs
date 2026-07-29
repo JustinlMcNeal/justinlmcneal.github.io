@@ -159,28 +159,29 @@ function verifyStatic059B() {
   notes.push("Default update_qty loader unchanged; syncContext correlation supported");
 
   const orch = readText("js/admin/inventory/services/adjustChannelOrchestrator.js");
+  const amazonHelper = readText("js/admin/inventory/services/channelSyncForVariant.js");
   const fnBody = orch.slice(orch.indexOf("export async function runAdjustChannelOrchestration"));
   const adjustIdx = fnBody.indexOf("await adjustInventory(");
   const amazonIdx = fnBody.indexOf("await resolveAmazonBranch(");
   if (adjustIdx < 0 || amazonIdx < 0 || amazonIdx < adjustIdx) {
     errors.push("Amazon inactive restock must run only after adjust_inventory succeeds");
   }
-  if (!orch.includes('mode: "inactive_restock"')) {
-    errors.push("Orchestrator must call pushAmazonFbmInventory with mode inactive_restock");
+  if (!amazonHelper.includes('mode: "inactive_restock"')) {
+    errors.push("Amazon helper must call pushAmazonFbmInventory with mode inactive_restock");
   }
-  if (!orch.includes("variantIds: [variantId]") || !orch.includes("limit: 1")) {
-    errors.push("Orchestrator must pass single variantId and limit 1");
+  if (!amazonHelper.includes("variantIds: [variantId]") || !amazonHelper.includes("limit: 1")) {
+    errors.push("Amazon helper must pass single variantId and limit 1");
   }
   if (!orch.includes("syncContext")) errors.push("Orchestrator must pass syncContext");
   if (!orch.includes("fetchChannelSyncCandidateForVariant")) {
     errors.push("Orchestrator must re-fetch post-adjust candidate");
   }
-  if (!orch.includes("projectedAvailable <= 0")) {
-    errors.push("Orchestrator must skip when projected available <= 0");
+  if (!/projectedAvailable\s*<=?\s*0/.test(orch)) {
+    errors.push("Orchestrator must skip when projected available is negative");
   }
   notes.push("Orchestrator: post-adjust inactive_restock with syncContext, single variant");
 
-  const updateQtyFn = orch.slice(0, orch.indexOf("async function runAmazonInactiveRestock"));
+  const updateQtyFn = amazonHelper.slice(0, amazonHelper.indexOf("async function runAmazonInactiveRestock"));
   if (updateQtyFn.includes('mode: "inactive_restock"')) {
     errors.push("update_qty path must not pass inactive_restock mode");
   }
@@ -202,7 +203,10 @@ function verifyStatic059B() {
   if (!preview.includes("Amazon inactive offer can be restored")) {
     errors.push("Preview must show inactive restore available copy");
   }
-  if (!preview.includes('candidate.amazon_sync_action === "inactive_can_update"')) {
+  if (
+    !preview.includes('candidate.amazon_sync_action === "inactive_can_update"') &&
+    !preview.includes('amazonAction === "inactive_can_update"')
+  ) {
     errors.push("Sync toggle default must include inactive_can_update");
   }
   notes.push("Preview copy and toggle default include inactive_can_update");
@@ -216,7 +220,10 @@ function verifyStatic059B() {
     "Amazon inactive offer restore requested",
     "Live Amazon patching is disabled",
   ]) {
-    if (!orch.includes(msg) && !(msg.includes("disabled") && orch.includes("AMAZON_DRY_RUN_COPY"))) {
+    if (
+      !amazonHelper.includes(msg) &&
+      !(msg.includes("disabled") && amazonHelper.includes("AMAZON_DRY_RUN_COPY"))
+    ) {
       errors.push(`Orchestrator missing result copy: ${msg}`);
     }
   }

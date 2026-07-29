@@ -33,7 +33,7 @@ export type PatchListingsResult =
     issues: Record<string, unknown>[];
     rawResponse: Record<string, unknown>;
   }
-  | { ok: false; error: string; httpStatus?: number; hint?: string };
+  | { ok: false; error: string; httpStatus?: number; hint?: string; issues?: Record<string, unknown>[] };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -43,6 +43,40 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 
 function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
+}
+
+function isAmazonHostedImageUrl(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return (
+      host === "m.media-amazon.com"
+      || host.endsWith(".media-amazon.com")
+      || host.endsWith(".ssl-images-amazon.com")
+      || host.endsWith(".images-amazon.com")
+    );
+  } catch {
+    return false;
+  }
+}
+
+function parseSpApiResponseIssues(data: Record<string, unknown>): Record<string, unknown>[] {
+  const fromIssues = asArray(data.issues)
+    .map((entry) => asRecord(entry))
+    .filter((entry): entry is Record<string, unknown> => entry !== null);
+  if (fromIssues.length) return fromIssues;
+
+  return asArray(data.errors)
+    .map((entry) => asRecord(entry))
+    .filter((entry): entry is Record<string, unknown> => entry !== null);
+}
+
+function firstSpApiErrorMessage(data: Record<string, unknown>): string | undefined {
+  for (const issue of parseSpApiResponseIssues(data)) {
+    const message = String(issue.message || issue.details || "").trim();
+    if (message) return message;
+  }
+  const topLevel = String(data.message || data.detail || "").trim();
+  return topLevel || undefined;
 }
 
 function hasCopyPatchInput(input: ListingCopyPatchInput): boolean {
@@ -99,7 +133,7 @@ export function validateListingPatchInput(input: ListingPatchInput): {
   if (hasImages) {
     const urls = (input.imageUrls || [])
       .map((entry) => String(entry || "").trim())
-      .filter((entry) => entry.startsWith("http"))
+      .filter((entry) => entry.startsWith("http") && !isAmazonHostedImageUrl(entry))
       .slice(0, 9);
     if (!urls.length) {
       return { ok: false, error: "invalid_image_urls" };
@@ -233,7 +267,6 @@ export function buildListingPatchOperations(
 export function buildListingImagePatchOperations(
   marketplaceId: string,
   imageUrls: string[],
-  previousSecondaryCount = 0,
 ): PatchOperation[] {
   const patches: PatchOperation[] = [];
   const main = String(imageUrls[0] || "").trim();
@@ -248,28 +281,19 @@ export function buildListingImagePatchOperations(
     }],
   });
 
-  const newSecondaryCount = Math.max(0, imageUrls.length - 1);
-  const priorSecondaryCount = Math.max(0, Math.min(8, previousSecondaryCount));
-
+  // Only replace secondary slots that have new URLs. Do not send bare delete patches —
+  // Amazon requires selector values on delete (marketplace_id + media_location) or returns 400.
   for (let slot = 1; slot <= 8; slot += 1) {
-    const path = `/attributes/other_product_image_locator_${slot}`;
     const url = String(imageUrls[slot] || "").trim();
-    if (url.startsWith("http")) {
-      patches.push({
-        op: "replace",
-        path,
-        value: [{
-          marketplace_id: marketplaceId,
-          media_location: url,
-        }],
-      });
-      continue;
-    }
-
-    // Only delete slots that previously had images — never delete empty slots Amazon never set.
-    if (slot <= priorSecondaryCount && slot > newSecondaryCount) {
-      patches.push({ op: "delete", path });
-    }
+    if (!url.startsWith("http")) continue;
+    patches.push({
+      op: "replace",
+      path: `/attributes/other_product_image_locator_${slot}`,
+      value: [{
+        marketplace_id: marketplaceId,
+        media_location: url,
+      }],
+    });
   }
 
   return patches;
@@ -462,17 +486,18 @@ async function patchListingsItemRequest(params: {
   }
 
   if (!resp.ok) {
+    const issues = parseSpApiResponseIssues(data);
+    const amazonMessage = firstSpApiErrorMessage(data);
     return {
       ok: false,
       error: params.failureError,
       httpStatus: resp.status,
-      hint: spApiHintForHttpStatus(resp.status, true),
+      hint: spApiHintForHttpStatus(resp.status, true) || amazonMessage,
+      issues,
     };
   }
 
-  const issues = asArray(data.issues)
-    .map((entry) => asRecord(entry))
-    .filter((entry): entry is Record<string, unknown> => entry !== null);
+  const issues = parseSpApiResponseIssues(data);
 
   return {
     ok: true,

@@ -1220,6 +1220,3 @@ Product in DB
 
 
 
-Manual adds
-push notifications  and test fix
-footer hyperlink fix

@@ -6,7 +6,7 @@ import { getSupabaseClient } from "/js/shared/supabaseClient.js";
 import { requireAuthenticatedSession } from "./inventoryApi.js";
 
 const SELECT_COLS =
-  "variant_id, internal_sku, product_label, available_qty, on_hand_qty, reserved_qty, kk_sync_action, ebay_sync_action, amazon_sync_action, ebay_listing_status, amazon_listing_status, ebay_current_qty, issue_flags";
+  "variant_id, product_id, internal_sku, product_label, available_qty, on_hand_qty, reserved_qty, kk_sync_action, ebay_sync_action, amazon_sync_action, ebay_listing_status, amazon_listing_status, ebay_current_qty, issue_flags";
 
 /**
  * @typedef {Object} ChannelSyncPreviewSummary
@@ -26,6 +26,7 @@ const SELECT_COLS =
  * @property {number} zeroQtyCandidates
  * @property {number} readyToSync
  * @property {number} ebayCacheTableRows
+ * @property {{ internal_sku: string|null, product_id: string|null }[]} cacheMissingSamples
  * @property {Object[]} samples
  */
 
@@ -58,6 +59,10 @@ function summarizeRows(rows) {
           r.kk_sync_action === "align_to_available"),
     ).length,
     readyToSync: amazonUpdate + ebayUpdate + kkAlign,
+    cacheMissingSamples: rows
+      .filter((r) => r.ebay_sync_action === "qty_cache_missing")
+      .map((r) => ({ internal_sku: r.internal_sku ?? null, product_id: r.product_id ?? null }))
+      .slice(0, 8),
     samples: rows
       .filter(
         (r) =>
@@ -87,6 +92,19 @@ export async function fetchChannelSyncPreview() {
   const summary = summarizeRows(data || []);
   summary.ebayCacheTableRows = cacheCountRes.count ?? 0;
   return summary;
+}
+
+/** Product IDs with active eBay listings but no cached qty yet. */
+export async function fetchEbayCacheMissingProductIds() {
+  await requireAuthenticatedSession();
+  const sb = getSupabaseClient();
+  const { data, error } = await sb
+    .from("v_inventory_channel_sync_candidates")
+    .select("product_id")
+    .eq("ebay_sync_action", "qty_cache_missing")
+    .not("product_id", "is", null);
+  if (error) throw new Error(error.message || "Failed to load cache-missing products");
+  return [...new Set((data || []).map((r) => String(r.product_id)).filter(Boolean))];
 }
 
 const AMAZON_PUSH_SELECT =

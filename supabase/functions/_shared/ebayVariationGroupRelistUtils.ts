@@ -151,7 +151,7 @@ export async function relistEbayVariationGroup(
         action: "variation_group_relist",
         errorMessage: response.status === "failed" ? response.message : null,
       });
-      await finalizeInventorySyncRun(run.id, {
+      await finalizeInventorySyncRun(supabase, run.id, {
         succeeded: response.status === "success" || response.status === "dry_run" ? 1 : 0,
         failed: response.status === "failed" ? 1 : 0,
         skipped: response.status === "skipped" || response.status === "manual" ? 1 : 0,

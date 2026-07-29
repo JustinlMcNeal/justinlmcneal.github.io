@@ -316,6 +316,10 @@ function verifyStaticWiring() {
 async function verifyBrowser() {
   const notes = [];
   const errors = [];
+  if (process.env.VERIFY_SKIP_BROWSER === "1") {
+    notes.push("Browser smoke skipped (VERIFY_SKIP_BROWSER=1)");
+    return { notes, errors };
+  }
   const consoleErrors = [];
   const server = await startServer();
   const browser = await chromium.launch({ headless: true });

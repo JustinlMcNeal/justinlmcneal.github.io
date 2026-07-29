@@ -93,8 +93,18 @@ export async function relistEbayFromProduct({
 
   if (!resp.ok && !data.status) {
     const err = new Error(data.error || data.message || "eBay relist request failed");
-    err.code = data.error || "relist_failed";
+    err.code = data.error || data.errors?.[0] || "relist_failed";
     err.status = resp.status;
+    if (Array.isArray(data.errors)) err.errors = data.errors;
+    if (data.message) err.hint = data.message;
+    throw err;
+  }
+
+  if (!resp.ok && data.status === "failed") {
+    const err = new Error(data.message || data.error || "eBay relist failed");
+    err.code = data.errors?.[0] || data.error || "relist_failed";
+    err.status = resp.status;
+    if (Array.isArray(data.errors)) err.errors = data.errors;
     throw err;
   }
 

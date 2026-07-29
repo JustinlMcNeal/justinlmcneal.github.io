@@ -6,9 +6,10 @@ import { corsHeadersJson, json, requireAdminJson } from "../_shared/amazonAuthUt
 
 const LOG_PREFIX = "[amazon-ai-autofill]";
 const AMAZON_ITEM_NAME_MAX_LENGTH = 75;
+const AMAZON_ITEM_HIGHLIGHT_MAX_LENGTH = 125;
 
-function clampAmazonItemName(title: string, maxLength = AMAZON_ITEM_NAME_MAX_LENGTH): string {
-  const trimmed = title.trim().replace(/\s+/g, " ");
+function clampAtWordBoundary(text: string, maxLength: number): string {
+  const trimmed = text.trim().replace(/\s+/g, " ");
   if (!trimmed || trimmed.length <= maxLength) return trimmed;
   let cut = trimmed.slice(0, maxLength);
   const lastSpace = cut.lastIndexOf(" ");
@@ -16,6 +17,22 @@ function clampAmazonItemName(title: string, maxLength = AMAZON_ITEM_NAME_MAX_LEN
     cut = cut.slice(0, lastSpace);
   }
   return cut.trim();
+}
+
+function clampAmazonItemName(title: string, maxLength = AMAZON_ITEM_NAME_MAX_LENGTH): string {
+  return clampAtWordBoundary(title, maxLength);
+}
+
+function clampAmazonItemHighlight(text: string, maxLength = AMAZON_ITEM_HIGHLIGHT_MAX_LENGTH): string {
+  return clampAtWordBoundary(text, maxLength);
+}
+
+function overflowFromClampedTitle(original: string, clamped: string): string {
+  const full = original.trim().replace(/\s+/g, " ");
+  const short = clamped.trim().replace(/\s+/g, " ");
+  if (!full || !short || full.length <= short.length) return "";
+  let overflow = full.slice(short.length).trim().replace(/^[-–—,|:;/]+/, "").trim();
+  return clampAmazonItemHighlight(overflow);
 }
 
 type AiField = {
@@ -324,11 +341,12 @@ Deno.serve(async (req) => {
 Generate Amazon listing content from product data and images.
 
 STRICT RULES:
-1. TITLE (item_name): SEO-optimized Amazon title, HARD MAX ${AMAZON_ITEM_NAME_MAX_LENGTH} characters (required for Amazon Item Highlights). Prioritize the most important keywords in the first 75 characters. Do NOT exceed 75 characters under any circumstance. Do NOT stuff brand name unless helpful.
-2. BULLET POINTS: Return exactly 5 concise bullet points, each max 500 characters. Focus on benefits and features visible from images/data.
-3. DESCRIPTION (product_description): Plain text product description, 2-4 short paragraphs, max 2000 characters. No HTML. Warm, on-brand tone.
-4. BRAND: Default to "${brandDefault}" unless product data clearly indicates otherwise.
-5. PTD ATTRIBUTES: Fill Amazon PTD attribute values from images, title, and hints below.
+1. TITLE (item_name): SEO-optimized Amazon title, HARD MAX ${AMAZON_ITEM_NAME_MAX_LENGTH} characters including spaces (Amazon policy effective July 27 2026; required for Item Highlights to display). Prioritize brand + product identity + 1–2 key attributes. Do NOT exceed 75 characters under any circumstance. Do NOT stuff brand name unless helpful.
+2. ITEM HIGHLIGHTS (title_differentiation): Always include this in attributes[] when possible. HARD MAX ${AMAZON_ITEM_HIGHLIGHT_MAX_LENGTH} characters. Short benefit phrases for materials, use cases, or differentiators that did not fit in the title. Searchable and shown under the title. Do NOT repeat the title. Do NOT write full sentences. Do NOT use "Default", "Enamel Pin" as filler unless the product is actually an enamel pin and that phrase is the differentiator.
+3. BULLET POINTS: Return exactly 5 concise bullet points, each max 500 characters. Focus on benefits and features visible from images/data.
+4. DESCRIPTION (product_description): Plain text product description, 2-4 short paragraphs, max 2000 characters. No HTML. Warm, on-brand tone. (Amazon did not shorten description limits with the title change.)
+5. BRAND: Default to "${brandDefault}" unless product data clearly indicates otherwise.
+6. PTD ATTRIBUTES: Fill Amazon PTD attribute values from images, title, and hints below.
    - Return one attributes[] entry for EVERY required attribute name when possible.
    - Use attributeHints.defaultValue when you cannot infer a better value from images/title.
    - When attributeHints.enumValues is provided, pick EXACTLY one allowed enum value (never invent codes).
@@ -352,8 +370,8 @@ STRICT RULES:
    - material → infer from images (Polyester, Plush, Faux Leather, Metal, etc.) when visible
    - included_components → short phrase describing what is in the package
    - generic_keyword → 3-5 search keywords comma-separated or short phrase
-6. DO NOT set or suggest: product type, price, quantity, fulfillment channel, condition, seller SKU, marketplace, ASIN, UPC/EAN/GTIN.
-7. DO NOT invent compliance claims. Use safe defaults above rather than leaving required attributes empty.
+7. DO NOT set or suggest: product type, price, quantity, fulfillment channel, condition, seller SKU, marketplace, ASIN, UPC/EAN/GTIN.
+8. DO NOT invent compliance claims. Use safe defaults above rather than leaving required attributes empty.
 ${isParentListing ? `
 PARENT VARIATION LISTING (variationRole=parent):
 - This is a non-buyable Amazon variation parent shell, NOT a child SKU and NOT a standalone listing.
@@ -375,6 +393,7 @@ Respond with ONLY valid JSON:
     { "value": "string", "confidence": 0.0-1.0, "source": "generated" }
   ],
   "attributes": [
+    { "name": "title_differentiation", "value": "materials or use-case phrase ≤125 chars", "source": "generated", "confidence": 0.0-1.0 },
     { "name": "amazon_attribute_name", "value": "string", "source": "from_data|inferred|default", "confidence": 0.0-1.0 }
   ],
   "notes": ["strings for admin review"]
@@ -484,8 +503,35 @@ Respond with ONLY valid JSON:
       title.value = clampAmazonItemName(title.value);
       if (title.value.length !== original.length) {
         notes.unshift(
-          `Title trimmed to ${title.value.length} characters (Amazon Item Highlights max ${AMAZON_ITEM_NAME_MAX_LENGTH}).`,
+          `Title trimmed to ${title.value.length} characters (Amazon max ${AMAZON_ITEM_NAME_MAX_LENGTH} for Item Highlights).`,
         );
+        const overflow = overflowFromClampedTitle(original, title.value);
+        const highlightIdx = attributes.findIndex((entry) => entry.name === "title_differentiation");
+        if (overflow) {
+          if (highlightIdx >= 0 && !attributes[highlightIdx].value.trim()) {
+            attributes[highlightIdx].value = overflow;
+            attributes[highlightIdx].source = attributes[highlightIdx].source || "from_title_overflow";
+          } else if (highlightIdx < 0) {
+            attributes.push({
+              name: "title_differentiation",
+              value: overflow,
+              source: "from_title_overflow",
+              confidence: 0.6,
+            });
+          }
+        }
+      }
+    }
+
+    for (const attr of attributes) {
+      if (attr.name === "title_differentiation" && attr.value) {
+        const original = attr.value;
+        attr.value = clampAmazonItemHighlight(attr.value);
+        if (attr.value.length !== original.length) {
+          notes.unshift(
+            `Item Highlights trimmed to ${attr.value.length} characters (Amazon max ${AMAZON_ITEM_HIGHLIGHT_MAX_LENGTH}).`,
+          );
+        }
       }
     }
 

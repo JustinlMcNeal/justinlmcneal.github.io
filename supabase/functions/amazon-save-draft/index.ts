@@ -362,10 +362,13 @@ Deno.serve(async (req) => {
     }
 
     if (variationRole === "parent" && kkVariantId) {
-      return json({ ok: false, error: "invalid_request" }, 400);
+      return json({ ok: false, error: "invalid_request", reason: "parent_cannot_have_variant" }, 400);
     }
 
-    if (parentDraftId) {
+    if (variationRole === "child" && parentDraftId) {
+      if (draftId && parentDraftId === draftId) {
+        return json({ ok: false, error: "invalid_request", reason: "parent_draft_self_reference" }, 400);
+      }
       const { data: parentDraft, error: parentErr } = await serviceClient
         .from("amazon_listing_drafts")
         .select("id, kk_product_id, variation_role, seller_sku")

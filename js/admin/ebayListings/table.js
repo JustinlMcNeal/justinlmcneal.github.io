@@ -8,7 +8,7 @@ import { updateBulkBar } from "./bulkActions.js";
 export function renderTable(products, pageAdRatePct) {
   const tbody = document.getElementById("productsBody");
   if (!products.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="py-8 text-center text-gray-400">No products found</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="py-8 text-center text-gray-400 text-sm">No products found</td></tr>';
     return;
   }
 
@@ -25,35 +25,37 @@ export function renderTable(products, pageAdRatePct) {
       : "";
 
     return `<tr class="product-row border-b border-gray-100">
-      <td class="py-2 pr-2">
-        ${isListed ? `<input type="checkbox" class="bulk-check accent-kkpink" data-code="${esc(p.code)}" data-offer="${esc(p.ebay_offer_id || '')}" data-sku="${esc(p.ebay_sku || p.code)}" />` : ""}
+      <td class="py-2.5 pr-2 align-top">
+        ${isListed ? `<input type="checkbox" class="bulk-check accent-kkpink mt-1" data-code="${esc(p.code)}" data-offer="${esc(p.ebay_offer_id || '')}" data-sku="${esc(p.ebay_sku || p.code)}" />` : ""}
       </td>
-      <td class="py-2 pr-3">
-        <div class="flex items-start gap-2">
-          ${p.catalog_image_url ? `<img src="${p.catalog_image_url}" class="w-8 h-8 object-cover rounded flex-shrink-0" />` : '<div class="w-8 h-8 bg-gray-100 rounded flex-shrink-0"></div>'}
+      <td class="py-2.5 pr-3 align-top">
+        <div class="flex items-start gap-2.5">
+          ${p.catalog_image_url
+            ? `<img src="${p.catalog_image_url}" class="w-9 h-9 object-cover rounded-sm border border-gray-200 flex-shrink-0" alt="" />`
+            : '<div class="w-9 h-9 bg-gray-100 rounded-sm border border-gray-200 flex-shrink-0"></div>'}
           <div class="min-w-0">
-            <a href="/pages/admin/products.html?q=${encodeURIComponent(p.name)}" target="_blank" class="font-medium text-sm line-clamp-1 text-blue-600 hover:underline">${esc(p.name)}</a>
-            <div class="text-[10px] font-mono text-gray-400 leading-none mt-0.5">${ebayCodeLinkHtml(p)}</div>
+            <a href="/pages/admin/products.html?q=${encodeURIComponent(p.name)}" target="_blank" class="font-semibold text-sm text-gray-900 hover:underline leading-snug line-clamp-2">${esc(p.name)}</a>
+            <div class="text-[10px] font-mono text-gray-400 leading-none mt-1">${ebayCodeLinkHtml(p)}</div>
             ${offerMappingDiagnosticHtml(p)}
             ${wsChips(p, health)}
           </div>
         </div>
       </td>
-      <td class="py-2 pr-3 text-xs">${kkPrice}</td>
-      <td class="py-2 pr-3 text-xs">${ebayPrice}</td>
-      <td class="py-2 pr-3 text-xs">${rowEstProfitHtml(p, pageAdRatePct)}</td>
-      <td class="py-2 pr-3">
-        <div class="flex flex-col items-start gap-0.5">
-          <span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase ebay-${status}">${statusLabel}</span>
+      <td class="py-2.5 pr-3 text-sm text-gray-800 align-top">${kkPrice}</td>
+      <td class="py-2.5 pr-3 text-sm font-semibold text-gray-900 align-top">${ebayPrice}</td>
+      <td class="py-2.5 pr-3 text-xs align-top">${rowEstProfitHtml(p, pageAdRatePct)}</td>
+      <td class="py-2.5 pr-3 align-top">
+        <div class="flex flex-col items-start gap-1">
+          <span class="ebay-status ebay-${status}">${statusLabel}</span>
           ${staleActionBadge(p)}
           ${scoreBadge}
         </div>
       </td>
-      <td class="py-2">
-        <div class="flex gap-1">
+      <td class="py-2.5 align-top">
+        <div class="flex flex-wrap gap-1">
           ${renderProductActions(p)}
           ${status !== "not_listed"
-            ? `<button class="border border-gray-200 text-gray-400 px-1.5 py-1 rounded text-[10px] hover:bg-gray-100 hover:text-black transition-all" data-action="open-sales" data-code="${esc(p.code)}" title="Sales history">📊</button>`
+            ? `<button class="border border-gray-300 bg-white text-gray-600 px-2 py-1 text-[10px] font-bold uppercase tracking-[.08em] hover:border-black hover:text-black rounded-sm" data-action="open-sales" data-code="${esc(p.code)}" title="Sales history">Sales</button>`
             : ""}
         </div>
       </td>

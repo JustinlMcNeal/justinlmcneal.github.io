@@ -1,14 +1,13 @@
 // /js/admin/customers/index.js
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from "/js/config/env.js";
 import { initAdminNav } from "/js/shared/adminNav.js";
 import { initFooter } from "/js/shared/footer.js";
+import { requireAdmin } from "/js/shared/guard.js";
 
 import { initCustomersState } from "./state.js";
 import { getCustomersList, upsertCustomerProfile, getCustomerOrderHistory } from "./api.js";
 import { getEls, bindUI } from "./dom.js";
-import { 
-  renderCustomersTable, 
+import {
+  renderCustomersTable,
   wireCustomerRowClicks,
   renderMobileCustomerCards,
   wireMobileCardClicks
@@ -22,23 +21,11 @@ import {
   setModalBusy
 } from "./modalCustomer.js";
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const ADMIN_ENTRY_PAGE = "/pages/admin/login.html";
 
-// ✅ Change this later when you make an admin home/login page.
-// For now this matches your existing "default admin destination" behavior.
-const ADMIN_ENTRY_PAGE = "/pages/admin/index.html";
-
-async function requireAdminSession(els) {
-  const { data: { session }, error } = await supabase.auth.getSession();
-  if (error) console.warn(error);
-
-  if (!session) {
-    // No session → send them to your admin entry flow
-    if (els?.status) els.status.textContent = "Admin session required. Redirecting…";
-    window.location.replace(ADMIN_ENTRY_PAGE);
-    return null;
-  }
-  return session;
+function buildLoginRedirect() {
+  const next = `${location.pathname}${location.search}`;
+  return `${ADMIN_ENTRY_PAGE}?next=${encodeURIComponent(next)}`;
 }
 
 const DEBUG = false;
@@ -81,13 +68,11 @@ async function loadCustomers({ reset = false } = {}) {
       await openCustomer(email);
     });
 
-    // Render mobile cards
     renderMobileCustomerCards(els.mobileCustomerCards, state.rows);
     wireMobileCardClicks(els.mobileCustomerCards, async (email) => {
       await openCustomer(email);
     });
 
-    // Count label
     if (typeof total === "number") {
       els.customerCount.textContent = `${total} customers`;
     } else {
@@ -108,7 +93,6 @@ async function loadCustomers({ reset = false } = {}) {
 async function openCustomer(email) {
   const { els, state } = window.__kkCustomers;
 
-  // Find the row from current list (for quick fill)
   const summary = state.rows.find(r => (r.email || "").toLowerCase() === (email || "").toLowerCase()) || null;
 
   openCustomerModal(els);
@@ -139,8 +123,6 @@ async function saveCustomer() {
   try {
     await upsertCustomerProfile(payload);
     setModalBusy(els, false, "Saved.");
-
-    // Refresh list so edited fields show
     await loadCustomers({ reset: true });
   } catch (err) {
     console.error(err);
@@ -169,22 +151,25 @@ function attachHandlers() {
     onSaveModal: async () => await saveCustomer(),
   });
 
-  // Close modal with ESC
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") closeCustomerModal(els);
   });
 }
+
 async function boot() {
-  // Admin nav + footer first
   await initAdminNav("Customers");
   initFooter();
 
   const els = getEls();
-  const session = await requireAdminSession(els);
-  if (!session) return; // redirected
+  const guard = await requireAdmin();
+  if (!guard.ok) {
+    if (els?.status) els.status.textContent = guard.reason || "Admin access required.";
+    window.location.replace(buildLoginRedirect());
+    return;
+  }
 
   const state = initCustomersState();
-  window.__kkCustomers = { els, state, session };
+  window.__kkCustomers = { els, state };
 
   attachHandlers();
   await loadCustomers({ reset: true });

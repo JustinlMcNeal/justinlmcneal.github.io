@@ -1,4 +1,5 @@
 import { renderHomeCard } from "../shared/components/productCardHome.js";
+import { bindProductCardImageHover } from "../shared/components/productCardHover.js";
 
 export function renderHomeGrid(products = [], variantMap = new Map()) {
   const grid = document.getElementById("homeProductGrid");
@@ -20,4 +21,6 @@ export function renderHomeGrid(products = [], variantMap = new Map()) {
       </article>
     `;
   }).join("");
+
+  bindProductCardImageHover(grid);
 }

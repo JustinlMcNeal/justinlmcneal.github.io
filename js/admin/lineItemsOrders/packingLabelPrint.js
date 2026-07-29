@@ -3,12 +3,10 @@
 
 export const PACKING_LABEL_SRC = "/imgs/packing-label.png";
 
-/** 4×6 packing sticker sheet (div only). */
+/** 4×6 packing sticker markup (img only — parent page sets size). */
 export function buildPackingLabelSheet(src = PACKING_LABEL_SRC) {
   const safe = escAttr(src);
-  return `<div style="width:4in;height:6in;display:flex;align-items:center;justify-content:center;background:#fff;overflow:hidden;">
-  <img src="${safe}" alt="Karry Kraze packing label" style="width:4in;height:6in;object-fit:contain;display:block;">
-</div>`;
+  return `<img class="fill-img" src="${safe}" alt="Karry Kraze packing label" style="display:block;width:4in;height:6in;object-fit:contain;object-position:center;background:#fff;">`;
 }
 
 /**
@@ -30,8 +28,12 @@ export function printPackingLabel() {
   <style>
     @page { size: 4in 6in; margin: 0; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #222; }
-    @media print { body { background: #fff; min-height: 0; } }
+    html, body { width: 4in; height: 6in; margin: 0; background: #fff; }
+    img { display: block; width: 4in; height: 6in; object-fit: contain; object-position: center; }
+    @media screen {
+      html, body { width: auto; height: auto; min-height: 100vh; background: #222; display: flex; align-items: center; justify-content: center; }
+      img { outline: 1px solid #555; }
+    }
   </style>
 </head>
 <body>

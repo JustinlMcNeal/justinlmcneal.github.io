@@ -12,8 +12,11 @@ import {
   createEbayInventoryItem,
   createEbayOffer,
   fetchInventoryItemAspects,
+  fetchPublishedEbayOffer,
   normalizeProductAspects,
   publishEbayOffer,
+  syncEbayOfferForRelist,
+  waitForEbayInventoryItem,
   wrapDescription,
 } from "./ebayListingPublishUtils.ts";
 import {
@@ -103,18 +106,22 @@ export async function handleEbayRelistFromProduct(params: HandleRelistParams): P
 
   const finish = async (response: RelistFromProductResponse): Promise<RelistFromProductResponse> => {
     if (run?.id) {
-      const logStatus = response.status === "success" ? "success" : response.status === "dry_run" || response.status === "skipped" ? "skipped" : "failed";
-      await logInventorySyncResult(client, {
-        runId: run.id, variantId, productId, sellerSku: response.sellerSku ?? null, targetQty: reqQty,
-        ebayOfferId: response.offerId ?? null, ebayListingId: response.listingId ?? null,
-        status: logStatus, action: "relist_from_product",
-        errorMessage: response.status === "failed" ? response.message : null,
-      });
-      await finalizeInventorySyncRun(run.id, {
-        succeeded: response.status === "success" || response.status === "dry_run" ? 1 : 0,
-        failed: response.status === "failed" ? 1 : 0,
-        skipped: response.status === "skipped" || response.status === "manual" ? 1 : 0,
-      }, now);
+      try {
+        const logStatus = response.status === "success" ? "success" : response.status === "dry_run" || response.status === "skipped" ? "skipped" : "failed";
+        await logInventorySyncResult(client, {
+          runId: run.id, variantId, productId, sellerSku: response.sellerSku ?? null, targetQty: reqQty,
+          ebayOfferId: response.offerId ?? null, ebayListingId: response.listingId ?? null,
+          status: logStatus, action: "relist_from_product",
+          errorMessage: response.status === "failed" ? response.message : null,
+        });
+        await finalizeInventorySyncRun(client, run.id, {
+          succeeded: response.status === "success" || response.status === "dry_run" ? 1 : 0,
+          failed: response.status === "failed" ? 1 : 0,
+          skipped: response.status === "skipped" || response.status === "manual" ? 1 : 0,
+        }, now);
+      } catch (err) {
+        console.error("[ebayRelist] finish logging failed", err);
+      }
     }
     return { ...response, runId: run?.id ?? null };
   };
@@ -127,6 +134,25 @@ export async function handleEbayRelistFromProduct(params: HandleRelistParams): P
     return finish(buildResponse({ status: "manual", productId, variantId, quantity: reqQty, message: "Product not found.", errors: ["product_not_found"], syncContext: syncCtx }));
   }
 
+  const localStatus = String(product.ebay_status || "").toLowerCase();
+  const localOfferId = String(product.ebay_offer_id || "").trim();
+  const localListingId = String(product.ebay_listing_id || "").trim();
+  if (localStatus === "active" && localListingId) {
+    return finish(buildResponse({
+      status: "skipped",
+      productId,
+      variantId,
+      quantity: reqQty,
+      sellerSku: resolveSellerSku(product, candidate!) ?? undefined,
+      offerId: localOfferId,
+      listingId: localListingId,
+      message: "eBay listing is already active. Use quantity sync instead of relist.",
+      errors: ["already_active"],
+      syncContext: syncCtx,
+      oldListingId: candidate!.old_ebay_listing_id,
+    }));
+  }
+
   const metaResult = validateMetadata(product, candidate!, reqQty, productId, variantId, syncCtx);
   if ("status" in metaResult) return finish(metaResult);
   const { sellerSku, categoryId, priceCents, imageUrls, title } = metaResult;
@@ -134,7 +160,7 @@ export async function handleEbayRelistFromProduct(params: HandleRelistParams): P
     accessToken && !dryRun ? await fetchInventoryItemAspects(accessToken, sellerSku) : null,
     title,
   );
-  const description = wrapDescription(title, typeof product.description === "string" ? product.description : "");
+  const description = wrapDescription(title, "");
 
   if (dryRun) {
     const gateNote = liveRelistDisabled && !wantsPreview ? "Live relist disabled (EBAY_ENABLE_LIVE_RELIST is not true)." : "Preview mode — no eBay publish.";
@@ -236,13 +262,52 @@ async function executeLiveRelist(opts: {
   const createItem = await createEbayInventoryItem(accessToken, sellerSku, { title, description, imageUrls, aspects, condition: "NEW", quantity: reqQty }, buildPackageWeightFromGrams(Number(product.weight_g)));
   if (!createItem.ok) return buildResponse({ ...base, status: "failed", message: createItem.error || "Create inventory item failed.", errors: ["create_item_failed"] });
 
+  const inventoryReady = await waitForEbayInventoryItem(accessToken, sellerSku);
+  if (!inventoryReady.ok) {
+    return buildResponse({
+      ...base,
+      status: "failed",
+      message: inventoryReady.error || "Inventory item not ready on eBay after create.",
+      errors: ["inventory_item_not_ready"],
+    });
+  }
+
   const createOffer = await createEbayOffer(accessToken, { sku: sellerSku, categoryId, priceCents, quantity: reqQty });
   if (!createOffer.ok || !createOffer.offerId) return buildResponse({ ...base, status: "failed", message: createOffer.error || "Create offer failed.", errors: ["create_offer_failed"] });
+
+  const syncOffer = await syncEbayOfferForRelist(accessToken, createOffer.offerId, { quantity: reqQty, priceCents, categoryId });
+  if (!syncOffer.ok) {
+    const publishedOffer = await fetchPublishedEbayOffer(accessToken, createOffer.offerId);
+    if (!publishedOffer) {
+      return buildResponse({ ...base, status: "failed", offerId: createOffer.offerId, message: syncOffer.error || "Update offer quantity failed.", errors: ["update_offer_failed"] });
+    }
+    warnings.push("Offer was already published on eBay; reconciled local mapping instead of relisting.");
+    const { error: reconcileErr } = await client.from("products").update({
+      ebay_sku: sellerSku, ebay_offer_id: createOffer.offerId, ebay_listing_id: publishedOffer.listingId,
+      ebay_status: "active", ebay_category_id: categoryId, ebay_price_cents: priceCents, updated_at: now,
+    }).eq("id", productId);
+    if (reconcileErr) {
+      return buildResponse({ ...base, status: "failed", listingId: publishedOffer.listingId, offerId: createOffer.offerId, message: "eBay listing is active but local reconciliation failed.", errors: [reconcileErr.message] });
+    }
+    return buildResponse({ ...base, status: "success", listingId: publishedOffer.listingId, offerId: createOffer.offerId, message: "eBay listing is already active; local mapping reconciled.", warnings });
+  }
 
   const publish = await publishEbayOffer(accessToken, { offerId: createOffer.offerId, sku: sellerSku, quantity: reqQty });
   if (!publish.ok) {
     if (publish.missingAspects?.length) {
       return buildResponse({ ...base, status: "manual", offerId: createOffer.offerId, message: "Missing required eBay aspects. Open eBay Listings / Relist Assist.", errors: publish.missingAspects });
+    }
+    const publishedOffer = await fetchPublishedEbayOffer(accessToken, createOffer.offerId);
+    if (publishedOffer) {
+      warnings.push("Publish returned an error but the offer is already live on eBay; reconciled local mapping.");
+      const { error: reconcileErr } = await client.from("products").update({
+        ebay_sku: sellerSku, ebay_offer_id: createOffer.offerId, ebay_listing_id: publishedOffer.listingId,
+        ebay_status: "active", ebay_category_id: categoryId, ebay_price_cents: priceCents, updated_at: now,
+      }).eq("id", productId);
+      if (reconcileErr) {
+        return buildResponse({ ...base, status: "failed", listingId: publishedOffer.listingId, offerId: createOffer.offerId, message: "eBay listing is active but local reconciliation failed.", errors: [reconcileErr.message] });
+      }
+      return buildResponse({ ...base, status: "success", listingId: publishedOffer.listingId, offerId: createOffer.offerId, message: "eBay listing is already active; local mapping reconciled.", warnings });
     }
     return buildResponse({ ...base, status: "failed", offerId: createOffer.offerId, message: publish.error || "Publish failed.", errors: ["publish_failed"], warnings: ["Offer may exist on eBay — verify Seller Hub before retry."] });
   }

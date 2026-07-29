@@ -11,6 +11,7 @@ import {
 } from "./pushDraftAttributes.js";
 import { getLoadedAttributeEnums, getLoadedAttributeNames, getLoadedRequiredAttributes } from "./pushDraftPtd.js";
 import { VARIATION_ROLES } from "./variationFamily.js";
+import { clampAmazonItemName } from "./pushDraftSaveValidation.js";
 
 const CHILD_INHERIT_SKIP = new Set([
   "title",
@@ -164,16 +165,16 @@ export async function applyParentDraftInheritance(familyContext, options = {}) {
       parentTitle,
       options.variantLabel || "",
     );
-    setInput("#amazonPushAmazonTitle", variantTitle || parentTitle);
+    setInput("#amazonPushAmazonTitle", clampAmazonItemName(variantTitle || parentTitle));
   } else if (readInput("#amazonPushAmazonTitle") && options.variantLabel) {
     setInput(
       "#amazonPushAmazonTitle",
-      titleWithVariantColor(readInput("#amazonPushAmazonTitle"), options.variantLabel),
+      clampAmazonItemName(titleWithVariantColor(readInput("#amazonPushAmazonTitle"), options.variantLabel)),
     );
   } else if (!readInput("#amazonPushAmazonTitle") && options.productTitle && options.variantLabel) {
     setInput(
       "#amazonPushAmazonTitle",
-      titleWithVariantColor(options.productTitle, options.variantLabel),
+      clampAmazonItemName(titleWithVariantColor(options.productTitle, options.variantLabel)),
     );
   }
 

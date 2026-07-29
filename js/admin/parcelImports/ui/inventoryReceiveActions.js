@@ -1,4 +1,4 @@
-/** Receive Inventory button wiring (Phase 11). */
+/** Receive Inventory button wiring (Phase 11 + post-receive channel sync). */
 
 import { receiveParcelImportInventory } from "../api/inventoryReceiveApi.js";
 import { fetchParcelImportHeader } from "../api/parcelImportsApi.js";
@@ -13,6 +13,7 @@ import {
 } from "../state.js";
 import { refreshGlobalKpis } from "./stats.js";
 import { renderActionStatus } from "./saveDraft.js";
+import { runChannelSyncForParcelVariants } from "/js/admin/inventory/services/channelSyncForVariant.js";
 
 let refreshHistoryFn = async () => {};
 
@@ -225,21 +226,49 @@ export async function handleReceiveInventory() {
   updateInventoryReceiveUi();
 
   try {
-    const result = await receiveParcelImportInventory(state.currentImportId, {
-      idempotencyKey: `receive-${state.currentImportId}`,
+    const importId = state.currentImportId;
+    const result = await receiveParcelImportInventory(importId, {
+      idempotencyKey: `receive-${importId}`,
     });
 
     setInventoryReceivedAt(new Date().toISOString());
 
-    const label = result.already_received
-      ? "Inventory already received."
-      : `Inventory received — ${result.total_units_received ?? 0} unit(s) across ${result.variants_updated ?? 0} variant(s).`;
-    setInventoryReceiveStatus("received", label);
-    setSaveStatus("saved", label);
+    if (result.already_received) {
+      setInventoryReceiveStatus("received", "Inventory already received.");
+      setSaveStatus("saved", "Inventory already received.");
+    } else {
+      const baseLabel = `Inventory received — ${result.total_units_received ?? 0} unit(s) across ${result.variants_updated ?? 0} variant(s).`;
+      setInventoryReceiveStatus("receiving", `${baseLabel} Syncing eBay/Amazon…`);
+      updateInventoryReceiveUi();
+
+      let channelSuffix = "";
+      const variants = Array.isArray(result.variants) ? result.variants : [];
+      if (variants.length > 0) {
+        try {
+          const { summary } = await runChannelSyncForParcelVariants({
+            variants,
+            importId,
+          });
+          channelSuffix = ` ${summary.line}`;
+          if (summary.hasFailures) {
+            channelSuffix +=
+              " Marketplace failures did not undo stock — retry from Inventory → Sync Channels.";
+          }
+        } catch (syncErr) {
+          console.warn("[parcelImports] post-receive channel sync failed", syncErr);
+          channelSuffix =
+            " Channel sync errored — KK stock kept. Retry from Inventory → Sync Channels.";
+        }
+      }
+
+      const label = `${baseLabel}${channelSuffix}`;
+      setInventoryReceiveStatus("received", label);
+      setSaveStatus("saved", label);
+    }
 
     await refreshHistoryFn();
     await refreshGlobalKpis();
-    await hydrateInventoryReceiveFromHeader(state.currentImportId);
+    await hydrateInventoryReceiveFromHeader(importId);
   } catch (err) {
     console.error("[parcelImports] receive inventory failed", err);
     setInventoryReceiveStatus(

@@ -3,6 +3,7 @@ import {
   buildImageUrls,
   isComplexHtml,
   variantSkuFromOption,
+  esc,
 } from "./utils.js";
 import {
   quillToolbar,
@@ -13,9 +14,10 @@ import {
 import { renderImageStrip, showGalleryPicker } from "./images.js";
 import { setVolTiers } from "./volPricing.js";
 import { buildEditAspectField } from "./aspectHelpers.js";
+import { fetchAndRenderAspects } from "./aspectFlow.js";
 import { renderEditVariantImageControls } from "./variantPanel.js";
 import { refreshEditPreview, refreshEditRef, loadAndRenderPriceRef } from "./modalPreviews.js";
-import { fetchAspectsForCategory } from "./taxonomyApi.js";
+import { fetchAspectsForCategory, fetchCategorySuggestions } from "./taxonomyApi.js";
 import { getItemForEdit, getOffersForEdit, getOffersByGroupForEdit, offerMappingDiagnosticMessage } from "./editFetch.js";
 import { loadPoliciesCache } from "./policyCache.js";
 import {
@@ -394,9 +396,9 @@ export function createEditModalContext({
         document.getElementById("editVolTiers").innerHTML = "";
       }
 
-      // Aspects
-      const categoryId      = p.ebay_category_id || offer.categoryId || item.categoryId || "";
-      document.getElementById("editCategoryId").value = categoryId || "";
+      // Category + Aspects
+      const categoryId = String(p.ebay_category_id || offer.categoryId || item.categoryId || "").trim();
+      resetEditCategoryUi(categoryId, p.name || "");
       const existingAspects = product.aspects || {};
       const reqContainer    = document.getElementById("editAspectsRequired");
       const optContainer    = document.getElementById("editAspectsOptional");
@@ -411,17 +413,7 @@ export function createEditModalContext({
           const required = aspectResult.aspects.filter(a => a.required);
           const optional = aspectResult.aspects.filter(a => !a.required).slice(0, 15);
 
-          const defaults = {};
-          for (const [key, val] of Object.entries(existingAspects)) {
-            defaults[key] = Array.isArray(val) ? val[0] : val;
-          }
-          if (!defaults.Brand)      defaults.Brand      = "Unbranded";
-          if (!defaults.Type)       defaults.Type       = "Accessory";
-          if (!defaults.Department) defaults.Department = "Unisex Adults";
-          if (isGroupListing && !defaults.Color) {
-            const colorSpec = p._groupData?.variesBy?.specifications?.find(s => s?.name === "Color");
-            if (colorSpec?.values?.length) defaults.Color = colorSpec.values.join(", ");
-          }
+          const defaults = buildEditAspectDefaults(existingAspects, p, isGroupListing);
 
           required.forEach(a => reqContainer.appendChild(buildEditAspectField(a, defaults, true)));
           optional.forEach(a => optContainer.appendChild(buildEditAspectField(a, defaults, false)));
@@ -459,6 +451,84 @@ export function createEditModalContext({
     }
   }
 
+  function collectCurrentEditAspectDefaults() {
+    const defaults = {};
+    document.querySelectorAll("[data-edit-aspect]").forEach((input) => {
+      const val = input.value.trim();
+      if (val) defaults[input.dataset.editAspect] = val;
+    });
+    return defaults;
+  }
+
+  function buildEditAspectDefaults(existingAspects, product, isGroupListing) {
+    const defaults = {};
+    for (const [key, val] of Object.entries(existingAspects || {})) {
+      defaults[key] = Array.isArray(val) ? val[0] : val;
+    }
+    if (!defaults.Brand) defaults.Brand = "Unbranded";
+    if (!defaults.Type) defaults.Type = "Accessory";
+    if (!defaults.Department) defaults.Department = "Unisex Adults";
+    if (isGroupListing && !defaults.Color) {
+      const colorSpec = product?._groupData?.variesBy?.specifications?.find((s) => s?.name === "Color");
+      if (colorSpec?.values?.length) defaults.Color = colorSpec.values.join(", ");
+    }
+    return defaults;
+  }
+
+  function resetEditCategoryUi(categoryId, searchHint = "") {
+    const idEl = document.getElementById("editCategoryId");
+    const searchEl = document.getElementById("editCatSearch");
+    const selectEl = document.getElementById("editCatSelect");
+    const selectedEl = document.getElementById("editCatSelected");
+    if (idEl) idEl.value = categoryId || "";
+    if (searchEl) searchEl.value = searchHint || "";
+    if (selectEl) {
+      selectEl.innerHTML = "";
+      selectEl.classList.add("hidden");
+      selectEl.onchange = null;
+    }
+    if (selectedEl) {
+      if (categoryId) {
+        selectedEl.textContent = `Current category ID: ${categoryId}`;
+        selectedEl.classList.remove("hidden");
+      } else {
+        selectedEl.textContent = "";
+        selectedEl.classList.add("hidden");
+      }
+    }
+  }
+
+  async function applyEditCategorySelection(categoryId, labelText) {
+    const id = String(categoryId || "").trim();
+    if (!id || id === "No categories found") return;
+
+    document.getElementById("editCategoryId").value = id;
+    const selectedEl = document.getElementById("editCatSelected");
+    selectedEl.textContent = labelText ? `✓ ${labelText}` : `✓ Category ${id}`;
+    selectedEl.classList.remove("hidden");
+
+    const p = state.currentProduct;
+    const isGroupListing = !!(p && isEffectiveGroupListing(p));
+    const defaults = {
+      ...buildEditAspectDefaults({}, p, isGroupListing),
+      ...collectCurrentEditAspectDefaults(),
+    };
+
+    await fetchAndRenderAspects({
+      categoryId: id,
+      sectionEl: document.getElementById("editAspectsSection"),
+      loadingEl: document.getElementById("editAspectsLoading"),
+      reqContainer: document.getElementById("editAspectsRequired"),
+      optContainer: document.getElementById("editAspectsOptional"),
+      buildField: buildEditAspectField,
+      defaults,
+      onAspects: (aspects) => {
+        state.editAspects = aspects;
+        deps.syncBack(state);
+      },
+    });
+  }
+
   // ── Remaining handlers ────────────────────────────────────────────────────
   // ── Base Edit listeners ─────────────────────────────────────────────────────────────
   // Close, relink, preview/reference refresh, add-image, description-mode tabs.
@@ -477,6 +547,50 @@ export function createEditModalContext({
     document.getElementById("btnEditRelink").addEventListener("click", async () => {
       if (!state.currentProduct) return;
       await deps.relinkEbayListing(state.currentProduct.code);
+    });
+
+    // Category search — change category on already-pushed listings
+    document.getElementById("btnEditSearchCat").addEventListener("click", async () => {
+      const query = document.getElementById("editCatSearch").value.trim();
+      if (!query) return;
+      const btn = document.getElementById("btnEditSearchCat");
+      btn.disabled = true;
+      btn.textContent = "...";
+      try {
+        const result = await fetchCategorySuggestions(query);
+        const sel = document.getElementById("editCatSelect");
+        if (result.suggestions?.length) {
+          sel.innerHTML = result.suggestions.map((s) =>
+            `<option value="${s.categoryId}">${esc(s.categoryName)} (${s.categoryId})</option>`
+          ).join("");
+          sel.classList.remove("hidden");
+          sel.onchange = () => {
+            const opt = sel.options[sel.selectedIndex];
+            if (!opt) return;
+            applyEditCategorySelection(opt.value, opt.text);
+          };
+          // Highlight current category if present; do not auto-apply — user must pick to change
+          const currentId = document.getElementById("editCategoryId").value.trim();
+          const matchIdx = [...sel.options].findIndex((o) => o.value === currentId);
+          sel.selectedIndex = matchIdx >= 0 ? matchIdx : -1;
+        } else {
+          sel.innerHTML = "<option>No categories found</option>";
+          sel.classList.remove("hidden");
+          sel.onchange = null;
+        }
+      } catch (e) {
+        document.getElementById("editStatus").textContent = "Category search failed: " + e.message;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Search";
+      }
+    });
+
+    document.getElementById("editCatSearch").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        document.getElementById("btnEditSearchCat").click();
+      }
     });
 
     // Profit preview + price reference live update

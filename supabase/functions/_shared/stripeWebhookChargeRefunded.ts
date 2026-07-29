@@ -6,11 +6,11 @@ import {
   claimStripeInventoryDedup,
   DEDUP_REFUND_STOCK_RESTORE,
   getKkReservationMode,
-  releaseKkActiveReservations,
   releaseKkShadowReservations,
   resolveDbLineVariant,
   restoreVariantStockForRefund,
 } from "./stripeWebhookInventory.ts";
+import { releaseKkSaleReservationsOnFullRefund } from "./marketplaceSaleRelease.ts";
 import {
   enrichRefundDetailsFromChargeEvent,
   resolveOrderSessionFromPaymentIntent,
@@ -105,10 +105,15 @@ export async function handleChargeRefundedEvent(opts: {
           `[stripe-webhook] refund inventory dedup skip event=${event.id} session=${orderSessionId}`,
         );
       } else if (kkMode === "reserve_only") {
-        const released = await releaseKkActiveReservations(sb, orderSessionId, latestRefundId);
-        if (released > 0) {
+        const releaseResult = await releaseKkSaleReservationsOnFullRefund(
+          sb,
+          orderSessionId,
+          latestRefundId,
+          { trigger: "stripe_charge_refunded_061c1" },
+        );
+        if (releaseResult.released > 0) {
           console.log(
-            `[stripe-webhook] active reservations released: ${released} for ${orderSessionId}`,
+            `[stripe-webhook] sale reservations released via RPC: ${releaseResult.released} for ${orderSessionId}`,
           );
         }
       } else {

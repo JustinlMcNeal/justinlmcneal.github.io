@@ -17,6 +17,7 @@ import { wireAmazonImport } from "./amazonImport.js";
 import { wireAmazonOrderSync, wireAmazonFinanceSync } from "./amazonOrderSync.js";
 import { wireEbayOrderSync } from "./ebayOrderSync.js";
 import { initWorkspace, openWorkspace } from "./workspace.js";
+import { patchRowShipment, rerenderOrdersList } from "./listShipmentSync.js";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const ADMIN_ENTRY_PAGE = "/pages/admin/index.html";
@@ -61,11 +62,22 @@ document.addEventListener("DOMContentLoaded", async () => {
   els.statusFilter.value = "";
   els.dateFrom.value = "";
   els.dateTo.value = "";
+  state.platformFilter = "all";
+  syncPlatformToggleUi("all");
 
   // Init workspace (replaces separate edit + view modals)
   initWorkspace({
     onSaved: async () => {
       await reload({ hard: true });
+    },
+    onClose: ({ sessionId, shipment }) => {
+      patchRowShipment(state.rows, sessionId, shipment);
+      rerenderOrdersList({
+        tbodyEl: els.ordersRows,
+        rows: state.rows,
+        onEdit: (row) => openWorkspace(row, { tab: "fulfillment" }),
+        onView: (row) => openWorkspace(row, { tab: "overview" }),
+      });
     },
   });
 
@@ -75,6 +87,82 @@ document.addEventListener("DOMContentLoaded", async () => {
 });
 
 // ── Shared helpers used by multiple wire* functions ──────────────
+const PLATFORM_TOGGLE_BASE =
+  "platform-toggle border-2 font-extrabold text-[10px] sm:text-[11px] uppercase tracking-wider px-3 py-1.5 cursor-pointer whitespace-nowrap transition-all select-none rounded-[1px]";
+const MFS_PLATFORM_TOGGLE_BASE =
+  "mfs-platform-toggle border-2 font-extrabold text-[10px] uppercase tracking-wider px-3 py-1.5 cursor-pointer whitespace-nowrap transition-all select-none rounded-[1px]";
+
+function platformToggleClasses(platform, active) {
+  if (platform === "all") {
+    return active
+      ? `${PLATFORM_TOGGLE_BASE} border-black bg-black text-white shadow-md opacity-100`
+      : `${PLATFORM_TOGGLE_BASE} border-black bg-transparent text-black hover:bg-black/5 opacity-70 hover:opacity-100`;
+  }
+  if (platform === "kk") {
+    return active
+      ? `${PLATFORM_TOGGLE_BASE} border-kkpink bg-kkpink text-black shadow-md opacity-100`
+      : `${PLATFORM_TOGGLE_BASE} border-black bg-transparent text-black hover:bg-black/5 opacity-70 hover:opacity-100`;
+  }
+  if (platform === "ebay") {
+    return active
+      ? `${PLATFORM_TOGGLE_BASE} border-[#e53238] bg-[#e53238] text-white shadow-md opacity-100`
+      : `${PLATFORM_TOGGLE_BASE} border-[#e53238] bg-transparent text-[#e53238] hover:bg-red-50 opacity-80 hover:opacity-100`;
+  }
+  if (platform === "amazon") {
+    return active
+      ? `${PLATFORM_TOGGLE_BASE} border-[#ff9900] bg-[#ff9900] text-black shadow-md opacity-100`
+      : `${PLATFORM_TOGGLE_BASE} border-[#ff9900] bg-transparent text-[#c27400] hover:bg-amber-50 opacity-80 hover:opacity-100`;
+  }
+  return PLATFORM_TOGGLE_BASE;
+}
+
+function mfsPlatformToggleClasses(platform, active) {
+  if (platform === "all") {
+    return active
+      ? `${MFS_PLATFORM_TOGGLE_BASE} border-black bg-black text-white`
+      : `${MFS_PLATFORM_TOGGLE_BASE} border-black bg-transparent text-black`;
+  }
+  if (platform === "kk") {
+    return active
+      ? `${MFS_PLATFORM_TOGGLE_BASE} border-kkpink bg-kkpink text-black`
+      : `${MFS_PLATFORM_TOGGLE_BASE} border-black bg-transparent text-black`;
+  }
+  if (platform === "ebay") {
+    return active
+      ? `${MFS_PLATFORM_TOGGLE_BASE} border-[#e53238] bg-[#e53238] text-white`
+      : `${MFS_PLATFORM_TOGGLE_BASE} border-[#e53238] bg-transparent text-[#e53238]`;
+  }
+  if (platform === "amazon") {
+    return active
+      ? `${MFS_PLATFORM_TOGGLE_BASE} border-[#ff9900] bg-[#ff9900] text-black`
+      : `${MFS_PLATFORM_TOGGLE_BASE} border-[#ff9900] bg-transparent text-[#c27400]`;
+  }
+  return MFS_PLATFORM_TOGGLE_BASE;
+}
+
+function syncPlatformToggleUi(platform = state.platformFilter) {
+  const active = String(platform || "all").toLowerCase();
+  state.platformFilter = active;
+
+  els.platformToggles?.querySelectorAll("[data-platform]").forEach((btn) => {
+    const p = btn.dataset.platform || "all";
+    btn.className = platformToggleClasses(p, p === active);
+    btn.setAttribute("aria-pressed", p === active ? "true" : "false");
+  });
+
+  els.mfsPlatformToggles?.querySelectorAll("[data-platform]").forEach((btn) => {
+    const p = btn.dataset.platform || "all";
+    btn.className = mfsPlatformToggleClasses(p, p === active);
+    btn.setAttribute("aria-pressed", p === active ? "true" : "false");
+  });
+}
+
+function setPlatformFilter(platform) {
+  syncPlatformToggleUi(platform);
+  reload({ hard: true });
+  updateFilterBadge();
+}
+
 function updateFilterBadge() {
   if (!els.btnFilterToggle) return;
   const badge = document.getElementById('filterBadge');
@@ -84,6 +172,7 @@ function updateFilterBadge() {
     els.reviewFilter?.value,
     els.dateFrom?.value,
     els.dateTo?.value,
+    state.platformFilter && state.platformFilter !== "all" ? state.platformFilter : "",
   ].filter(Boolean).length;
   badge.textContent = String(count);
   badge.classList.toggle('hidden', count === 0);
@@ -227,6 +316,19 @@ function wireAmazonModal() {
   });
 }
 
+function wirePlatformToggles() {
+  const onToggleClick = (e) => {
+    const btn = e.target.closest("[data-platform]");
+    if (!btn) return;
+    const platform = btn.dataset.platform || "all";
+    if (platform === state.platformFilter) return;
+    setPlatformFilter(platform);
+  };
+
+  els.platformToggles?.addEventListener("click", onToggleClick);
+  els.mfsPlatformToggles?.addEventListener("click", onToggleClick);
+}
+
 function wireFilterControls() {
   // Search (debounced)
   els.searchInput.addEventListener("input", () => {
@@ -299,6 +401,7 @@ function wireMobileFilterSheet() {
       if (mfsReview) mfsReview.value = els.reviewFilter?.value || '';
       if (mfsDateFrom) mfsDateFrom.value = els.dateFrom?.value || '';
       if (mfsDateTo) mfsDateTo.value = els.dateTo?.value || '';
+      syncPlatformToggleUi(state.platformFilter);
       els.filterSheet.classList.remove('hidden');
       document.body.classList.add('overflow-hidden');
     });
@@ -326,6 +429,8 @@ function wireMobileFilterSheet() {
     if (els.reviewFilter) els.reviewFilter.value = '';
     if (els.dateFrom) els.dateFrom.value = '';
     if (els.dateTo) els.dateTo.value = '';
+    state.platformFilter = "all";
+    syncPlatformToggleUi("all");
     ['mfsStatus', 'mfsReview', 'mfsDateFrom', 'mfsDateTo'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.value = '';
@@ -353,6 +458,7 @@ function wireLoadControls() {
 
 function wireEvents() {
   wireAmazonModal();
+  wirePlatformToggles();
   wireFilterControls();
   wireExportControls();
   wireMobileFilterSheet();
@@ -366,6 +472,7 @@ function readFilters() {
     dateFrom: (els.dateFrom.value || "").trim(),
     dateTo: (els.dateTo.value || "").trim(),
     reviewStatus: (els.reviewFilter?.value || "").trim(),
+    platform: state.platformFilter || "all",
   };
 }
 

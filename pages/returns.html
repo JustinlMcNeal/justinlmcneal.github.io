@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#f58f86" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="apple-touch-icon" href="/imgs/icons/apple-touch-icon.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/imgs/icons/favicon-32x32.png" />
+  <title>Returns &amp; Refunds | KarryKraze</title>
+
+  <meta name="description" content="Karry Kraze refund policy for website orders. We do not accept returns — contact us to request a refund." />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            kkpink: '#f58f86',
+            kkpeach: '#f6dcc6',
+          },
+          borderWidth: {
+            '4': '4px',
+          },
+        }
+      }
+    }
+  </script>
+
+  <link rel="stylesheet" href="/css/theme/base.css">
+  <link rel="stylesheet" href="/css/theme/components.css">
+
+  <script src="/js/shared/metaPixel.js"></script>
+</head>
+<body class="kk-page bg-gray-50 text-gray-800 min-h-screen flex flex-col">
+
+  <div id="kkNavbarMount"></div>
+
+  <main class="flex-1 max-w-6xl mx-auto px-4 py-8 sm:py-12 w-full" id="returnsMain">
+
+    <header class="text-center mb-8">
+      <div class="inline-block bg-black text-white px-3 py-1 text-[10px] font-black uppercase tracking-[.25em] mb-3">
+        Returns &amp; Refunds
+      </div>
+      <h1 class="text-3xl sm:text-4xl font-black tracking-tight">Refund Policy</h1>
+      <p class="text-gray-500 text-sm mt-2 max-w-md mx-auto">
+        For karrykraze.com orders — we do not accept product returns.
+      </p>
+    </header>
+
+    <div class="border-t-4 border-black mb-8" aria-hidden="true"></div>
+
+    <section id="returnsHighlights" class="mb-8" aria-label="Policy highlights"></section>
+
+    <section id="returnsPolicy" aria-label="Refund policy details"></section>
+
+    <section id="returnsHowTo" aria-label="How to request a refund"></section>
+
+    <section id="returnsMarketplace" aria-label="Marketplace orders"></section>
+
+    <section id="returnsCta" aria-label="Contact for refund help"></section>
+
+  </main>
+
+  <div id="kkFooterMount"></div>
+
+  <script type="module" src="/js/pages/returns/index.js"></script>
+  <script type="module" src="/js/shared/pwa.js"></script>
+</body>
+</html>

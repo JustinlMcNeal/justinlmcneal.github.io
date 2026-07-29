@@ -1,4 +1,4 @@
-// Phase 6E — KK reservation finalization on shipment (shared helper).
+// Phase 6E / marketplace ship finalize — reservation finalization on shipment.
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -8,6 +8,7 @@ export type FinalizeKkResult = {
   skipped_already_finalized?: number;
   missing_reservations?: number;
   note?: string;
+  channel?: string;
 };
 
 /** True for Stripe KK store sessions (not eBay/Amazon prefixes). */
@@ -15,14 +16,17 @@ export function isKkStoreSession(sessionId: string): boolean {
   return !!sessionId && !sessionId.startsWith("ebay") && !sessionId.startsWith("amazon");
 }
 
-/** Call finalize_kk_order_reservations RPC (idempotent). */
+/**
+ * Call finalize_kk_order_reservations RPC (idempotent).
+ * Supports KK, eBay (`ebay%`), and Amazon (`amazon%`) order sessions.
+ */
 export async function finalizeKkOrderReservations(
   sb: SupabaseClient,
   orderId: string,
   referenceId: string,
   source = "fulfillment",
 ): Promise<FinalizeKkResult | null> {
-  if (!isKkStoreSession(orderId)) return null;
+  if (!orderId) return null;
 
   const { data, error } = await sb.rpc("finalize_kk_order_reservations", {
     p_order_id: orderId,

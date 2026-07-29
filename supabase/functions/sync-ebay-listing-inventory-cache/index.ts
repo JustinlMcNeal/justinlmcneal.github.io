@@ -8,6 +8,7 @@ import {
   EBAY_CACHE_REFRESH_MAX,
   refreshProductEbayCache,
   upsertEbayCacheRows,
+  reconcileProductEbayMappingFromCache,
   sleep,
   type ProductRefreshTarget,
   type VariantRow,
@@ -156,6 +157,7 @@ Deno.serve(async (req) => {
           }
         } else {
           await upsertEbayCacheRows(serviceClient, rows, now);
+          await reconcileProductEbayMappingFromCache(serviceClient, product, rows, now);
           succeeded += 1;
           results.push({
             productId: product.id,

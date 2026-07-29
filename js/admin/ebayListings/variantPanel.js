@@ -161,7 +161,7 @@ export function renderVariantPanel(variants, baseCode, product) {
  * @param {object} product                   Full product record (with product_variants)
  * @param {object} group                     eBay inventory item group data (with variantSKUs)
  * @param {object} deps
- * @param {string[]} deps.editImageUrls      Current edit-modal candidate images (read-only)
+ * @param {string[]} deps.editImageUrls      Shared listing images currently on eBay (edit strip)
  * @param {object}  deps.editVariantImageOverrides  Map of sku → image URL array (mutated in place)
  * @param {object}  deps.editVariantQtyOverrides    Map of sku → qty (mutated in place)
  * @returns {Promise<{rows, failures}|undefined>}
@@ -211,7 +211,11 @@ export async function renderEditVariantImageControls(product, group, {
     const row = document.createElement("div");
     row.className   = "mb-3";
     const assignedImages = [...new Set((r.images || []).filter(Boolean))];
-    const candidateImages = [...new Set([...editImageUrls, ...assignedImages].filter(Boolean))];
+    const candidateImages = [...new Set([
+      ...editImageUrls,
+      ...buildImageUrls(product),
+      ...assignedImages,
+    ].filter(Boolean))];
     const candidatePicker = renderVariantCandidatePicker(candidateImages);
 
     row.innerHTML = `

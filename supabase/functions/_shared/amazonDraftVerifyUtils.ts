@@ -8,6 +8,7 @@ import { patchSubmissionAccepted } from "./amazonListingPatchUtils.ts";
 import { resolveAmazonCredentials } from "./amazonPtdAuthUtils.ts";
 import { readListingSpApiStatusFlags } from "./amazonSpApiUtils.ts";
 import { runMarketplaceSync } from "./amazonSyncRunUtils.ts";
+import { isParentVariationDraftRow } from "./amazonAuthUtils.ts";
 
 export type DraftRowForVerify = {
   id: string;
@@ -19,6 +20,7 @@ export type DraftRowForVerify = {
   kk_variant_id: string | null;
   kk_sku: string | null;
   draft_status: string;
+  variation_role?: string | null;
 };
 
 export type ListingRowForVerify = {
@@ -176,6 +178,7 @@ export function asDraftRowForVerify(draft: Record<string, unknown>): DraftRowFor
     kk_variant_id: typeof draft.kk_variant_id === "string" ? draft.kk_variant_id : null,
     kk_sku: typeof draft.kk_sku === "string" ? draft.kk_sku : null,
     draft_status: String(draft.draft_status || ""),
+    variation_role: typeof draft.variation_role === "string" ? draft.variation_role : null,
   };
 }
 
@@ -279,9 +282,10 @@ export async function verifySubmittedDraftOnce(
     return { status: "not_found", reason: "listing_not_found_yet" };
   }
 
+  const isParentVariation = isParentVariationDraftRow(draft);
   let offerActivationAttempted = false;
 
-  if (listingNeedsOfferActivation(listing)) {
+  if (!isParentVariation && listingNeedsOfferActivation(listing)) {
     const offerResult = await attemptOfferActivationForDraft(client, draft, listing, env);
     offerActivationAttempted = true;
 
@@ -310,7 +314,7 @@ export async function verifySubmittedDraftOnce(
     }
   }
 
-  if (!effectiveListingBuyable(listing)) {
+  if (!isParentVariation && !effectiveListingBuyable(listing)) {
     return {
       status: "not_found",
       reason: "awaiting_buyable",
@@ -318,7 +322,7 @@ export async function verifySubmittedDraftOnce(
     };
   }
 
-  if (listing.listing_status_buyable !== true) {
+  if (!isParentVariation && listing.listing_status_buyable !== true) {
     await client
       .from("amazon_listings")
       .update({

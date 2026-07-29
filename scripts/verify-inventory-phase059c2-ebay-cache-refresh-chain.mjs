@@ -87,8 +87,11 @@ function verifyStatic() {
   notes.push("Cache edge accepts syncContext and persists correlation on sync run");
 
   const syncUi = readText("js/admin/inventory/ui/syncEbayReadiness.js");
-  if (!syncUi.includes("refreshEbayListingCache({ limit: 25 })")) {
-    errors.push("Sync Channels must keep bulk cache refresh unchanged");
+  if (!syncUi.includes("fetchEbayCacheMissingProductIds")) {
+    errors.push("Sync Channels must target cache-missing products on refresh");
+  }
+  if (!syncUi.includes("refreshEbayListingCache(payload)")) {
+    errors.push("Sync Channels must call refreshEbayListingCache with dynamic payload");
   }
   if (syncUi.includes("syncContext")) {
     errors.push("Sync Channels bulk refresh must not require syncContext");

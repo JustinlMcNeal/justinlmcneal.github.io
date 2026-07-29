@@ -94,7 +94,6 @@ function validateCandidate(candidate) {
   if (state === "variation_no_change") return { ok: true, state, reason, actionable: false };
   if (!ACTIONABLE.has(state)) return { ok: false, state, reason: "unsupported_candidate_state", actionable: false };
   if (state === "variation_update_qty") {
-    if ((candidate.kk_available_qty ?? 0) <= 0) return { ok: false, state: "variation_manual", reason: "kk_available_not_positive", actionable: false };
     if (!candidate.expected_ebay_sku || !candidate.cache_ebay_sku) return { ok: false, state: "variation_mapping_missing", reason: "missing_child_sku", actionable: false };
     if (!candidate.child_offer_id) return { ok: false, state: "variation_child_offer_missing", reason: "missing_child_offer_id", actionable: false };
     if (candidate.ebay_child_qty == null) return { ok: false, state: "variation_qty_cache_missing", reason: "ebay_child_qty_unknown", actionable: true };
@@ -118,8 +117,8 @@ const MANUAL_STATES = new Set([
 function simulateSyncDecision(candidate, { quantity = 1, preview = false, liveEnabled = false } = {}) {
   const requestedQty = Number.isFinite(quantity) ? Math.trunc(quantity) : NaN;
   const isPreview = preview === true || !liveEnabled;
-  if (!Number.isFinite(requestedQty) || requestedQty <= 0) {
-    return { status: "skipped", wouldPatch: false, errorCode: "quantity_required" };
+  if (!Number.isFinite(requestedQty) || requestedQty < 0) {
+    return { status: "skipped", wouldPatch: false, errorCode: "quantity_invalid" };
   }
   if (!candidate) return { status: "manual", wouldPatch: false, candidateState: "variation_manual" };
   const state = candidate.candidate_state;
@@ -156,7 +155,7 @@ function resolveEdgeVariation(body) {
   if (!productId) return { error: "productId is required for variation_child_update_qty" };
   const n = Number(body.quantity);
   const qty = Number.isFinite(n) ? Math.trunc(n) : NaN;
-  if (!Number.isFinite(qty) || qty <= 0) return { error: "quantity must be a positive integer" };
+  if (!Number.isFinite(qty) || qty < 0) return { error: "quantity must be a non-negative integer" };
   return { productId, variantId: singleVariantId, quantity: qty };
 }
 
@@ -185,13 +184,13 @@ const SCENARIOS = [
   { id: "mapping_ambiguous", candidate: { ...READY_CANDIDATE, candidate_state: "variation_mapping_ambiguous" }, opts: { quantity: 1 }, expect: { status: "manual" } },
   { id: "child_offer_missing", candidate: { ...READY_CANDIDATE, candidate_state: "variation_child_offer_missing", child_offer_id: null }, opts: { quantity: 1 }, expect: { status: "manual" } },
   { id: "parent_inactive", candidate: { ...READY_CANDIDATE, candidate_state: "variation_parent_inactive" }, opts: { quantity: 1 }, expect: { status: "manual" } },
-  { id: "qty_zero", candidate: READY_CANDIDATE, opts: { quantity: 0 }, expect: { status: "skipped" } },
+  { id: "qty_zero", candidate: { ...READY_CANDIDATE, kk_available_qty: 0, ebay_child_qty: 54 }, opts: { quantity: 0, liveEnabled: false }, expect: { status: "dry_run", wouldPatch: false, hasChild: true } },
 ];
 
 const EDGE_SCENARIOS = [
   { id: "bulk_rejected", body: { mode: "variation_child_update_qty", productId: READY_CANDIDATE.product_id, variantIds: [READY_CANDIDATE.variant_id, "00000000-0000-4000-8000-000000000099"], quantity: 1 }, expectError: "one variant only" },
   { id: "missing_product_id", body: { mode: "variation_child_update_qty", variantId: READY_CANDIDATE.variant_id, quantity: 1 }, expectError: "productId is required" },
-  { id: "qty_zero_edge", body: { mode: "variation_child_update_qty", productId: READY_CANDIDATE.product_id, variantId: READY_CANDIDATE.variant_id, quantity: 0 }, expectError: "positive integer" },
+  { id: "qty_zero_edge", body: { mode: "variation_child_update_qty", productId: READY_CANDIDATE.product_id, variantId: READY_CANDIDATE.variant_id, quantity: 0 }, expectQty: 0 },
 ];
 
 function verifyStaticInfrastructure() {
@@ -265,8 +264,12 @@ function verifyScenarioMatrix() {
   }
   for (const sc of EDGE_SCENARIOS) {
     const r = resolveEdgeVariation(sc.body);
-    if (!r.error || !r.error.includes(sc.expectError)) errors.push(`Edge scenario ${sc.id}: expected error containing "${sc.expectError}"`);
-    else passed += 1;
+    if (sc.expectQty != null) {
+      if (r.quantity !== sc.expectQty) errors.push(`Edge scenario ${sc.id}: expected quantity ${sc.expectQty}, got ${r.quantity ?? "error"}`);
+      else passed += 1;
+    } else if (!r.error || !r.error.includes(sc.expectError)) {
+      errors.push(`Edge scenario ${sc.id}: expected error containing "${sc.expectError}"`);
+    } else passed += 1;
   }
   const ready = simulateSyncDecision(READY_CANDIDATE, { quantity: 2, preview: true });
   if (ready.childSku !== "KK-0001-BLACK" || ready.childOfferId !== "OFFER-CHILD-1") {

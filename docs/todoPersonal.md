@@ -325,6 +325,7 @@ When restyling a page: match Amazon header/buttons/labels first; keep page JS wi
 - [x] Web push notifications (subscription, admin new-order, composer)
 - [x] Cursor project rules — brand theme + image prompts (`.cursor/rules/`)
 - [x] Shipping page visual overhaul — `pages/shipping.html` + `js/pages/shipping/` (7826; accurate rates/timelines, live threshold, KK theme)
+- [x] Marketplace reservation finalize on ship (eBay/Amazon) — `20261111_inventory_marketplace_ship_finalize.sql` + backfill
 
 ## Backlog — Sorted by area
 
@@ -380,6 +381,7 @@ When restyling a page: match Amazon header/buttons/labels first; keep page JS wi
 
 ### Inventory (admin)
 
+- [x] **M** Marketplace sale holds finalize on ship/deliver (eBay/Amazon) — same Shippo timing as KK; RPC + admin path + backfill + `shippo-webhook` redeployed (`062_marketplace_ship_finalize.md`).
 - [ ] **M** Inventory page: multi-select line items and apply bulk edits.
 
 ### Public website — product page

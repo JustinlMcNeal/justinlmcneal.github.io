@@ -1,5 +1,10 @@
 import { qs } from "./dom.js";
 import { escapeHtml } from "./renderListings.js";
+import {
+  linkListingAsin,
+  linkListingSku,
+  linkListingTitle,
+} from "./listingLinks.js";
 import { resolveVariantSellerSku } from "./variantPanel.js";
 
 /** @type {string | null} */
@@ -66,8 +71,14 @@ export function buildUnmappedCard(row) {
   const status = String(row.listing_status || "unknown");
   const badge = statusBadge(status);
   const title = escapeHtml(row.amazon_title || "Untitled Amazon Listing");
-  const asin = escapeHtml(row.asin || "—");
-  const sku = escapeHtml(row.seller_sku || "—");
+  const titleRaw = String(row.amazon_title || "Untitled Amazon Listing");
+  const asinRaw = String(row.asin || "").trim() || "—";
+  const skuRaw = String(row.seller_sku || "").trim() || "—";
+  const asin = escapeHtml(asinRaw);
+  const sku = escapeHtml(skuRaw);
+  const titleLinked = linkListingTitle(row, title, titleRaw);
+  const skuLinked = linkListingSku(row, sku, skuRaw);
+  const asinLinked = linkListingAsin(row, asin, asinRaw);
   const price = escapeHtml(formatPrice(row));
   const synced = escapeHtml(formatSyncedDate(row.last_synced_at));
   const marketplace = escapeHtml(
@@ -104,10 +115,10 @@ export function buildUnmappedCard(row) {
       <div class="flex flex-col lg:flex-row lg:items-center gap-4">
         ${listingThumbMarkup(row)}
         <div class="flex-1 min-w-0">
-          <h3 class="font-bold text-sm">${title}</h3>
+          <h3 class="font-bold text-sm">${titleLinked}</h3>
           <dl class="grid grid-cols-2 sm:grid-cols-4 gap-x-3 gap-y-1 mt-2 text-xs">
-            <div><dt class="text-gray-400">ASIN</dt><dd class="font-mono font-medium">${asin}</dd></div>
-            <div><dt class="text-gray-400">Seller SKU</dt><dd class="font-mono font-medium">${sku}</dd></div>
+            <div><dt class="text-gray-400">ASIN</dt><dd class="font-mono font-medium">${asinLinked}</dd></div>
+            <div><dt class="text-gray-400">Seller SKU</dt><dd class="font-mono font-medium">${skuLinked}</dd></div>
             <div><dt class="text-gray-400">Status</dt><dd><span class="inline-flex px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${badge.className}">${escapeHtml(badge.label)}</span></dd></div>
             <div><dt class="text-gray-400">Last synced</dt><dd class="text-gray-600">${synced}</dd></div>
             <div><dt class="text-gray-400">Price</dt><dd class="font-bold">${price}</dd></div>

@@ -27,7 +27,7 @@ export function staleActionBadge(p) {
   if (!state) return "";
   const label = state === "no_active_match" ? "No active eBay listing found" : staleLinkLabel(p._linkCheck);
   const cls = state === "out_of_stock" ? "bg-orange-100 text-orange-800" : "bg-amber-100 text-amber-800";
-  return `<span class="inline-block px-2 py-0.5 rounded ${cls} text-[10px] font-bold uppercase" title="${esc(staleLinkMessage(p._linkCheck))}">${esc(label)}</span>`;
+  return `<span class="inline-block px-2 py-0.5 rounded-full ${cls} text-[9px] font-bold uppercase tracking-[.04em]" title="${esc(staleLinkMessage(p._linkCheck))}">${esc(label)}</span>`;
 }
 
 function asList(value) {
@@ -87,8 +87,8 @@ export function offerMappingDiagnosticHtml(p, compact = false) {
   if (!groupKey) return "";
   const d = check.diagnostic || null;
   const boxCls = compact
-    ? "mt-2 rounded border border-amber-200 bg-amber-50 p-2 text-[10px] text-amber-900"
-    : "mt-1 rounded border border-amber-200 bg-amber-50 p-2 text-[10px] text-amber-900";
+    ? "mt-2 border-4 border-amber-600 bg-amber-50 p-2 text-[10px] text-amber-900"
+    : "mt-1 border-4 border-amber-600 bg-amber-50 p-2 text-[10px] text-amber-900";
   const btn = p?.code
     ? `<button type="button" data-action="diagnose-mapping" data-code="${esc(p.code)}" class="mt-1 inline-flex border border-amber-500 bg-white px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-amber-800 hover:bg-amber-100">Diagnose Mapping</button>`
     : "";

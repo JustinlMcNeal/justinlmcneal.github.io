@@ -142,6 +142,44 @@ Deno.serve(async (req) => {
       }, 200);
     }
 
+    // 4) Align fulfillment status for full refunds that never left the warehouse
+    if (isFullRefund) {
+      const nextLabelStatus =
+        refundReason === "cancelled_before_ship"
+          ? "cancelled"
+          : refundReason === "refunded_kept_item" || refundReason === "returned"
+            ? "refunded"
+            : null;
+
+      if (nextLabelStatus) {
+        const { data: shipment } = await supabaseAdmin
+          .from("fulfillment_shipments")
+          .select("label_status, notes")
+          .eq("stripe_checkout_session_id", sessionId)
+          .maybeSingle();
+
+        const current = String(shipment?.label_status || "pending");
+        if (current === "pending" || current === "label_purchased") {
+          const noteLine =
+            nextLabelStatus === "cancelled"
+              ? "Canceled via Stripe refund (cancelled_before_ship)"
+              : `Marked ${nextLabelStatus} via Stripe refund (${refundReason})`;
+          const prevNotes = String(shipment?.notes || "").trim();
+          const { error: shipErr } = await supabaseAdmin
+            .from("fulfillment_shipments")
+            .update({
+              label_status: nextLabelStatus,
+              notes: prevNotes ? `${prevNotes}\n${noteLine}` : noteLine,
+            })
+            .eq("stripe_checkout_session_id", sessionId);
+
+          if (shipErr) {
+            console.warn("[stripe-refund] Fulfillment status update failed:", shipErr.message);
+          }
+        }
+      }
+    }
+
     return json({
       success: true,
       refund_id: refund.id,

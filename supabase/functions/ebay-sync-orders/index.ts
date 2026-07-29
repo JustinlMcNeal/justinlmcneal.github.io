@@ -5,7 +5,7 @@ import {
   corsHeaders,
   createServiceClient,
   getAccessToken,
-  matchProduct,
+  resolveEbayProductCode,
   EBAY_API,
   KKProduct,
 } from "../_shared/ebayUtils.ts";
@@ -145,7 +145,8 @@ serve(async (req) => {
       .select("code, name");
     const products: KKProduct[] = (allProducts || []) as KKProduct[];
     const variantHints = await loadEbayVariantHints(supabase);
-    const resolveProductCode = (title: string) => matchProduct(title, products);
+    const resolveProductCode = (title: string, sellerSku?: string | null) =>
+      resolveEbayProductCode(title, sellerSku ?? null, products);
     console.log(
       `[ebay-sync] Loaded ${products.length} products, ${variantHints.length} variants for matching`,
     );
@@ -154,6 +155,7 @@ serve(async (req) => {
     let skipped = 0;
     let updated = 0;
     let canceledUpdated = 0;
+    let refundUpdated = 0;
     let matched = 0;
     let unmatched = 0;
     let variantsRepaired = 0;
@@ -176,6 +178,7 @@ serve(async (req) => {
           variantHints,
         });
         variantsRepaired += updateResult.variantsRepaired || 0;
+        if (updateResult.refundUpdated) refundUpdated++;
         if (updateResult.canceled) canceledUpdated++;
         else updated++;
         continue;
@@ -236,7 +239,11 @@ serve(async (req) => {
       const lineItems = (order.lineItems as Record<string, unknown>[]) || [];
       for (const item of lineItems) {
         const ebayTitle = (item.title as string) || "Unknown";
-        const productCode = matchProduct(ebayTitle, products);
+        const productCode = resolveEbayProductCode(
+          ebayTitle,
+          (item.sku as string) || null,
+          products,
+        );
         if (productCode) {
           matched++;
           console.log(`[ebay-sync] Matched "${ebayTitle}" → ${productCode}`);
@@ -342,7 +349,7 @@ serve(async (req) => {
           order,
           sessionId,
           isCanceled,
-          (title) => matchProduct(title, products),
+          (title, sellerSku) => resolveEbayProductCode(title, sellerSku ?? null, products),
         );
         console.log(
           `[ebay-sync] Sale hold ${orderId}: attempted=${holdResult.attempted} reserved=${holdResult.reserved} skipped=${holdResult.skipped}`,
@@ -364,7 +371,7 @@ serve(async (req) => {
     }
 
     console.log(
-      `[ebay-sync] Done: synced=${synced}, updated=${updated}, canceledUpdated=${canceledUpdated}, skipped=${skipped}, matched=${matched}, unmatched=${unmatched}, variantsRepaired=${variantsRepaired}`,
+      `[ebay-sync] Done: synced=${synced}, updated=${updated}, canceledUpdated=${canceledUpdated}, refundUpdated=${refundUpdated}, skipped=${skipped}, matched=${matched}, unmatched=${unmatched}, variantsRepaired=${variantsRepaired}`,
     );
 
     const obsRefresh = await refreshMarketplaceObservationsAfterSync(supabase, {
@@ -379,6 +386,7 @@ serve(async (req) => {
         synced,
         updated,
         canceledUpdated,
+        refundUpdated,
         skipped,
         matched,
         unmatched,

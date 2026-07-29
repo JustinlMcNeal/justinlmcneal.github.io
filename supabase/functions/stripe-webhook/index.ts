@@ -16,6 +16,7 @@ import {
   reserveLiveBundleComponents,
 } from "../_shared/bundleLiveInventory.ts";
 import { handleChargeRefundedEvent } from "../_shared/stripeWebhookChargeRefunded.ts";
+import { enqueueSaleSyncAfterSuccessfulHold } from "../_shared/marketplaceSaleSyncAfterHold.ts";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -693,6 +694,36 @@ if (fErr) {
                 console.log(
                   `[stripe-webhook] active reservation: ${sessionId}/${lineItemId} qty=${qty}`,
                 );
+              }
+              if (reservation.inserted || reservation.skipped) {
+                try {
+                  const { data: existingRes } = await supabaseAdmin
+                    .from("inventory_reservations")
+                    .select("id")
+                    .eq("order_id", sessionId)
+                    .eq("order_item_id", lineItemId)
+                    .eq("status", "reserved")
+                    .eq("is_shadow", false)
+                    .maybeSingle();
+                  const enqueueResult = await enqueueSaleSyncAfterSuccessfulHold({
+                    supabase: supabaseAdmin,
+                    sourceChannel: "kk",
+                    productId: variantRow.product_id,
+                    variantId: variantRow.id,
+                    externalOrderId: sessionId,
+                    externalLineId: lineItemId,
+                    reservationId: existingRes?.id ?? null,
+                    metadata: { trigger: "kk_checkout_061b3" },
+                  });
+                  console.log(
+                    `[stripe-webhook] sale sync enqueue ${sessionId}/${lineItemId}: enqueued=${enqueueResult.enqueued} idempotent=${enqueueResult.idempotent}`,
+                  );
+                } catch (enqueueErr) {
+                  console.warn(
+                    `[stripe-webhook] sale sync enqueue failed (non-fatal) ${sessionId}/${lineItemId}:`,
+                    enqueueErr,
+                  );
+                }
               }
             } catch (reserveErr) {
               console.error("[stripe-webhook] active reservation failed (non-fatal):", reserveErr);

@@ -1,11 +1,18 @@
 import { VARIATION_ROLES } from "./variationFamily.js";
 
-/** Amazon Item Highlights requires item_name ≤ 75 characters. */
+/**
+ * Amazon product title / Item Highlights limits (Seller Central, Jul 27 2026):
+ * - item_name (title): max 75 characters including spaces (all categories except media)
+ * - title_differentiation (Item Highlights): max 125 characters; searchable; shows under title
+ *   only when item_name is ≤ 75. Materials / use cases / differentiators — do not repeat title.
+ * Product description length is unchanged (still long-form product_description).
+ */
 export const AMAZON_ITEM_NAME_MAX_LENGTH = 75;
+export const AMAZON_ITEM_HIGHLIGHT_MAX_LENGTH = 125;
 
-/** @param {unknown} title @param {number} [maxLength] */
-export function clampAmazonItemName(title, maxLength = AMAZON_ITEM_NAME_MAX_LENGTH) {
-  const trimmed = String(title || "").trim().replace(/\s+/g, " ");
+/** @param {unknown} text @param {number} [maxLength] */
+function clampAtWordBoundary(text, maxLength) {
+  const trimmed = String(text || "").trim().replace(/\s+/g, " ");
   if (!trimmed || trimmed.length <= maxLength) return trimmed;
   let cut = trimmed.slice(0, maxLength);
   const lastSpace = cut.lastIndexOf(" ");
@@ -13,6 +20,47 @@ export function clampAmazonItemName(title, maxLength = AMAZON_ITEM_NAME_MAX_LENG
     cut = cut.slice(0, lastSpace);
   }
   return cut.trim();
+}
+
+/** @param {unknown} title @param {number} [maxLength] */
+export function clampAmazonItemName(title, maxLength = AMAZON_ITEM_NAME_MAX_LENGTH) {
+  return clampAtWordBoundary(title, maxLength);
+}
+
+/** @param {unknown} text @param {number} [maxLength] */
+export function clampAmazonItemHighlight(text, maxLength = AMAZON_ITEM_HIGHLIGHT_MAX_LENGTH) {
+  return clampAtWordBoundary(text, maxLength);
+}
+
+/**
+ * When a long title is clamped, use the leftover phrase as Item Highlights seed.
+ * @param {string} original
+ * @param {string} clamped
+ */
+export function overflowFromClampedTitle(original, clamped) {
+  const full = String(original || "").trim().replace(/\s+/g, " ");
+  const short = String(clamped || "").trim().replace(/\s+/g, " ");
+  if (!full || !short || full.length <= short.length) return "";
+  let overflow = full.slice(short.length).trim();
+  overflow = overflow.replace(/^[-–—,|:;/]+/, "").trim();
+  return clampAmazonItemHighlight(overflow);
+}
+
+/**
+ * Update title length counter + over-limit styling.
+ * @param {HTMLInputElement | HTMLTextAreaElement | null} input
+ * @param {HTMLElement | null} counter
+ */
+export function syncAmazonTitleLengthUi(input, counter) {
+  if (!(input instanceof HTMLInputElement) && !(input instanceof HTMLTextAreaElement)) return;
+  const len = input.value.length;
+  const max = AMAZON_ITEM_NAME_MAX_LENGTH;
+  if (counter) {
+    counter.textContent = `${len} / ${max}`;
+    counter.classList.toggle("text-red-600", len > max);
+    counter.classList.toggle("text-gray-400", len <= max);
+  }
+  input.classList.toggle("amazon-attr-control--missing", len > max);
 }
 
 const UUID_RE =
@@ -57,7 +105,19 @@ export function validateAmazonDraftSavePayload(payload, context = {}) {
   } else if (title.length > AMAZON_ITEM_NAME_MAX_LENGTH) {
     issues.push({
       field: "title",
-      message: `Amazon title must be ${AMAZON_ITEM_NAME_MAX_LENGTH} characters or less for Item Highlights (currently ${title.length}).`,
+      message: `Amazon title must be ${AMAZON_ITEM_NAME_MAX_LENGTH} characters or less (Item Highlights policy; currently ${title.length}).`,
+    });
+  }
+
+  const highlight = String(
+    draftPayload.title_differentiation
+    || draftPayload.item_highlight
+    || "",
+  ).trim();
+  if (highlight.length > AMAZON_ITEM_HIGHLIGHT_MAX_LENGTH) {
+    issues.push({
+      field: "title_differentiation",
+      message: `Item Highlights must be ${AMAZON_ITEM_HIGHLIGHT_MAX_LENGTH} characters or less (currently ${highlight.length}).`,
     });
   }
 

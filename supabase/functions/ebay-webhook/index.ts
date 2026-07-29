@@ -7,7 +7,7 @@ import {
   corsHeaders,
   createServiceClient,
   getAccessToken,
-  matchProduct,
+  resolveEbayProductCode,
   EBAY_API,
   KKProduct,
 } from "../_shared/ebayUtils.ts";
@@ -172,7 +172,11 @@ async function insertEbayOrder(
 
   for (const item of lineItems) {
     const ebayTitle = (item.title as string) || "Unknown";
-    const productCode = matchProduct(ebayTitle, products);
+    const productCode = resolveEbayProductCode(
+      ebayTitle,
+      (item.sku as string) || null,
+      products,
+    );
 
     if (productCode) {
       matched++;
@@ -245,7 +249,7 @@ async function insertEbayOrder(
     order,
     sessionId,
     false,
-    (title) => matchProduct(title, products),
+    (title, sellerSku) => resolveEbayProductCode(title, sellerSku ?? null, products),
   );
   console.log(
     `[ebay-webhook] Sale hold ${orderId}: attempted=${holdResult.attempted} reserved=${holdResult.reserved} skipped=${holdResult.skipped}`,
@@ -268,7 +272,8 @@ async function processEbayOrderNotification(
     return { success: false, error: "order_fetch_failed" };
   }
 
-  const resolveProductCode = (title: string) => matchProduct(title, products);
+  const resolveProductCode = (title: string, sellerSku?: string | null) =>
+    resolveEbayProductCode(title, sellerSku ?? null, products);
   const existingUpdate = await updateExistingEbayOrderFromApi(supabase, order, {
     syncSource: "webhook",
     resolveProductCode,
@@ -283,9 +288,14 @@ async function processEbayOrderNotification(
     });
     return {
       success: true,
-      action: existingUpdate.canceled ? "canceled_updated" : "updated",
+      action: existingUpdate.canceled
+        ? "canceled_updated"
+        : existingUpdate.refundUpdated
+        ? "refund_updated"
+        : "updated",
       sessionId: existingUpdate.sessionId,
       variantsRepaired: existingUpdate.variantsRepaired,
+      refundUpdated: existingUpdate.refundUpdated,
       observation_refresh: obsRefresh,
     };
   }

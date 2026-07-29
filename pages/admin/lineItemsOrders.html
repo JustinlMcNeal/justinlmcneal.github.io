@@ -291,6 +291,29 @@
 
       </div>
 
+      <!-- Platform toggles -->
+      <div class="w-full mt-3 pt-3 border-t border-gray-100">
+        <div class="text-[9px] font-black uppercase tracking-[.18em] mb-2 text-gray-500">Platform</div>
+        <div id="platformToggles" class="flex flex-wrap gap-2" role="group" aria-label="Filter orders by platform">
+          <button type="button" data-platform="all"
+            class="platform-toggle border-2 border-black font-extrabold text-[10px] sm:text-[11px] uppercase tracking-wider px-3 py-1.5 cursor-pointer whitespace-nowrap transition-all select-none rounded-[1px] bg-black text-white shadow-md">
+            All
+          </button>
+          <button type="button" data-platform="kk"
+            class="platform-toggle border-2 border-black font-extrabold text-[10px] sm:text-[11px] uppercase tracking-wider px-3 py-1.5 cursor-pointer whitespace-nowrap transition-all select-none rounded-[1px] bg-transparent text-black hover:bg-black/5 opacity-70 hover:opacity-100">
+            Website
+          </button>
+          <button type="button" data-platform="ebay"
+            class="platform-toggle border-2 border-[#e53238] font-extrabold text-[10px] sm:text-[11px] uppercase tracking-wider px-3 py-1.5 cursor-pointer whitespace-nowrap transition-all select-none rounded-[1px] bg-transparent text-[#e53238] hover:bg-red-50 opacity-80 hover:opacity-100">
+            eBay
+          </button>
+          <button type="button" data-platform="amazon"
+            class="platform-toggle border-2 border-[#ff9900] font-extrabold text-[10px] sm:text-[11px] uppercase tracking-wider px-3 py-1.5 cursor-pointer whitespace-nowrap transition-all select-none rounded-[1px] bg-transparent text-[#c27400] hover:bg-amber-50 opacity-80 hover:opacity-100">
+            Amazon
+          </button>
+        </div>
+      </div>
+
       <!-- Count + status bar -->
       <div class="flex items-center justify-between mt-2 text-xs text-gray-500">
         <span id="countLabel">0 rows</span>
@@ -315,6 +338,27 @@
             aria-label="Close filters">✕</button>
         </div>
         <div class="p-4 grid grid-cols-2 gap-3">
+          <div class="col-span-2">
+            <div class="text-[9px] font-black uppercase tracking-[.18em] mb-2 text-gray-500">Platform</div>
+            <div id="mfsPlatformToggles" class="flex flex-wrap gap-2" role="group" aria-label="Filter orders by platform">
+              <button type="button" data-platform="all"
+                class="mfs-platform-toggle border-2 border-black font-extrabold text-[10px] uppercase tracking-wider px-3 py-1.5 cursor-pointer whitespace-nowrap transition-all select-none rounded-[1px] bg-black text-white">
+                All
+              </button>
+              <button type="button" data-platform="kk"
+                class="mfs-platform-toggle border-2 border-black font-extrabold text-[10px] uppercase tracking-wider px-3 py-1.5 cursor-pointer whitespace-nowrap transition-all select-none rounded-[1px] bg-transparent text-black">
+                Website
+              </button>
+              <button type="button" data-platform="ebay"
+                class="mfs-platform-toggle border-2 border-[#e53238] font-extrabold text-[10px] uppercase tracking-wider px-3 py-1.5 cursor-pointer whitespace-nowrap transition-all select-none rounded-[1px] bg-transparent text-[#e53238]">
+                eBay
+              </button>
+              <button type="button" data-platform="amazon"
+                class="mfs-platform-toggle border-2 border-[#ff9900] font-extrabold text-[10px] uppercase tracking-wider px-3 py-1.5 cursor-pointer whitespace-nowrap transition-all select-none rounded-[1px] bg-transparent text-[#c27400]">
+                Amazon
+              </button>
+            </div>
+          </div>
           <div class="col-span-2">
             <label for="mfsStatus"
                    class="block text-[9px] font-black uppercase tracking-[.18em] mb-1 text-gray-500">Status</label>

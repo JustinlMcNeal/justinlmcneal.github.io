@@ -127,6 +127,33 @@ export function stem(w: string): string {
 }
 
 /**
+ * Extract KK product code from an eBay seller SKU like `KK-0016-BLACK` → `KK-0016`.
+ * Prefer this over title fuzzy-match when present — titles often collide across beanie SKUs.
+ */
+export function productCodeFromSellerSku(sellerSku: string | null | undefined): string | null {
+  const m = String(sellerSku || "")
+    .trim()
+    .toUpperCase()
+    .match(/^(KK-\d+)/);
+  return m?.[1] || null;
+}
+
+/**
+ * Resolve KK product for an eBay line: seller SKU prefix first, then title match.
+ */
+export function resolveEbayProductCode(
+  ebayTitle: string,
+  sellerSku: string | null | undefined,
+  products: KKProduct[],
+): string | null {
+  const fromSku = productCodeFromSellerSku(sellerSku);
+  if (fromSku && products.some((p) => String(p.code || "").toUpperCase() === fromSku)) {
+    return fromSku;
+  }
+  return matchProduct(ebayTitle, products);
+}
+
+/**
  * Match an eBay item title to a KK product.
  * Strategy: exact → bracket-strip → substring → token-overlap (≥2 shared roots)
  */

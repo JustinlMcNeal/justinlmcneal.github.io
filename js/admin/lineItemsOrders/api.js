@@ -773,19 +773,13 @@ export async function upsertFulfillmentShipment({
   return data;
 }
 
-/** Phase 6E — finalize KK inventory reservations when order ships (admin path). */
+/** Phase 6E / marketplace — finalize inventory reservations when order ships (admin path). */
 export async function finalizeKkOrderReservations({
   stripe_checkout_session_id,
   reference_id,
   source = "admin_fulfillment",
 } = {}) {
   if (!stripe_checkout_session_id) throw new Error("Missing stripe_checkout_session_id");
-  if (
-    stripe_checkout_session_id.startsWith("ebay") ||
-    stripe_checkout_session_id.startsWith("amazon")
-  ) {
-    return null;
-  }
 
   const { data, error } = await supabase.rpc("finalize_kk_order_reservations", {
     p_order_id: stripe_checkout_session_id,

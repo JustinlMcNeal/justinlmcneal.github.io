@@ -89,6 +89,54 @@ function isEligibleCandidate(row: EbaySyncCandidate): boolean {
   return true;
 }
 
+async function enrichCandidatesWithCacheOfferIds(
+  // deno-lint-ignore no-explicit-any
+  client: any,
+  candidates: EbaySyncCandidate[],
+): Promise<EbaySyncCandidate[]> {
+  const needsOffer = candidates.filter((row) => !String(row.ebay_offer_id || "").trim());
+  if (!needsOffer.length) return candidates;
+
+  const productIds = [...new Set(needsOffer.map((row) => row.product_id))];
+  const { data: cacheRows, error } = await client
+    .from("ebay_listing_inventory_cache")
+    .select("product_id, ebay_sku, ebay_item_id, raw_payload_json")
+    .in("product_id", productIds);
+  if (error) {
+    console.warn("[inventoryEbaySync] cache offer lookup failed:", error.message);
+    return candidates;
+  }
+
+  const offerByKey = new Map<string, string>();
+  const listingByKey = new Map<string, string>();
+  for (const row of cacheRows || []) {
+    const productId = String(row.product_id || "").trim();
+    const sku = String(row.ebay_sku || "").trim();
+    if (!productId || !sku) continue;
+    const key = `${productId}:${sku}`;
+    const payload = isRecord(row.raw_payload_json) ? row.raw_payload_json : {};
+    const offerId = typeof payload.offerId === "string" ? payload.offerId.trim() : "";
+    if (offerId) offerByKey.set(key, offerId);
+    const listingId = String(row.ebay_item_id || "").trim();
+    if (listingId) listingByKey.set(key, listingId);
+  }
+
+  return candidates.map((row) => {
+    if (String(row.ebay_offer_id || "").trim()) return row;
+    const sku = resolveEbaySku(row);
+    if (!sku) return row;
+    const key = `${row.product_id}:${sku}`;
+    const offerId = offerByKey.get(key) || null;
+    const listingId = String(row.ebay_listing_id || "").trim() || listingByKey.get(key) || null;
+    if (!offerId && !listingId) return row;
+    return {
+      ...row,
+      ebay_offer_id: offerId,
+      ebay_listing_id: listingId,
+    };
+  });
+}
+
 export async function loadEbaySyncCandidates(
   // deno-lint-ignore no-explicit-any
   client: any,
@@ -129,7 +177,8 @@ export async function loadEbaySyncCandidates(
   const { data, error } = await query.limit(cap * 2);
   if (error) throw new Error("database_error");
 
-  return ((data || []) as EbaySyncCandidate[])
+  const enriched = await enrichCandidatesWithCacheOfferIds(client, (data || []) as EbaySyncCandidate[]);
+  return enriched
     .filter(isEligibleCandidate)
     .slice(0, cap);
 }
@@ -176,6 +225,48 @@ async function ebayInventoryFetchWithBody(
   return { ok: resp.ok, status: resp.status, data };
 }
 
+function responsesHaveSalePriceLock(responses: unknown[]): boolean {
+  for (const raw of responses) {
+    if (!isRecord(raw)) continue;
+    const errors = Array.isArray(raw.errors) ? raw.errors : [];
+    for (const err of errors) {
+      if (!isRecord(err)) continue;
+      if (Number(err.errorId) === 25019) return true;
+      const msg = String(err.message || "");
+      if (/part of a sale|cannot revise listing|price updates/i.test(msg)) return true;
+    }
+  }
+  return false;
+}
+
+function bestBulkResponseStatus(responses: unknown[]): {
+  anyOk: boolean;
+  worstStatus: number | null;
+  firstErrorMsg: string | null;
+} {
+  let anyOk = false;
+  let worstStatus: number | null = null;
+  let firstErrorMsg: string | null = null;
+  for (const raw of responses) {
+    if (!isRecord(raw)) continue;
+    const statusCode = Number(raw.statusCode ?? raw.status ?? NaN);
+    if (!Number.isFinite(statusCode)) continue;
+    if (statusCode < 400) {
+      anyOk = true;
+      continue;
+    }
+    if (worstStatus == null || statusCode > worstStatus) worstStatus = statusCode;
+    if (!firstErrorMsg) {
+      const errors = Array.isArray(raw.errors) ? raw.errors : [];
+      const firstErr = isRecord(errors[0]) ? errors[0] : null;
+      firstErrorMsg = firstErr
+        ? JSON.stringify(firstErr).slice(0, 300)
+        : JSON.stringify(raw).slice(0, 300);
+    }
+  }
+  return { anyOk, worstStatus, firstErrorMsg };
+}
+
 async function validateOfferActive(
   accessToken: string,
   item: EbayQuantityPatchItem,
@@ -184,11 +275,21 @@ async function validateOfferActive(
     return { ok: false, error: "missing_offer_id", errorCode: "missing_offer_id" };
   }
 
-  const offerRes = await ebayInventoryFetch(
+  let offerRes = await ebayInventoryFetch(
     accessToken,
     "GET",
     `${INV_API}/offer/${encodeURIComponent(item.offerId)}`,
   );
+
+  // eBay occasionally returns 5xx on offer GET — one short retry before failing the push.
+  if (!offerRes.ok && offerRes.status >= 500) {
+    await sleep(EBAY_CACHE_DELAY_MS);
+    offerRes = await ebayInventoryFetch(
+      accessToken,
+      "GET",
+      `${INV_API}/offer/${encodeURIComponent(item.offerId)}`,
+    );
+  }
 
   if (!offerRes.ok) {
     return {
@@ -214,27 +315,62 @@ async function validateOfferActive(
   return { ok: true };
 }
 
-async function patchEbayQuantityLive(
+async function postBulkQtyUpdate(
   accessToken: string,
-  item: EbayQuantityPatchItem,
-): Promise<{ ok: boolean; error?: string; errorCode?: string; responseRef?: string }> {
-  const request: Record<string, unknown> = {
-    sku: item.ebaySku,
-    shipToLocationAvailability: { quantity: item.targetQty },
-  };
-
-  if (item.offerId) {
-    request.offers = [{ offerId: item.offerId, availableQuantity: item.targetQty }];
-  }
-
+  request: Record<string, unknown>,
+): Promise<{ ok: boolean; status: number; data: unknown; responses: unknown[] }> {
   const result = await ebayInventoryFetchWithBody(
     accessToken,
     "POST",
     `${INV_API}/bulk_update_price_quantity`,
     { requests: [request] },
   );
+  const payload = isRecord(result.data) ? result.data : {};
+  const responses = Array.isArray(payload.responses) ? payload.responses : [];
+  return { ok: result.ok, status: result.status, data: result.data, responses };
+}
 
-  if (!result.ok) {
+async function patchEbayQuantityLive(
+  accessToken: string,
+  item: EbayQuantityPatchItem,
+): Promise<{ ok: boolean; error?: string; errorCode?: string; responseRef?: string }> {
+  const locationOnlyRequest: Record<string, unknown> = {
+    sku: item.ebaySku,
+    shipToLocationAvailability: { quantity: item.targetQty },
+  };
+  const withOfferRequest: Record<string, unknown> = {
+    ...locationOnlyRequest,
+  };
+  if (item.offerId) {
+    withOfferRequest.offers = [{ offerId: item.offerId, availableQuantity: item.targetQty }];
+  }
+
+  // Prefer offer+location when we have an offerId; fall back to location-only on sale price lock (25019).
+  let result = await postBulkQtyUpdate(
+    accessToken,
+    item.offerId ? withOfferRequest : locationOnlyRequest,
+  );
+
+  if (
+    item.offerId &&
+    (responsesHaveSalePriceLock(result.responses) ||
+      (!result.ok && /part of a sale|25019/i.test(JSON.stringify(result.data || {}))))
+  ) {
+    console.warn(
+      `[inventoryEbaySync] sale price lock on ${item.ebaySku}; retrying quantity-only update`,
+    );
+    result = await postBulkQtyUpdate(accessToken, locationOnlyRequest);
+  }
+
+  const parsed = bestBulkResponseStatus(result.responses);
+  if (parsed.anyOk || (result.ok && result.responses.length === 0)) {
+    return {
+      ok: true,
+      responseRef: item.offerId || item.ebaySku,
+    };
+  }
+
+  if (!result.ok && result.responses.length === 0) {
     const errText = JSON.stringify(result.data || {}).slice(0, 500);
     return {
       ok: false,
@@ -243,24 +379,11 @@ async function patchEbayQuantityLive(
     };
   }
 
-  const payload = isRecord(result.data) ? result.data : {};
-  const responses = Array.isArray(payload.responses) ? payload.responses : [];
-  const first = isRecord(responses[0]) ? responses[0] : null;
-  const statusCode = first?.statusCode ?? first?.status;
-
-  if (statusCode != null && Number(statusCode) >= 400) {
-    const errors = Array.isArray(first?.errors) ? first.errors : [];
-    const msg = errors.length
-      ? JSON.stringify(errors[0]).slice(0, 300)
-      : JSON.stringify(first).slice(0, 300);
-    return { ok: false, error: msg, errorCode: String(statusCode) };
-  }
-
-  const responseRef = typeof first?.offerId === "string"
-    ? first.offerId
-    : item.offerId || item.ebaySku;
-
-  return { ok: true, responseRef };
+  return {
+    ok: false,
+    error: parsed.firstErrorMsg || `bulk_update_failed_${parsed.worstStatus ?? result.status}`,
+    errorCode: String(parsed.worstStatus ?? result.status),
+  };
 }
 
 export async function updateEbayCacheQtyAfterPush(

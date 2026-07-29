@@ -29,8 +29,8 @@ function getColorVariants(product) {
 export function renderProductCard(product) {
   const href = `/pages/product.html?sku=${encodeURIComponent(product.slug)}`;
 
-  const img = product.images?.catalog || "";
-  const hover = product.images?.hover || img;
+  const img = product.catalog_image_url || product.primary_image_url || "";
+  const hover = product.catalog_hover_url || img;
 
   const colors = getColorVariants(product);
   const shown = colors.slice(0, 3);

@@ -13,6 +13,7 @@ import {
   validateOverrides,
 } from "../validation/overrideValidators.js";
 import { renderCpiPreviewFromState } from "./cpiPreviewPanel.js";
+import { syncParcelSummaryFromOverrides } from "./parcelSummary.js";
 
 const DASH = "—";
 let listenersBound = false;
@@ -210,6 +211,7 @@ function refreshOverrideUi() {
 
   syncChargedWeightRowUi();
   renderGlobalOverrideMessages(validation);
+  syncParcelSummaryFromOverrides();
   renderCpiPreviewFromState();
 }
 

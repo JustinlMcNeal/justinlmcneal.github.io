@@ -122,7 +122,7 @@ function verifyFiles() {
   if (!index.includes("variation_child_update_qty accepts one variant only")) {
     errors.push("Edge must reject bulk variation requests");
   }
-  if (!index.includes("quantity must be a positive integer")) {
+  if (!index.includes("quantity must be a non-negative integer")) {
     errors.push("Edge must require quantity > 0");
   }
   if (!index.includes("EBAY_ENABLE_LIVE_QUANTITY_PATCH")) {

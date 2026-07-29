@@ -155,6 +155,10 @@ function verifyStatic() {
     join(ROOT, "js/admin/inventory/services/adjustChannelOrchestrator.js"),
     "utf8",
   );
+  const amazonHelper = readFileSync(
+    join(ROOT, "js/admin/inventory/services/channelSyncForVariant.js"),
+    "utf8",
+  );
   if (!orch.includes("orchestrationId")) errors.push("Orchestrator must return orchestrationId");
   if (!orch.includes("buildAdjustSyncContext")) {
     errors.push("Orchestrator must build sync context for channel pushes");
@@ -162,7 +166,7 @@ function verifyStatic() {
   if (!orch.includes("syncContext")) {
     errors.push("Orchestrator must pass syncContext to channel push APIs");
   }
-  if (!orch.includes('mode: "inactive_restock"')) {
+  if (!amazonHelper.includes('mode: "inactive_restock"')) {
     errors.push("Orchestrator must support Amazon inactive_restock (059B.3+)");
   }
   notes.push("Orchestrator includes orchestrationId, syncContext, and inactive restock");

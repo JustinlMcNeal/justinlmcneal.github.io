@@ -9,5 +9,7 @@ export const state = {
 
   searchTimer: null,
 
+  platformFilter: "all",
+
   modal: null,
 };

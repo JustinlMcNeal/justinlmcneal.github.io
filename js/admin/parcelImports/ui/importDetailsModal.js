@@ -83,9 +83,16 @@ function renderDetailsHtml(header, events) {
     ["Products affected", header.products_affected_count ?? "—"],
     ["Rows needing mapping", header.rows_needing_mapping_count ?? "—"],
     ["Rows excluded", header.rows_excluded_count ?? "—"],
-    ["Total charge (CNY)", header.actual_total_charge_cny ?? "—"],
+    [
+      "Charged weight (g)",
+      firstNumber(header.actual_charged_weight_grams, header.xls_charged_weight_grams) ?? "—",
+    ],
+    [
+      "Total charge (CNY)",
+      firstNumber(header.actual_total_charge_cny, header.xls_total_parcel_charge_cny) ?? "—",
+    ],
     ["FX rate", header.effective_fx_rate ?? "—"],
-    ["USD equivalent", header.usd_equivalent ?? "—"],
+    ["USD equivalent", formatDetailsUsd(header)],
   ];
 
   const summary = rows
@@ -123,6 +130,31 @@ function renderDetailsHtml(header, events) {
 function formatDate(value) {
   if (!value) return "—";
   return String(value).replace("T", " ").slice(0, 19);
+}
+
+/** @param {...unknown} values */
+function firstNumber(...values) {
+  for (const value of values) {
+    if (value == null || value === "") continue;
+    const n = Number(value);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
+/** @param {object} header */
+function formatDetailsUsd(header) {
+  const stored = firstNumber(header.usd_equivalent);
+  if (stored != null) return stored.toFixed(2);
+  const charge = firstNumber(
+    header.actual_total_charge_cny,
+    header.xls_total_parcel_charge_cny,
+  );
+  const fx = firstNumber(header.effective_fx_rate);
+  if (charge != null && charge > 0 && fx != null && fx > 0) {
+    return (charge / fx).toFixed(2);
+  }
+  return "—";
 }
 
 function escapeHtml(str) {

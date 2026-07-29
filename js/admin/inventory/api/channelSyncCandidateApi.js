@@ -7,7 +7,7 @@ import { getSupabaseClient } from "/js/shared/supabaseClient.js";
 import { requireAuthenticatedSession } from "./inventoryApi.js";
 
 const VARIANT_CANDIDATE_SELECT =
-  "variant_id, product_id, available_qty, on_hand_qty, reserved_qty, kk_sync_action, amazon_sync_action, amazon_listing_status, amazon_current_qty, ebay_sync_action, ebay_listing_status, ebay_current_qty, issue_flags";
+  "variant_id, product_id, available_qty, on_hand_qty, reserved_qty, kk_sync_action, amazon_sync_action, amazon_listing_status, amazon_current_qty, ebay_sync_action, ebay_listing_status, ebay_local_status, ebay_listing_id, ebay_offer_id, ebay_current_qty, ebay_item_group_key, product_active_variant_count, issue_flags";
 
 const RELIST_SELECT = "variant_id, relist_action, suggested_qty, available_qty, old_status";
 
@@ -24,7 +24,12 @@ const RELIST_SELECT = "variant_id, relist_action, suggested_qty, available_qty, 
  * @property {number|null} amazon_current_qty
  * @property {string|null} ebay_sync_action
  * @property {string|null} ebay_listing_status
+ * @property {string|null} ebay_local_status
+ * @property {string|null} ebay_listing_id
+ * @property {string|null} ebay_offer_id
  * @property {number|null} ebay_current_qty
+ * @property {string|null} ebay_item_group_key
+ * @property {number|null} product_active_variant_count
  * @property {string[]|null} issue_flags
  */
 

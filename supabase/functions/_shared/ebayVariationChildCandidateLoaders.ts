@@ -168,9 +168,6 @@ export function validateVariationChildCandidateForQty(
   }
 
   if (state === "variation_update_qty") {
-    if (candidate.kk_available_qty <= 0) {
-      return { ok: false, state: "variation_manual", reason: "kk_available_not_positive", actionable: false };
-    }
     if (!candidate.expected_ebay_sku || !candidate.cache_ebay_sku) {
       return { ok: false, state: "variation_mapping_missing", reason: "missing_child_sku", actionable: false };
     }

@@ -24,7 +24,7 @@ function contentTypeCheckboxes(board) {
   const selected = new Set(board.content_types || ["product"]);
   return CONTENT_TYPES.map(
     (t) => `
-    <label class="inline-flex items-center gap-1 text-xs">
+    <label class="board-strategy-check">
       <input type="checkbox" class="board-content-type" data-board-id="${board.id}" value="${t}"
         ${selected.has(t) ? "checked" : ""}>
       ${t}
@@ -95,9 +95,9 @@ export function renderBoardList() {
 
   if (!state.boards.length) {
     els.boardList.innerHTML = `
-      <div class="p-8 text-center text-gray-400">
-        <p>No boards in strategy registry</p>
-        <p class="text-xs mt-1">Connect Pinterest, then use Sync from Pinterest (does not change routing rules).</p>
+      <div class="boards-tab__empty">
+        <p class="boards-tab__empty-title">No boards in strategy registry</p>
+        <p class="boards-tab__empty-sub">Connect Pinterest, then use Sync from Pinterest (does not change routing rules).</p>
       </div>
     `;
     return;
@@ -107,9 +107,15 @@ export function renderBoardList() {
     .map((board) => {
       const inactive = board.is_active === false;
       const badges = [
-        board.is_default ? '<span class="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">Default fallback</span>' : "",
-        inactive ? '<span class="text-xs px-2 py-0.5 rounded-full bg-gray-200 text-gray-600">Inactive</span>' : "",
-        board._stale ? '<span class="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-800">Stale 30d+</span>' : "",
+        board.is_default
+          ? '<span class="board-strategy-badge board-strategy-badge--default">Default fallback</span>'
+          : "",
+        inactive
+          ? '<span class="board-strategy-badge board-strategy-badge--inactive">Inactive</span>'
+          : "",
+        board._stale
+          ? '<span class="board-strategy-badge board-strategy-badge--stale">Stale 30d+</span>'
+          : "",
       ]
         .filter(Boolean)
         .join(" ");
@@ -120,54 +126,54 @@ export function renderBoardList() {
           : "No pins logged yet";
 
       const pid = board.pinterest_board_id
-        ? `<span class="font-mono text-[10px] text-gray-400">${escapeHtml(board.pinterest_board_id)}</span>`
-        : '<span class="text-xs text-red-600">No Pinterest ID — sync required</span>';
+        ? `<span class="board-strategy-item__pid">${escapeHtml(board.pinterest_board_id)}</span>`
+        : '<span class="board-strategy-item__pid board-strategy-item__pid--missing">No Pinterest ID — sync required</span>';
 
       return `
-      <div class="board-strategy-item p-4 border-b ${inactive ? "opacity-60" : ""}" data-board-id="${board.id}">
-        <div class="flex flex-wrap items-start justify-between gap-2 mb-2">
-          <div>
-            <div class="font-medium">${escapeHtml(board.name)}</div>
-            <div class="flex flex-wrap gap-1 mt-1">${badges}</div>
+      <div class="board-strategy-item${inactive ? " is-inactive" : ""}" data-board-id="${board.id}">
+        <div class="flex flex-wrap items-start justify-between gap-3 mb-3">
+          <div class="min-w-0">
+            <div class="board-strategy-item__name">${escapeHtml(board.name)}</div>
+            <div class="flex flex-wrap gap-1.5 mt-2">${badges}</div>
             ${pid}
-            <p class="text-xs text-gray-500 mt-1">${escapeHtml(usage)}</p>
+            <p class="board-strategy-item__meta">${escapeHtml(usage)}</p>
           </div>
-          <div class="flex gap-2">
-            <button type="button" class="btn-set-default text-xs px-2 py-1 border rounded hover:bg-gray-50" data-board-id="${board.id}" ${board.is_default ? "disabled" : ""}>Set default</button>
-            <button type="button" class="btn-delete-board text-xs px-2 py-1 border border-red-200 text-red-600 rounded hover:bg-red-50" data-board-id="${board.id}">Delete</button>
+          <div class="board-strategy-item__actions">
+            <button type="button" class="btn-set-default board-strategy-item__btn" data-board-id="${board.id}" ${board.is_default ? "disabled" : ""}>Set default</button>
+            <button type="button" class="btn-delete-board board-strategy-item__btn board-strategy-item__btn--danger" data-board-id="${board.id}">Delete</button>
           </div>
         </div>
-        <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
+        <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <div>
-            <label class="text-xs text-gray-500 block mb-1">Search intent</label>
-            <select class="board-intent w-full border rounded px-2 py-1 text-sm" data-board-id="${board.id}">
+            <label class="board-strategy-label">Search intent</label>
+            <select class="board-intent board-strategy-control" data-board-id="${board.id}">
               ${intentOptions(board.intent_key || "product-category")}
             </select>
           </div>
           <div>
-            <label class="text-xs text-gray-500 block mb-1">Product categories</label>
-            <select class="board-categories w-full border rounded px-2 py-1 text-sm" data-board-id="${board.id}" multiple size="3">
+            <label class="board-strategy-label">Product categories</label>
+            <select class="board-categories board-strategy-control" data-board-id="${board.id}" multiple size="3">
               ${categoryMultiOptions(board, state.categories || [])}
             </select>
           </div>
           <div>
-            <label class="text-xs text-gray-500 block mb-1">Active</label>
-            <label class="inline-flex items-center gap-2">
+            <label class="board-strategy-label">Active</label>
+            <label class="board-strategy-check mt-1">
               <input type="checkbox" class="board-active" data-board-id="${board.id}" ${board.is_active !== false ? "checked" : ""}>
-              <span class="text-xs">Use for routing</span>
+              <span>Use for routing</span>
             </label>
           </div>
         </div>
-        <div class="mt-2">
-          <label class="text-xs text-gray-500 block mb-1">Allowed content types</label>
-          <div class="flex flex-wrap gap-2">${contentTypeCheckboxes(board)}</div>
+        <div class="mt-3">
+          <label class="board-strategy-label">Allowed content types</label>
+          <div class="flex flex-wrap gap-3">${contentTypeCheckboxes(board)}</div>
         </div>
-        <div class="mt-2">
-          <label class="text-xs text-gray-500 block mb-1">Notes</label>
-          <input type="text" class="board-notes w-full border rounded px-2 py-1 text-sm" data-board-id="${board.id}"
+        <div class="mt-3">
+          <label class="board-strategy-label">Notes</label>
+          <input type="text" class="board-notes board-strategy-control" data-board-id="${board.id}"
             value="${escapeHtml(board.strategy_notes || "")}" placeholder="Strategy notes (optional)">
         </div>
-        <button type="button" class="btn-save-board mt-2 text-xs font-medium px-3 py-1.5 bg-black text-white rounded-lg" data-board-id="${board.id}">Save routing</button>
+        <button type="button" class="btn-save-board board-strategy-item__btn board-strategy-item__btn--save" data-board-id="${board.id}">Save routing</button>
       </div>`;
     })
     .join("");
@@ -176,8 +182,6 @@ export function renderBoardList() {
 }
 
 function wireBoardListEvents() {
-  const { state } = getBoardsContext();
-
   document.querySelectorAll(".btn-save-board").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const boardId = btn.dataset.boardId;

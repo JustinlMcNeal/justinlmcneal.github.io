@@ -4,6 +4,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   finalizeKkOrderReservations,
+  isKkStoreSession,
   shouldFinalizeOnShippoTracking,
 } from "../_shared/finalizeKkReservations.ts";
 import { recordBundleFinalizeShadowsForOrder } from "../_shared/bundleCheckoutShadow.ts";
@@ -28,6 +29,29 @@ function mapStatus(shippoStatus: string): string {
     case "FAILURE":      return "failed";
     default:             return "shipped"; // UNKNOWN → treat as shipped
   }
+}
+
+/** Higher rank = later in the fulfillment lifecycle. Never move backward. */
+const LABEL_STATUS_RANK: Record<string, number> = {
+  pending: 0,
+  label_purchased: 1,
+  shipped: 2,
+  failed: 2,
+  delivered: 3,
+  returned: 4,
+  // Admin / money statuses — Shippo must not overwrite these
+  voided: 100,
+  refunded: 100,
+  partial_refund: 100,
+};
+
+function labelStatusRank(status: string | null | undefined): number {
+  return LABEL_STATUS_RANK[String(status || "pending")] ?? 0;
+}
+
+/** True when next status is same or later than prev (no regression). */
+function shouldApplyLabelStatus(prev: string | null | undefined, next: string): boolean {
+  return labelStatusRank(next) >= labelStatusRank(prev);
 }
 
 Deno.serve(async (req) => {
@@ -66,13 +90,13 @@ Deno.serve(async (req) => {
   try {
     // ── 2. Handle track_updated events ──
     if (event === "track_updated" && trackingNumber && currentStatus) {
-      const newLabelStatus = mapStatus(currentStatus);
+      const mappedStatus = mapStatus(currentStatus);
       const now = new Date().toISOString();
 
       // Find the shipment row by tracking number
       const { data: shipment, error: lookupErr } = await sb
         .from("fulfillment_shipments")
-        .select("stripe_checkout_session_id, kk_order_id, label_status, tracking_number")
+        .select("stripe_checkout_session_id, kk_order_id, label_status, tracking_number, delivered_at")
         .eq("tracking_number", trackingNumber)
         .single();
 
@@ -81,24 +105,46 @@ Deno.serve(async (req) => {
         logError = `No shipment found for tracking ${trackingNumber}`;
         console.warn("[shippo-webhook]", logError);
       } else {
-        // Build update object
+        // Heal rows that already have delivered_at but were regressively set back to shipped
+        const prevStatus =
+          shipment.delivered_at && labelStatusRank(shipment.label_status) < labelStatusRank("delivered")
+            ? "delivered"
+            : shipment.label_status;
+
+        const applyStatus = shouldApplyLabelStatus(prevStatus, mappedStatus);
+        const newLabelStatus = applyStatus ? mappedStatus : prevStatus;
+
+        // Build update object — always refresh sync timestamp / ETA
         const update: Record<string, unknown> = {
-          label_status: newLabelStatus,
           last_tracking_sync_at: now,
         };
+
+        if (applyStatus) {
+          update.label_status = newLabelStatus;
+        } else if (prevStatus !== shipment.label_status) {
+          // Heal inconsistent DB row even when this event would have regressed
+          update.label_status = prevStatus;
+        }
 
         if (eta) update.estimated_delivery = eta;
 
         // Set timestamps based on status
-        if (currentStatus === "TRANSIT" && shipment.label_status !== "shipped") {
+        if (currentStatus === "TRANSIT" && prevStatus !== "shipped" && prevStatus !== "delivered") {
           update.in_transit_at = now;
           update.shipped_at = now;
         }
         if (currentStatus === "DELIVERED") {
           update.delivered_at = now;
+          update.label_status = "delivered";
         }
         if (currentStatus === "RETURNED") {
           update.returned_at = now;
+        }
+
+        if (!applyStatus && currentStatus !== "DELIVERED" && prevStatus === shipment.label_status) {
+          console.log(
+            `[shippo-webhook] ${trackingNumber} skip status regression ${shipment.label_status} ← ${mappedStatus} | order=${shipment.kk_order_id}`,
+          );
         }
 
         const { error: updateErr } = await sb
@@ -112,12 +158,13 @@ Deno.serve(async (req) => {
           console.error("[shippo-webhook] Update error:", updateErr.message);
         } else {
           const subStatus = trackingStatus?.substatus as string || "";
-          console.log(`[shippo-webhook] ${trackingNumber} ${shipment.label_status} → ${newLabelStatus}${subStatus ? ` (${subStatus})` : ""} | order=${shipment.kk_order_id}`);
+          const effectiveNext =
+            (update.label_status as string | undefined) || shipment.label_status;
+          console.log(`[shippo-webhook] ${trackingNumber} ${shipment.label_status} → ${effectiveNext}${subStatus ? ` (${subStatus})` : ""} | order=${shipment.kk_order_id}`);
 
           // ── 3. Send SMS notifications for shipped / delivered ──
-          const prevStatus = shipment.label_status;
           const shouldNotify =
-            (currentStatus === "TRANSIT" && prevStatus !== "shipped") ||
+            (currentStatus === "TRANSIT" && prevStatus !== "shipped" && prevStatus !== "delivered") ||
             (currentStatus === "DELIVERED" && prevStatus !== "delivered");
 
           if (shouldNotify) {
@@ -138,7 +185,7 @@ Deno.serve(async (req) => {
             }
           }
 
-          // ── 5. Finalize KK inventory reservations on in-transit / delivery ──
+          // ── 5. Finalize inventory reservations on in-transit / delivery (KK + marketplace) ──
           if (shouldFinalizeOnShippoTracking(currentStatus, shipment.label_status)) {
             try {
               const fin = await finalizeKkOrderReservations(
@@ -149,7 +196,7 @@ Deno.serve(async (req) => {
               );
               if (fin && (fin.finalized_count ?? 0) > 0) {
                 console.log(
-                  `[shippo-webhook] KK reservations finalized: order=${shipment.kk_order_id} units=${fin.finalized_units}`,
+                  `[shippo-webhook] reservations finalized: order=${shipment.kk_order_id} channel=${fin.channel || "?"} units=${fin.finalized_units}`,
                 );
               }
 
@@ -205,7 +252,7 @@ Deno.serve(async (req) => {
   return json({ ok: true, status: logStatus });
 });
 
-// ── SMS helper: send shipped/delivered notification ──
+// ── SMS helper: send shipped/delivered notification (KK website orders only) ──
 async function sendTrackingSms(
   sb: ReturnType<typeof createClient>,
   sessionId: string,
@@ -214,12 +261,22 @@ async function sendTrackingSms(
   trackingNumber: string,
   carrier: string,
 ) {
+  if (!isKkStoreSession(sessionId)) {
+    console.log("[shippo-webhook] Skip shipping SMS for marketplace order", kkOrderId);
+    return;
+  }
+
   // Look up the customer's phone from orders_raw
-  const { data: order } = await sb
+  const { data: order, error: orderErr } = await sb
     .from("orders_raw")
-    .select("phone_number, customer_name, kk_order_id")
+    .select("phone_number, first_name, last_name, kk_order_id")
     .eq("stripe_checkout_session_id", sessionId)
     .single();
+
+  if (orderErr) {
+    console.error("[shippo-webhook] Order lookup for SMS failed:", orderErr.message);
+    return;
+  }
 
   if (!order?.phone_number) {
     console.log("[shippo-webhook] No phone number for order", kkOrderId);
@@ -234,7 +291,7 @@ async function sendTrackingSms(
     .eq("phone", order.phone_number)
     .maybeSingle();
 
-  const firstName = (order.customer_name || "").split(" ")[0] || "there";
+  const firstName = String(order.first_name || "").trim() || "there";
   const trackUrl = carrier === "USPS"
     ? `https://tools.usps.com/go/TrackConfirmAction?tLabels=${trackingNumber}`
     : `https://karrykraze.com/pages/my-orders.html`;

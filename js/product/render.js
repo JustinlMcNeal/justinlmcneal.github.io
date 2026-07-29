@@ -448,10 +448,8 @@ export function renderPairsCarousel(containerEl, products = []) {
   list.forEach((p) => {
     const a = document.createElement("a");
     a.href = `/pages/product.html?slug=${encodeURIComponent(p.slug)}`;
-    a.className = "block snap-start shrink-0";
-
-    // show 2 at a time on mobile/desktop
-    a.style.flex = "0 0 calc((100% - 12px) / 2)";
+    a.className =
+      "snap-start shrink-0 flex-[0_0_calc((100%-12px)/2)] md:flex-[0_0_calc((100%-36px)/4)]";
 
     const img = p.primary_image_url || p.catalog_image_url || "/imgs/brand/placeholder.png";
 

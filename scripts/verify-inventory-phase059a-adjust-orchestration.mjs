@@ -190,10 +190,17 @@ function verifyStatic059A() {
   } else notes.push("Orchestrator calls adjust before channel sync");
 
   const ebayBranch = readText("js/admin/inventory/services/adjustChannelEbayBranch.js");
-  if (!orch.includes('action === "update_qty"') && !ebayBranch.includes('action === "update_qty"')) {
+  const amazonHelper = readText("js/admin/inventory/services/channelSyncForVariant.js");
+  if (
+    !amazonHelper.includes('action === "update_qty"') &&
+    !ebayBranch.includes('action === "update_qty"')
+  ) {
     errors.push("Orchestrator must gate channel push on update_qty");
   }
-  if (!orch.includes("await pushAmazonFbmInventory(") || !ebayBranch.includes("pushEbayInventoryQuantity")) {
+  if (
+    !amazonHelper.includes("await pushAmazonFbmInventory(") ||
+    !ebayBranch.includes("pushEbayInventoryQuantity")
+  ) {
     errors.push("Orchestrator must include safe update_qty push paths");
   }
   if (!ebayBranch.includes("available <= 0")) errors.push("Orchestrator must skip eBay qty-0 push");

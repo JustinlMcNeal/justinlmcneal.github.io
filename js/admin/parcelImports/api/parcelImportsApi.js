@@ -6,7 +6,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY } from "/js/config/env.js";
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const HISTORY_SELECT =
-  "id, parcel_id, status, imported_at, approved_at, xls_total_items, actual_total_charge_cny, effective_fx_rate, usd_equivalent, products_affected_count, rows_needing_mapping_count, expense_id, inventory_received_at, source_file_name, file_hash, xls_charged_weight_grams";
+  "id, parcel_id, status, imported_at, approved_at, xls_total_items, actual_total_charge_cny, xls_total_parcel_charge_cny, effective_fx_rate, usd_equivalent, products_affected_count, rows_needing_mapping_count, expense_id, inventory_received_at, source_file_name, file_hash, xls_charged_weight_grams, actual_charged_weight_grams";
 
 /** @returns {Promise<import('@supabase/supabase-js').Session>} */
 export async function requireAuthenticatedSession() {

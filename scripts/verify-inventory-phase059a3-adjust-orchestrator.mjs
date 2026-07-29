@@ -99,17 +99,27 @@ function verifyStatic() {
     join(ROOT, "js/admin/inventory/services/adjustChannelEbayBranch.js"),
     "utf8",
   );
-  if (!orch.includes("await pushAmazonFbmInventory(") || !ebayBranch.includes("pushEbayInventoryQuantity")) {
+  const amazonHelper = readFileSync(
+    join(ROOT, "js/admin/inventory/services/channelSyncForVariant.js"),
+    "utf8",
+  );
+  if (
+    !amazonHelper.includes("await pushAmazonFbmInventory(") ||
+    !ebayBranch.includes("pushEbayInventoryQuantity")
+  ) {
     errors.push("Orchestrator must include channel push API calls for update_qty");
   }
   notes.push("Orchestrator calls adjust before channel push APIs");
 
-  if (!orch.includes('action === "update_qty"') && !ebayBranch.includes('action === "update_qty"')) {
+  if (
+    !amazonHelper.includes('action === "update_qty"') &&
+    !ebayBranch.includes('action === "update_qty"')
+  ) {
     errors.push("Orchestrator must gate on update_qty action");
   }
-  if (orch.includes("inactive_can_update") && orch.includes('mode: "inactive_restock"')) {
+  if (amazonHelper.includes("inactive_can_update") && amazonHelper.includes('mode: "inactive_restock"')) {
     notes.push("Amazon inactive_can_update wired via inactive_restock mode (059B.3+)");
-  } else if (orch.includes("inactive_can_update") && orch.includes("pushAmazonFbmInventory")) {
+  } else if (amazonHelper.includes("inactive_can_update") && amazonHelper.includes("pushAmazonFbmInventory")) {
     errors.push("inactive_can_update must use mode inactive_restock, not bare update_qty push");
   }
   notes.push("Amazon update_qty + inactive_restock branches present");

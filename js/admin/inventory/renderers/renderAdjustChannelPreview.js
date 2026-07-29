@@ -71,7 +71,7 @@ export function renderAdjustChannelPreviewCards(state) {
 /** @param {{ checked: boolean, enabled: boolean }} toggle */
 export function syncToggleHintText(toggle) {
   if (!toggle.enabled) {
-    return "Enable when a safe Amazon or eBay path exists and projected available qty is positive.";
+    return "Enable when a safe Amazon or eBay path exists and projected available qty is zero or positive.";
   }
   if (toggle.checked) {
     return `${ADJUST_SYNC_TOGGLE_HELPER_BASE} Safe paths will run after save.`;

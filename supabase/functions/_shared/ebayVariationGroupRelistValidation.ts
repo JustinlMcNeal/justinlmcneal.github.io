@@ -170,7 +170,7 @@ export async function resolveGroupRelistMetadata({
   const metadataSources: string[] = ["kk_product"];
 
   const title = String(product.name || candidate.title || "").trim();
-  const description = wrapDescription(title, typeof product.description === "string" ? product.description : "");
+  const description = wrapDescription(title, "");
   const categoryId = String(product.ebay_category_id || candidate.ebay_category_id || "").trim();
   const groupKey = String(candidate.ebay_item_group_key || product.ebay_item_group_key || "").trim();
   const variationOptionName = String(candidate.variation_option_name || "Color").trim();

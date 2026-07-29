@@ -49,6 +49,12 @@
 
 .img-strip .img-thumb.picker { border-style: dashed; cursor: pointer; opacity: 0.6; }
 .img-strip .img-thumb.picker:hover { opacity: 1; border-color: #ff69b4; }
+.img-strip .img-thumb.picker.selected {
+  border-style: solid;
+  border-color: #ff69b4;
+  opacity: 1;
+  cursor: default;
+}
 
 .amazon-row-popover {
   position: fixed;
@@ -220,4 +226,17 @@
 
 .amazon-listing-row-menu {
   flex-shrink: 0;
+}
+
+/* Preview Amazon Submit — missing attribute highlight (KK thick border + pink offset) */
+.amazon-attr-field--missing {
+  border: 4px solid #000;
+  background: #fff5f4;
+  box-shadow: 4px 4px 0 0 #f58f86;
+  padding: 0.5rem;
+}
+
+.amazon-attr-control--missing {
+  border-color: #000 !important;
+  background-color: #fff !important;
 }

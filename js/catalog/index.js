@@ -9,6 +9,7 @@ import {
   calculatePromotionDiscount 
 } from "../shared/promotionLoader.js";
 import { renderHomeCard } from "../shared/components/productCardHome.js";
+import { bindProductCardImageHover } from "../shared/components/productCardHover.js";
 import { addToCart, openCartDrawer } from "../shared/cartStore.js";
 import { fetchAllReviewStats } from "../shared/reviewStats.js";
 
@@ -44,6 +45,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // State
   let activeCategoryId = "all";
   let activeSort = "newest";
+  let pendingCategorySlug = null; // footer links use ?category=headwear
   
   // Infinite Scroll State
   let filteredProducts = [];
@@ -51,9 +53,37 @@ document.addEventListener("DOMContentLoaded", async () => {
   const PAGE_SIZE = 12;
   let observer = null;
 
+  function categorySlug(name) {
+    return String(name || "")
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+  }
+
+  function resolveCategorySlug(slug) {
+    if (!slug || !allCategories.length) return null;
+    const needle = String(slug).toLowerCase().trim();
+    const match = allCategories.find((c) => {
+      const name = String(c.name || "").toLowerCase().trim();
+      return name === needle || categorySlug(c.name) === needle;
+    });
+    return match ? String(match.id) : null;
+  }
+
+  function applyPendingCategorySlug() {
+    if (!pendingCategorySlug) return;
+    const id = resolveCategorySlug(pendingCategorySlug);
+    if (id) activeCategoryId = id;
+    pendingCategorySlug = null;
+  }
+
   // --- URL State Management ---
   function updateURL() {
     const url = new URL(window.location);
+    // Normalize footer-style ?category=slug away once a chip/id filter is active
+    url.searchParams.delete("category");
+
     if (activeCategoryId && activeCategoryId !== "all") {
       url.searchParams.set("cat", activeCategoryId);
     } else {
@@ -74,9 +104,27 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   function readURL() {
     const params = new URLSearchParams(window.location.search);
-    activeCategoryId = params.get("cat") || "all";
     activeSort = params.get("sort") || "newest";
     if (els.sort) els.sort.value = activeSort;
+
+    const cat = params.get("cat");
+    const slug = (params.get("category") || "").trim().toLowerCase();
+    pendingCategorySlug = null;
+
+    if (cat) {
+      activeCategoryId = cat;
+    } else if (slug) {
+      // Resolve now if categories are loaded; otherwise defer until init finishes
+      const id = resolveCategorySlug(slug);
+      if (id) {
+        activeCategoryId = id;
+      } else {
+        activeCategoryId = "all";
+        pendingCategorySlug = slug;
+      }
+    } else {
+      activeCategoryId = "all";
+    }
   }
 
   // --- Category UI ---
@@ -499,6 +547,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       allPromotions = _promos || [];
       bestSellerTagIds = _bestSellerIds || [];
       reviewStatsMap = _reviewStats || new Map();
+
+      // Footer links use ?category=headwear — map slug → category id now that names are loaded
+      applyPendingCategorySlug();
       
       const ids = allProducts.map(p => p.id);
       if (ids.length) {
@@ -507,6 +558,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       updateCategoryHeader();
       renderChips();
+      bindProductCardImageHover(els.grid);
       resetAndRenderGrid();
 
       els.sort?.addEventListener("change", (e) => {

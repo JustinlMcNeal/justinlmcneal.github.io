@@ -418,7 +418,7 @@ async function enrichAmazonListingImages(rows) {
   const sb = getSupabaseClient();
   const { data: products, error } = await sb
     .from("products")
-    .select("id, primary_image_url, catalog_image_url, product_variants(id, preview_image_url, is_active)")
+    .select("id, slug, primary_image_url, catalog_image_url, product_variants(id, preview_image_url, is_active)")
     .in("id", productIds);
 
   if (error || !products?.length) return rows;
@@ -442,11 +442,12 @@ async function enrichAmazonListingImages(rows) {
       imageUrl = product.primary_image_url || product.catalog_image_url || null;
     }
 
-    if (!imageUrl) return row;
+    const withSlug = { ...row, kk_product_slug: product.slug || null };
+    if (!imageUrl) return withSlug;
     if (row.kk_variant_id || !row.image_url) {
-      return { ...row, image_url: imageUrl };
+      return { ...withSlug, image_url: imageUrl };
     }
-    return row;
+    return withSlug;
   });
 }
 

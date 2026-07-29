@@ -31,6 +31,7 @@ import {
 } from "./pushDraftAttributes.js";
 import { resolvePushWorkflowFromSuggestedAsin, shouldHydrateSuggestedAsin } from "./pushDraftWorkflow.js";
 import { initPushDraftLive, deriveSubmitMetaFromDraftRow, setDraftSubmitMeta, setPtdPreviewMeta, updateLiveSubmitReadiness } from "./pushDraftLive.js";
+import { focusMissingAttribute } from "./pushDraftMissingHighlight.js";
 import { initPushDraftVerify, updateVerifyReadiness } from "./pushDraftVerify.js";
 import { getRecommendationMeta } from "./pushDraftPtd.js";
 import {
@@ -79,6 +80,7 @@ import {
 import {
   clampAmazonItemName,
   draftSaveValidationMessage,
+  syncAmazonTitleLengthUi,
   validateAmazonDraftSavePayload,
 } from "./pushDraftSaveValidation.js";
 
@@ -162,7 +164,7 @@ async function hydrateLinkToFamilyFromListing(listingRow, product, familyContext
   setText("#amazonPushKkSku", productCode || "—");
   setInput("#amazonPushMarketplaceId", marketplaceId);
   if (sellerSku) setInput("#amazonPushSellerSku", sellerSku);
-  if (amazonTitle) setInput("#amazonPushAmazonTitle", amazonTitle);
+  if (amazonTitle) setAmazonTitle(amazonTitle);
   if (productType) setInput("#amazonPushProductType", productType);
 
   const livePrice = listingRow.price;
@@ -181,7 +183,7 @@ async function hydrateLinkToFamilyFromListing(listingRow, product, familyContext
       if (listingRaw?.raw_listing) {
         const copy = extractAmazonListingCopyFields(listingRaw.raw_listing, marketplaceId);
         if (copy.title && !readInput("#amazonPushAmazonTitle")) {
-          setInput("#amazonPushAmazonTitle", copy.title);
+          setAmazonTitle(copy.title);
         }
         if (copy.brand) setInput("#amazonPushBrand", copy.brand);
         if (copy.description) setInput("#amazonPushDescription", copy.description);
@@ -288,6 +290,15 @@ function setInput(id, value) {
   }
 }
 
+function setAmazonTitle(value) {
+  setInput("#amazonPushAmazonTitle", clampAmazonItemName(value));
+  const input = qs("#amazonPushAmazonTitle");
+  const counter = qs("#amazonPushAmazonTitleCount");
+  if (input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement) {
+    syncAmazonTitleLengthUi(input, counter instanceof HTMLElement ? counter : null);
+  }
+}
+
 function setAiFillStatus(message, tone = "info") {
   const el = qs("#amazonAiFillStatus");
   if (!el) return;
@@ -381,7 +392,7 @@ async function handleAmazonAiAutofill() {
     });
 
     const ai = result.data || {};
-    if (ai.title?.value) setInput("#amazonPushAmazonTitle", clampAmazonItemName(ai.title.value));
+    if (ai.title?.value) setAmazonTitle(ai.title.value);
     if (ai.brand?.value) setInput("#amazonPushBrand", ai.brand.value);
     if (ai.description?.value) setInput("#amazonPushDescription", ai.description.value);
     if (Array.isArray(ai.bulletPoints) && ai.bulletPoints.length) {
@@ -576,7 +587,7 @@ function hydrateFromDraftRow(row) {
   setInput("#amazonPushSellerSku", String(row.seller_sku || row.kk_sku || ""));
   setInput("#amazonPushMarketplaceId", String(row.marketplace_id || "ATVPDKIKX0DER"));
   setInput("#amazonPushProductType", String(row.product_type || payload.productType || ""));
-  setInput("#amazonPushAmazonTitle", clampAmazonItemName(String(payload.title || row.kk_product_title || "")));
+  setAmazonTitle(String(payload.title || row.kk_product_title || ""));
   setInput("#amazonPushBrand", String(payload.brand || "Generic"));
   setInput("#amazonPushPrice", payload.price != null ? String(payload.price) : "");
   setInput("#amazonPushQuantity", payload.quantity != null ? String(payload.quantity) : "");
@@ -689,7 +700,11 @@ export function initAmazonPushDraft(deps = {}) {
     onDraftSaved: deps.onDraftSaved,
     isSaving: () => saving,
     setSaving: (value) => { saving = value; },
-    onSubmitComplete: () => updateVerifyReadiness(),
+    onSubmitComplete: () => {
+      updateVerifyReadiness();
+      clearPushQueue();
+      closeAmazonModals();
+    },
   });
 
   const productTypeInput = qs("#amazonPushProductType");
@@ -697,6 +712,19 @@ export function initAmazonPushDraft(deps = {}) {
     productTypeInput.addEventListener("input", () => {
       updatePushComplianceWarnings(() => readInput("#amazonPushProductType"));
     });
+  }
+
+  const titleInput = qs("#amazonPushAmazonTitle");
+  const titleCount = qs("#amazonPushAmazonTitleCount");
+  if (titleInput instanceof HTMLInputElement) {
+    const refreshTitleCount = () => {
+      syncAmazonTitleLengthUi(
+        titleInput,
+        titleCount instanceof HTMLElement ? titleCount : null,
+      );
+    };
+    titleInput.addEventListener("input", refreshTitleCount);
+    refreshTitleCount();
   }
 
   document.addEventListener("input", (event) => {
@@ -878,7 +906,7 @@ export function initAmazonPushDraft(deps = {}) {
     setInput("#amazonPushSellerSku", suggestedSku || sku);
     setInput("#amazonPushMarketplaceId", "ATVPDKIKX0DER");
     setInput("#amazonPushProductType", "");
-    setInput("#amazonPushAmazonTitle", title);
+    setAmazonTitle(title);
     setInput("#amazonPushBrand", "Generic");
     setInput("#amazonPushPrice", price);
     setInput("#amazonPushQuantity", quantity);
@@ -1283,6 +1311,10 @@ export function initAmazonPushDraft(deps = {}) {
       case "preview-amazon-submit":
         event.preventDefault();
         ptd.previewAmazonSubmit().catch(() => {});
+        break;
+      case "jump-missing-attr":
+        event.preventDefault();
+        focusMissingAttribute(actionEl.dataset.attr || "");
         break;
       case "search-amazon-product-types":
         event.preventDefault();

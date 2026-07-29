@@ -57,6 +57,8 @@ export const els = {
   // Filter toggle + bottom sheet
   btnFilterToggle: document.getElementById("btnFilterToggle"),
   filterSheet: document.getElementById("filterSheet"),
+  platformToggles: document.getElementById("platformToggles"),
+  mfsPlatformToggles: document.getElementById("mfsPlatformToggles"),
 
   // Amazon Import modal
   amazonImportModal: document.getElementById("amazonImportModal"),

@@ -91,7 +91,9 @@ function verifyStatic() {
   if (!varBranch.includes('candidate_state !== "variation_update_qty"') && !varBranch.includes('candidate_state === "variation_update_qty"')) {
     errors.push("Qty sync must require variation_update_qty state");
   }
-  if (!varBranch.includes("availableQty <= 0")) errors.push("Variation branch must gate on available qty");
+  if (!/runEbayVariationGroupRelist[\s\S]*availableQty <= 0/.test(varBranch)) {
+    errors.push("Group relist must gate on non-positive available qty");
+  }
   if (/updateSibling|siblingVariants|relistEbayFromProduct/.test(varBranch)) {
     errors.push("Variation branch must not update siblings or single-SKU relist");
   }

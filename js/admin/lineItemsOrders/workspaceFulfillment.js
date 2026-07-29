@@ -248,7 +248,7 @@ function buildCtaLabelSection(order) {
 
   return `<section>
     ${sh("Packing Insert / CTA Label")}
-    <p class="text-xs text-black/60 font-bold mb-3">Print All sends CTA + packing sticker + shipping label in one job (skips anything unavailable).</p>
+    <p class="text-xs text-black/60 font-bold mb-3">Print All sends CTA + packing + shipping as one 4×6 job (CTA is rasterized so proportions stay correct).</p>
     <div class="flex flex-wrap items-center gap-3">
       ${printAllBtn}
       ${packingBtn}
