@@ -32,7 +32,7 @@ async function loadQrLib() {
  * @param {string} url
  * @returns {Promise<string|null>}
  */
-async function generateQrDataUrl(url) {
+export async function generateQrDataUrlForTarget(url) {
   const QRCode = await loadQrLib();
   if (!QRCode?.toDataURL) return null;
   try {
@@ -85,18 +85,14 @@ export function buildQrTarget(order, source, labelType) {
 }
 
 /**
- * Build a complete print-window HTML document for the CTA label.
- * Label dimensions: 6" × 4" (set via @page CSS).
- * All CSS is inline — the print window has no external stylesheets.
- * No PII is included: no email, phone, address, or internal session IDs.
- *
- * @param {object} order - order row
+ * Build the CTA label sheet markup (6" × 4" div only — no document wrapper).
+ * @param {object} order
  * @param {"review_cta"|"channel_cta"} labelType
- * @param {{ qrDataUrl?: string|null, qrFallbackUrl?: string }} options
- * @returns {string} Full <!DOCTYPE html> string
+ * @param {{ qrDataUrl?: string|null, qrFallbackUrl?: string }} [options]
+ * @returns {string}
  */
-export function buildLabelHtml(order, labelType, options = {}) {
-  const { qrDataUrl = null, qrFallbackUrl = "https://karrykraze.com", printDelayMs = 400 } = options;
+export function buildCtaLabelSheet(order, labelType, options = {}) {
+  const { qrDataUrl = null, qrFallbackUrl = "https://karrykraze.com" } = options;
 
   const qrBlock = qrDataUrl
     ? `<img src="${qrDataUrl}" width="176" height="176" style="display:block;width:1.82in;height:1.82in;border:0;" alt="Scan QR code">`
@@ -125,26 +121,7 @@ export function buildLabelHtml(order, labelType, options = {}) {
     footerRight = "Save more";
   }
 
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>KK CTA Label</title>
-  <style>
-    @page { size: 6in 4in; margin: 0; }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      width: 6in; height: 4in; overflow: hidden;
-      font-family: Arial, Helvetica, sans-serif;
-      -webkit-print-color-adjust: exact;
-      print-color-adjust: exact;
-      background: #fff;
-    }
-    @media print { body { width: 6in; height: 4in; } }
-  </style>
-</head>
-<body onload="setTimeout(function(){window.print();},${printDelayMs})">
-  <div style="width:6in;height:4in;display:flex;flex-direction:column;border:4px solid #000;background:#fff;color:#000;position:relative;overflow:hidden;">
+  return `<div style="width:6in;height:4in;display:flex;flex-direction:column;border:4px solid #000;background:#fff;color:#000;position:relative;overflow:hidden;font-family:Arial,Helvetica,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
 
     <!-- Header -->
     <div style="height:.62in;display:flex;align-items:stretch;justify-content:space-between;border-bottom:4px solid #000;background:#fff;">
@@ -202,7 +179,46 @@ export function buildLabelHtml(order, labelType, options = {}) {
       <span>${esc(footerRight)}</span>
     </div>
 
-  </div>
+  </div>`;
+}
+
+/**
+ * Build a complete print-window HTML document for the CTA label.
+ * Label dimensions: 6" × 4" (set via @page CSS).
+ *
+ * @param {object} order - order row
+ * @param {"review_cta"|"channel_cta"} labelType
+ * @param {{ qrDataUrl?: string|null, qrFallbackUrl?: string, printDelayMs?: number|null }} options
+ * @returns {string} Full <!DOCTYPE html> string
+ */
+export function buildLabelHtml(order, labelType, options = {}) {
+  const { printDelayMs = 400 } = options;
+  const sheet = buildCtaLabelSheet(order, labelType, options);
+  const onload =
+    printDelayMs == null
+      ? ""
+      : ` onload="setTimeout(function(){window.print();},${Number(printDelayMs) || 0})"`;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>KK CTA Label</title>
+  <style>
+    @page { size: 6in 4in; margin: 0; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      width: 6in; height: 4in; overflow: hidden;
+      font-family: Arial, Helvetica, sans-serif;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+      background: #fff;
+    }
+    @media print { body { width: 6in; height: 4in; } }
+  </style>
+</head>
+<body${onload}>
+  ${sheet}
 </body>
 </html>`;
 }
@@ -242,7 +258,7 @@ export async function printLabel(order, { onPrinted } = {}) {
   pw.document.close();
 
   const qrTarget = buildQrTarget(order, source, labelType);
-  const qrDataUrl = await generateQrDataUrl(qrTarget);
+  const qrDataUrl = await generateQrDataUrlForTarget(qrTarget);
 
   // rewriteQr — called by onPrinted with tracking URL or direct qrTarget (fallback).
   // Regenerates QR and rewrites the print window. Uses 400ms print delay.
@@ -250,7 +266,7 @@ export async function printLabel(order, { onPrinted } = {}) {
     if (!pw || pw.closed) return;
     const newQrDataUrl = newQrTarget === qrTarget
       ? qrDataUrl                            // reuse the already-generated data URL
-      : await generateQrDataUrl(newQrTarget);
+      : await generateQrDataUrlForTarget(newQrTarget);
     const html = buildLabelHtml(order, labelType, {
       qrDataUrl:     newQrDataUrl,
       qrFallbackUrl: newQrTarget,

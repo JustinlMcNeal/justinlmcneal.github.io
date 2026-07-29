@@ -79,7 +79,7 @@ export function renderFulfillment(order, shipment) {
       ${
         shipment.delivered_at
           ? `<div class="border-4 border-emerald-200 p-4 bg-emerald-50">
-        <div class="text-[10px] font-black uppercase tracking-[.18em] text-emerald-600/60 mb-1">Delivered</div>
+        <div class="text-[10px] font-black uppercase tracking-[.18em] text-emerald-600/60 mb-1">Delivered date</div>
         <div class="font-black text-sm text-emerald-700">${new Date(shipment.delivered_at).toLocaleDateString()}</div>
       </div>`
           : ""
@@ -225,23 +225,35 @@ export function renderFulfillment(order, shipment) {
 function buildCtaLabelSection(order) {
   const { eligible, message } = getCtaEligibility(order);
 
-  let body;
+  const packingBtn = `<button type="button" data-print-packing-label
+      class="px-4 py-2 text-xs font-black uppercase tracking-wider border-4 border-black bg-white text-black hover:bg-black hover:text-white transition">
+      Print Packing Label
+    </button>`;
+
+  let ctaBody;
   if (eligible) {
-    body = `<div class="flex flex-wrap items-center gap-3">
-      <button type="button" data-print-cta-workspace
+    ctaBody = `<button type="button" data-print-cta-workspace
         class="px-4 py-2 text-xs font-black uppercase tracking-wider border-4 border-black bg-white text-black hover:bg-black hover:text-white transition">
         Print CTA Label
       </button>
-      <span data-cta-print-status class="hidden text-xs font-bold text-black/70"></span>
-    </div>`;
+      <span data-cta-print-status class="hidden text-xs font-bold text-black/70"></span>`;
   } else {
-    body = `<p class="text-xs text-black/55 font-bold leading-snug">${esc(message)}</p>`;
+    ctaBody = `<p class="text-xs text-black/55 font-bold leading-snug w-full">${esc(message)}</p>`;
   }
+
+  const printAllBtn = `<button type="button" data-print-all-labels
+      class="px-4 py-2 text-xs font-black uppercase tracking-wider border-4 border-kkpink bg-kkpink text-black hover:bg-black hover:text-white hover:border-black transition">
+      Print All
+    </button>`;
 
   return `<section>
     ${sh("Packing Insert / CTA Label")}
-    <p class="text-xs text-black/60 font-bold mb-3">Print a 6x4 CTA insert for this order.</p>
-    ${body}
+    <p class="text-xs text-black/60 font-bold mb-3">Print All sends CTA + packing sticker + shipping label in one job (skips anything unavailable).</p>
+    <div class="flex flex-wrap items-center gap-3">
+      ${printAllBtn}
+      ${packingBtn}
+      ${ctaBody}
+    </div>
   </section>
   <div class="border-t-4 border-gray-100"></div>`;
 }

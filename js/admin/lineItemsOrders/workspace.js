@@ -38,8 +38,11 @@ import { renderOverview } from "./workspaceOverview.js";
 import { renderFinancials } from "./workspaceFinancials.js";
 import { renderFulfillment } from "./workspaceFulfillment.js";
 import { renderLabels } from "./workspaceLabels.js";
+import { STATUS_COLORS } from "./fulfillmentStatusUi.js";
 import { renderIds } from "./workspaceIds.js";
 import { printCtaForOrder } from "./ctaPrintFlow.js";
+import { printPackingLabel } from "./packingLabelPrint.js";
+import { printAllLabels } from "./printAllLabels.js";
 function cleanStr(v) {
   const s = String(v ?? "").trim();
   return s.length ? s : null;
@@ -52,6 +55,7 @@ function cleanInt(v) {
 
 // ── state ────────────────────────────────────────────────────────
 let _onSaved = null;
+let _onClose = null;
 let _currentRow = null;
 let _currentTab = "overview";
 let _wsDirty = false;
@@ -63,21 +67,11 @@ let _shippingValidation = null;
 let _shippingAddrDirty = false;
 let _lastSuggestedAddress = null;
 
-const STATUS_COLORS = {
-  pending: "bg-amber-500",
-  label_purchased: "bg-blue-500",
-  shipped: "bg-blue-600",
-  delivered: "bg-emerald-500",
-  voided: "bg-gray-500",
-  returned: "bg-gray-500",
-  refunded: "bg-red-500",
-  partial_refund: "bg-red-500",
-};
-
 // ── public API ───────────────────────────────────────────────────
 
-export function initWorkspace({ onSaved } = {}) {
+export function initWorkspace({ onSaved, onClose } = {}) {
   _onSaved = onSaved;
+  _onClose = onClose;
 
   document.getElementById("btnWsClose")?.addEventListener("click", _safeClose);
   document.getElementById("btnWsCancel")?.addEventListener("click", () => {
@@ -148,6 +142,10 @@ export async function openWorkspace(row, { tab = "overview", focusLineItemId = n
         error: historyErr?.message || String(historyErr),
       };
     }
+    if (_currentRow) {
+      _currentRow.shipment = _detail.shipment || null;
+      _populateHeader(_currentRow);
+    }
     _renderTabBody(tab);
     if (_focusLineItemId) {
       requestAnimationFrame(() => _applyLineFocusAfterRender(tab));
@@ -163,6 +161,16 @@ export async function openWorkspace(row, { tab = "overview", focusLineItemId = n
 }
 
 export function closeWorkspace() {
+  const sessionId = _currentRow?.stripe_checkout_session_id || null;
+  const shipment = _detail?.shipment ?? _currentRow?.shipment ?? null;
+  if (sessionId) {
+    try {
+      _onClose?.({ sessionId, shipment });
+    } catch (err) {
+      console.warn("[workspace] onClose sync failed:", err);
+    }
+  }
+
   const ws = document.getElementById("orderWorkspace");
   ws?.classList.add("hidden");
   ws?.setAttribute("aria-hidden", "true");
@@ -370,6 +378,8 @@ function _renderTabBody(tab) {
     _wireRefundButtons(wsBody, order);
     _wireLabelButtons(wsBody, order, shipment);
     _wireCtaPrintButton(wsBody, order);
+    _wirePackingLabelButton(wsBody);
+    _wirePrintAllLabelsButton(wsBody, order, shipment);
     _trackDirty(wsBody);
   } else if (tab === "labels") {
     _wireCopyButtons(wsBody);
@@ -502,7 +512,10 @@ async function _save() {
 
     setStatus("Saved shipment ✓");
     if (_detail) _detail.shipment = saved;
-    if (_currentRow) _currentRow.shipment = saved;
+    if (_currentRow) {
+      _currentRow.shipment = saved;
+      _populateHeader(_currentRow);
+    }
     _wsDirty = false;
     _setDirtyDot(false);
 
@@ -1000,6 +1013,33 @@ function _wireCtaPrintButton(container, order) {
     }
 
     if (result.ok) {
+      await _refreshCtaLabelHistory();
+    }
+  });
+}
+
+function _wirePackingLabelButton(container) {
+  const btn = container.querySelector("[data-print-packing-label]");
+  if (!btn) return;
+
+  btn.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const result = printPackingLabel();
+    setStatus(result.message, !result.ok);
+  });
+}
+
+function _wirePrintAllLabelsButton(container, order, shipment) {
+  const btn = container.querySelector("[data-print-all-labels]");
+  if (!btn) return;
+
+  btn.addEventListener("click", async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const result = await printAllLabels(order, shipment, { buttonEl: btn });
+    setStatus(result.message, Boolean(result.isError));
+    if (result.ok && result.ctaPrinted) {
       await _refreshCtaLabelHistory();
     }
   });
