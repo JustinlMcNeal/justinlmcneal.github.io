@@ -106,8 +106,9 @@ export function updateActionBarVisibility() {
   if (!actionBar) return;
 
   const hasWork = !!state.items?.length;
-  const onHistory = getActiveTabId() === "parcelTabHistory";
-  const show = hasWork && !onHistory;
+  const tabId = getActiveTabId();
+  const offWorkflow = tabId === "parcelTabHistory" || tabId === "parcelTabPlan";
+  const show = hasWork && !offWorkflow;
   actionBar.classList.toggle("hidden", !show);
   actionBar.hidden = !show;
 }

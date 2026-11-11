@@ -11,6 +11,7 @@ const TAB_IDS = {
   map: "parcelTabMap",
   cpi: "parcelTabCpi",
   history: "parcelTabHistory",
+  plan: "parcelTabPlan",
 };
 
 /**

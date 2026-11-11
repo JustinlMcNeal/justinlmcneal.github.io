@@ -94,7 +94,7 @@ function supplierShipPerUnit(weightG) {
  * @param {number|null} weightG — packaged weight in grams
  * @returns {number|null} estimated label cost in USD, or null if weight unavailable/too heavy
  */
-function estimateLabelCost(weightG) {
+export function estimateLabelCost(weightG) {
   if (!weightG || weightG <= 0) return null;
   const oz  = weightG / 28.35;
   const lbs = weightG / 453.6;
@@ -142,13 +142,14 @@ function estimateEbayFee(priceCents) {
  *
  * @returns {object} estimate result with all fields and warnings
  */
-export function buildEstimate({ priceCents, kkPriceCents, unitCostUsd, weightG, labelWeightG, adRatePct = 0 }) {
+export function buildEstimate({ priceCents, kkPriceCents, unitCostUsd, weightG, labelWeightG, adRatePct = 0, adRateSource = "assumed" }) {
   const est = {
     priceCents:       priceCents  ?? null,
     kkPriceCents:     kkPriceCents ?? null,
     feeCents:         null,
-    adFeeCents:       null,   // Phase 6: assumed promotional ad fee (not actual campaign data)
+    adFeeCents:       null,   // Promoted Listings fee estimate (live rate when available)
     adRatePct:        adRatePct,
+    adRateSource:     adRateSource,
     cpiCents:         null,
     labelCents:       null,
     netAfterFeeCents: null,
@@ -212,10 +213,14 @@ export function buildEstimate({ priceCents, kkPriceCents, unitCostUsd, weightG, 
     est.assumptions.push("Label: not estimated (no weight available)");
   }
 
-  // ── Assumed ad/promotional fee (Phase 6 extension) ─────────
+  // ── Promoted Listings fee (live CPS rate when available) ────
   if (adRatePct > 0 && priceCents > 0) {
     est.adFeeCents = Math.round(priceCents * adRatePct / 100);
-    est.assumptions.push(`Assumed promo/ad rate: ${adRatePct}% of price (not actual campaign data)`);
+    if (adRateSource === "live") {
+      est.assumptions.push(`Live promo ad rate: ${adRatePct}% of price (Promoted Listings CPS)`);
+    } else {
+      est.assumptions.push(`Assumed promo/ad rate: ${adRatePct}% of price (not actual campaign data)`);
+    }
   }
   const adFeeDeduct = est.adFeeCents ?? 0;
 

@@ -14,6 +14,7 @@ export const PARCEL_TABS = [
   { id: "parcelTabMap", panelId: "parcelImportItemMapping" },
   { id: "parcelTabCpi", panelId: "parcelImportCpiPreview" },
   { id: "parcelTabHistory", panelId: "parcelImportHistory" },
+  { id: "parcelTabPlan", panelId: "parcelPlanner" },
 ];
 
 /** @type {string} */

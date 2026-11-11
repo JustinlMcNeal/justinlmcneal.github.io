@@ -18,6 +18,7 @@ import {
   openImportDetailsModal,
 } from "./ui/importDetailsModal.js";
 import { initParcelTabs } from "./ui/tabs.js";
+import { initParcelPlanner } from "./ui/parcelPlanner.js";
 import { applyParcelImportsDeepLink } from "./ui/deepLink.js";
 import { updateWorkflowChrome } from "./ui/exportActions.js";
 import { initMappingListeners } from "./ui/itemMappingTable.js";
@@ -75,6 +76,7 @@ async function init() {
   initExportActions({ refreshHistory });
   initImportDetailsModal();
   initParcelTabs();
+  void initParcelPlanner({ authed });
 
   const { importDetailsBtn } = getDom();
   importDetailsBtn?.addEventListener("click", () => {

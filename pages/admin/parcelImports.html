@@ -209,7 +209,7 @@
       <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
         <p class="text-[9px] font-black uppercase tracking-[.18em] text-gray-500 shrink-0">Work Area</p>
         <div
-          class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2 flex-1"
+          class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2 flex-1"
           role="tablist"
           aria-label="Parcel import workflow steps"
         >
@@ -269,14 +269,26 @@
             aria-controls="parcelImportHistory"
             tabindex="-1"
             title="Previous parcel imports"
-            class="flex items-center justify-center sm:justify-start px-3 py-2.5 rounded-xl border-2 border-black bg-white text-black text-left min-h-[44px] hover:bg-gray-50 col-span-2 md:col-span-1"
+            class="flex items-center justify-center sm:justify-start px-3 py-2.5 rounded-xl border-2 border-black bg-white text-black text-left min-h-[44px] hover:bg-gray-50"
           >
             <span class="text-[10px] font-black uppercase tracking-[.12em]">Previous Imports</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            id="parcelTabPlan"
+            aria-selected="false"
+            aria-controls="parcelPlanner"
+            tabindex="-1"
+            title="Plan the next parcel and order when shipping is efficient"
+            class="flex items-center justify-center sm:justify-start px-3 py-2.5 rounded-xl border-2 border-black bg-white text-black text-left min-h-[44px] hover:bg-gray-50"
+          >
+            <span class="text-[10px] font-black uppercase tracking-[.12em]">Plan Next Parcel</span>
           </button>
         </div>
       </div>
       <p class="text-[11px] text-gray-400 mt-2">
-        Five-step workflow — use the tabs above to switch between upload, charges, mapping, CPI preview, and import history.
+        Five-step import workflow — upload, charges, mapping, CPI preview, and import history — plus a planner for the next parcel.
       </p>
     </nav>
 
@@ -1145,7 +1157,19 @@
       </article>
     </section>
 
-    <!-- Sticky workflow bar (hidden until import loaded; hidden on History tab) -->
+    <!-- Parcel Planner -->
+    <section
+      id="parcelPlanner"
+      role="tabpanel"
+      aria-labelledby="parcelTabPlan"
+      aria-label="Plan next parcel"
+      hidden
+      class="hidden"
+    >
+      <div id="parcelPlannerRoot"></div>
+    </section>
+
+    <!-- Sticky workflow bar (hidden until import loaded; hidden on History and Planner tabs) -->
     <section
       id="parcelImportActionBar"
       class="hidden sticky bottom-3 z-20"
