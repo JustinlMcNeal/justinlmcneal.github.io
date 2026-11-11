@@ -757,6 +757,7 @@
       "https://api.ebay.com/oauth/api_scope/sell.account.readonly",
       "https://api.ebay.com/oauth/api_scope/commerce.notification.subscription",
       "https://api.ebay.com/oauth/api_scope/sell.marketing",
+      "https://api.ebay.com/oauth/api_scope/sell.analytics.readonly",
     ].join(" "));
 
     const btnConnectEbay = document.getElementById("btnConnectEbay");
@@ -765,23 +766,16 @@
     const ebayConnectedPanel = document.getElementById("ebayConnectedPanel");
 
     async function checkEbayConnection() {
-      if (PRIVILEGED_ADMIN_ACTIONS_DISABLED) {
-        ebayStatusDot.className = "w-3 h-3 rounded-full bg-gray-300";
-        ebayStatusText.textContent = "Admin status unavailable";
-        ebayConnectedPanel.classList.add("hidden");
-        return false;
-      }
-
       try {
-        const headers = { "Authorization": `Bearer ${""}`, "apikey": "" };
-        const resp = await fetch(
-          `${SUPABASE_URL}/rest/v1/marketplace_tokens?platform=eq.ebay&select=token_expires_at,extra,updated_at`,
-          { headers }
-        );
-        const rows = await resp.json();
-        if (rows.length && rows[0].extra?.connected) {
-          const expiresAt = new Date(rows[0].token_expires_at);
-          const isExpired = Date.now() > expiresAt.getTime();
+        // marketplace_tokens is service-role only; status via edge function (no secrets)
+        const { data, error } = await supabase.functions.invoke("ebay-refresh-token", {
+          body: { statusOnly: true },
+        });
+        if (error) throw error;
+
+        if (data?.connected) {
+          const expiresAt = data.expires_at ? new Date(data.expires_at) : null;
+          const isExpired = expiresAt ? Date.now() > expiresAt.getTime() : false;
           ebayStatusDot.className = `w-3 h-3 rounded-full ${isExpired ? "bg-yellow-400" : "bg-green-500"}`;
           ebayStatusText.textContent = isExpired ? "Connected (token expired — click Refresh)" : "Connected";
           btnConnectEbay.textContent = "✓ Connected";
@@ -789,10 +783,12 @@
           btnConnectEbay.classList.replace("hover:bg-[#c72a30]", "hover:bg-green-700");
           ebayConnectedPanel.classList.remove("hidden");
 
-          document.getElementById("ebayTokenExpiry").textContent =
-            `Token expires: ${expiresAt.toLocaleString()}`;
-          document.getElementById("ebayLastSync").textContent =
-            `Last updated: ${new Date(rows[0].updated_at).toLocaleString()}`;
+          document.getElementById("ebayTokenExpiry").textContent = expiresAt
+            ? `Token expires: ${expiresAt.toLocaleString()}`
+            : "Token expires: —";
+          document.getElementById("ebayLastSync").textContent = data.updated_at
+            ? `Last updated: ${new Date(data.updated_at).toLocaleString()}`
+            : "Last updated: —";
           return true;
         }
       } catch (e) { console.error("eBay check failed:", e); }
@@ -900,22 +896,18 @@
     document.getElementById("btnRefreshEbayToken")?.addEventListener("click", async () => {
       const btn = document.getElementById("btnRefreshEbayToken");
       const status = document.getElementById("ebaySyncStatus");
-      if (PRIVILEGED_ADMIN_ACTIONS_DISABLED) { showPrivilegedAdminDisabled(status); return; }
 
       btn.disabled = true;
       status.textContent = "Refreshing token...";
 
       try {
-        const resp = await fetch(`${SUPABASE_URL}/functions/v1/ebay-refresh-token`, {
-          method: "POST",
-          headers: { "Authorization": `Bearer ${""}`, "Content-Type": "application/json" },
-        });
-        const data = await resp.json();
-        if (data.success) {
+        const { data, error } = await supabase.functions.invoke("ebay-refresh-token", { body: {} });
+        if (error) throw error;
+        if (data?.success) {
           status.textContent = `✅ Token refreshed, expires: ${new Date(data.expires_at).toLocaleString()}`;
           checkEbayConnection();
         } else {
-          status.textContent = "❌ " + (data.error || "Refresh failed");
+          status.textContent = "❌ " + (data?.error || "Refresh failed");
         }
       } catch (e) { status.textContent = "❌ Error: " + e.message; }
       finally { btn.disabled = false; }
