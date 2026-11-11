@@ -140,6 +140,7 @@ export type ProductRefreshTarget = {
   ebay_offer_id: string | null;
   ebay_status: string | null;
   ebay_item_group_key: string | null;
+  ebay_do_not_list?: boolean | null;
 };
 
 export type VariantRow = {
@@ -272,11 +273,16 @@ export async function refreshProductEbayCache(
     return { rows, errors };
   }
 
+  // A single-SKU listing on a multi-variant product sells one variant; leaving variant_id null would
+  // let every variant's stock sync overwrite the listing quantity.
+  const listedVariant = variants.length === 1
+    ? variants[0]
+    : variants.find((v) => String(v.sku || "").trim() === baseSku);
   const result = await readSkuCache(
     accessToken,
     product,
     baseSku,
-    variants.length === 1 ? variants[0]?.id ?? null : null,
+    listedVariant?.id ?? null,
     product.ebay_listing_id,
   );
   if (result.ok) rows.push(result.row);
@@ -312,6 +318,7 @@ export async function reconcileProductEbayMappingFromCache(
 ): Promise<void> {
   const primary = rows.find((row) => row.ebay_sku === String(product.ebay_sku || product.code || "").trim()) || rows[0];
   if (!primary) return;
+  if (product.ebay_do_not_list) return;
 
   const payload = isRecord(primary.raw_payload_json) ? primary.raw_payload_json : {};
   const offerId = typeof payload.offerId === "string" ? payload.offerId.trim() : "";
